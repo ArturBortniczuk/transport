@@ -3,6 +3,7 @@ import knex from 'knex';
 import * as XLSX from 'xlsx';
 import fs from 'fs';
 import path from 'path';
+import { neon } from '@neondatabase/serverless';
 
 // Sprawdź, czy jesteśmy w fazie budowania
 const isBuildPhase = process.env.NODE_ENV === 'production' && typeof window === 'undefined' && !process.env.NEXT_RUNTIME;
@@ -15,7 +16,7 @@ const createDbConnection = () => {
       schema: {
         hasTable: () => Promise.resolve(false),
         createTable: () => Promise.resolve(),
-        table: () => ({ datetime: () => {} })
+        table: () => ({ timestamp: () => {} })
       },
       raw: () => Promise.resolve([[], []]),
       select: () => ({ where: () => ({ first: () => Promise.resolve({}) }) }),
@@ -28,21 +29,13 @@ const createDbConnection = () => {
 
   // W przeciwnym razie utwórz prawdziwe połączenie
   return knex({
-    client: 'pg',  // Zmienione z mysql2 na pg (PostgreSQL)
-    connection: {
-      host: process.env.DB_HOST || 'localhost',
-      port: process.env.DB_PORT || 5432,  // Zmienione z 3306 na 5432 (port PostgreSQL)
-      user: process.env.DB_USER,
-      password: process.env.DB_PASSWORD,
-      database: process.env.DB_NAME,
-      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
-    },
+    client: 'pg',
+    connection: process.env.DATABASE_URL,
     pool: {
-      min: 0,  // Pozostawione bez zmian
-      max: 1   // Zmniejszone do 1 dla środowiska serverless
+      min: 0,
+      max: 1 // Redukcja dla środowiska serverless
     },
-    acquireConnectionTimeout: 30000,  // Zwiększony timeout
-    idleTimeoutMillis: 30000
+    acquireConnectionTimeout: 30000
   });
 };
 
@@ -66,8 +59,8 @@ const initializeDatabase = async () => {
         table.string('phone');
         table.string('password').notNullable();
         table.string('role').notNullable();
-        table.boolean('first_login').defaultTo(true);  // W PostgreSQL true/false zamiast 1/0
-        table.boolean('is_admin').defaultTo(false);    // W PostgreSQL true/false zamiast 1/0
+        table.boolean('first_login').defaultTo(true);
+        table.boolean('is_admin').defaultTo(false);
         table.text('permissions');
         table.string('mpk');
       });
@@ -79,7 +72,7 @@ const initializeDatabase = async () => {
       await db.schema.createTable('sessions', table => {
         table.string('token').primary();
         table.string('user_id').notNullable();
-        table.timestamp('expires_at').notNullable();  // datetime -> timestamp w PostgreSQL
+        table.timestamp('expires_at').notNullable();
         table.timestamp('created_at').defaultTo(db.fn.now());
         table.foreign('user_id').references('email').inTable('users');
       });
@@ -104,9 +97,9 @@ const initializeDatabase = async () => {
         table.string('market');
         table.string('loading_level');
         table.text('notes');
-        table.boolean('is_cyclical').defaultTo(false);  // W PostgreSQL true/false zamiast 1/0
-        table.timestamp('delivery_date');  // datetime -> timestamp w PostgreSQL
-        table.timestamp('completed_at');   // datetime -> timestamp w PostgreSQL
+        table.boolean('is_cyclical').defaultTo(false);
+        table.timestamp('delivery_date');
+        table.timestamp('completed_at');
         table.string('requester_name');
         table.string('requester_email');
         table.string('mpk');
@@ -115,12 +108,12 @@ const initializeDatabase = async () => {
 
     return true;
   } catch (error) {
-    console.error('Błąd inicjalizacji bazy danych:', error);
+    console.error('Błąd inicjalizacji bazy:', error);
     return false;
   }
 };
 
-// Inicjalizacja użytkowników z pliku Excel
+// Inicjalizacja użytkowników z pliku Excel - bez zmian
 const initializeUsersFromExcel = async () => {
   if (isBuildPhase) {
     return;
@@ -178,8 +171,8 @@ const initializeUsersFromExcel = async () => {
         phone: row.phone,
         password: row.password,
         role: role,
-        first_login: true,  // true zamiast 1
-        is_admin: isAdmin ? true : false,  // true/false zamiast 1/0
+        first_login: true,
+        is_admin: isAdmin,
         permissions: getDefaultPermissions(role, isAdmin),
         mpk: row.mpk || ''
       };
@@ -201,7 +194,7 @@ const showAllUsers = async () => {
   try {
     await db('users').select('email', 'name', 'position', 'role');
   } catch (error) {
-    console.error('Błąd pobierania użytkowników:', error);
+    console.error('Błąd wyświetlania użytkowników:', error);
   }
 };
 
@@ -212,7 +205,7 @@ const checkTransportsTable = async () => {
   }
   
   try {
-    // PostgreSQL zamiast SHOW COLUMNS używa information_schema
+    // PostgreSQL używa information_schema zamiast SHOW COLUMNS
     const columns = await db.raw(`
       SELECT column_name 
       FROM information_schema.columns 
@@ -240,7 +233,7 @@ if (!isBuildPhase) {
       await showAllUsers();
       await checkTransportsTable();
     } catch (error) {
-      console.error('Błąd podczas inicjalizacji:', error);
+      console.error('Błąd inicjalizacji:', error);
     }
   })();
 }
