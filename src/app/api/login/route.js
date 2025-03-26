@@ -68,7 +68,7 @@ export async function POST(request) {
         await db('sessions').insert({
           token: sessionToken,
           user_id: user.email,
-          expires_at: db.raw('DATE_ADD(NOW(), INTERVAL 7 DAY)') // MySQL format dla +7 dni
+          expires_at: db.raw("NOW() + INTERVAL '7 days' ")
         });
         
         console.log('Sesja zapisana dla użytkownika:', user.email);
