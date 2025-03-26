@@ -28,19 +28,20 @@ const createDbConnection = () => {
 
   // W przeciwnym razie utwórz prawdziwe połączenie
   return knex({
-    client: 'mysql2',
+    client: 'pg',  // Zmienione z mysql2 na pg (PostgreSQL)
     connection: {
       host: process.env.DB_HOST || 'localhost',
-      port: process.env.DB_PORT || 3306,
+      port: process.env.DB_PORT || 5432,  // Zmienione z 3306 na 5432 (port PostgreSQL)
       user: process.env.DB_USER,
       password: process.env.DB_PASSWORD,
       database: process.env.DB_NAME,
+      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
     },
     pool: {
-      min: 0,  // Zmniejszone z 2 na 0
-      max: 3   // Zmniejszone z 10 na 3
+      min: 0,  // Pozostawione bez zmian
+      max: 1   // Zmniejszone do 1 dla środowiska serverless
     },
-    acquireConnectionTimeout: 10000,
+    acquireConnectionTimeout: 30000,  // Zwiększony timeout
     idleTimeoutMillis: 30000
   });
 };
@@ -65,8 +66,8 @@ const initializeDatabase = async () => {
         table.string('phone');
         table.string('password').notNullable();
         table.string('role').notNullable();
-        table.boolean('first_login').defaultTo(1);
-        table.boolean('is_admin').defaultTo(0);
+        table.boolean('first_login').defaultTo(true);  // W PostgreSQL true/false zamiast 1/0
+        table.boolean('is_admin').defaultTo(false);    // W PostgreSQL true/false zamiast 1/0
         table.text('permissions');
         table.string('mpk');
       });
@@ -78,8 +79,8 @@ const initializeDatabase = async () => {
       await db.schema.createTable('sessions', table => {
         table.string('token').primary();
         table.string('user_id').notNullable();
-        table.datetime('expires_at').notNullable();
-        table.datetime('created_at').defaultTo(db.fn.now());
+        table.timestamp('expires_at').notNullable();  // datetime -> timestamp w PostgreSQL
+        table.timestamp('created_at').defaultTo(db.fn.now());
         table.foreign('user_id').references('email').inTable('users');
       });
     }
@@ -103,9 +104,9 @@ const initializeDatabase = async () => {
         table.string('market');
         table.string('loading_level');
         table.text('notes');
-        table.boolean('is_cyclical').defaultTo(0);
-        table.datetime('delivery_date');
-        table.datetime('completed_at');
+        table.boolean('is_cyclical').defaultTo(false);  // W PostgreSQL true/false zamiast 1/0
+        table.timestamp('delivery_date');  // datetime -> timestamp w PostgreSQL
+        table.timestamp('completed_at');   // datetime -> timestamp w PostgreSQL
         table.string('requester_name');
         table.string('requester_email');
         table.string('mpk');
@@ -114,6 +115,7 @@ const initializeDatabase = async () => {
 
     return true;
   } catch (error) {
+    console.error('Błąd inicjalizacji bazy danych:', error);
     return false;
   }
 };
@@ -176,8 +178,8 @@ const initializeUsersFromExcel = async () => {
         phone: row.phone,
         password: row.password,
         role: role,
-        first_login: 1,
-        is_admin: isAdmin ? 1 : 0,
+        first_login: true,  // true zamiast 1
+        is_admin: isAdmin ? true : false,  // true/false zamiast 1/0
         permissions: getDefaultPermissions(role, isAdmin),
         mpk: row.mpk || ''
       };
@@ -186,7 +188,7 @@ const initializeUsersFromExcel = async () => {
     // Wstawianie wsadowe użytkowników
     await db('users').insert(usersToInsert);
   } catch (error) {
-    // Pominięto obsługę błędu
+    console.error('Błąd inicjalizacji użytkowników:', error);
   }
 };
 
@@ -199,7 +201,7 @@ const showAllUsers = async () => {
   try {
     await db('users').select('email', 'name', 'position', 'role');
   } catch (error) {
-    // Pominięto obsługę błędu
+    console.error('Błąd pobierania użytkowników:', error);
   }
 };
 
@@ -210,18 +212,22 @@ const checkTransportsTable = async () => {
   }
   
   try {
-    // MySQL nie używa PRAGMA, więc musimy sprawdzić to inaczej
-    const columns = await db.raw('SHOW COLUMNS FROM transports');
-    const columnNames = columns[0].map(col => col.Field);
+    // PostgreSQL zamiast SHOW COLUMNS używa information_schema
+    const columns = await db.raw(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'transports'
+    `);
+    const columnNames = columns.rows.map(col => col.column_name);
     
     // Sprawdź czy kolumna completed_at istnieje
     if (!columnNames.includes('completed_at')) {
       await db.schema.table('transports', table => {
-        table.datetime('completed_at');
+        table.timestamp('completed_at');
       });
     }
   } catch (error) {
-    // Pominięto obsługę błędu
+    console.error('Błąd sprawdzania tabeli transportów:', error);
   }
 };
 
@@ -234,7 +240,7 @@ if (!isBuildPhase) {
       await showAllUsers();
       await checkTransportsTable();
     } catch (error) {
-      // Pominięto obsługę błędu
+      console.error('Błąd podczas inicjalizacji:', error);
     }
   })();
 }
