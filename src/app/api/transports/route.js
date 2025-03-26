@@ -11,7 +11,7 @@ const validateSession = async (authToken) => {
   
   const session = await db('sessions')
     .where('token', authToken)
-    .whereRaw('expires_at > NOW()') // Zamiana datetime('now') na NOW() dla MySQL
+    .whereRaw('expires_at > NOW()') 
     .select('user_id')
     .first();
   
@@ -58,8 +58,8 @@ export async function GET(request) {
     let countQuery = db('transports').count('* as total');
     
     if (date) {
-      query = query.whereRaw('DATE(delivery_date) = ?', [date]);
-      countQuery = countQuery.whereRaw('DATE(delivery_date) = ?', [date]);
+      query = query.whereRaw('delivery_date::date = ?', [date]);
+      countQuery = countQuery.whereRaw('delivery_date::date = ?', [date]);
     }
     
     // Pobierz dane z paginacją
@@ -141,7 +141,7 @@ export async function POST(request) {
     const transportData = await request.json();
     
     // Używamy Knex do wstawienia danych
-    const [id] = await db('transports').insert(transportData);
+    const [id] = await db('transports').insert(transportData).returning('id');
     
     // Wyczyść cache po dodaniu nowego transportu
     clearCache();
@@ -219,7 +219,7 @@ export async function PUT(request) {
     
     // Dodaj datę zakończenia jeśli status zmieniony na completed
     if (status === 'completed') {
-      updateData.completed_at = db.fn.now(); // Używamy funkcji NOW() w MySQL
+      updateData.completed_at = db.fn.now(); 
     }
     
     if (Object.keys(updateData).length === 0) {
