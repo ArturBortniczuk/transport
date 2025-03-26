@@ -38,9 +38,13 @@ export async function PUT(request) {
       .select('is_admin')
       .first();
     
-    console.log('Sprawdzenie uprawnień admina:', admin);
+    console.log('Sprawdzenie uprawnień admina:', {
+      userId,
+      isAdmin: admin?.is_admin,
+      typeOf: typeof admin?.is_admin 
+    });
     
-    if (admin?.is_admin !== 1) {
+    if (admin?.is_admin !== true && admin?.is_admin !== 1) {
       return NextResponse.json({ 
         success: false, 
         error: 'Brak uprawnień administratora' 
