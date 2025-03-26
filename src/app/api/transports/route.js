@@ -104,7 +104,6 @@ export async function POST(request) {
     // Sprawdzamy uwierzytelnienie
     const authToken = request.cookies.get('authToken')?.value;
     const userId = await validateSession(authToken);
-
     
     if (!userId) {
       return NextResponse.json({ 
@@ -113,7 +112,7 @@ export async function POST(request) {
       }, { status: 401 });
     }
     
-    // Sprawdź uprawnienia użytkownika (zaktualizowane dla Knex)
+    // Sprawdź uprawnienia użytkownika
     const user = await db('users')
       .where('email', userId)
       .select('role', 'permissions')
@@ -128,7 +127,6 @@ export async function POST(request) {
     } catch (e) {
       console.error('Błąd parsowania uprawnień:', e);
     }
-
     
     // Tylko użytkownicy z uprawnieniami mogą dodawać transporty
     if (!canEditCalendar) {
@@ -139,12 +137,36 @@ export async function POST(request) {
     }
     
     const transportData = await request.json();
+    console.log('Otrzymane dane transportu:', transportData);
     
-    // Używamy Knex do wstawienia danych
-    const [id] = await db('transports').insert(transportData).returning('id');
+    // Konwersja wartości boolean dla PostgreSQL
+    if ('is_cyclical' in transportData) {
+      transportData.is_cyclical = transportData.is_cyclical === 1 || 
+                               transportData.is_cyclical === '1' || 
+                               transportData.is_cyclical === true;
+    }
+    
+    // Upewnij się, że data jest we właściwym formacie
+    if (transportData.delivery_date && typeof transportData.delivery_date === 'string') {
+      // Pozostaw datę jako string - PostgreSQL radzi sobie z ISO formatem
+      console.log('Data dostawy po formatowaniu:', transportData.delivery_date);
+    }
+    
+    console.log('Dane transportu do zapisania:', transportData);
+    
+    // W PostgreSQL używamy returning('id') aby uzyskać ID nowego rekordu
+    const result = await db('transports').insert(transportData).returning('id');
+    const id = result[0]?.id;
+    
+    console.log('Nowy transport dodany z ID:', id);
     
     // Wyczyść cache po dodaniu nowego transportu
-    clearCache();
+    try {
+      clearCache();
+    } catch (error) {
+      console.error('Błąd czyszczenia cache:', error);
+      // Nie przerywamy, jeśli czyszczenie cache się nie powiedzie
+    }
     
     return NextResponse.json({ 
       success: true, 
@@ -176,7 +198,7 @@ export async function PUT(request) {
     // Pobierz dane transportu i dane użytkownika
     const { id, status, ...transportData } = await request.json();
     
-    // Sprawdź uprawnienia użytkownika (zaktualizowane dla Knex)
+    // Sprawdź uprawnienia użytkownika
     const user = await db('users')
       .where('email', userId)
       .select('role', 'permissions')
@@ -213,6 +235,14 @@ export async function PUT(request) {
     
     // Przygotowanie danych do aktualizacji
     const updateData = { ...transportData };
+    
+    // Konwersja wartości boolean dla PostgreSQL
+    if ('is_cyclical' in updateData) {
+      updateData.is_cyclical = updateData.is_cyclical === 1 || 
+                            updateData.is_cyclical === '1' || 
+                            updateData.is_cyclical === true;
+    }
+    
     if (status) {
       updateData.status = status;
     }
@@ -229,6 +259,8 @@ export async function PUT(request) {
       });
     }
     
+    console.log('Aktualizacja transportu, ID:', id, 'Dane:', updateData);
+    
     // Używamy Knex do aktualizacji danych
     const updated = await db('transports')
       .where('id', id)
@@ -239,7 +271,11 @@ export async function PUT(request) {
     }
 
     // Wyczyść cache po aktualizacji transportu
-    clearCache();
+    try {
+      clearCache();
+    } catch (error) {
+      console.error('Błąd czyszczenia cache:', error);
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -265,7 +301,7 @@ export async function DELETE(request) {
       }, { status: 401 });
     }
     
-    // Sprawdź uprawnienia użytkownika (zaktualizowane dla Knex)
+    // Sprawdź uprawnienia użytkownika
     const user = await db('users')
       .where('email', userId)
       .select('role', 'permissions')
@@ -306,7 +342,11 @@ export async function DELETE(request) {
     }
 
     // Wyczyść cache po usunięciu transportu
-    clearCache();
+    try {
+      clearCache();
+    } catch (error) {
+      console.error('Błąd czyszczenia cache:', error);
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {
