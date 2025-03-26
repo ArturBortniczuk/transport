@@ -13,10 +13,10 @@ export async function GET(request) {
       return NextResponse.json({ isAdmin: false });
     }
     
-    // Pobierz ID użytkownika z sesji - zaktualizowane do Knex
+    // Pobierz ID użytkownika z sesji
     const session = await db('sessions')
       .where('token', authToken)
-      .whereRaw('expires_at > NOW()') // Funkcja NOW() dla MySQL
+      .whereRaw('expires_at > NOW()') // To powinno działać tak samo w PostgreSQL
       .select('user_id')
       .first();
     
@@ -26,19 +26,19 @@ export async function GET(request) {
       return NextResponse.json({ isAdmin: false });
     }
     
-    // Sprawdź czy użytkownik jest adminem - zaktualizowane do Knex
+    // Sprawdź czy użytkownik jest adminem
     const user = await db('users')
       .where('email', session.user_id)
       .select('is_admin')
       .first();
 
-    console.log('Sprawdzanie czy użytkownik jest adminem:', {
-      user_id: session.user_id,
-      is_admin: user?.is_admin === 1
-    });
-
+    // Dodaj więcej logów dla debugowania
+    console.log('Dane użytkownika:', user);
+    console.log('Status admin:', user?.is_admin);
+    
+    // W PostgreSQL true/false zamiast 1/0
     return NextResponse.json({ 
-      isAdmin: user?.is_admin === 1 
+      isAdmin: user?.is_admin === true || user?.is_admin === 1 
     });
 
   } catch (error) {
