@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { format } from 'date-fns'
 import { pl } from 'date-fns/locale'
 import { KIEROWCY } from '../kalendarz/constants'
+import * as XLSX from 'xlsx'
 
 export default function ArchiwumPage() {
   const [archiwum, setArchiwum] = useState([])
@@ -11,6 +12,7 @@ export default function ArchiwumPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [deleteStatus, setDeleteStatus] = useState(null)
+  const [exportFormat, setExportFormat] = useState('xlsx')
   
   // Filtry
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
@@ -150,6 +152,87 @@ export default function ArchiwumPage() {
     return driver ? `${driver.imie} (${driver.tabliceRej})` : 'Brak danych'
   }
 
+  // Funkcja eksportująca dane do pliku
+  const exportData = () => {
+    if (filteredArchiwum.length === 0) {
+      alert('Brak danych do eksportu')
+      return
+    }
+    
+    // Przygotuj dane do eksportu
+    const dataToExport = filteredArchiwum.map(transport => {
+      const driver = KIEROWCY.find(k => k.id === parseInt(transport.driver_id))
+      
+      return {
+        'Data transportu': format(new Date(transport.delivery_date), 'dd.MM.yyyy', { locale: pl }),
+        'Miasto': transport.destination_city,
+        'Kod pocztowy': transport.postal_code || '',
+        'Ulica': transport.street || '',
+        'Magazyn': transport.source_warehouse === 'bialystok' ? 'Białystok' : 
+                 transport.source_warehouse === 'zielonka' ? 'Zielonka' : 
+                 transport.source_warehouse,
+        'Odległość (km)': transport.distance || '',
+        'Firma': transport.client_name || '',
+        'MPK': transport.mpk || '',
+        'Kierowca': driver ? driver.imie : '',
+        'Nr rejestracyjny': driver ? driver.tabliceRej : '',
+        'Status': transport.status || '',
+        'Data zakończenia': transport.completed_at ? format(new Date(transport.completed_at), 'dd.MM.yyyy HH:mm', { locale: pl }) : ''
+      }
+    })
+    
+    // Przygotuj nazwę pliku
+    const monthLabel = selectedMonth === 'all' ? 'wszystkie_miesiace' : 
+                     months.find(m => m.value === selectedMonth)?.label.toLowerCase() || selectedMonth
+    
+    const fileName = `transporty_${selectedYear}_${monthLabel}`
+    
+    if (exportFormat === 'csv') {
+      exportToCSV(dataToExport, fileName)
+    } else {
+      exportToXLSX(dataToExport, fileName)
+    }
+  }
+  
+  // Eksport do CSV
+  const exportToCSV = (data, fileName) => {
+    // Nagłówki
+    const headers = Object.keys(data[0])
+    
+    // Convert data to CSV string
+    let csvContent = headers.join(';') + '\n'
+    data.forEach(item => {
+      const row = headers.map(header => {
+        let cell = item[header] !== undefined && item[header] !== null ? item[header] : ''
+        // Jeśli komórka zawiera przecinek, średnik lub nowy wiersz, umieść ją w cudzysłowach
+        if (cell.toString().includes(',') || cell.toString().includes(';') || cell.toString().includes('\n')) {
+          cell = `"${cell}"`
+        }
+        return cell
+      }).join(';')
+      csvContent += row + '\n'
+    })
+
+    // Kodowanie do ISO-8859-2 dla polskich znaków w Excelu
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' })
+    
+    // Tworzenie i kliknięcie tymczasowego linku do pobrania
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(blob)
+    link.download = `${fileName}.csv`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
+  // Eksport do XLSX
+  const exportToXLSX = (data, fileName) => {
+    const ws = XLSX.utils.json_to_sheet(data)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Transporty')
+    XLSX.writeFile(wb, `${fileName}.xlsx`)
+  }
+
   if (loading) {
     return <div className="flex justify-center items-center h-64">Ładowanie...</div>
   }
@@ -196,6 +279,31 @@ export default function ArchiwumPage() {
                 <option key={month.value} value={month.value}>{month.label}</option>
               ))}
             </select>
+          </div>
+          
+          {/* Eksport danych */}
+          <div className="flex items-end gap-2">
+            <div>
+              <label htmlFor="exportFormat" className="block text-sm font-medium text-gray-700 mb-1">
+                Format
+              </label>
+              <select
+                id="exportFormat"
+                value={exportFormat}
+                onChange={(e) => setExportFormat(e.target.value)}
+                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+              >
+                <option value="xlsx">Excel (XLSX)</option>
+                <option value="csv">CSV</option>
+              </select>
+            </div>
+            <button
+              onClick={exportData}
+              disabled={filteredArchiwum.length === 0}
+              className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              Eksportuj
+            </button>
           </div>
         </div>
       </div>
@@ -299,7 +407,7 @@ export default function ArchiwumPage() {
         </div>
         
         {/* Podsumowanie */}
-        <div className="border-t border-gray-200 px-4 py-3 bg-gray-50">
+        <div className="border-t border-gray-200 px-4 py-3 bg-gray-50 flex justify-between items-center">
           <div className="text-sm text-gray-700">
             Łącznie: <span className="font-semibold">{filteredArchiwum.length}</span> transportów
             {filteredArchiwum.length > 0 && (
