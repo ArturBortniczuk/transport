@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { KIEROWCY, RYNKI, POZIOMY_ZALADUNKU } from '../constants'
 import { format } from 'date-fns'
 import { pl } from 'date-fns/locale'
+import LocationSelector from './LocationSelector' // Nowy import
 
 export default function TransportForm({
   selectedDate,
@@ -19,6 +20,7 @@ export default function TransportForm({
   const [searchTerm, setSearchTerm] = useState('')
   const [filteredUsers, setFilteredUsers] = useState([])
   const [showUsersList, setShowUsersList] = useState(false)
+  const [showLocationSelector, setShowLocationSelector] = useState(false) // Nowy stan
 
   useEffect(() => {
     async function fetchUsers() {
@@ -76,6 +78,62 @@ export default function TransportForm({
       magazyn: magazyn
     }))
   }
+
+  // Funkcja do zapisywania lokalizacji
+  const saveCurrentLocation = () => {
+    if (!nowyTransport.miasto || !nowyTransport.kodPocztowy) {
+      alert('Uzupełnij przynajmniej miasto i kod pocztowy, aby zapisać lokalizację');
+      return;
+    }
+    
+    try {
+      // Pobierz aktualną listę zapisanych lokalizacji
+      const savedLocations = localStorage.getItem('savedLocations');
+      let locations = [];
+      
+      if (savedLocations) {
+        locations = JSON.parse(savedLocations);
+      }
+      
+      // Przygotuj lokalizację do zapisania
+      const locationToSave = {
+        miasto: nowyTransport.miasto,
+        kodPocztowy: nowyTransport.kodPocztowy,
+        ulica: nowyTransport.ulica || '',
+        nazwaKlienta: nowyTransport.nazwaKlienta || ''
+      };
+      
+      // Sprawdź czy lokalizacja już istnieje
+      const exists = locations.some(loc => 
+        loc.miasto === locationToSave.miasto && 
+        loc.kodPocztowy === locationToSave.kodPocztowy && 
+        loc.ulica === locationToSave.ulica
+      );
+      
+      if (!exists) {
+        // Dodaj nową lokalizację i zapisz
+        locations.push(locationToSave);
+        localStorage.setItem('savedLocations', JSON.stringify(locations));
+        alert('Lokalizacja została zapisana');
+      } else {
+        alert('Ta lokalizacja już istnieje w zapisanych lokalizacjach');
+      }
+    } catch (error) {
+      console.error('Błąd podczas zapisywania lokalizacji:', error);
+      alert('Wystąpił błąd podczas zapisywania lokalizacji');
+    }
+  };
+  
+  // Funkcja obsługująca wybór lokalizacji z selektora
+  const handleLocationSelect = (location) => {
+    setNowyTransport(prev => ({
+      ...prev,
+      miasto: location.miasto,
+      kodPocztowy: location.kodPocztowy,
+      ulica: location.ulica || '',
+      nazwaKlienta: location.nazwaKlienta || ''
+    }));
+  };
 
   const canEditCalendar = userPermissions?.calendar?.edit === true;
   
@@ -139,13 +197,31 @@ export default function TransportForm({
           <div className="space-y-6">
             {/* Sekcja: Lokalizacja */}
             <div className={sectionBaseClass}>
-              <h3 className="text-lg font-semibold text-gray-700 mb-4 flex items-center">
-                <svg className="w-5 h-5 mr-2 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-                Lokalizacja dostawy
-              </h3>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold text-gray-700 flex items-center">
+                  <svg className="w-5 h-5 mr-2 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  Lokalizacja dostawy
+                </h3>
+                <div className="flex space-x-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowLocationSelector(true)}
+                    className="px-3 py-1 text-sm border border-blue-300 text-blue-600 rounded hover:bg-blue-50"
+                  >
+                    Wczytaj z listy
+                  </button>
+                  <button
+                    type="button"
+                    onClick={saveCurrentLocation}
+                    className="px-3 py-1 text-sm border border-green-300 text-green-600 rounded hover:bg-green-50"
+                  >
+                    Zapisz lokalizację
+                  </button>
+                </div>
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className={labelBaseClass}>
@@ -404,6 +480,14 @@ export default function TransportForm({
           </div>
         </form>
       </div>
+      
+      {/* Selektor lokalizacji */}
+      {showLocationSelector && (
+        <LocationSelector 
+          onSelect={handleLocationSelect} 
+          onClose={() => setShowLocationSelector(false)}
+        />
+      )}
     </div>
   )
 }
