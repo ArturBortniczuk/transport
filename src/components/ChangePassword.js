@@ -1,6 +1,5 @@
 // src/components/ChangePassword.js
 import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
 
 const ChangePassword = ({ onClose }) => {
   const [currentPassword, setCurrentPassword] = useState('');
@@ -9,7 +8,6 @@ const ChangePassword = ({ onClose }) => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const router = useRouter();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -60,78 +58,134 @@ const ChangePassword = ({ onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={(e) => {
-      // Zamknij modal tylko gdy kliknięto bezpośrednio na tło
-      if (e.target === e.currentTarget) {
-        onClose();
-      }
+    <div className="fixed inset-0 flex items-center justify-center z-50" style={{
+      backgroundColor: 'rgba(0, 0, 0, 0.5)'
     }}>
-      <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full" style={{
+        border: '1px solid #ccc',
+        maxWidth: '400px',
+        width: '100%'
+      }}>
         <h2 className="text-xl font-semibold mb-4">Zmiana hasła</h2>
         
         {success ? (
-          <div className="bg-green-50 text-green-700 p-4 rounded-md">
+          <div style={{
+            backgroundColor: '#d1fae5',
+            color: '#047857',
+            padding: '16px',
+            borderRadius: '6px'
+          }}>
             Hasło zostało zmienione pomyślnie!
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit}>
             {error && (
-              <div className="bg-red-50 text-red-700 p-4 rounded-md">
+              <div style={{
+                backgroundColor: '#fee2e2',
+                color: '#b91c1c',
+                padding: '16px',
+                borderRadius: '6px',
+                marginBottom: '16px'
+              }}>
                 {error}
               </div>
             )}
             
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{
+                display: 'block',
+                marginBottom: '8px',
+                fontWeight: '500'
+              }}>
                 Aktualne hasło
               </label>
               <input
                 type="password"
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
-                className="mt-1 block w-full rounded-md border border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 py-2 px-3"
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px'
+                }}
                 required
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{
+                display: 'block',
+                marginBottom: '8px',
+                fontWeight: '500'
+              }}>
                 Nowe hasło
               </label>
               <input
                 type="password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                className="mt-1 block w-full rounded-md border border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 py-2 px-3"
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px'
+                }}
                 required
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+            <div style={{ marginBottom: '24px' }}>
+              <label style={{
+                display: 'block',
+                marginBottom: '8px',
+                fontWeight: '500'
+              }}>
                 Potwierdź nowe hasło
               </label>
               <input
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                className="mt-1 block w-full rounded-md border border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 py-2 px-3"
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px'
+                }}
                 required
               />
             </div>
 
-            <div className="flex justify-end space-x-4 mt-6">
+            <div style={{
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: '12px'
+            }}>
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: 'white',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px',
+                  cursor: 'pointer'
+                }}
                 disabled={isLoading}
               >
                 Anuluj
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700"
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: '#2563eb',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer'
+                }}
                 disabled={isLoading}
               >
                 {isLoading ? 'Zapisywanie...' : 'Zmień hasło'}
