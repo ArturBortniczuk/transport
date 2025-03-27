@@ -1,31 +1,37 @@
 // src/components/ChangePassword.js
-import React, { useState } from 'react';
+import React, { useRef, useEffect } from 'react';
 
 const ChangePassword = ({ onClose }) => {
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  // Używamy useRef zamiast useState dla pól formularza
+  const currentPasswordRef = useRef(null);
+  const newPasswordRef = useRef(null);
+  const confirmPasswordRef = useRef(null);
+  const formRef = useRef(null);
+
+  // Ustawiamy fokus na pierwsze pole po załadowaniu
+  useEffect(() => {
+    if (currentPasswordRef.current) {
+      currentPasswordRef.current.focus();
+    }
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
-    setIsLoading(true);
-
+    
+    const currentPassword = currentPasswordRef.current.value;
+    const newPassword = newPasswordRef.current.value;
+    const confirmPassword = confirmPasswordRef.current.value;
+    
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      alert('Wszystkie pola są wymagane');
+      return;
+    }
+    
     if (newPassword !== confirmPassword) {
-      setError('Nowe hasła nie są identyczne');
-      setIsLoading(false);
+      alert('Nowe hasła nie są identyczne');
       return;
     }
-
-    if (newPassword.length < 6) {
-      setError('Nowe hasło musi mieć co najmniej 6 znaków');
-      setIsLoading(false);
-      return;
-    }
-
+    
     try {
       const response = await fetch('/api/change-password', {
         method: 'POST',
@@ -41,158 +47,91 @@ const ChangePassword = ({ onClose }) => {
       const data = await response.json();
 
       if (data.success) {
-        setSuccess(true);
-        
-        // Po 2 sekundach zamknij modal
-        setTimeout(() => {
-          onClose();
-        }, 2000);
+        alert('Hasło zostało zmienione pomyślnie!');
+        onClose();
       } else {
-        setError(data.error || 'Wystąpił błąd podczas zmiany hasła');
+        alert(data.error || 'Wystąpił błąd podczas zmiany hasła');
       }
     } catch (error) {
-      setError('Wystąpił błąd podczas zmiany hasła');
-    } finally {
-      setIsLoading(false);
+      alert('Wystąpił błąd podczas komunikacji z serwerem');
     }
   };
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center z-50" style={{
-      backgroundColor: 'rgba(0, 0, 0, 0.5)'
-    }}>
-      <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full" style={{
-        border: '1px solid #ccc',
-        maxWidth: '400px',
-        width: '100%'
-      }}>
-        <h2 className="text-xl font-semibold mb-4">Zmiana hasła</h2>
+    <div 
+      id="password-modal"
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+      onClick={(e) => {
+        if (e.target.id === "password-modal") {
+          onClose();
+        }
+      }}
+    >
+      <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
+        <h2 className="text-xl font-bold mb-4">Zmiana hasła</h2>
         
-        {success ? (
-          <div style={{
-            backgroundColor: '#d1fae5',
-            color: '#047857',
-            padding: '16px',
-            borderRadius: '6px'
-          }}>
-            Hasło zostało zmienione pomyślnie!
+        <form ref={formRef} onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label htmlFor="current-password" className="block text-sm font-medium mb-1">
+              Aktualne hasło
+            </label>
+            <input
+              id="current-password"
+              name="currentPassword"
+              type="password"
+              ref={currentPasswordRef}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md"
+              autoComplete="current-password"
+              required
+            />
           </div>
-        ) : (
-          <form onSubmit={handleSubmit}>
-            {error && (
-              <div style={{
-                backgroundColor: '#fee2e2',
-                color: '#b91c1c',
-                padding: '16px',
-                borderRadius: '6px',
-                marginBottom: '16px'
-              }}>
-                {error}
-              </div>
-            )}
-            
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{
-                display: 'block',
-                marginBottom: '8px',
-                fontWeight: '500'
-              }}>
-                Aktualne hasło
-              </label>
-              <input
-                type="password"
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '6px'
-                }}
-                required
-              />
-            </div>
 
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{
-                display: 'block',
-                marginBottom: '8px',
-                fontWeight: '500'
-              }}>
-                Nowe hasło
-              </label>
-              <input
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '6px'
-                }}
-                required
-              />
-            </div>
+          <div>
+            <label htmlFor="new-password" className="block text-sm font-medium mb-1">
+              Nowe hasło
+            </label>
+            <input
+              id="new-password"
+              name="newPassword"
+              type="password"
+              ref={newPasswordRef}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md"
+              autoComplete="new-password"
+              required
+            />
+          </div>
 
-            <div style={{ marginBottom: '24px' }}>
-              <label style={{
-                display: 'block',
-                marginBottom: '8px',
-                fontWeight: '500'
-              }}>
-                Potwierdź nowe hasło
-              </label>
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '6px'
-                }}
-                required
-              />
-            </div>
+          <div>
+            <label htmlFor="confirm-password" className="block text-sm font-medium mb-1">
+              Potwierdź nowe hasło
+            </label>
+            <input
+              id="confirm-password"
+              name="confirmPassword"
+              type="password"
+              ref={confirmPasswordRef}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md"
+              autoComplete="new-password"
+              required
+            />
+          </div>
 
-            <div style={{
-              display: 'flex',
-              justifyContent: 'flex-end',
-              gap: '12px'
-            }}>
-              <button
-                type="button"
-                onClick={onClose}
-                style={{
-                  padding: '8px 16px',
-                  backgroundColor: 'white',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '6px',
-                  cursor: 'pointer'
-                }}
-                disabled={isLoading}
-              >
-                Anuluj
-              </button>
-              <button
-                type="submit"
-                style={{
-                  padding: '8px 16px',
-                  backgroundColor: '#2563eb',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: 'pointer'
-                }}
-                disabled={isLoading}
-              >
-                {isLoading ? 'Zapisywanie...' : 'Zmień hasło'}
-              </button>
-            </div>
-          </form>
-        )}
+          <div className="flex justify-end space-x-4 pt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md"
+            >
+              Anuluj
+            </button>
+            <button
+              type="submit"
+              className="px-4 py-2 bg-blue-600 text-white rounded-md"
+            >
+              Zmień hasło
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
