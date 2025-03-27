@@ -1,65 +1,52 @@
 'use client'
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
+import 'leaflet/dist/leaflet.css'
 
-export default function GoogleMapComponent({ transporty = [], magazyny = {} }) {
-  const mapRef = useRef(null);
-  const [mapLoaded, setMapLoaded] = useState(false);
-  const [googleMapsLoaded, setGoogleMapsLoaded] = useState(false);
-  const [markers, setMarkers] = useState([]);
-  const [infoWindows, setInfoWindows] = useState([]);
+export default function SimpleMapComponent({ transporty = [], magazyny = {} }) {
+  const [mapCreated, setMapCreated] = useState(false);
+  const [mapContainer, setMapContainer] = useState(null);
+  const [leafletLoaded, setLeafletLoaded] = useState(false);
+  const [L, setLeafletLib] = useState(null);
+  const [map, setMap] = useState(null);
 
   // Logowanie danych wejściowych
   useEffect(() => {
-    console.log("GoogleMapComponent: Otrzymane transporty:", transporty);
-    console.log("GoogleMapComponent: Otrzymane magazyny:", magazyny);
+    console.log("SimpleMapComponent: Otrzymane transporty:", transporty);
+    console.log("SimpleMapComponent: Otrzymane magazyny:", magazyny);
   }, [transporty, magazyny]);
 
-  // Załaduj Google Maps API
+  // Funkcja inicjalizująca mapę
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (window.google && window.google.maps) {
-      setGoogleMapsLoaded(true);
-      return;
-    }
 
-    // Funkcja wywoływana po załadowaniu Google Maps API
-    window.initGoogleMaps = () => {
-      setGoogleMapsLoaded(true);
-    };
-
-    // Dodaj skrypt Google Maps do strony
-    const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY&callback=initGoogleMaps`;
-    script.async = true;
-    script.defer = true;
-    document.head.appendChild(script);
-
-    return () => {
-      window.initGoogleMaps = null;
-      // Usuń skrypt jeśli komponent zostanie odmontowany przed załadowaniem
-      if (document.head.contains(script)) {
-        document.head.removeChild(script);
-      }
-    };
+    // Dynamiczne załadowanie biblioteki Leaflet
+    import('leaflet').then((leaflet) => {
+      setLeafletLib(leaflet.default);
+      setLeafletLoaded(true);
+    });
   }, []);
 
-  // Inicjalizacja mapy
+  // Tworzenie mapy po załadowaniu Leaflet
   useEffect(() => {
-    if (!googleMapsLoaded || !mapRef.current || mapLoaded) return;
+    if (!leafletLoaded || !L || !mapContainer || mapCreated) return;
 
-    const map = new window.google.maps.Map(mapRef.current, {
-      center: { lat: 52.7, lng: 22 },
-      zoom: 7,
-      mapTypeControl: true,
-      streetViewControl: false,
-      fullscreenControl: true,
+    // Napraw problem z ikonami Leaflet
+    delete L.Icon.Default.prototype._getIconUrl;
+    L.Icon.Default.mergeOptions({
+      iconRetinaUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png',
+      iconUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png',
+      shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
     });
 
-    setMapLoaded(true);
-    return () => {
-      // Czyszczenie zasobów mapy jeśli potrzebne
-    };
-  }, [googleMapsLoaded, mapLoaded]);
+    // Utwórz mapę
+    const mapInstance = L.map(mapContainer).setView([52.7, 22], 7);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(mapInstance);
+
+    setMap(mapInstance);
+    setMapCreated(true);
+  }, [L, mapContainer, leafletLoaded, mapCreated]);
 
   // Funkcja do określania źródła transportu (magazynu)
   const getTransportSource = (transport) => {
@@ -69,51 +56,52 @@ export default function GoogleMapComponent({ transporty = [], magazyny = {} }) {
            (transport.latitude > 53 ? 'bialystok' : 'zielonka'); // Domyślnie na podstawie położenia
   };
 
-  // Dodawanie markerów
+  // Dodawanie markerów magazynów
   useEffect(() => {
-    if (!mapLoaded || !window.google || !window.google.maps) return;
+    if (!map || !L) return;
 
-    // Funkcja tworząca marker magazynu
-    const createWarehouseMarker = (key, magazyn) => {
+    // Usuń poprzednie markery
+    map.eachLayer(layer => {
+      if (layer instanceof L.Marker) {
+        map.removeLayer(layer);
+      }
+    });
+
+    // Dodaj markery magazynów
+    Object.entries(magazyny).forEach(([key, magazyn]) => {
       console.log(`Dodaję marker magazynu ${key}:`, magazyn);
       
-      const marker = new window.google.maps.Marker({
-        position: { lat: magazyn.lat, lng: magazyn.lng },
-        map: new window.google.maps.Map(mapRef.current),
-        title: magazyn.nazwa,
-        icon: {
-          path: window.google.maps.SymbolPath.CIRCLE,
-          fillColor: magazyn.kolor,
-          fillOpacity: 1,
-          strokeWeight: 2,
-          strokeColor: '#FFFFFF',
-          scale: 12,
-        },
-        label: {
-          text: 'M',
-          color: '#FFFFFF',
-          fontSize: '10px',
-          fontWeight: 'bold'
-        },
-        zIndex: 10
+      const icon = L.divIcon({
+        className: 'custom-div-icon',
+        html: `
+          <div style="
+            width: 24px;
+            height: 24px;
+            background-color: ${magazyn.kolor};
+            border: 2px solid white;
+            border-radius: 50%;
+            box-shadow: 0 0 4px rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: white;
+            font-size: 12px;
+            font-family: Arial, sans-serif;
+          ">
+            M
+          </div>
+        `,
+        iconSize: [24, 24],
+        iconAnchor: [12, 12]
       });
 
-      const infoWindow = new window.google.maps.InfoWindow({
-        content: `<div class="text-center"><b>${magazyn.nazwa}</b></div>`
-      });
+      const marker = L.marker([magazyn.lat, magazyn.lng], { icon }).addTo(map);
+      marker.bindPopup(`<div class="text-center"><b>${magazyn.nazwa}</b></div>`);
+    });
 
-      marker.addListener('click', () => {
-        infoWindow.open({
-          anchor: marker,
-          map: new window.google.maps.Map(mapRef.current),
-        });
-      });
-
-      return { marker, infoWindow };
-    };
-
-    // Funkcja tworząca marker transportu
-    const createTransportMarker = (transport, index) => {
+    // Dodaj markery transportów
+    transporty.forEach((transport, index) => {
       // Normalizacja danych transportu
       const wspolrzedne = {
         lat: transport.wspolrzedne?.lat || transport.latitude,
@@ -122,7 +110,7 @@ export default function GoogleMapComponent({ transporty = [], magazyny = {} }) {
       
       if (!wspolrzedne.lat || !wspolrzedne.lng) {
         console.warn(`Transport ${index} nie ma współrzędnych:`, transport);
-        return null;
+        return;
       }
       
       const sourceKey = getTransportSource(transport);
@@ -131,27 +119,29 @@ export default function GoogleMapComponent({ transporty = [], magazyny = {} }) {
       
       const kolor = magazyn?.kolor || '#888888';
       
-      const marker = new window.google.maps.Marker({
-        position: { lat: wspolrzedne.lat, lng: wspolrzedne.lng },
-        map: new window.google.maps.Map(mapRef.current),
-        icon: {
-          path: window.google.maps.SymbolPath.CIRCLE,
-          fillColor: kolor,
-          fillOpacity: 1,
-          strokeWeight: 1,
-          strokeColor: '#FFFFFF',
-          scale: 8,
-        },
-        zIndex: 5
+      const icon = L.divIcon({
+        className: 'custom-div-icon',
+        html: `<div style="
+          background-color: ${kolor}; 
+          width: 16px; 
+          height: 16px; 
+          border-radius: 50%; 
+          border: 2px solid white; 
+          box-shadow: 0 0 4px rgba(0,0,0,0.5);
+        "></div>`,
+        iconSize: [16, 16],
+        iconAnchor: [8, 8]
       });
 
+      const marker = L.marker([wspolrzedne.lat, wspolrzedne.lng], { icon }).addTo(map);
+      
       const miasto = transport.miasto || transport.destination_city || '';
       const kodPocztowy = transport.kodPocztowy || transport.postal_code || '';
       const ulica = transport.ulica || transport.street || '';
       const odleglosc = transport.odleglosc || transport.distance || 0;
       const magazynNazwa = magazyn?.nazwa || sourceKey || '';
       
-      const infoWindowContent = `
+      const popupContent = `
         <div>
           <b>${miasto}</b>
           <br />
@@ -163,59 +153,15 @@ export default function GoogleMapComponent({ transporty = [], magazyny = {} }) {
           <small>Odległość: ${odleglosc} km</small>
         </div>
       `;
-
-      const infoWindow = new window.google.maps.InfoWindow({
-        content: infoWindowContent
-      });
-
-      marker.addListener('click', () => {
-        infoWindow.open({
-          anchor: marker,
-          map: new window.google.maps.Map(mapRef.current),
-        });
-      });
-
-      return { marker, infoWindow };
-    };
-
-    // Usuń stare markery
-    markers.forEach(marker => marker.setMap(null));
-    infoWindows.forEach(infoWindow => infoWindow.close());
-
-    // Dodaj markery magazynów
-    const newMarkers = [];
-    const newInfoWindows = [];
-
-    // Dodaj markery magazynów
-    Object.entries(magazyny).forEach(([key, magazyn]) => {
-      const { marker, infoWindow } = createWarehouseMarker(key, magazyn);
-      newMarkers.push(marker);
-      newInfoWindows.push(infoWindow);
+      
+      marker.bindPopup(popupContent);
     });
-
-    // Dodaj markery transportów
-    transporty.forEach((transport, index) => {
-      const result = createTransportMarker(transport, index);
-      if (result) {
-        newMarkers.push(result.marker);
-        newInfoWindows.push(result.infoWindow);
-      }
-    });
-
-    setMarkers(newMarkers);
-    setInfoWindows(newInfoWindows);
-
-    return () => {
-      // Czyszczenie markerów przy odmontowaniu
-      newMarkers.forEach(marker => marker.setMap(null));
-      newInfoWindows.forEach(infoWindow => infoWindow.close());
-    };
-  }, [mapLoaded, transporty, magazyny]);
+  }, [map, L, transporty, magazyny]);
 
   return (
     <div>
-      <div
-        ref={mapRef}
+      <div 
+        ref={setMapContainer} 
         style={{ height: '500px', width: '100%', borderRadius: '0.5rem' }}
       />
     </div>
