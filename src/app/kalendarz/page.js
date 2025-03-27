@@ -325,7 +325,6 @@ export default function KalendarzPage() {
       trasaCykliczna: false
     })
   }
-
   const handleUpdateTransport = async (e) => {
     e.preventDefault()
     
@@ -336,7 +335,7 @@ export default function KalendarzPage() {
         nowyTransport.kodPocztowy,
         nowyTransport.ulica
       )
-
+  
       // Oblicz odległość za pomocą Google Distance Matrix API
       const wybranyMagazyn = nowyTransport.zrodlo || 'bialystok'
       const odleglosc = await calculateDistance(
@@ -345,7 +344,7 @@ export default function KalendarzPage() {
         coordinates.lat,
         coordinates.lng
       )
-
+  
       const response = await fetch(`/api/transports`, {
         method: 'PUT',
         headers: {
@@ -368,10 +367,13 @@ export default function KalendarzPage() {
           delivery_date: selectedDate ? format(selectedDate, "yyyy-MM-dd'T'HH:mm:ss") : edytowanyTransport.delivery_date
         })
       })
-
+  
       const data = await response.json()
-
+  
       if (data.success) {
+        // Automatycznie zapisz lokalizację
+        saveLocationToStorage(nowyTransport);
+        
         await fetchTransports()
         setEdytowanyTransport(null)
         setNowyTransport({
