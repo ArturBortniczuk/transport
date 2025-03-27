@@ -2,19 +2,12 @@
 import { useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import { MAGAZYNY } from '../kalendarz/constants'
-import { getCoordinates } from '../services/geocoding'
+import { getGoogleCoordinates } from '../services/geocoding-google'
 
-// Dynamiczny import komponentu mapy aby uniknąć problemów z SSR
-const SimpleMapComponent = dynamic(
-  () => import('../../components/SimpleMapComponent'),
-  {
-    loading: () => (
-      <div className="h-[500px] bg-gray-100 rounded-lg flex items-center justify-center">
-        <div className="text-gray-500">Ładowanie mapy...</div>
-      </div>
-    ),
-    ssr: false  // To jest kluczowe - wyłączamy SSR dla komponentu mapy
-  }
+// Dynamiczny import komponentu mapy Google (bez SSR)
+const GoogleMapWithNoSSR = dynamic(
+  () => import('../../components/GoogleMapWithNoSSR'),
+  { ssr: false }
 )
 
 export default function MapaPage() {
@@ -81,14 +74,14 @@ export default function MapaPage() {
           (!transport.wspolrzedne || !transport.wspolrzedne.lat) && 
           (!transport.latitude || !transport.longitude)
         ) {
-          // Jeśli nie ma, spróbuj je uzyskać
+          // Jeśli nie ma, spróbuj je uzyskać używając Google Geocoding
           try {
             const city = transport.miasto || transport.destination_city;
             const postalCode = transport.kodPocztowy || transport.postal_code;
             const street = transport.ulica || transport.street;
             
             if (city && postalCode) {
-              const coords = await getCoordinates(city, postalCode, street);
+              const coords = await getGoogleCoordinates(city, postalCode, street);
               return {
                 ...transport,
                 wspolrzedne: coords
@@ -135,7 +128,7 @@ export default function MapaPage() {
 
       <div className="bg-white rounded-lg shadow">
         <div className="p-4">
-          <SimpleMapComponent transporty={mappedTransporty} magazyny={MAGAZYNY} />
+          <GoogleMapWithNoSSR transporty={mappedTransporty} magazyny={MAGAZYNY} />
         </div>
 
         <div className="border-t p-4">
