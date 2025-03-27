@@ -2,8 +2,8 @@
 import { useState, useEffect } from 'react'
 import { format, addMonths, startOfMonth, endOfMonth, eachDayOfInterval, addDays, startOfWeek, endOfWeek, parseISO } from 'date-fns'
 import { pl } from 'date-fns/locale'
-import * as turf from '@turf/turf'
-import { getCoordinates } from '../services/geocoding'
+import { getGoogleCoordinates } from '../services/geocoding-google'
+import { calculateDistance } from '../services/calculateDistance'
 import CalendarGrid from './components/CalendarGrid'
 import SimpleCalendarGrid from './components/SimpleCalendarGrid'
 import TransportForm from './components/TransportForm'
@@ -165,8 +165,6 @@ export default function KalendarzPage() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     
-
-    // W pliku page_5.js w funkcji handleSubmit
     console.log('Dane transportu wysyłane do API:', {
       miasto: nowyTransport.miasto,
       osobaZlecajaca: nowyTransport.osobaZlecajaca,
@@ -174,7 +172,7 @@ export default function KalendarzPage() {
     });
 
     try {
-      // Dodajmy wybór magazynu w formularzu zamiast używania roli
+      // Wybór magazynu
       const wybranyMagazyn = nowyTransport.magazyn || 'bialystok' // Domyślnie Białystok
       
       if (!MAGAZYNY[wybranyMagazyn]) {
@@ -182,15 +180,20 @@ export default function KalendarzPage() {
         return
       }
     
-      const coordinates = await getCoordinates(
+      // Pozyskaj współrzędne miejsca docelowego za pomocą Google Geocoding API
+      const coordinates = await getGoogleCoordinates(
         nowyTransport.miasto,
         nowyTransport.kodPocztowy,
         nowyTransport.ulica
       )
     
-      const from = turf.point([MAGAZYNY[wybranyMagazyn].lng, MAGAZYNY[wybranyMagazyn].lat])
-      const to = turf.point([coordinates.lng, coordinates.lat])
-      const odleglosc = Math.round(turf.distance(from, to, { units: 'kilometers' }))
+      // Oblicz odległość za pomocą Google Distance Matrix API
+      const odleglosc = await calculateDistance(
+        MAGAZYNY[wybranyMagazyn].lat,
+        MAGAZYNY[wybranyMagazyn].lng,
+        coordinates.lat,
+        coordinates.lng
+      )
     
       const response = await fetch('/api/transports', {
         method: 'POST',
@@ -245,7 +248,7 @@ export default function KalendarzPage() {
       }
     } catch (error) {
       console.error('Błąd podczas dodawania transportu:', error)
-      alert('Wystąpił błąd podczas dodawania transportu')
+      alert('Wystąpił błąd podczas dodawania transportu: ' + error.message)
     }
   }
 
@@ -327,15 +330,21 @@ export default function KalendarzPage() {
     e.preventDefault()
     
     try {
-      const coordinates = await getCoordinates(
+      // Pozyskaj współrzędne miejsca docelowego za pomocą Google Geocoding API
+      const coordinates = await getGoogleCoordinates(
         nowyTransport.miasto,
         nowyTransport.kodPocztowy,
         nowyTransport.ulica
       )
 
-      const from = turf.point([MAGAZYNY[userRole].lng, MAGAZYNY[userRole].lat])
-      const to = turf.point([coordinates.lng, coordinates.lat])
-      const odleglosc = Math.round(turf.distance(from, to, { units: 'kilometers' }))
+      // Oblicz odległość za pomocą Google Distance Matrix API
+      const wybranyMagazyn = nowyTransport.zrodlo || 'bialystok'
+      const odleglosc = await calculateDistance(
+        MAGAZYNY[wybranyMagazyn].lat,
+        MAGAZYNY[wybranyMagazyn].lng,
+        coordinates.lat,
+        coordinates.lng
+      )
 
       const response = await fetch(`/api/transports`, {
         method: 'PUT',
