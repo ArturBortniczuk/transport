@@ -1,8 +1,6 @@
 'use client'
 import { useEffect, useState, useRef } from 'react'
-import dynamic from 'next/dynamic'
 
-// Ten komponent renderuje się tylko po stronie klienta
 export default function GoogleMapWithNoSSR({ transporty = [], magazyny = {} }) {
   const [isLoaded, setIsLoaded] = useState(false);
   const mapRef = useRef(null);
@@ -12,7 +10,10 @@ export default function GoogleMapWithNoSSR({ transporty = [], magazyny = {} }) {
   const [infoWindows, setInfoWindows] = useState([]);
 
   // Dodajmy log dla debugowania
-  console.log("Transporty przekazane do mapy:", transporty);
+  useEffect(() => {
+    console.log("GoogleMapWithNoSSR: Otrzymane transporty:", transporty);
+    console.log("GoogleMapWithNoSSR: Otrzymane magazyny:", magazyny);
+  }, [transporty, magazyny]);
 
   // Ładowanie Google Maps API
   useEffect(() => {
