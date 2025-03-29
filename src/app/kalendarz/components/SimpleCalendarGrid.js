@@ -1,6 +1,3 @@
-// Aktualizacja SimpleCalendarGrid.js
-// Dodamy logikę filtrowania, która będzie brała pod uwagę aktywne filtry
-
 'use client'
 import { useState } from 'react'
 import { format, getDate } from 'date-fns'
@@ -35,17 +32,28 @@ export default function SimpleCalendarGrid({
     return 'bg-gray-100 text-gray-800'
   }
 
-  // Funkcja filtrująca transporty na podstawie aktywnych filtrów
+  // Funkcja filtrująca transporty na podstawie aktywnych filtrów - poprawiona
   const filtrujTransporty = (transportyNaDzien) => {
     if (!transportyNaDzien || !Array.isArray(transportyNaDzien)) return [];
     
     return transportyNaDzien.filter(transport => {
+      // Upewnij się, że transporty ze statusem 'completed' są filtrowane
+      if (transport.status === 'completed' || transport.status === 'zakończony') {
+        return false;
+      }
+      
+      // Sprawdź czy transport jest aktywny
+      const isActive = transport.status === 'aktywny' || transport.status === 'active';
+      if (!isActive) {
+        return false;
+      }
+      
+      // Filtry magazynu, kierowcy i rynku
       const pasujeMagazyn = !filtryAktywne?.magazyn || transport.zrodlo === filtryAktywne.magazyn;
       const pasujeKierowca = !filtryAktywne?.kierowca || transport.kierowcaId === filtryAktywne.kierowca;
       const pasujeRynek = !filtryAktywne?.rynek || transport.rynek === filtryAktywne.rynek;
       
-      return (transport.status === 'aktywny' || transport.status === 'active') && 
-             pasujeMagazyn && pasujeKierowca && pasujeRynek;
+      return pasujeMagazyn && pasujeKierowca && pasujeRynek;
     });
   };
 
@@ -72,6 +80,12 @@ export default function SimpleCalendarGrid({
     onTransportMove(transport, destination.droppableId)
   }
   
+  // Dodajemy też debugowanie
+  console.log("SimpleCalendarGrid rendering with:", {
+    transportyCount: Object.keys(transporty || {}).reduce((count, key) => count + (transporty[key]?.length || 0), 0),
+    filtryAktywne
+  });
+  
   return (
     <DragDropContext onDragEnd={handleDragEnd}>
       <div className="grid grid-cols-7 gap-2">
@@ -87,6 +101,16 @@ export default function SimpleCalendarGrid({
           
           // Pobierz transporty dla danego dnia i filtruj je
           const transportyNaDzien = transporty[dateKey] || []
+          
+          // Dodajemy debugowanie dla konkretnego dnia
+          if (transportyNaDzien.length > 0) {
+            console.log(`Day ${dateKey}:`, {
+              total: transportyNaDzien.length,
+              active: transportyNaDzien.filter(t => t.status === 'aktywny' || t.status === 'active').length,
+              completed: transportyNaDzien.filter(t => t.status === 'completed').length
+            });
+          }
+          
           const filtrowaneTransporty = filtrujTransporty(transportyNaDzien)
           
           return (
