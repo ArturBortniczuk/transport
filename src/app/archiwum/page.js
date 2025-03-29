@@ -168,6 +168,7 @@ export default function ArchiwumPage() {
         'Miasto': transport.destination_city,
         'Kod pocztowy': transport.postal_code || '',
         'Ulica': transport.street || '',
+        'Numer WZ': transport.wz_number || '',
         'Magazyn': transport.source_warehouse === 'bialystok' ? 'Białystok' : 
                  transport.source_warehouse === 'zielonka' ? 'Zielonka' : 
                  transport.source_warehouse,
@@ -330,6 +331,9 @@ export default function ArchiwumPage() {
                   Miejsce docelowe
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Numer WZ
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Magazyn
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -366,6 +370,9 @@ export default function ArchiwumPage() {
                       </div>
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {transport.wz_number || 'N/A'}
+                    </td>
+                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
                       {transport.source_warehouse === 'bialystok' ? 'Białystok' : 
                        transport.source_warehouse === 'zielonka' ? 'Zielonka' : 
                        transport.source_warehouse}
@@ -397,7 +404,7 @@ export default function ArchiwumPage() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={isAdmin ? 8 : 7} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={isAdmin ? 9 : 8} className="px-4 py-8 text-center text-gray-500">
                     Brak transportów w wybranym okresie
                   </td>
                 </tr>
