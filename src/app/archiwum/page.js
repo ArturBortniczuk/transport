@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react'
 import { format } from 'date-fns'
 import { pl } from 'date-fns/locale'
-import { KIEROWCY } from '../kalendarz/constants'
+import { KIEROWCY, RYNKI } from '../kalendarz/constants'
 import * as XLSX from 'xlsx'
 
 export default function ArchiwumPage() {
@@ -13,11 +13,16 @@ export default function ArchiwumPage() {
   const [error, setError] = useState(null)
   const [deleteStatus, setDeleteStatus] = useState(null)
   const [exportFormat, setExportFormat] = useState('xlsx')
-  const [refreshKey, setRefreshKey] = useState(0) // Dodany klucz odświeżania
   
   // Filtry
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [selectedMonth, setSelectedMonth] = useState('all') // 'all' oznacza wszystkie miesiące
+  const [selectedWarehouse, setSelectedWarehouse] = useState('') // filtr magazynu
+  const [selectedDriver, setSelectedDriver] = useState('') // filtr kierowcy
+  const [selectedRequester, setSelectedRequester] = useState('') // filtr handlowca
+  
+  // Lista użytkowników (handlowców) do filtrowania
+  const [users, setUsers] = useState([])
   
   // Lista dostępnych lat i miesięcy
   const currentYear = new Date().getFullYear()
@@ -37,58 +42,14 @@ export default function ArchiwumPage() {
     { value: '10', label: 'Listopad' },
     { value: '11', label: 'Grudzień' }
   ]
+  
+  // Lista magazynów do filtrowania
+  const warehouses = [
+    { value: '', label: 'Wszystkie magazyny' },
+    { value: 'bialystok', label: 'Magazyn Białystok' },
+    { value: 'zielonka', label: 'Magazyn Zielonka' }
+  ]
 
-  // Zoptymalizowana funkcja pobierania transportów
-  const fetchArchivedTransports = async () => {
-    try {
-      setLoading(true)
-      setError(null)
-      
-      // Dodajemy parametr nocache i timestamp, aby uniknąć problemów z cachem
-      const timestamp = new Date().getTime()
-      const response = await fetch(`/api/transports?status=completed&nocache=${timestamp}`, {
-        cache: 'no-store',
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0'
-        }
-      })
-      
-      if (!response.ok) {
-        throw new Error(`Błąd HTTP: ${response.status}`)
-      }
-      
-      const data = await response.json()
-      
-      if (data.success) {
-        console.log('Pobrano transporty:', data.transports.length)
-        
-        // Sprawdź czy dane są tablicą
-        if (!Array.isArray(data.transports)) {
-          console.error('Nieprawidłowy format danych:', data.transports)
-          throw new Error('Nieprawidłowy format danych')
-        }
-        
-        // Sortuj transporty od najnowszych
-        const sortedTransports = data.transports.sort((a, b) => 
-          new Date(b.delivery_date) - new Date(a.delivery_date)
-        )
-        
-        setArchiwum(sortedTransports)
-        applyFilters(sortedTransports, selectedYear, selectedMonth)
-      } else {
-        throw new Error(data.error || 'Nie udało się pobrać archiwum transportów')
-      }
-    } catch (error) {
-      console.error('Błąd pobierania archiwum:', error)
-      setError('Wystąpił błąd podczas pobierania danych: ' + error.message)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // Sprawdzenie uprawnień i pobranie danych
   useEffect(() => {
     // Sprawdź czy użytkownik jest administratorem
     const checkAdmin = async () => {
@@ -101,44 +62,87 @@ export default function ArchiwumPage() {
         setIsAdmin(false)
       }
     }
+    
+    // Pobierz listę użytkowników (handlowców)
+    const fetchUsers = async () => {
+      try {
+        const response = await fetch('/api/users/list')
+        if (response.ok) {
+          const data = await response.json()
+          setUsers(data)
+        }
+      } catch (error) {
+        console.error('Błąd pobierania użytkowników:', error)
+      }
+    }
 
     checkAdmin()
+    fetchUsers()
     fetchArchivedTransports()
-  }, [refreshKey]) // Dodajemy refreshKey jako zależność
+  }, [])
 
-  // Funkcja filtrująca transporty na podstawie wybranego roku i miesiąca
-  const applyFilters = (transports, year, month) => {
-    if (!transports || !Array.isArray(transports)) {
-      setFilteredArchiwum([])
-      return
+  // Pobierz dane archiwum z API
+  const fetchArchivedTransports = async () => {
+    try {
+      setLoading(true)
+      const response = await fetch('/api/transports?status=completed')
+      const data = await response.json()
+      
+      if (data.success) {
+        // Sortuj transporty od najnowszych
+        const sortedTransports = data.transports.sort((a, b) => 
+          new Date(b.delivery_date) - new Date(a.delivery_date)
+        )
+        setArchiwum(sortedTransports)
+        applyFilters(sortedTransports, selectedYear, selectedMonth, selectedWarehouse, selectedDriver, selectedRequester)
+      } else {
+        setError('Nie udało się pobrać archiwum transportów')
+      }
+    } catch (error) {
+      console.error('Błąd pobierania archiwum:', error)
+      setError('Wystąpił błąd podczas pobierania danych')
+    } finally {
+      setLoading(false)
     }
+  }
+
+  // Funkcja filtrująca transporty na podstawie wybranego roku, miesiąca, magazynu, kierowcy i osoby zlecającej
+  const applyFilters = (transports, year, month, warehouse, driver, requester) => {
+    if (!transports) return
     
     const filtered = transports.filter(transport => {
-      if (!transport || !transport.delivery_date) return false
+      const date = new Date(transport.delivery_date)
+      const transportYear = date.getFullYear()
       
-      try {
-        const date = new Date(transport.delivery_date)
-        if (isNaN(date.getTime())) return false // Sprawdź czy data jest prawidłowa
-        
-        const transportYear = date.getFullYear()
-        
-        // Najpierw sprawdź rok
-        if (transportYear !== parseInt(year)) {
-          return false
-        }
-        
-        // Jeśli wybrany "wszystkie miesiące", nie filtruj po miesiącu
-        if (month === 'all') {
-          return true
-        }
-        
-        // W przeciwnym razie sprawdź czy miesiąc się zgadza
-        const transportMonth = date.getMonth()
-        return transportMonth === parseInt(month)
-      } catch (e) {
-        console.error('Błąd przetwarzania daty transportu:', e, transport)
+      // Najpierw sprawdź rok
+      if (transportYear !== parseInt(year)) {
         return false
       }
+      
+      // Jeśli wybrany "wszystkie miesiące", nie filtruj po miesiącu
+      if (month !== 'all') {
+        const transportMonth = date.getMonth()
+        if (transportMonth !== parseInt(month)) {
+          return false
+        }
+      }
+      
+      // Filtr magazynu
+      if (warehouse && transport.source_warehouse !== warehouse) {
+        return false
+      }
+      
+      // Filtr kierowcy
+      if (driver && transport.driver_id.toString() !== driver) {
+        return false
+      }
+      
+      // Filtr osoby zlecającej
+      if (requester && transport.requester_email !== requester) {
+        return false
+      }
+      
+      return true
     })
     
     setFilteredArchiwum(filtered)
@@ -146,10 +150,10 @@ export default function ArchiwumPage() {
 
   // Obsługa zmiany filtrów
   useEffect(() => {
-    applyFilters(archiwum, selectedYear, selectedMonth)
-  }, [selectedYear, selectedMonth, archiwum])
+    applyFilters(archiwum, selectedYear, selectedMonth, selectedWarehouse, selectedDriver, selectedRequester)
+  }, [selectedYear, selectedMonth, selectedWarehouse, selectedDriver, selectedRequester, archiwum])
 
-  // Funkcja do usuwania transportu - poprawiona
+  // Funkcja do usuwania transportu
   const handleDeleteTransport = async (id) => {
     if (!confirm('Czy na pewno chcesz usunąć ten transport?')) {
       return
@@ -159,54 +163,34 @@ export default function ArchiwumPage() {
       setDeleteStatus({ type: 'loading', message: 'Usuwanie transportu...' })
       
       const response = await fetch(`/api/transports/delete?id=${id}`, {
-        method: 'DELETE',
-        cache: 'no-store',
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache'
-        }
+        method: 'DELETE'
       })
-      
-      if (!response.ok) {
-        throw new Error(`Błąd HTTP: ${response.status}`)
-      }
       
       const data = await response.json()
       
       if (data.success) {
-        // Usuwamy transport z lokalnego stanu
+        // Usuń transport z lokalnego stanu
         const updatedArchiwum = archiwum.filter(transport => transport.id !== id)
         setArchiwum(updatedArchiwum)
+        applyFilters(updatedArchiwum, selectedYear, selectedMonth, selectedWarehouse, selectedDriver, selectedRequester)
         
-        // Aktualizujemy filtrowane dane
-        applyFilters(updatedArchiwum, selectedYear, selectedMonth)
-        
-        // Ustawiamy status i planujemy jego wyczyszczenie
         setDeleteStatus({ type: 'success', message: 'Transport został usunięty' })
         
-        // Odświeżamy dane z serwera po krótkim czasie
+        // Wyczyść status po 3 sekundach
         setTimeout(() => {
-          setRefreshKey(prev => prev + 1) // Zwiększamy klucz odświeżania, co spowoduje ponowne pobranie danych
           setDeleteStatus(null)
         }, 3000)
       } else {
-        throw new Error(data.error || 'Nie udało się usunąć transportu')
+        setDeleteStatus({ type: 'error', message: data.error || 'Nie udało się usunąć transportu' })
       }
     } catch (error) {
       console.error('Błąd usuwania transportu:', error)
-      setDeleteStatus({ type: 'error', message: 'Wystąpił błąd podczas usuwania transportu: ' + error.message })
-      
-      // Odświeżamy dane z serwera nawet w przypadku błędu
-      setTimeout(() => {
-        setRefreshKey(prev => prev + 1)
-      }, 3000)
+      setDeleteStatus({ type: 'error', message: 'Wystąpił błąd podczas usuwania transportu' })
     }
   }
 
   // Funkcja pomocnicza do znajdowania danych kierowcy
   const getDriverInfo = (driverId) => {
-    if (!driverId) return 'Brak danych'
-    
     const driver = KIEROWCY.find(k => k.id === parseInt(driverId))
     return driver ? `${driver.imie} (${driver.tabliceRej})` : 'Brak danych'
   }
@@ -227,7 +211,6 @@ export default function ArchiwumPage() {
         'Miasto': transport.destination_city,
         'Kod pocztowy': transport.postal_code || '',
         'Ulica': transport.street || '',
-        'Numer WZ': transport.wz_number || '',
         'Magazyn': transport.source_warehouse === 'bialystok' ? 'Białystok' : 
                  transport.source_warehouse === 'zielonka' ? 'Zielonka' : 
                  transport.source_warehouse,
@@ -237,7 +220,8 @@ export default function ArchiwumPage() {
         'Kierowca': driver ? driver.imie : '',
         'Nr rejestracyjny': driver ? driver.tabliceRej : '',
         'Status': transport.status || '',
-        'Data zakończenia': transport.completed_at ? format(new Date(transport.completed_at), 'dd.MM.yyyy HH:mm', { locale: pl }) : ''
+        'Data zakończenia': transport.completed_at ? format(new Date(transport.completed_at), 'dd.MM.yyyy HH:mm', { locale: pl }) : '',
+        'Osoba zlecająca': transport.requester_name || ''
       }
     })
     
@@ -293,46 +277,22 @@ export default function ArchiwumPage() {
     XLSX.writeFile(wb, `${fileName}.xlsx`)
   }
 
-  // Ręczne odświeżanie danych
-  const handleRefresh = () => {
-    setRefreshKey(prev => prev + 1)
-  }
-
   if (loading) {
     return <div className="flex justify-center items-center h-64">Ładowanie...</div>
   }
 
   if (error) {
-    return (
-      <div className="max-w-6xl mx-auto py-8">
-        <div className="text-red-500 text-center p-4 bg-red-50 rounded-lg">
-          {error}
-          <button 
-            className="ml-4 px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700"
-            onClick={handleRefresh}
-          >
-            Odśwież
-          </button>
-        </div>
-      </div>
-    )
+    return <div className="text-red-500 text-center p-4">{error}</div>
   }
 
   return (
     <div className="max-w-6xl mx-auto py-8">
       <div className="mb-8 flex flex-col md:flex-row md:justify-between md:items-center space-y-4 md:space-y-0">
-        <h1 className="text-3xl font-bold text-gray-900">Archiwum Transportów</h1>
+        <h1 className="text-3xl font-bold text-gray-900">
+          Archiwum Transportów
+        </h1>
         
         <div className="flex flex-wrap items-center gap-4">
-          {/* Przycisk odświeżania */}
-          <button
-            onClick={handleRefresh}
-            className="px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none"
-            title="Odśwież listę transportów"
-          >
-            Odśwież dane
-          </button>
-          
           {/* Wybór roku */}
           <div>
             <label htmlFor="yearSelect" className="block text-sm font-medium text-gray-700 mb-1">
@@ -363,6 +323,63 @@ export default function ArchiwumPage() {
             >
               {months.map(month => (
                 <option key={month.value} value={month.value}>{month.label}</option>
+              ))}
+            </select>
+          </div>
+          
+          {/* Wybór magazynu */}
+          <div>
+            <label htmlFor="warehouseSelect" className="block text-sm font-medium text-gray-700 mb-1">
+              Magazyn
+            </label>
+            <select
+              id="warehouseSelect"
+              value={selectedWarehouse}
+              onChange={(e) => setSelectedWarehouse(e.target.value)}
+              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+            >
+              <option value="">Wszystkie magazyny</option>
+              <option value="bialystok">Magazyn Białystok</option>
+              <option value="zielonka">Magazyn Zielonka</option>
+            </select>
+          </div>
+          
+          {/* Wybór kierowcy */}
+          <div>
+            <label htmlFor="driverSelect" className="block text-sm font-medium text-gray-700 mb-1">
+              Kierowca
+            </label>
+            <select
+              id="driverSelect"
+              value={selectedDriver}
+              onChange={(e) => setSelectedDriver(e.target.value)}
+              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+            >
+              <option value="">Wszyscy kierowcy</option>
+              {KIEROWCY.map(kierowca => (
+                <option key={kierowca.id} value={kierowca.id}>
+                  {kierowca.imie} ({kierowca.tabliceRej})
+                </option>
+              ))}
+            </select>
+          </div>
+          
+          {/* Wybór handlowca */}
+          <div>
+            <label htmlFor="requesterSelect" className="block text-sm font-medium text-gray-700 mb-1">
+              Osoba zlecająca
+            </label>
+            <select
+              id="requesterSelect"
+              value={selectedRequester}
+              onChange={(e) => setSelectedRequester(e.target.value)}
+              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+            >
+              <option value="">Wszyscy zlecający</option>
+              {users.map(user => (
+                <option key={user.email} value={user.email}>
+                  {user.name}
+                </option>
               ))}
             </select>
           </div>
@@ -416,9 +433,6 @@ export default function ArchiwumPage() {
                   Miejsce docelowe
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Numer WZ
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Magazyn
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -432,6 +446,9 @@ export default function ArchiwumPage() {
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Kierowca
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Osoba zlecająca
                 </th>
                 {isAdmin && (
                   <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -455,9 +472,6 @@ export default function ArchiwumPage() {
                       </div>
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {transport.wz_number || 'N/A'}
-                    </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
                       {transport.source_warehouse === 'bialystok' ? 'Białystok' : 
                        transport.source_warehouse === 'zielonka' ? 'Zielonka' : 
                        transport.source_warehouse}
@@ -473,6 +487,9 @@ export default function ArchiwumPage() {
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
                       {getDriverInfo(transport.driver_id)}
+                    </td>
+                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {transport.requester_name || 'N/A'}
                     </td>
                     {isAdmin && (
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-right">
