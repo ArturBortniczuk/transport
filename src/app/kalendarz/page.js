@@ -282,7 +282,7 @@ export default function KalendarzPage() {
   const handleZakonczTransport = async (dateKey, transportId) => {
     try {
       // Dodaj potwierdzenie przed oznaczenem jako zrealizowane
-      if (!confirm('Czy na pewno chcesz oznaczyć ten transport jako zrealizowany?')) {
+      if (!confirm('Czy na pewno chcesz oznaczyć ten transport jako zrealizowany? Transport zostanie przeniesiony do archiwum.')) {
         return; // Przerwij jeśli użytkownik anuluje
       }
       
@@ -296,6 +296,8 @@ export default function KalendarzPage() {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
         },
         body: JSON.stringify({
           id: transportId,
@@ -308,9 +310,29 @@ export default function KalendarzPage() {
       console.log('Odpowiedź z API po oznaczeniu transportu jako zakończony:', data);
   
       if (data.success) {
-        // Odśwież dane transportów
-        await fetchTransports();
-        alert('Transport został pomyślnie zrealizowany!');
+        // Natychmiast usuń transport z lokalnego stanu
+        setTransporty(prevTransporty => {
+          const updatedTransporty = { ...prevTransporty };
+          
+          // Usuń transport z listy tylko jeśli istnieje
+          if (updatedTransporty[dateKey]) {
+            updatedTransporty[dateKey] = updatedTransporty[dateKey].filter(
+              t => t.id !== transportId
+            );
+            
+            // Jeśli nie ma już transportów na tę datę, usuń klucz
+            if (updatedTransporty[dateKey].length === 0) {
+              delete updatedTransporty[dateKey];
+            }
+          }
+          
+          return updatedTransporty;
+        });
+        
+        // Odśwież dane transportów aby upewnić się, że stan jest aktualny
+        setTimeout(() => fetchTransports(), 500);
+        
+        alert('Transport został pomyślnie zrealizowany i przeniesiony do archiwum!');
       } else {
         throw new Error(data.error || 'Nie udało się zakończyć transportu');
       }
