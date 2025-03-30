@@ -58,11 +58,17 @@ export default function KalendarzPage() {
 
   const fetchTransports = async () => {
     try {
-      const response = await fetch('/api/transports')
-      const data = await response.json()
+      setIsLoading(true);
+      const response = await fetch('/api/transports', {
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      });
+      const data = await response.json();
       
-      console.log('Surowe dane transportów:', data.transports) // Dodaj szczegółowe logowanie
-  
+      console.log('Dane transportów z API:', data.transports); // Dodaj szczegółowe logowanie
+    
       if (data.success) {
         // Przekształć listę transportów na format obiektu z datami jako kluczami
         const transportsByDate = data.transports.reduce((acc, transport) => {
@@ -71,7 +77,7 @@ export default function KalendarzPage() {
             acc[dateKey] = []
           }
           acc[dateKey].push({
-            id: transport.id, // Dodaj ID
+            id: transport.id,
             miasto: transport.destination_city,
             kodPocztowy: transport.postal_code,
             ulica: transport.street,
@@ -95,20 +101,18 @@ export default function KalendarzPage() {
           return acc
         }, {})
         
-        console.log('Transporty po przetworzeniu:', transportsByDate)
-        
-        setTransporty(transportsByDate)
+        console.log('Transporty po przetworzeniu:', transportsByDate);
+        setTransporty(transportsByDate);
       } else {
-        setError('Nie udało się pobrać transportów')
+        setError('Nie udało się pobrać transportów');
       }
     } catch (error) {
-      console.error('Błąd pobierania transportów:', error)
-      setError('Wystąpił błąd podczas pobierania danych')
+      console.error('Błąd pobierania transportów:', error);
+      setError('Wystąpił błąd podczas pobierania danych');
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
   }
-
   useEffect(() => {
     const role = localStorage.getItem('userRole')
     const id = localStorage.getItem('userId')
