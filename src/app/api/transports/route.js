@@ -19,6 +19,8 @@ const validateSession = async (authToken) => {
 };
 
 // W pliku route_6.js (API transportów), dodajemy paginację
+// Zmodyfikujmy funkcję GET w pliku route_6.js
+
 export async function GET(request) {
   try {
     // Sprawdzamy uwierzytelnienie
@@ -34,69 +36,47 @@ export async function GET(request) {
     
     const { searchParams } = new URL(request.url);
     const date = searchParams.get('date');
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '50'); // 50 elementów na stronę
-    const offset = (page - 1) * limit;
+    const status = searchParams.get('status') || 'active'; // Domyślnie pobieramy tylko aktywne
     
-    // Generowanie klucza cache na podstawie parametrów zapytania
-    const cacheKey = date 
-      ? `transports_date_${date}_page_${page}_limit_${limit}` 
-      : `transports_all_page_${page}_limit_${limit}`;
+    // Wyłączamy cache całkowicie
     
-    // Próba pobrania z cache
-    const cachedData = getFromCache(cacheKey);
-    if (cachedData) {
-      return NextResponse.json({ 
-        success: true, 
-        ...cachedData,
-        fromCache: true
-      }, {
-        headers: {
-          'Cache-Control': 'no-store, max-age=0',
-          'Pragma': 'no-cache'
-        }
+    // Budujemy zapytanie
+    let query = db('transports');
+    
+    // Filtrujemy po statusie
+    if (status === 'all') {
+      // Nie filtrujemy po statusie
+    } else if (status === 'completed') {
+      query = query.where('status', 'completed');
+    } else {
+      // Domyślnie zwracamy aktywne, ale sprawdzamy też wartość 'aktywny' (dla zgodności wstecznej)
+      query = query.where(function() {
+        this.where('status', 'active').orWhere('status', 'aktywny');
       });
     }
     
-    // Jeśli nie ma w cache, pobierz z bazy danych
-    let query = db('transports');
-    let countQuery = db('transports').count('* as total');
-    
+    // Filtrujemy po dacie jeśli podana
     if (date) {
       query = query.whereRaw('delivery_date::date = ?', [date]);
-      countQuery = countQuery.whereRaw('delivery_date::date = ?', [date]);
     }
     
-    // Pobierz dane z paginacją
-    const transports = await query
-      .orderBy('delivery_date', date ? 'asc' : 'desc')
-      .limit(limit)
-      .offset(offset);
+    // Sortujemy
+    query = query.orderBy('delivery_date', 'desc');
     
-    // Pobierz całkowitą liczbę rekordów dla paginacji
-    const totalResult = await countQuery.first();
-    const total = totalResult ? totalResult.total : 0;
+    // Wykonaj zapytanie
+    const transports = await query;
     
-    const result = {
-      transports: transports || [],
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit)
-      }
-    };
-    
-    // Zapisz wynik w cache na 5 minut
-    setInCache(cacheKey, result, 300);
+    console.log(`Pobrano ${transports.length} transportów o statusie: ${status}`);
     
     return NextResponse.json({ 
       success: true, 
-      ...result
+      transports: transports || []
     }, {
       headers: {
-        'Cache-Control': 'no-store, max-age=0',
-        'Pragma': 'no-cache'
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+        'Surrogate-Control': 'no-store'
       }
     });
   } catch (error) {
