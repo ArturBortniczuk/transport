@@ -258,6 +258,11 @@ export default function KalendarzPage() {
 
   const handleZakonczTransport = async (dateKey, transportId) => {
     try {
+      // Dodaj potwierdzenie przed oznaczenem jako zrealizowane
+      if (!confirm('Czy na pewno chcesz oznaczyć ten transport jako zrealizowany?')) {
+        return; // Przerwij jeśli użytkownik anuluje
+      }
+      
       console.log('Rozpoczęcie procesu oznaczania transportu jako zakończony:', {
         dateKey, 
         transportId
@@ -280,37 +285,6 @@ export default function KalendarzPage() {
       console.log('Odpowiedź z API po oznaczeniu transportu jako zakończony:', data);
   
       if (data.success) {
-        // Dodaj transport do archiwum
-        const transportDoArchiwum = transporty[dateKey]?.find(t => t.id === transportId);
-        
-        if (transportDoArchiwum) {
-          // Pobierz aktualne archiwum z localStorage
-          let archiwum = [];
-          const savedArchiwum = localStorage.getItem('archiwumTransportow');
-          
-          if (savedArchiwum) {
-            try {
-              archiwum = JSON.parse(savedArchiwum);
-            } catch (e) {
-              console.error('Błąd parsowania archiwum:', e);
-              archiwum = [];
-            }
-          }
-          
-          // Dodaj zakończony transport do archiwum
-          const transportZArchiwum = {
-            ...transportDoArchiwum,
-            status: 'completed',
-            dataZakonczenia: new Date().toISOString()
-          };
-          
-          archiwum.push(transportZArchiwum);
-          
-          // Zapisz zaktualizowane archiwum
-          localStorage.setItem('archiwumTransportow', JSON.stringify(archiwum));
-          console.log('Transport dodany do archiwum:', transportZArchiwum);
-        }
-        
         // Odśwież dane transportów
         await fetchTransports();
         alert('Transport został pomyślnie zrealizowany!');
@@ -322,6 +296,8 @@ export default function KalendarzPage() {
       alert('Wystąpił błąd podczas kończenia transportu: ' + error.message);
     }
   }
+
+  
   const handleEditTransport = (transport) => {
     setEdytowanyTransport(transport)
     setNowyTransport({
