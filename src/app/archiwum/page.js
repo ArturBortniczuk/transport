@@ -4,6 +4,7 @@ import { format } from 'date-fns'
 import { pl } from 'date-fns/locale'
 import { KIEROWCY, RYNKI } from '../kalendarz/constants'
 import * as XLSX from 'xlsx'
+import { ChevronLeft, ChevronRight, FileText, Download } from 'lucide-react'
 
 export default function ArchiwumPage() {
   const [archiwum, setArchiwum] = useState([])
@@ -13,13 +14,15 @@ export default function ArchiwumPage() {
   const [error, setError] = useState(null)
   const [deleteStatus, setDeleteStatus] = useState(null)
   const [exportFormat, setExportFormat] = useState('xlsx')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage] = useState(10)
   
   // Filtry
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
-  const [selectedMonth, setSelectedMonth] = useState('all') // 'all' oznacza wszystkie miesiące
-  const [selectedWarehouse, setSelectedWarehouse] = useState('') // filtr magazynu
-  const [selectedDriver, setSelectedDriver] = useState('') // filtr kierowcy
-  const [selectedRequester, setSelectedRequester] = useState('') // filtr handlowca
+  const [selectedMonth, setSelectedMonth] = useState('all')
+  const [selectedWarehouse, setSelectedWarehouse] = useState('')
+  const [selectedDriver, setSelectedDriver] = useState('')
+  const [selectedRequester, setSelectedRequester] = useState('')
   
   // Lista użytkowników (handlowców) do filtrowania
   const [users, setUsers] = useState([])
@@ -41,13 +44,6 @@ export default function ArchiwumPage() {
     { value: '9', label: 'Październik' },
     { value: '10', label: 'Listopad' },
     { value: '11', label: 'Grudzień' }
-  ]
-  
-  // Lista magazynów do filtrowania
-  const warehouses = [
-    { value: '', label: 'Wszystkie magazyny' },
-    { value: 'bialystok', label: 'Magazyn Białystok' },
-    { value: 'zielonka', label: 'Magazyn Zielonka' }
   ]
 
   useEffect(() => {
@@ -106,7 +102,7 @@ export default function ArchiwumPage() {
     }
   }
 
-  // Funkcja filtrująca transporty na podstawie wybranego roku, miesiąca, magazynu, kierowcy i osoby zlecającej
+  // Funkcja filtrująca transporty
   const applyFilters = (transports, year, month, warehouse, driver, requester) => {
     if (!transports) return
     
@@ -146,6 +142,7 @@ export default function ArchiwumPage() {
     })
     
     setFilteredArchiwum(filtered)
+    setCurrentPage(1) // Reset to first page when filters change
   }
 
   // Obsługa zmiany filtrów
@@ -277,23 +274,44 @@ export default function ArchiwumPage() {
     XLSX.writeFile(wb, `${fileName}.xlsx`)
   }
 
+  // Paginacja
+  const indexOfLastItem = currentPage * itemsPerPage
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage
+  const currentItems = filteredArchiwum.slice(indexOfFirstItem, indexOfLastItem)
+  const totalPages = Math.ceil(filteredArchiwum.length / itemsPerPage)
+
+  // Zmiana strony
+  const paginate = (pageNumber) => setCurrentPage(pageNumber)
+  
+  const selectStyles = "block w-full py-2 pl-3 pr-10 text-base border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+
   if (loading) {
-    return <div className="flex justify-center items-center h-64">Ładowanie...</div>
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
+    )
   }
 
   if (error) {
-    return <div className="text-red-500 text-center p-4">{error}</div>
+    return <div className="text-red-500 text-center p-4 bg-red-50 rounded-lg">{error}</div>
   }
 
   return (
-    <div className="max-w-6xl mx-auto py-8">
-      <div className="mb-8 flex flex-col md:flex-row md:justify-between md:items-center space-y-4 md:space-y-0">
-        <h1 className="text-3xl font-bold text-gray-900">
+    <div className="max-w-7xl mx-auto py-8">
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">
           Archiwum Transportów
         </h1>
-        
-        <div className="flex flex-wrap items-center gap-4">
-          {/* Wybór roku */}
+        <p className="text-gray-600">
+          Przeglądaj i filtruj zrealizowane transporty
+        </p>
+      </div>
+
+      {/* Filters Section */}
+      <div className="mb-8 bg-white rounded-lg shadow p-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+          {/* Rok */}
           <div>
             <label htmlFor="yearSelect" className="block text-sm font-medium text-gray-700 mb-1">
               Rok
@@ -302,7 +320,7 @@ export default function ArchiwumPage() {
               id="yearSelect"
               value={selectedYear}
               onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+              className={selectStyles}
             >
               {years.map(year => (
                 <option key={year} value={year}>{year}</option>
@@ -310,7 +328,7 @@ export default function ArchiwumPage() {
             </select>
           </div>
           
-          {/* Wybór miesiąca */}
+          {/* Miesiąc */}
           <div>
             <label htmlFor="monthSelect" className="block text-sm font-medium text-gray-700 mb-1">
               Miesiąc
@@ -319,7 +337,7 @@ export default function ArchiwumPage() {
               id="monthSelect"
               value={selectedMonth}
               onChange={(e) => setSelectedMonth(e.target.value)}
-              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+              className={selectStyles}
             >
               {months.map(month => (
                 <option key={month.value} value={month.value}>{month.label}</option>
@@ -327,7 +345,7 @@ export default function ArchiwumPage() {
             </select>
           </div>
           
-          {/* Wybór magazynu */}
+          {/* Magazyn */}
           <div>
             <label htmlFor="warehouseSelect" className="block text-sm font-medium text-gray-700 mb-1">
               Magazyn
@@ -336,7 +354,7 @@ export default function ArchiwumPage() {
               id="warehouseSelect"
               value={selectedWarehouse}
               onChange={(e) => setSelectedWarehouse(e.target.value)}
-              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+              className={selectStyles}
             >
               <option value="">Wszystkie magazyny</option>
               <option value="bialystok">Magazyn Białystok</option>
@@ -344,7 +362,7 @@ export default function ArchiwumPage() {
             </select>
           </div>
           
-          {/* Wybór kierowcy */}
+          {/* Kierowca */}
           <div>
             <label htmlFor="driverSelect" className="block text-sm font-medium text-gray-700 mb-1">
               Kierowca
@@ -353,7 +371,7 @@ export default function ArchiwumPage() {
               id="driverSelect"
               value={selectedDriver}
               onChange={(e) => setSelectedDriver(e.target.value)}
-              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+              className={selectStyles}
             >
               <option value="">Wszyscy kierowcy</option>
               {KIEROWCY.map(kierowca => (
@@ -364,7 +382,7 @@ export default function ArchiwumPage() {
             </select>
           </div>
           
-          {/* Wybór handlowca */}
+          {/* Osoba zlecająca */}
           <div>
             <label htmlFor="requesterSelect" className="block text-sm font-medium text-gray-700 mb-1">
               Osoba zlecająca
@@ -373,7 +391,7 @@ export default function ArchiwumPage() {
               id="requesterSelect"
               value={selectedRequester}
               onChange={(e) => setSelectedRequester(e.target.value)}
-              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+              className={selectStyles}
             >
               <option value="">Wszyscy zlecający</option>
               {users.map(user => (
@@ -384,29 +402,31 @@ export default function ArchiwumPage() {
             </select>
           </div>
           
-          {/* Eksport danych */}
-          <div className="flex items-end gap-2">
-            <div>
-              <label htmlFor="exportFormat" className="block text-sm font-medium text-gray-700 mb-1">
-                Format
-              </label>
+          {/* Format eksportu */}
+          <div className="flex flex-col justify-end">
+            <label htmlFor="exportFormat" className="block text-sm font-medium text-gray-700 mb-1">
+              Format
+            </label>
+            <div className="flex space-x-2">
               <select
                 id="exportFormat"
                 value={exportFormat}
                 onChange={(e) => setExportFormat(e.target.value)}
-                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                className={`${selectStyles} flex-grow`}
               >
                 <option value="xlsx">Excel (XLSX)</option>
                 <option value="csv">CSV</option>
               </select>
+              <button
+                onClick={exportData}
+                disabled={filteredArchiwum.length === 0}
+                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center"
+                title="Eksportuj dane"
+              >
+                <Download size={18} className="mr-1" />
+                Eksportuj
+              </button>
             </div>
-            <button
-              onClick={exportData}
-              disabled={filteredArchiwum.length === 0}
-              className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              Eksportuj
-            </button>
           </div>
         </div>
       </div>
@@ -421,10 +441,11 @@ export default function ArchiwumPage() {
         </div>
       )}
 
+      {/* Table Section */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+            <thead className="bg-gray-100">
               <tr>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Data transportu
@@ -458,14 +479,14 @@ export default function ArchiwumPage() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredArchiwum.length > 0 ? (
-                filteredArchiwum.map((transport) => (
-                  <tr key={transport.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+              {currentItems.length > 0 ? (
+                currentItems.map((transport) => (
+                  <tr key={transport.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                       {format(new Date(transport.delivery_date), 'dd.MM.yyyy', { locale: pl })}
                     </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
-                      <div className="font-medium">{transport.destination_city}</div>
+                    <td className="px-4 py-4 whitespace-nowrap text-sm">
+                      <div className="font-medium text-gray-900">{transport.destination_city}</div>
                       <div className="text-gray-500">
                         {transport.postal_code}
                         {transport.street && `, ${transport.street}`}
@@ -492,10 +513,10 @@ export default function ArchiwumPage() {
                       {transport.requester_name || 'N/A'}
                     </td>
                     {isAdmin && (
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-right">
+                      <td className="px-4 py-4 whitespace-nowrap text-right text-sm">
                         <button
                           onClick={() => handleDeleteTransport(transport.id)}
-                          className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                          className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1"
                           title="Usuń transport"
                         >
                           Usuń
@@ -507,7 +528,10 @@ export default function ArchiwumPage() {
               ) : (
                 <tr>
                   <td colSpan={isAdmin ? 9 : 8} className="px-4 py-8 text-center text-gray-500">
-                    Brak transportów w wybranym okresie
+                    <div className="flex flex-col items-center justify-center py-6">
+                      <FileText size={48} className="text-gray-400 mb-2" />
+                      <p className="text-gray-500">Brak transportów w wybranym okresie</p>
+                    </div>
                   </td>
                 </tr>
               )}
@@ -515,18 +539,40 @@ export default function ArchiwumPage() {
           </table>
         </div>
         
-        {/* Podsumowanie */}
-        <div className="border-t border-gray-200 px-4 py-3 bg-gray-50 flex justify-between items-center">
-          <div className="text-sm text-gray-700">
-            Łącznie: <span className="font-semibold">{filteredArchiwum.length}</span> transportów
+        {/* Pagination & Summary */}
+        <div className="border-t border-gray-200 px-4 py-4 bg-gray-50 flex flex-col sm:flex-row justify-between items-center">
+          <div className="text-sm text-gray-700 mb-4 sm:mb-0">
+            <span className="font-medium">Łącznie:</span> {filteredArchiwum.length} transportów
             {filteredArchiwum.length > 0 && (
-              <>
-                , Całkowita odległość: <span className="font-semibold">
-                  {filteredArchiwum.reduce((sum, t) => sum + (t.distance || 0), 0).toLocaleString('pl-PL')}
-                </span> km
-              </>
+              <span className="ml-2">
+                <span className="font-medium">Całkowita odległość:</span> {filteredArchiwum.reduce((sum, t) => sum + (t.distance || 0), 0).toLocaleString('pl-PL')} km
+              </span>
             )}
           </div>
+          
+          {totalPages > 1 && (
+            <div className="flex justify-center items-center space-x-2">
+              <button
+                onClick={() => paginate(Math.max(1, currentPage - 1))}
+                disabled={currentPage === 1}
+                className="p-2 rounded-full text-gray-600 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ChevronLeft size={20} />
+              </button>
+              
+              <div className="text-sm text-gray-700">
+                Strona {currentPage} z {totalPages}
+              </div>
+              
+              <button
+                onClick={() => paginate(Math.min(totalPages, currentPage + 1))}
+                disabled={currentPage === totalPages}
+                className="p-2 rounded-full text-gray-600 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ChevronRight size={20} />
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
