@@ -58,17 +58,17 @@ export default function KalendarzPage() {
 
   const fetchTransports = async () => {
     try {
-      setIsLoading(true);
+      // Dodajemy nagłówki no-cache aby uniknąć problemów z cache przeglądarki
       const response = await fetch('/api/transports', {
         headers: {
           'Cache-Control': 'no-cache',
           'Pragma': 'no-cache'
         }
-      });
-      const data = await response.json();
+      })
+      const data = await response.json()
       
-      console.log('Dane transportów z API:', data.transports); // Dodaj szczegółowe logowanie
-    
+      console.log('Surowe dane transportów:', data.transports) // Dodaj szczegółowe logowanie
+  
       if (data.success) {
         // Przekształć listę transportów na format obiektu z datami jako kluczami
         const transportsByDate = data.transports.reduce((acc, transport) => {
@@ -77,7 +77,7 @@ export default function KalendarzPage() {
             acc[dateKey] = []
           }
           acc[dateKey].push({
-            id: transport.id,
+            id: transport.id, // Dodaj ID
             miasto: transport.destination_city,
             kodPocztowy: transport.postal_code,
             ulica: transport.street,
@@ -101,18 +101,20 @@ export default function KalendarzPage() {
           return acc
         }, {})
         
-        console.log('Transporty po przetworzeniu:', transportsByDate);
-        setTransporty(transportsByDate);
+        console.log('Transporty po przetworzeniu:', transportsByDate)
+        
+        setTransporty(transportsByDate)
       } else {
-        setError('Nie udało się pobrać transportów');
+        setError('Nie udało się pobrać transportów')
       }
     } catch (error) {
-      console.error('Błąd pobierania transportów:', error);
-      setError('Wystąpił błąd podczas pobierania danych');
+      console.error('Błąd pobierania transportów:', error)
+      setError('Wystąpił błąd podczas pobierania danych')
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
   }
+
   useEffect(() => {
     const role = localStorage.getItem('userRole')
     const id = localStorage.getItem('userId')
@@ -151,7 +153,16 @@ export default function KalendarzPage() {
       setZamowienia(JSON.parse(savedZamowienia))
     }
     
+    // Wywołaj funkcję przy montowaniu komponentu
     fetchTransports()
+    
+    // Ustaw interwał odświeżania co 30 sekund
+    const refreshInterval = setInterval(() => {
+      fetchTransports();
+    }, 30000);
+    
+    // Wyczyść interwał przy odmontowaniu komponentu
+    return () => clearInterval(refreshInterval);
   }, [])
 
   const handleDateClick = (date) => {
@@ -296,7 +307,6 @@ export default function KalendarzPage() {
       alert('Wystąpił błąd podczas kończenia transportu: ' + error.message);
     }
   }
-
   
   const handleEditTransport = (transport) => {
     setEdytowanyTransport(transport)
