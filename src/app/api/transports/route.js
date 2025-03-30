@@ -18,7 +18,7 @@ const validateSession = async (authToken) => {
   return session?.user_id;
 };
 
-// W pliku route_5.js (API transportów), dodajemy paginację
+// W pliku route_6.js (API transportów), dodajemy paginację
 export async function GET(request) {
   try {
     // Sprawdzamy uwierzytelnienie
@@ -50,6 +50,11 @@ export async function GET(request) {
         success: true, 
         ...cachedData,
         fromCache: true
+      }, {
+        headers: {
+          'Cache-Control': 'no-store, max-age=0',
+          'Pragma': 'no-cache'
+        }
       });
     }
     
@@ -88,6 +93,11 @@ export async function GET(request) {
     return NextResponse.json({ 
       success: true, 
       ...result
+    }, {
+      headers: {
+        'Cache-Control': 'no-store, max-age=0',
+        'Pragma': 'no-cache'
+      }
     });
   } catch (error) {
     console.error('Error fetching transports:', error);
@@ -171,6 +181,11 @@ export async function POST(request) {
     return NextResponse.json({ 
       success: true, 
       id: id 
+    }, {
+      headers: {
+        'Cache-Control': 'no-store, max-age=0',
+        'Pragma': 'no-cache'
+      }
     });
   } catch (error) {
     console.error('Error adding transport:', error);
@@ -277,7 +292,14 @@ export async function PUT(request) {
       console.error('Błąd czyszczenia cache:', error);
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ 
+      success: true 
+    }, {
+      headers: {
+        'Cache-Control': 'no-store, max-age=0',
+        'Pragma': 'no-cache'
+      }
+    });
   } catch (error) {
     console.error('Error updating transport:', error);
     return NextResponse.json({ 
@@ -348,7 +370,14 @@ export async function DELETE(request) {
       console.error('Błąd czyszczenia cache:', error);
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ 
+      success: true 
+    }, {
+      headers: {
+        'Cache-Control': 'no-store, max-age=0',
+        'Pragma': 'no-cache'
+      }
+    });
   } catch (error) {
     console.error('Error deleting transport:', error);
     return NextResponse.json({ 
