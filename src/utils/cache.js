@@ -49,7 +49,25 @@ export function removeFromCache(key) {
  * Czyści cały cache
  */
 export function clearCache() {
+  // Wyczyść cały cache
   cache.clear();
+  
+  // Dodatkowo usuń nieaktualne wpisy
+  const now = Date.now();
+  cache.forEach((item, key) => {
+    if (item.expiry < now) {
+      cache.delete(key);
+    }
+  });
+  
+  // Usuń wszystkie wpisy związane z transportami
+  cache.forEach((item, key) => {
+    if (key.includes('transports')) {
+      cache.delete(key);
+    }
+  });
+  
+  console.log('Cache został wyczyszczony');
 }
 
 /**
