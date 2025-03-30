@@ -58,26 +58,39 @@ export default function KalendarzPage() {
 
   const fetchTransports = async () => {
     try {
-      // Dodajemy nagłówki no-cache aby uniknąć problemów z cache przeglądarki
-      const response = await fetch('/api/transports', {
+      setIsLoading(true);
+      // Dodajemy parametr status=active, żeby jawnie pobrać tylko aktywne transporty
+      const response = await fetch('/api/transports?status=active', {
         headers: {
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
-        }
-      })
-      const data = await response.json()
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        },
+        cache: 'no-store'
+      });
       
-      console.log('Surowe dane transportów:', data.transports) // Dodaj szczegółowe logowanie
-  
+      if (!response.ok) {
+        throw new Error(`Problem z API: ${response.status} ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      
+      console.log(`Pobrano ${data.transports?.length || 0} aktywnych transportów`);
+    
       if (data.success) {
         // Przekształć listę transportów na format obiektu z datami jako kluczami
         const transportsByDate = data.transports.reduce((acc, transport) => {
+          // Upewnij się, że to jest aktywny transport
+          if (transport.status !== 'active' && transport.status !== 'aktywny') {
+            return acc; // Pomiń nieaktywne transporty
+          }
+          
           const dateKey = format(new Date(transport.delivery_date), 'yyyy-MM-dd')
           if (!acc[dateKey]) {
             acc[dateKey] = []
           }
           acc[dateKey].push({
-            id: transport.id, // Dodaj ID
+            id: transport.id,
             miasto: transport.destination_city,
             kodPocztowy: transport.postal_code,
             ulica: transport.street,
@@ -101,17 +114,16 @@ export default function KalendarzPage() {
           return acc
         }, {})
         
-        console.log('Transporty po przetworzeniu:', transportsByDate)
-        
-        setTransporty(transportsByDate)
+        console.log('Transporty po przetworzeniu:', transportsByDate);
+        setTransporty(transportsByDate);
       } else {
-        setError('Nie udało się pobrać transportów')
+        setError('Nie udało się pobrać transportów');
       }
     } catch (error) {
-      console.error('Błąd pobierania transportów:', error)
-      setError('Wystąpił błąd podczas pobierania danych')
+      console.error('Błąd pobierania transportów:', error);
+      setError('Wystąpił błąd podczas pobierania danych: ' + error.message);
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
   }
 
