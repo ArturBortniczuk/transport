@@ -168,11 +168,6 @@ export default function KalendarzPage() {
     // Wywołaj funkcję przy montowaniu komponentu
     fetchTransports()
     
-    // Ustaw interwał odświeżania co 30 sekund
-    const refreshInterval = setInterval(() => {
-      fetchTransports();
-    }, 30000);
-    
     // Wyczyść interwał przy odmontowaniu komponentu
     return () => clearInterval(refreshInterval);
   }, [])
