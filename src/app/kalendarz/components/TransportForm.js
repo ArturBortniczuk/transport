@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react'
 import { KIEROWCY, RYNKI, POZIOMY_ZALADUNKU } from '../constants'
 import { format } from 'date-fns'
 import { pl } from 'date-fns/locale'
-import LocationSelector from './LocationSelector' // Nowy import
+import LocationSelector from './LocationSelector'
+import ConstructionSelector from './ConstructionSelector'
 
 export default function TransportForm({
   selectedDate,
@@ -13,14 +14,18 @@ export default function TransportForm({
   handleUpdateTransport,
   setEdytowanyTransport,
   setNowyTransport,
-  userPermissions // Dodajemy props z uprawnieniami
+  userPermissions
 }) {
   const [users, setUsers] = useState([])
   const [isLoadingUsers, setIsLoadingUsers] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [filteredUsers, setFilteredUsers] = useState([])
   const [showUsersList, setShowUsersList] = useState(false)
-  const [showLocationSelector, setShowLocationSelector] = useState(false) // Nowy stan
+  const [showLocationSelector, setShowLocationSelector] = useState(false)
+  const [recipientType, setRecipientType] = useState(
+    nowyTransport.mpk ? 'construction' : 'sales'
+  )
+  const [selectedConstruction, setSelectedConstruction] = useState(null)
 
   useEffect(() => {
     async function fetchUsers() {
@@ -41,6 +46,26 @@ export default function TransportForm({
     fetchUsers()
   }, [])
 
+  // Ustawienie typu odbiorcy i konstrukcji przy edycji transportu
+  useEffect(() => {
+    if (edytowanyTransport && edytowanyTransport.mpk) {
+      // Jeśli transport ma numer MPK, prawdopodobnie jest to budowa
+      setRecipientType('construction')
+      
+      // Utworzenie obiektu construction bazując na danych transportu
+      if (edytowanyTransport.nazwaKlienta && edytowanyTransport.mpk) {
+        setSelectedConstruction({
+          id: 'temp', // ID tymczasowe
+          name: edytowanyTransport.nazwaKlienta,
+          mpk: edytowanyTransport.mpk
+        })
+      }
+    } else {
+      setRecipientType('sales')
+      setSelectedConstruction(null)
+    }
+  }, [edytowanyTransport])
+
   // Filtrowanie użytkowników na podstawie wpisanego tekstu
   useEffect(() => {
     if (searchTerm.trim() === '') {
@@ -55,7 +80,7 @@ export default function TransportForm({
   }, [searchTerm, users])
 
   const handleUserSelect = (user) => {
-    console.log('Wybrany użytkownik:', user); // Dodaj log
+    console.log('Wybrany użytkownik:', user)
     
     setNowyTransport(prev => {
       const updated = {
@@ -63,13 +88,13 @@ export default function TransportForm({
         osobaZlecajaca: user.name,
         emailZlecajacego: user.email,
         mpk: user.mpk || ''
-      };
-      console.log('Aktualizacja transportu z MPK:', updated); // Dodaj log
-      return updated;
-    });
+      }
+      console.log('Aktualizacja transportu z MPK:', updated)
+      return updated
+    })
     
-    setSearchTerm(user.name);
-    setShowUsersList(false);
+    setSearchTerm(user.name)
+    setShowUsersList(false)
   }
 
   const handleMagazynSelect = (magazyn) => {
@@ -79,20 +104,50 @@ export default function TransportForm({
     }))
   }
 
+  // Obsługa zmiany typu odbiorcy
+  const handleRecipientTypeChange = (type) => {
+    setRecipientType(type)
+    
+    // Resetuj pola zależne od typu
+    if (type === 'construction') {
+      setNowyTransport(prev => ({
+        ...prev,
+        osobaZlecajaca: 'Admin', // Domyślna wartość dla budowy
+        emailZlecajacego: 'admin@firma.pl', // Domyślny email
+      }))
+    } else {
+      setSelectedConstruction(null)
+      setNowyTransport(prev => ({
+        ...prev,
+        mpk: ''
+      }))
+    }
+  }
+
+  // Obsługa wyboru budowy
+  const handleConstructionSelect = (construction) => {
+    setSelectedConstruction(construction)
+    setNowyTransport(prev => ({
+      ...prev,
+      nazwaKlienta: construction.name,
+      mpk: construction.mpk
+    }))
+  }
+
   // Funkcja do zapisywania lokalizacji
   const saveCurrentLocation = () => {
     if (!nowyTransport.miasto || !nowyTransport.kodPocztowy) {
-      alert('Uzupełnij przynajmniej miasto i kod pocztowy, aby zapisać lokalizację');
-      return;
+      alert('Uzupełnij przynajmniej miasto i kod pocztowy, aby zapisać lokalizację')
+      return
     }
     
     try {
       // Pobierz aktualną listę zapisanych lokalizacji
-      const savedLocations = localStorage.getItem('savedLocations');
-      let locations = [];
+      const savedLocations = localStorage.getItem('savedLocations')
+      let locations = []
       
       if (savedLocations) {
-        locations = JSON.parse(savedLocations);
+        locations = JSON.parse(savedLocations)
       }
       
       // Przygotuj lokalizację do zapisania
@@ -101,28 +156,28 @@ export default function TransportForm({
         kodPocztowy: nowyTransport.kodPocztowy,
         ulica: nowyTransport.ulica || '',
         nazwaKlienta: nowyTransport.nazwaKlienta || ''
-      };
+      }
       
       // Sprawdź czy lokalizacja już istnieje
       const exists = locations.some(loc => 
         loc.miasto === locationToSave.miasto && 
         loc.kodPocztowy === locationToSave.kodPocztowy && 
         loc.ulica === locationToSave.ulica
-      );
+      )
       
       if (!exists) {
         // Dodaj nową lokalizację i zapisz
-        locations.push(locationToSave);
-        localStorage.setItem('savedLocations', JSON.stringify(locations));
-        alert('Lokalizacja została zapisana');
+        locations.push(locationToSave)
+        localStorage.setItem('savedLocations', JSON.stringify(locations))
+        alert('Lokalizacja została zapisana')
       } else {
-        alert('Ta lokalizacja już istnieje w zapisanych lokalizacjach');
+        alert('Ta lokalizacja już istnieje w zapisanych lokalizacjach')
       }
     } catch (error) {
-      console.error('Błąd podczas zapisywania lokalizacji:', error);
-      alert('Wystąpił błąd podczas zapisywania lokalizacji');
+      console.error('Błąd podczas zapisywania lokalizacji:', error)
+      alert('Wystąpił błąd podczas zapisywania lokalizacji')
     }
-  };
+  }
   
   // Funkcja obsługująca wybór lokalizacji z selektora
   const handleLocationSelect = (location) => {
@@ -132,10 +187,10 @@ export default function TransportForm({
       kodPocztowy: location.kodPocztowy,
       ulica: location.ulica || '',
       nazwaKlienta: location.nazwaKlienta || ''
-    }));
-  };
+    }))
+  }
 
-  const canEditCalendar = userPermissions?.calendar?.edit === true;
+  const canEditCalendar = userPermissions?.calendar?.edit === true
   
   // Jeśli użytkownik nie ma uprawnień, nie wyświetlaj formularza
   if (!canEditCalendar) {
@@ -145,7 +200,7 @@ export default function TransportForm({
           Nie masz uprawnień do dodawania lub edycji transportów.
         </p>
       </div>
-    );
+    )
   }
 
   const inputBaseClass = "w-full rounded-lg border-gray-300 shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
@@ -376,50 +431,97 @@ export default function TransportForm({
                   />
                 </div>
 
-                {/* Pole wyszukiwania użytkowników */}
-                <div>
-                  <label className={labelBaseClass}>
-                    Osoba odpowiedzialna
-                  </label>
-                  {isLoadingUsers ? (
-                    <div className="animate-pulse h-10 bg-gray-200 rounded"></div>
-                  ) : (
-                    <div className="relative">
-                      <input
-                        type="text"
-                        value={searchTerm}
-                        onChange={(e) => {
-                          setSearchTerm(e.target.value)
-                          setShowUsersList(true)
-                        }}
-                        onFocus={() => setShowUsersList(true)}
-                        placeholder="Wpisz, aby wyszukać osobę"
-                        className={inputBaseClass}
-                        required
-                      />
-                      {showUsersList && (
-                        <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto">
-                          {filteredUsers.length > 0 ? (
-                            filteredUsers.map(user => (
-                              <div
-                                key={user.email}
-                                onClick={() => handleUserSelect(user)}
-                                className="p-2 hover:bg-gray-100 cursor-pointer"
-                              >
-                                <div className="font-medium">{user.name}</div>
-                                {user.mpk && (
-                                  <div className="text-sm text-gray-500">MPK: {user.mpk}</div>
-                                )}
-                              </div>
-                            ))
-                          ) : (
-                            <div className="p-2 text-gray-500">Brak wyników</div>
+                {/* Wybór typu odbiorcy */}
+                <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <h4 className="text-base font-medium text-gray-800 mb-3">Typ odbiorcy</h4>
+                  <div className="flex space-x-4">
+                    <button
+                      type="button"
+                      onClick={() => handleRecipientTypeChange('sales')}
+                      className={`px-4 py-2 rounded-md ${
+                        recipientType === 'sales'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-white text-gray-700 border border-gray-300'
+                      }`}
+                    >
+                      Handlowiec
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleRecipientTypeChange('construction')}
+                      className={`px-4 py-2 rounded-md ${
+                        recipientType === 'construction'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-white text-gray-700 border border-gray-300'
+                      }`}
+                    >
+                      Budowa
+                    </button>
+                  </div>
+                </div>
+
+                {/* Wybór odbiorcy w zależności od typu */}
+                {recipientType === 'sales' ? (
+                  <>
+                    {/* Pole wyszukiwania użytkowników (handlowców) */}
+                    <div>
+                      <label className={labelBaseClass}>
+                        Osoba odpowiedzialna
+                      </label>
+                      {isLoadingUsers ? (
+                        <div className="animate-pulse h-10 bg-gray-200 rounded"></div>
+                      ) : (
+                        <div className="relative">
+                          <input
+                            type="text"
+                            value={searchTerm}
+                            onChange={(e) => {
+                              setSearchTerm(e.target.value)
+                              setShowUsersList(true)
+                            }}
+                            onFocus={() => setShowUsersList(true)}
+                            placeholder="Wpisz, aby wyszukać osobę"
+                            className={inputBaseClass}
+                            required
+                          />
+                          {showUsersList && (
+                            <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto">
+                              {filteredUsers.length > 0 ? (
+                                filteredUsers.map(user => (
+                                  <div
+                                    key={user.email}
+                                    onClick={() => handleUserSelect(user)}
+                                    className="p-2 hover:bg-gray-100 cursor-pointer"
+                                  >
+                                    <div className="font-medium">{user.name}</div>
+                                    {user.mpk && (
+                                      <div className="text-sm text-gray-500">MPK: {user.mpk}</div>
+                                    )}
+                                  </div>
+                                ))
+                              ) : (
+                                <div className="p-2 text-gray-500">Brak wyników</div>
+                              )}
+                            </div>
                           )}
                         </div>
                       )}
                     </div>
-                  )}
-                </div>
+                  </>
+                ) : (
+                  <>
+                    {/* Wybór budowy */}
+                    <div>
+                      <label className={labelBaseClass}>
+                        Budowa
+                      </label>
+                      <ConstructionSelector
+                        value={selectedConstruction}
+                        onChange={handleConstructionSelect}
+                      />
+                    </div>
+                  </>
+                )}
 
                 {/* Pole wyświetlające numer MPK */}
                 <div>
@@ -432,6 +534,20 @@ export default function TransportForm({
                     value={nowyTransport.mpk || ''}
                     className={inputBaseClass}
                     readOnly
+                  />
+                </div>
+
+                {/* Dodatkowe informacje o transporcie */}
+                <div>
+                  <label className={labelBaseClass}>
+                    Uwagi dodatkowe
+                  </label>
+                  <textarea
+                    name="informacje"
+                    value={nowyTransport.informacje || ''}
+                    onChange={handleInputChange}
+                    className={`${inputBaseClass} h-24`}
+                    placeholder="Dodatkowe informacje o transporcie..."
                   />
                 </div>
               </div>
