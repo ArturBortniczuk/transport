@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { readFileSync, writeFileSync } from 'fs';
 import { NextResponse } from 'next/server';
 import path from 'path';
