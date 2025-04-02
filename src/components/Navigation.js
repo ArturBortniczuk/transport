@@ -56,7 +56,7 @@ export default function Navigation() {
       ? setInterval(() => {
           setLastRefresh(Date.now());
           fetchUserInfo();
-        }, 5000)
+        }, 60000)
       : null;
       
     // Własne zdarzenie do odświeżania po zalogowaniu
