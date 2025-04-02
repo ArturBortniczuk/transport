@@ -149,7 +149,80 @@ export default function AdminPage() {
           <h1 className="text-3xl font-bold text-gray-900">Panel Administratora</h1>
         </div>
         
-        <div className="bg-white rounded-lg shadow overflow-hidden">
+        {/* Karty funkcji administratora */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
+          {/* Karta zarządzania użytkownikami */}
+          <div className="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300">
+            <div className="p-6">
+              <div className="flex items-center mb-4">
+                <div className="bg-indigo-100 p-3 rounded-full">
+                  <svg className="w-6 h-6 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                  </svg>
+                </div>
+                <h3 className="ml-4 text-lg font-medium">Zarządzanie użytkownikami</h3>
+              </div>
+              <p className="text-gray-600 mb-4">
+                Zarządzaj uprawnieniami użytkowników, przypisuj role i kontroluj dostęp do funkcji systemu.
+              </p>
+              <button
+                onClick={() => window.location.href = '#users-section'}
+                className="w-full inline-flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
+                Przejdź do zarządzania
+              </button>
+            </div>
+          </div>
+          
+          {/* Karta archiwum transportów */}
+          <div className="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300">
+            <div className="p-6">
+              <div className="flex items-center mb-4">
+                <div className="bg-green-100 p-3 rounded-full">
+                  <svg className="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                  </svg>
+                </div>
+                <h3 className="ml-4 text-lg font-medium">Archiwum transportów</h3>
+              </div>
+              <p className="text-gray-600 mb-4">
+                Przeglądaj, eksportuj i zarządzaj archiwum zrealizowanych transportów.
+              </p>
+              <a
+                href="/archiwum"
+                className="w-full inline-flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+              >
+                Przejdź do archiwum
+              </a>
+            </div>
+          </div>
+          
+          {/* Karta zarządzania budowami */}
+          <div className="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300">
+            <div className="p-6">
+              <div className="flex items-center mb-4">
+                <div className="bg-blue-100 p-3 rounded-full">
+                  <svg className="w-6 h-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                  </svg>
+                </div>
+                <h3 className="ml-4 text-lg font-medium">Zarządzanie budowami</h3>
+              </div>
+              <p className="text-gray-600 mb-4">
+                Dodawaj, edytuj i usuwaj budowy dla transportów. Zarządzaj ich nazwami i numerami MPK.
+              </p>
+              <a
+                href="/admin/constructions"
+                className="w-full inline-flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                Przejdź do zarządzania
+              </a>
+            </div>
+          </div>
+        </div>
+        
+        {/* Sekcja zarządzania uprawnieniami użytkowników */}
+        <div id="users-section" className="bg-white rounded-lg shadow overflow-hidden mt-8">
           <div className="p-6">
             <h2 className="text-xl font-semibold mb-4">Zarządzanie uprawnieniami użytkowników</h2>
             
