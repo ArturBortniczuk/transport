@@ -15,6 +15,16 @@ export default function Navigation() {
   const pathname = usePathname()
   const router = useRouter()
 
+  // Funkcja pomocnicza do obsługi różnych formatów boolean
+  const isTrueValue = (value) => {
+    return value === true || 
+           value === 1 || 
+           value === 't' || 
+           value === 'TRUE' || 
+           value === 'true' || 
+           value === 'T';
+  };
+
   // Funkcja pobierająca dane użytkownika
   const fetchUserInfo = async () => {
     try {
@@ -28,12 +38,17 @@ export default function Navigation() {
       if (data.isAuthenticated && data.user) {
         setUserRole(data.user.role || null);
         setUserName(data.user.name || '');
-        setIsAdmin(data.user.isAdmin || data.user.role === 'admin');
+        
+        // Poprawiona obsługa wartości isAdmin
+        const adminStatus = isTrueValue(data.user.isAdmin) || data.user.role === 'admin';
+        setIsAdmin(adminStatus);
+        
         console.log('Stan po aktualizacji:', {
           isLoggedIn: true,
           userRole: data.user.role,
           userName: data.user.name,
-          isAdmin: data.user.isAdmin || data.user.role === 'admin'
+          isAdmin: adminStatus,
+          rawIsAdmin: data.user.isAdmin // Dodanie surowej wartości dla debugowania
         });
       } else {
         setUserRole(null);
@@ -51,7 +66,7 @@ export default function Navigation() {
   useEffect(() => {
     fetchUserInfo();
     
-    // Okresowe odświeżanie stanu co 5 sekund (tylko w środowisku deweloperskim)
+    // Okresowe odświeżanie stanu co 60 sekund (tylko w środowisku deweloperskim)
     const intervalId = process.env.NODE_ENV === 'development' 
       ? setInterval(() => {
           setLastRefresh(Date.now());
@@ -106,6 +121,7 @@ export default function Navigation() {
 
   // Dodaj link do panelu admina tylko dla administratora
   if (isAdmin) {
+    console.log('Dodawanie linku do panelu administratora, isAdmin =', isAdmin);
     privateLinks.push({ name: 'Panel Administratora', path: '/admin' });
   }
 
