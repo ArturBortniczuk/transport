@@ -1,4 +1,6 @@
 // src/app/api/check-admin/route.js
+export const dynamic = 'force-dynamic';
+
 import { NextResponse } from 'next/server';
 import db from '@/database/db';
 
@@ -6,21 +8,17 @@ export async function GET(request) {
   try {
     // Pobierz token z ciasteczka
     const authToken = request.cookies.get('authToken')?.value;
-    console.log('Sprawdzanie uprawnień admina, token:', authToken ? 'Istnieje' : 'Brak');
     
     if (!authToken) {
-      console.log('Brak tokenu - użytkownik niezalogowany');
       return NextResponse.json({ isAdmin: false });
     }
     
     // Pobierz ID użytkownika z sesji
     const session = await db('sessions')
       .where('token', authToken)
-      .whereRaw('expires_at > NOW()') // To powinno działać tak samo w PostgreSQL
+      .whereRaw('expires_at > NOW()')
       .select('user_id')
       .first();
-    
-    console.log('Wynik sprawdzania sesji:', session ? `Sesja dla użytkownika ${session.user_id}` : 'Sesja nie istnieje');
     
     if (!session) {
       return NextResponse.json({ isAdmin: false });
@@ -29,18 +27,18 @@ export async function GET(request) {
     // Sprawdź czy użytkownik jest adminem
     const user = await db('users')
       .where('email', session.user_id)
-      .select('is_admin')
+      .select('is_admin', 'email')
       .first();
-
-    // Dodaj więcej logów dla debugowania
-    console.log('Dane użytkownika:', user);
-    console.log('Status admin:', user?.is_admin);
     
-    // W PostgreSQL true/false zamiast 1/0
-    return NextResponse.json({ 
-      isAdmin: user?.is_admin === true || user?.is_admin === 1 
-    });
-
+    // Obsłuż różne możliwe formaty wartości boolean
+    const isAdminValue = 
+      user?.is_admin === true || 
+      user?.is_admin === 1 || 
+      user?.is_admin === 't' || 
+      user?.is_admin === 'TRUE' || 
+      user?.is_admin === 'true';
+    
+    return NextResponse.json({ isAdmin: isAdminValue });
   } catch (error) {
     console.error('Error checking admin status:', error);
     return NextResponse.json({ isAdmin: false });
