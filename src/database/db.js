@@ -106,6 +106,18 @@ const initializeDatabase = async () => {
       });
     }
 
+    // Tabela budów
+    const constructionsExists = await db.schema.hasTable('constructions');
+    if (!constructionsExists) {
+      await db.schema.createTable('constructions', table => {
+        table.increments('id').primary();
+        table.string('name').notNullable();
+        table.string('mpk').notNullable();
+        table.timestamp('created_at').defaultTo(db.fn.now());
+        table.timestamp('updated_at').defaultTo(db.fn.now());
+      });
+    }
+
     return true;
   } catch (error) {
     console.error('Błąd inicjalizacji bazy:', error);
