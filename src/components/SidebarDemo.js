@@ -6,7 +6,7 @@ import { motion } from 'framer-motion';
 import Image from 'next/image';
 import { cn } from '@/lib/utils';
 
-export function SidebarDemo() {
+export function SidebarDemo({ children }) {
   // Zastępujemy ikony Tabler odpowiednikami z Lucide (które już masz w projekcie)
   const links = [
     {
@@ -60,39 +60,18 @@ export function SidebarDemo() {
   const [open, setOpen] = useState(false);
   
   return (
-    <div
-      className={cn(
+    <div className={cn(
         'mx-auto flex w-full max-w-7xl flex-1 flex-col overflow-hidden rounded-md border border-neutral-200 bg-gray-100 md:flex-row dark:border-neutral-700 dark:bg-neutral-800',
         'h-screen'
-      )}>
+    )}>
       <Sidebar open={open} setOpen={setOpen}>
         <SidebarBody className="justify-between gap-10">
-          <div className="flex flex-1 flex-col overflow-x-hidden overflow-y-auto">
-            {open ? <Logo /> : <LogoIcon />}
-            <div className="mt-8 flex flex-col gap-2">
-              {links.map((link, idx) => (
-                <SidebarLink key={idx} link={link} />
-              ))}
-            </div>
-          </div>
-          <div>
-            <SidebarLink
-              link={{
-                label: 'Mój Profil',
-                href: '/change-password',
-                icon: (
-                  <div className="h-7 w-7 shrink-0 rounded-full bg-blue-500 flex items-center justify-center text-white">
-                    U
-                  </div>
-                ),
-              }}
-            />
-          </div>
+          {/* kod sidebara */}
         </SidebarBody>
       </Sidebar>
       <div className="flex flex-1">
         <div className="flex h-full w-full flex-1 flex-col gap-2 rounded-tl-2xl border border-neutral-200 bg-white p-2 md:p-10 dark:border-neutral-700 dark:bg-neutral-900 overflow-auto">
-          {children}
+          {children}  {/* Używamy props children tutaj */}
         </div>
       </div>
     </div>
