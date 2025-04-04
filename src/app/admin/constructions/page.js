@@ -41,86 +41,85 @@ export default function ConstructionsPage() {
     }));
   };
 
+  // Zmodyfikuj funkcję handleSubmit
   const handleSubmit = async (e) => {
     e.preventDefault();
     
     try {
-      let updatedConstructions;
-      
       if (editMode) {
         // Edycja istniejącej budowy
-        updatedConstructions = constructions.map(construction => 
-          construction.id === editingId 
-            ? { ...newConstruction, id: editingId } 
-            : construction
-        );
+        const response = await fetch('/api/constructions', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            id: editingId,
+            name: newConstruction.name,
+            mpk: newConstruction.mpk
+          })
+        });
+        
+        if (!response.ok) {
+          throw new Error('Problem z aktualizacją danych');
+        }
       } else {
         // Dodanie nowej budowy
-        const newId = Math.max(0, ...constructions.map(c => c.id)) + 1;
-        updatedConstructions = [
+        const response = await fetch('/api/constructions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            name: newConstruction.name,
+            mpk: newConstruction.mpk
+          })
+        });
+        
+        if (!response.ok) {
+          throw new Error('Problem z zapisem danych');
+        }
+        
+        const data = await response.json();
+        
+        // Dodaj nową budowę do lokalnego stanu
+        setConstructions([
           ...constructions,
-          { ...newConstruction, id: newId }
-        ];
+          { ...newConstruction, id: data.id }
+        ]);
       }
       
-      const response = await fetch('/api/constructions', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ constructions: updatedConstructions })
-      });
-      
-      if (!response.ok) {
-        throw new Error('Problem z zapisem danych');
-      }
-      
-      setConstructions(updatedConstructions);
       resetForm();
+      fetchConstructions(); // Odśwież listę
       
     } catch (err) {
       setError('Wystąpił błąd podczas zapisywania: ' + err.message);
       console.error('Error saving construction:', err);
     }
   };
-
-  const handleEdit = (construction) => {
-    setNewConstruction({
-      name: construction.name,
-      mpk: construction.mpk
-    });
-    setEditMode(true);
-    setEditingId(construction.id);
-  };
-
+  
+  // Zmodyfikuj funkcję handleDelete
   const handleDelete = async (id) => {
     if (!confirm('Czy na pewno chcesz usunąć tę budowę?')) {
       return;
     }
     
     try {
-      const updatedConstructions = constructions.filter(c => c.id !== id);
-      
-      const response = await fetch('/api/constructions', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ constructions: updatedConstructions })
+      const response = await fetch(`/api/constructions?id=${id}`, {
+        method: 'DELETE'
       });
       
       if (!response.ok) {
         throw new Error('Problem z usunięciem danych');
       }
       
-      setConstructions(updatedConstructions);
+      setConstructions(constructions.filter(c => c.id !== id));
       
     } catch (err) {
       setError('Wystąpił błąd podczas usuwania: ' + err.message);
       console.error('Error deleting construction:', err);
     }
   };
-
   const resetForm = () => {
     setNewConstruction({ name: '', mpk: '' });
     setEditMode(false);
