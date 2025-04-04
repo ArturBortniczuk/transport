@@ -69,7 +69,15 @@ export async function GET(request) {
         email: user.email,
         name: user.name,
         role: user.role,
-        isAdmin: user.is_admin === 1,
+        // Dodaj bezpośrednio wartość boolean dla isAdmin
+        isAdmin: Boolean(
+          user.is_admin === true || 
+          user.is_admin === 1 || 
+          user.is_admin === 't' || 
+          user.is_admin === 'TRUE' || 
+          user.is_admin === 'true' ||
+          user.role === 'admin'
+        ),
         permissions: permissions,
         mpk: user.mpk || ''
       }
