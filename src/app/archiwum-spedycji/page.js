@@ -15,6 +15,7 @@ export default function ArchiwumSpedycjiPage() {
   const [exportFormat, setExportFormat] = useState('xlsx')
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage] = useState(10)
+  const [expandedRowId, setExpandedRowId] = useState(null)
   
   // Filtry
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
@@ -56,7 +57,7 @@ export default function ArchiwumSpedycjiPage() {
     fetchArchiveData()
   }, [])
 
-  // Pobierz dane archiwum z lokalnego storage (później zastąpimy to API)
+  // Pobierz dane archiwum z API
   const fetchArchiveData = async () => {
     try {
       setLoading(true)
@@ -79,6 +80,23 @@ export default function ArchiwumSpedycjiPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  // Funkcja pomocnicza do określania miasta załadunku
+  const getLoadingCity = (transport) => {
+    if (transport.location === 'Producent' && transport.producerAddress) {
+      return transport.producerAddress.city || '';
+    } else if (transport.location === 'Magazyn Białystok') {
+      return 'Białystok';
+    } else if (transport.location === 'Magazyn Zielonka') {
+      return 'Zielonka';
+    }
+    return '';
+  }
+  
+  // Funkcja pomocnicza do określania miasta dostawy
+  const getDeliveryCity = (transport) => {
+    return transport.delivery?.city || '';
   }
 
   // Funkcja filtrująca transporty
@@ -152,6 +170,11 @@ export default function ArchiwumSpedycjiPage() {
     }
   }
 
+  // Obliczanie ceny za kilometr
+  const calculatePricePerKm = (price, distance) => {
+    if (!price || !distance || distance === 0) return 0;
+    return (price / distance).toFixed(2);
+  }
   // Funkcja eksportująca dane do pliku
   const exportData = () => {
     if (filteredArchiwum.length === 0) {
@@ -161,16 +184,24 @@ export default function ArchiwumSpedycjiPage() {
     
     // Przygotuj dane do eksportu
     const dataToExport = filteredArchiwum.map(transport => {
+      const distanceKm = transport.response?.distanceKm || transport.distanceKm || 0;
+      const price = transport.response?.deliveryPrice || 0;
+      const pricePerKm = calculatePricePerKm(price, distanceKm);
+      
       return {
         'Data zlecenia': format(new Date(transport.createdAt), 'dd.MM.yyyy', { locale: pl }),
         'Data realizacji': transport.completedAt ? format(new Date(transport.completedAt), 'dd.MM.yyyy', { locale: pl }) : 'Brak',
-        'Z': transport.location || '',
-        'Do': transport.delivery?.city || '',
+        'Trasa': `${getLoadingCity(transport)} → ${getDeliveryCity(transport)}`,
         'MPK': transport.mpk || '',
-        'Przewoźnik': transport.response?.driverName + ' ' + transport.response?.driverSurname || '',
+        'Dokumenty': transport.documents || '',
+        'Osoba dodająca': transport.createdBy || '',
+        'Osoba odpowiedzialna': transport.responsiblePerson || transport.createdBy || '',
+        'Przewoźnik': (transport.response?.driverName || '') + ' ' + (transport.response?.driverSurname || ''),
         'Numer auta': transport.response?.vehicleNumber || '',
         'Telefon': transport.response?.driverPhone || '',
-        'Cena': transport.response?.deliveryPrice || ''
+        'Cena (PLN)': price,
+        'Odległość (km)': distanceKm,
+        'Cena za km (PLN/km)': pricePerKm
       }
     })
     
@@ -225,6 +256,11 @@ export default function ArchiwumSpedycjiPage() {
     XLSX.writeFile(wb, `${fileName}.xlsx`)
   }
 
+  // Formatowanie daty
+  const formatDate = (dateString) => {
+    return format(new Date(dateString), 'dd.MM.yyyy', { locale: pl })
+  }
+
   // Paginacja
   const indexOfLastItem = currentPage * itemsPerPage
   const indexOfFirstItem = indexOfLastItem - itemsPerPage
@@ -235,6 +271,15 @@ export default function ArchiwumSpedycjiPage() {
   const paginate = (pageNumber) => setCurrentPage(pageNumber)
   
   const selectStyles = "block w-full py-2 pl-3 pr-10 text-base border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+
+  // Obsługa rozwijania wiersza
+  const toggleRowExpansion = (id) => {
+    if (expandedRowId === id) {
+      setExpandedRowId(null);
+    } else {
+      setExpandedRowId(id);
+    }
+  };
 
   if (loading) {
     return (
@@ -359,6 +404,9 @@ export default function ArchiwumSpedycjiPage() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Cena
                 </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  PLN/km
+                </th>
                 {isAdmin && (
                   <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Akcje
@@ -369,57 +417,87 @@ export default function ArchiwumSpedycjiPage() {
             <tbody className="bg-white divide-y divide-gray-200">
               {currentItems.length > 0 ? (
                 currentItems.map((transport) => (
-                  <tr key={transport.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {format(new Date(transport.createdAt), 'dd.MM.yyyy', { locale: pl })}
-                      {transport.completedAt && (
-                        <div className="text-xs text-gray-500">
-                          Zrealizowano: {format(new Date(transport.completedAt), 'dd.MM.yyyy', { locale: pl })}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm">
-                      <div className="font-medium text-gray-900">
-                        {transport.location} → {transport.delivery?.city}
-                      </div>
-                      <div className="text-gray-500">
-                        {transport.delivery?.street && `${transport.delivery.street}, `}
-                        {transport.delivery?.postalCode}
-                      </div>
-                    </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {transport.response?.driverName} {transport.response?.driverSurname}
-                      {transport.response?.driverPhone && (
-                        <div className="text-xs text-gray-500">
-                          Tel: {transport.response.driverPhone}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {transport.response?.vehicleNumber || 'N/A'}
-                    </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {transport.mpk || 'N/A'}
-                    </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {transport.response?.deliveryPrice ? `${transport.response.deliveryPrice} PLN` : 'N/A'}
-                    </td>
-                    {isAdmin && (
-                      <td className="px-4 py-4 whitespace-nowrap text-right text-sm">
-                        <button
-                          onClick={() => handleDeleteTransport(transport.id)}
-                          className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1"
-                          title="Usuń transport"
-                        >
-                          Usuń
-                        </button>
+                  <React.Fragment key={transport.id}>
+                    <tr 
+                      className="hover:bg-gray-50 transition-colors cursor-pointer"
+                      onClick={() => toggleRowExpansion(transport.id)}
+                    >
+                      <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        {formatDate(transport.createdAt)}
+                        {transport.completedAt && (
+                          <div className="text-xs text-gray-500">
+                            Zrealizowano: {formatDate(transport.completedAt)}
+                          </div>
+                        )}
                       </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm">
+                        <div className="font-medium text-gray-900">
+                          {getLoadingCity(transport)} → {getDeliveryCity(transport)}
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {transport.response?.driverName} {transport.response?.driverSurname}
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {transport.response?.vehicleNumber || 'N/A'}
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {transport.mpk || 'N/A'}
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {transport.response?.deliveryPrice ? `${transport.response.deliveryPrice} PLN` : 'N/A'}
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {calculatePricePerKm(
+                          transport.response?.deliveryPrice,
+                          transport.response?.distanceKm || transport.distanceKm
+                        )} PLN/km
+                      </td>
+                      {isAdmin && (
+                        <td className="px-4 py-4 whitespace-nowrap text-right text-sm">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteTransport(transport.id);
+                            }}
+                            className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1"
+                            title="Usuń transport"
+                          >
+                            Usuń
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                    {expandedRowId === transport.id && (
+                      <tr>
+                        <td colSpan={isAdmin ? 8 : 7} className="bg-gray-50 p-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <h4 className="font-medium mb-2">Szczegóły zlecenia</h4>
+                              <p className="text-sm"><span className="font-medium">Dokumenty: </span>{transport.documents || 'N/A'}</p>
+                              <p className="text-sm"><span className="font-medium">Osoba dodająca: </span>{transport.createdBy || 'N/A'}</p>
+                              <p className="text-sm"><span className="font-medium">Osoba odpowiedzialna: </span>{transport.responsiblePerson || transport.createdBy || 'N/A'}</p>
+                              {transport.notes && (
+                                <p className="text-sm"><span className="font-medium">Uwagi: </span>{transport.notes}</p>
+                              )}
+                            </div>
+                            <div>
+                              <h4 className="font-medium mb-2">Szczegóły przewoźnika</h4>
+                              <p className="text-sm"><span className="font-medium">Telefon: </span>{transport.response?.driverPhone || 'N/A'}</p>
+                              <p className="text-sm"><span className="font-medium">Odległość: </span>{transport.response?.distanceKm || transport.distanceKm || 'N/A'} km</p>
+                              {transport.response?.adminNotes && (
+                                <p className="text-sm"><span className="font-medium">Uwagi przewoźnika: </span>{transport.response.adminNotes}</p>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
                     )}
-                  </tr>
+                  </React.Fragment>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={isAdmin ? 7 : 6} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={isAdmin ? 8 : 7} className="px-4 py-8 text-center text-gray-500">
                     <div className="flex flex-col items-center justify-center py-6">
                       <FileText size={48} className="text-gray-400 mb-2" />
                       <p className="text-gray-500">Brak transportów spedycyjnych w wybranym okresie</p>
@@ -435,6 +513,16 @@ export default function ArchiwumSpedycjiPage() {
         <div className="border-t border-gray-200 px-4 py-4 bg-gray-50 flex flex-col sm:flex-row justify-between items-center">
           <div className="text-sm text-gray-700 mb-4 sm:mb-0">
             <span className="font-medium">Łącznie:</span> {filteredArchiwum.length} transportów
+            {filteredArchiwum.length > 0 && (
+              <>
+                <span className="ml-4 font-medium">Całkowita kwota:</span> {filteredArchiwum.reduce((sum, t) => sum + (t.response?.deliveryPrice || 0), 0).toLocaleString('pl-PL')} PLN
+                <span className="ml-4 font-medium">Średnia cena/km:</span> {(filteredArchiwum.reduce((sum, t) => {
+                  const price = t.response?.deliveryPrice || 0;
+                  const distance = t.response?.distanceKm || t.distanceKm || 0;
+                  return distance > 0 ? sum + (price / distance) : sum;
+                }, 0) / (filteredArchiwum.filter(t => (t.response?.distanceKm || t.distanceKm) > 0).length || 1)).toFixed(2)} PLN/km
+              </>
+            )}
           </div>
           
           {totalPages > 1 && (
