@@ -1,6 +1,8 @@
-// src/app/spedycja/components/SpedycjaForm.js
 'use client'
 import { useState, useEffect } from 'react'
+import { getGoogleCoordinates } from '@/services/geocoding-google'
+import { calculateDistance } from '@/services/calculateDistance'
+import { MAGAZYNY } from '@/kalendarz/constants'
 
 export default function SpedycjaForm({ onSubmit, onCancel, initialData, isResponse }) {
   const [selectedLocation, setSelectedLocation] = useState(initialData?.location || '')
@@ -12,6 +14,8 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
     email: '',
     name: ''
   })
+  const [distance, setDistance] = useState(0)
+  const [isCalculatingDistance, setIsCalculatingDistance] = useState(false)
 
   // Pobierz listę użytkowników i dane bieżącego użytkownika na początku
   useEffect(() => {
@@ -57,20 +61,83 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
     unselected: "px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
   }
   
-  const handleSubmit = (e) => {
-    e.preventDefault()
-    const formData = new FormData(e.target)
+  // Funkcja do obliczania odległości
+  const calculateRouteDistance = async (fromLocation, toLocation) => {
+    try {
+      setIsCalculatingDistance(true);
+      let originLat, originLng, destLat, destLng;
+      
+      // Ustal współrzędne punktu początkowego
+      if (fromLocation === 'Producent') {
+        const producerCity = document.querySelector('input[name="producerCity"]').value;
+        const producerPostalCode = document.querySelector('input[name="producerPostalCode"]').value;
+        const producerStreet = document.querySelector('input[name="producerStreet"]').value;
+        
+        if (!producerCity || !producerPostalCode) {
+          alert('Wprowadź dane adresowe producenta');
+          setIsCalculatingDistance(false);
+          return 0;
+        }
+        
+        const originCoords = await getGoogleCoordinates(producerCity, producerPostalCode, producerStreet);
+        originLat = originCoords.lat;
+        originLng = originCoords.lng;
+      } else {
+        // Użyj współrzędnych magazynu
+        const warehouseKey = fromLocation === 'Magazyn Białystok' ? 'bialystok' : 'zielonka';
+        originLat = MAGAZYNY[warehouseKey].lat;
+        originLng = MAGAZYNY[warehouseKey].lng;
+      }
+      
+      // Ustal współrzędne punktu docelowego
+      const destCity = document.querySelector('input[name="deliveryCity"]').value;
+      const destPostalCode = document.querySelector('input[name="deliveryPostalCode"]').value;
+      const destStreet = document.querySelector('input[name="deliveryStreet"]').value;
+      
+      if (!destCity || !destPostalCode) {
+        alert('Wprowadź dane adresowe dostawy');
+        setIsCalculatingDistance(false);
+        return 0;
+      }
+      
+      const destCoords = await getGoogleCoordinates(destCity, destPostalCode, destStreet);
+      destLat = destCoords.lat;
+      destLng = destCoords.lng;
+      
+      // Oblicz odległość między punktami
+      const distanceKm = await calculateDistance(originLat, originLng, destLat, destLng);
+      setDistance(distanceKm);
+      setIsCalculatingDistance(false);
+      return distanceKm;
+    } catch (error) {
+      console.error('Błąd obliczania odległości:', error);
+      setIsCalculatingDistance(false);
+      return 0;
+    }
+  };
+  
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
     
     if (isResponse) {
+      const distanceKm = formData.get('distanceKm') || 
+                          distance || 
+                          (initialData.response?.distanceKm || 0);
+                          
+      const deliveryPrice = Number(formData.get('deliveryPrice'));
+      const pricePerKm = distanceKm > 0 ? (deliveryPrice / distanceKm).toFixed(2) : 0;
+      
       onSubmit(initialData.id, {
         driverName: formData.get('driverName'),
         driverSurname: formData.get('driverSurname'),
         driverPhone: formData.get('driverPhone'),
         vehicleNumber: formData.get('vehicleNumber'),
-        deliveryPrice: Number(formData.get('deliveryPrice')),
-        distanceKm: Number(formData.get('distanceKm') || 0),
+        deliveryPrice: deliveryPrice,
+        distanceKm: Number(distanceKm),
+        pricePerKm: Number(pricePerKm),
         adminNotes: formData.get('adminNotes')
-      })
+      });
     } else {
       const mpk = isForOtherUser && selectedUser 
         ? (users.find(u => u.email === selectedUser)?.mpk || '')
@@ -83,7 +150,13 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
       const responsibleEmail = isForOtherUser && selectedUser
         ? selectedUser
         : currentUser.email;
-        
+      
+      // Najpierw oblicz odległość, jeśli jeszcze nie obliczona
+      let routeDistance = distance;
+      if (routeDistance === 0) {
+        routeDistance = await calculateRouteDistance(selectedLocation, 'destination');
+      }
+      
       const data = {
         location: selectedLocation,
         documents: formData.get('documents'),
@@ -102,6 +175,7 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
         loadingContact: formData.get('loadingContact'),
         unloadingContact: formData.get('unloadingContact'),
         deliveryDate: formData.get('deliveryDate'),
+        distanceKm: routeDistance,
         mpk: mpk,
         notes: formData.get('notes'),
         // Dodajemy informacje o użytkowniku dodającym i odpowiedzialnym
@@ -109,12 +183,13 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
         createdByEmail: currentUser.email,
         responsiblePerson: personResponsible,
         responsibleEmail: responsibleEmail
-      }
-      onSubmit(data)
+      };
+      
+      onSubmit(data);
     }
     
-    onCancel()
-  }
+    onCancel();
+  };
 
   return (
     <form onSubmit={handleSubmit} className="p-6 space-y-6">
@@ -188,12 +263,20 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">Odległość (km)</label>
-              <input
-                name="distanceKm"
-                type="number"
-                className="w-full p-2 border rounded-md"
-                required
-              />
+              <div className="flex items-center">
+                <input
+                  name="distanceKm"
+                  type="number"
+                  className="w-full p-2 border rounded-md"
+                  value={initialData.distanceKm || distance}
+                  readOnly
+                />
+              </div>
+              {initialData.distanceKm > 0 && (
+                <div className="mt-1 text-xs text-green-600">
+                  Odległość obliczona automatycznie: {initialData.distanceKm} km
+                </div>
+              )}
             </div>
           </div>
 
@@ -431,6 +514,23 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
               rows={3}
               placeholder="Dodatkowe informacje..."
             />
+          </div>
+
+          <div>
+            <button
+              type="button"
+              onClick={() => calculateRouteDistance(selectedLocation, 'destination')}
+              className="w-full px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 mb-2"
+              disabled={isCalculatingDistance}
+            >
+              {isCalculatingDistance ? 'Obliczanie...' : 'Oblicz odległość trasy'}
+            </button>
+            
+            {distance > 0 && (
+              <div className="text-center text-green-700 bg-green-50 p-2 rounded-md">
+                Odległość trasy: <strong>{distance} km</strong>
+              </div>
+            )}
           </div>
         </>
       )}
