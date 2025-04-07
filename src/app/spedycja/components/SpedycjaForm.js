@@ -1,8 +1,5 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { getGoogleCoordinates } from '@/services/geocoding-google'
-import { calculateDistance } from '@/services/calculateDistance'
-import { MAGAZYNY } from '@/kalendarz/constants'
 
 export default function SpedycjaForm({ onSubmit, onCancel, initialData, isResponse }) {
   const [selectedLocation, setSelectedLocation] = useState(initialData?.location || '')
@@ -16,6 +13,22 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
   })
   const [distance, setDistance] = useState(0)
   const [isCalculatingDistance, setIsCalculatingDistance] = useState(false)
+  
+  // Stałe dla magazynów
+  const MAGAZYNY = {
+    bialystok: { 
+      lat: 53.1325, 
+      lng: 23.1688, 
+      nazwa: 'Magazyn Białystok',
+      kolor: '#0000FF'
+    },
+    zielonka: { 
+      lat: 52.3125, 
+      lng: 21.1390, 
+      nazwa: 'Magazyn Zielonka',
+      kolor: '#FF0000'
+    }
+  };
 
   // Pobierz listę użytkowników i dane bieżącego użytkownika na początku
   useEffect(() => {
@@ -61,7 +74,90 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
     unselected: "px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
   }
   
+  // Funkcja do geokodowania adresu
+  async function getGoogleCoordinates(city, postalCode, street = '') {
+    try {
+      const address = `${street}, ${postalCode} ${city}, Poland`;
+      const query = encodeURIComponent(address);
+      
+      // Użyj Google Maps Geocoding API
+      const response = await fetch(
+        `https://maps.googleapis.com/maps/api/geocode/json?address=${query}&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`
+      );
+      
+      const data = await response.json();
+      
+      if (data.status === 'OK' && data.results && data.results.length > 0) {
+        const location = data.results[0].geometry.location;
+        return {
+          lat: location.lat,
+          lng: location.lng
+        };
+      }
+      
+      throw new Error('Nie znaleziono lokalizacji');
+    } catch (error) {
+      console.error('Błąd geokodowania Google:', error);
+      throw error;
+    }
+  }
+  
   // Funkcja do obliczania odległości
+  async function calculateDistance(originLat, originLng, destinationLat, destinationLng) {
+    try {
+      // Używamy własnego endpointu proxy zamiast bezpośredniego wywołania API Google
+      const url = `/api/distance?origins=${originLat},${originLng}&destinations=${destinationLat},${destinationLng}`;
+      
+      console.log('Wywołuję endpoint proxy:', url);
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        throw new Error(`Żądanie API nie powiodło się ze statusem: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log('Odpowiedź API:', data);
+      
+      if (data.status === 'OK' && 
+          data.rows && 
+          data.rows[0] && 
+          data.rows[0].elements && 
+          data.rows[0].elements[0] && 
+          data.rows[0].elements[0].status === 'OK') {
+        
+        const distance = Math.round(data.rows[0].elements[0].distance.value / 1000);
+        console.log(`Rzeczywista odległość drogowa: ${distance} km`);
+        return distance;
+      }
+      
+      throw new Error('Nieprawidłowa odpowiedź API');
+    } catch (error) {
+      console.error('Błąd obliczania odległości:', error);
+      
+      // Obliczanie dystansu w linii prostej z korektą
+      const straightLineDistance = calculateStraightLineDistance(
+        originLat, originLng, destinationLat, destinationLng
+      );
+      
+      // Dodaj 30% do odległości w linii prostej aby przybliżyć odległość drogową
+      return Math.round(straightLineDistance * 1.3);
+    }
+  }
+  
+  // Pomocnicza funkcja do obliczania odległości w linii prostej
+  function calculateStraightLineDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371; // Promień Ziemi w km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = 
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+      Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c; // Odległość w km
+  }
+  
+  // Funkcja do obliczania odległości trasy
   const calculateRouteDistance = async (fromLocation, toLocation) => {
     try {
       setIsCalculatingDistance(true);
