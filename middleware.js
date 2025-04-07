@@ -30,6 +30,7 @@ export const config = {
     '/spedycja/:path*',
     '/kurier/:path*',
     '/archiwum/:path*',
+    '/archiwum-spedycji/:path*',
     '/change-password/:path*'
   ]
 }
