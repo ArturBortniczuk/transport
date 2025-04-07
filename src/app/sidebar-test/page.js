@@ -25,9 +25,9 @@ export default function SidebarTestPage() {
   const days = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      <SidebarDemo>
-        <div className="container mx-auto py-6">
+    <SidebarDemo>
+      <div className="flex flex-col h-full w-full overflow-auto">
+        <div className="px-6 py-6 flex-1">
           <h1 className="text-3xl font-bold mb-6">Kalendarz Transportów</h1>
           
           <div className="bg-white rounded-lg shadow p-4 mb-6">
@@ -85,7 +85,7 @@ export default function SidebarTestPage() {
             <div className="text-gray-500">Nie znaleziono transportów na wybrany dzień.</div>
           </div>
         </div>
-      </SidebarDemo>
-    </div>
+      </div>
+    </SidebarDemo>
   );
 }
