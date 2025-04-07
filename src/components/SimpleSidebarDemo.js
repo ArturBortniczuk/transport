@@ -3,16 +3,16 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 
 export function SimpleSidebarDemo(props) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(true);
   
   return (
-    <div className="flex h-screen">
+    <div className="flex h-screen w-full">
       {/* Sidebar */}
-      <div className={`h-full transition-all duration-300 bg-blue-800 text-white ${isOpen ? 'w-64' : 'w-16'}`}>
+      <div className={`h-full transition-all duration-300 bg-blue-800 text-white ${isOpen ? 'w-64' : 'w-16'} fixed left-0 top-0 z-10 overflow-y-auto`}>
         <div className="flex flex-col h-full px-3 py-8">
           {/* Logo */}
-          <div className="flex items-center mb-8">
-            <div className="h-5 w-6 bg-white rounded"></div>
+          <div className="flex items-center mb-10">
+            <div className="h-5 w-6 bg-white rounded-tl-lg rounded-tr-sm rounded-br-lg rounded-bl-sm"></div>
             {isOpen && (
               <span className="ml-2 text-white font-medium">TransportSystem</span>
             )}
@@ -21,14 +21,14 @@ export function SimpleSidebarDemo(props) {
           {/* Toggle button */}
           <button 
             onClick={() => setIsOpen(!isOpen)}
-            className="absolute left-16 top-20 z-30 w-8 h-8 rounded-full bg-white text-blue-800 flex items-center justify-center shadow"
+            className="absolute -right-4 top-20 z-30 w-8 h-8 rounded-full bg-white text-blue-800 flex items-center justify-center shadow border border-gray-200"
           >
             {isOpen ? '<' : '>'}
           </button>
 
           {/* Navigation links */}
-          <nav className="flex flex-col gap-2">
-            <Link href="/kalendarz" className="flex items-center px-3 py-2 rounded hover:bg-blue-700">
+          <nav className="flex flex-col gap-3">
+            <Link href="/kalendarz" className="flex items-center px-2.5 py-2 rounded hover:bg-blue-700">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <rect width="18" height="18" x="3" y="3" rx="2" />
                 <path d="M8 12h8" />
@@ -36,7 +36,7 @@ export function SimpleSidebarDemo(props) {
               </svg>
               {isOpen && <span className="ml-2">Kalendarz</span>}
             </Link>
-            <Link href="/mapa" className="flex items-center px-3 py-2 rounded hover:bg-blue-700">
+            <Link href="/mapa" className="flex items-center px-2.5 py-2 rounded hover:bg-blue-700">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21" />
                 <line x1="9" x2="9" y1="3" y2="18" />
@@ -44,7 +44,7 @@ export function SimpleSidebarDemo(props) {
               </svg>
               {isOpen && <span className="ml-2">Mapa</span>}
             </Link>
-            <Link href="/admin" className="flex items-center px-3 py-2 rounded hover:bg-blue-700">
+            <Link href="/admin" className="flex items-center px-2.5 py-2 rounded hover:bg-blue-700">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
                 <circle cx="9" cy="7" r="4" />
@@ -53,21 +53,22 @@ export function SimpleSidebarDemo(props) {
               </svg>
               {isOpen && <span className="ml-2">Panel Administratora</span>}
             </Link>
-            <Link href="/archiwum" className="flex items-center px-3 py-2 rounded hover:bg-blue-700">
+            <Link href="/archiwum" className="flex items-center px-2.5 py-2 rounded hover:bg-blue-700">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7" />
                 <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+                <path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4" />
               </svg>
               {isOpen && <span className="ml-2">Archiwum</span>}
             </Link>
-            <Link href="/change-password" className="flex items-center px-3 py-2 rounded hover:bg-blue-700">
+            <Link href="/change-password" className="flex items-center px-2.5 py-2 rounded hover:bg-blue-700">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
                 <path d="M7 11V7a5 5 0 0 1 10 0v4" />
               </svg>
               {isOpen && <span className="ml-2">Zmień hasło</span>}
             </Link>
-            <Link href="/logout" className="flex items-center px-3 py-2 rounded hover:bg-blue-700">
+            <Link href="/logout" className="flex items-center px-2.5 py-2 rounded hover:bg-blue-700">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
                 <polyline points="16 17 21 12 16 7" />
@@ -79,8 +80,8 @@ export function SimpleSidebarDemo(props) {
         </div>
       </div>
       
-      {/* Main content */}
-      <div className="flex-1 overflow-auto bg-gray-100">
+      {/* Main content - with margin to account for the fixed sidebar */}
+      <div className={`flex-1 overflow-auto bg-gray-100 ${isOpen ? 'ml-64' : 'ml-16'} transition-all duration-300`}>
         {props.children}
       </div>
     </div>
