@@ -8,7 +8,7 @@ export const Sidebar = ({ children, open, setOpen }) => {
   return (
     <aside
       className={cn(
-        "relative h-full w-16 border-r border-neutral-200 transition-all duration-300 ease-in-out dark:border-neutral-700",
+        "relative h-full w-16 transition-all duration-300 ease-in-out bg-blue-800 text-white",
         open && "w-64"
       )}
     >
@@ -16,7 +16,7 @@ export const Sidebar = ({ children, open, setOpen }) => {
         {/* Hamburger Menu Button */}
         <button
           onClick={() => setOpen(!open)}
-          className="absolute -right-4 top-20 z-30 grid h-8 w-8 place-items-center rounded-full border border-neutral-200 bg-white text-neutral-600 transition-all duration-300 ease-in-out hover:bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100 dark:hover:bg-neutral-700"
+          className="absolute -right-4 top-20 z-30 grid h-8 w-8 place-items-center rounded-full border border-neutral-200 bg-white text-blue-800 transition-all duration-300 ease-in-out hover:bg-neutral-100"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -65,15 +65,15 @@ export const SidebarLink = ({ link }) => {
     <Link
       href={link.href}
       className={cn(
-        "group flex w-full items-center gap-x-2 rounded-lg px-2.5 py-2 transition-all duration-150 ease-in-out hover:bg-neutral-100 dark:hover:bg-neutral-700",
-        isActive ? "bg-neutral-100 dark:bg-neutral-700" : ""
+        "group flex w-full items-center gap-x-2 rounded-lg px-2.5 py-2 transition-all duration-150 ease-in-out hover:bg-blue-700",
+        isActive ? "bg-blue-700" : ""
       )}
     >
       {link.icon}
       <motion.span
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        className="whitespace-pre text-sm font-medium text-neutral-700 dark:text-neutral-200"
+        className="whitespace-pre text-sm font-medium text-white"
       >
         {link.label}
       </motion.span>
