@@ -116,13 +116,15 @@ export default function Navigation() {
 
   const privateLinks = [
     { name: 'Kalendarz', path: '/kalendarz' },
-    { name: 'Mapa', path: '/mapa' }
+    { name: 'Mapa', path: '/mapa' },
+    { name: 'Spedycja', path: '/spedycja' }
   ];
-
+  
   // Dodaj link do panelu admina tylko dla administratora
   if (isAdmin) {
     console.log('Dodawanie linku do panelu administratora, isAdmin =', isAdmin);
     privateLinks.push({ name: 'Panel Administratora', path: '/admin' });
+    privateLinks.push({ name: 'Archiwum Spedycji', path: '/archiwum-spedycji' });
   }
 
   const navLinks = isLoggedIn ? privateLinks : publicLinks;
