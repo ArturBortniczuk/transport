@@ -46,6 +46,18 @@ export default function SpedycjaPage() {
       setIsLoading(true)
       setError(null)
       
+      // Próbujemy najpierw pobrać dane z localStorage dla kompatybilności
+      const savedData = localStorage.getItem('zamowieniaSpedycja')
+      if (savedData) {
+        const parsedData = JSON.parse(savedData)
+        const filteredData = showArchive 
+          ? parsedData.filter(item => item.status === 'completed')
+          : parsedData.filter(item => item.status === 'new')
+        setZamowienia(filteredData)
+        setIsLoading(false)
+        return
+      }
+      
       // Pobierz dane z API z filtrem statusu
       const status = showArchive ? 'completed' : 'new'
       const response = await fetch(`/api/spedycje?status=${status}`)
@@ -93,24 +105,43 @@ export default function SpedycjaPage() {
 
   const handleDodajZamowienie = async (noweZamowienie) => {
     try {
-      // Wysyłamy dane do API
-      const response = await fetch('/api/spedycje', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(noweZamowienie)
-      })
-      
-      const data = await response.json()
-      
-      if (data.success) {
-        // Odświeżamy listę po dodaniu
-        fetchSpedycje()
-        setShowForm(false)
-      } else {
-        alert(`Błąd: ${data.error || 'Nie udało się dodać zlecenia'}`)
+      // Najpierw spróbuj zapisać do API
+      try {
+        const response = await fetch('/api/spedycje', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(noweZamowienie)
+        })
+        
+        const data = await response.json()
+        
+        if (data.success) {
+          // Odświeżamy listę po dodaniu
+          fetchSpedycje()
+          setShowForm(false)
+          return
+        }
+      } catch (apiError) {
+        console.error('Błąd API, używam localStorage:', apiError)
       }
+      
+      // Zapisz do localStorage jeśli API zawiedzie
+      const zamowienieWithDetails = {
+        ...noweZamowienie,
+        id: Date.now(),
+        status: 'new',
+        createdAt: new Date().toISOString()
+      }
+
+      const savedData = localStorage.getItem('zamowieniaSpedycja')
+      const currentZamowienia = savedData ? JSON.parse(savedData) : []
+      const updatedZamowienia = [...currentZamowienia, zamowienieWithDetails]
+      localStorage.setItem('zamowieniaSpedycja', JSON.stringify(updatedZamowienia))
+      
+      fetchSpedycje()
+      setShowForm(false)
     } catch (error) {
       console.error('Błąd dodawania zlecenia:', error)
       alert('Wystąpił błąd podczas dodawania zlecenia')
@@ -119,27 +150,51 @@ export default function SpedycjaPage() {
 
   const handleResponse = async (zamowienieId, response) => {
     try {
-      // Wysyłamy odpowiedź do API
-      const responseApi = await fetch('/api/spedycje', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          id: zamowienieId,
-          ...response
+      // Najpierw spróbuj użyć API
+      try {
+        const responseApi = await fetch('/api/spedycje', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            id: zamowienieId,
+            ...response
+          })
         })
-      })
-      
-      const data = await responseApi.json()
-      
-      if (data.success) {
-        // Odświeżamy listę po odpowiedzi
-        setShowForm(false)
-        fetchSpedycje()
-      } else {
-        alert(`Błąd: ${data.error || 'Nie udało się zapisać odpowiedzi'}`)
+        
+        const data = await responseApi.json()
+        
+        if (data.success) {
+          setShowForm(false)
+          fetchSpedycje()
+          return
+        }
+      } catch (apiError) {
+        console.error('Błąd API, używam localStorage:', apiError)
       }
+      
+      // Aktualizuj w localStorage jeśli API zawiedzie
+      const savedData = localStorage.getItem('zamowieniaSpedycja')
+      if (savedData) {
+        const zamowienia = JSON.parse(savedData)
+        const updatedZamowienia = zamowienia.map(zam => {
+          if (zam.id === zamowienieId) {
+            return { 
+              ...zam, 
+              status: 'completed', 
+              response,
+              completedAt: new Date().toISOString()
+            }
+          }
+          return zam
+        })
+        
+        localStorage.setItem('zamowieniaSpedycja', JSON.stringify(updatedZamowienia))
+        fetchSpedycje()
+      }
+      
+      setShowForm(false)
     } catch (error) {
       console.error('Błąd odpowiedzi na zlecenie:', error)
       alert('Wystąpił błąd podczas zapisywania odpowiedzi')
