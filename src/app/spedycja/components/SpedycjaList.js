@@ -1,3 +1,4 @@
+// src/app/spedycja/components/SpedycjaList.js
 import React, { useState } from 'react'
 import { generateCMR } from '@/lib/utils/generateCMR'
 
@@ -41,6 +42,9 @@ export default function SpedycjaList({ zamowienia, showArchive, isAdmin, onRespo
                 <p className="text-sm text-gray-500">
                   Data dostawy: {zamowienie.deliveryDate}
                 </p>
+                <p className="text-sm text-gray-500">
+                  MPK: {zamowienie.mpk}
+                </p>
               </div>
               <div className="flex items-center space-x-2">
                 <span className={`px-2 py-1 rounded-full text-sm
@@ -69,6 +73,7 @@ export default function SpedycjaList({ zamowienia, showArchive, isAdmin, onRespo
             {expandedId === zamowienie.id && (
               <div className="mt-4 pl-4 border-l-2 border-gray-200">
                 <div className="grid grid-cols-2 gap-4">
+                  {/* Nadawca */}
                   <div>
                     <h4 className="font-medium mb-2">Szczegóły załadunku</h4>
                     {zamowienie.location === 'Producent' ? (
@@ -80,6 +85,7 @@ export default function SpedycjaList({ zamowienia, showArchive, isAdmin, onRespo
                       Kontakt: {zamowienie.loadingContact}
                     </p>
                   </div>
+                  {/* Odbiorca */}
                   <div>
                     <h4 className="font-medium mb-2">Szczegóły dostawy</h4>
                     <p>{formatAddress(zamowienie.delivery)}</p>
@@ -89,24 +95,43 @@ export default function SpedycjaList({ zamowienia, showArchive, isAdmin, onRespo
                   </div>
                 </div>
 
-                <div className="mt-4">
-                  <p><span className="font-medium">Dokumenty:</span> {zamowienie.documents}</p>
-                  <p><span className="font-medium">MPK:</span> {zamowienie.mpk}</p>
-                  {zamowienie.notes && (
-                    <p><span className="font-medium">Uwagi:</span> {zamowienie.notes}</p>
-                  )}
+                {/* Informacje o osobach i MPK */}
+                <div className="mt-4 bg-gray-50 p-4 rounded-md">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <h4 className="font-medium mb-2">Dane zlecenia</h4>
+                      <p className="text-sm"><span className="font-medium">MPK:</span> {zamowienie.mpk}</p>
+                      <p className="text-sm"><span className="font-medium">Osoba dodająca:</span> {zamowienie.createdBy || zamowienie.requestedBy}</p>
+                      <p className="text-sm"><span className="font-medium">Osoba odpowiedzialna:</span> {zamowienie.responsiblePerson || zamowienie.createdBy || zamowienie.requestedBy}</p>
+                    </div>
+                    <div>
+                      <h4 className="font-medium mb-2">Dokumenty i daty</h4>
+                      <p className="text-sm"><span className="font-medium">Dokumenty:</span> {zamowienie.documents}</p>
+                      <p className="text-sm"><span className="font-medium">Data dodania:</span> {formatDate(zamowienie.createdAt)}</p>
+                      {zamowienie.notes && (
+                        <p className="text-sm"><span className="font-medium">Uwagi:</span> {zamowienie.notes}</p>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 {zamowienie.response && (
                   <div className="mt-4 bg-gray-50 p-4 rounded-lg">
                     <h4 className="font-medium mb-2">Szczegóły realizacji</h4>
-                    <p><span className="font-medium">Przewoźnik:</span> {zamowienie.response.driverName} {zamowienie.response.driverSurname}</p>
-                    <p><span className="font-medium">Telefon:</span> {zamowienie.response.driverPhone}</p>
-                    <p><span className="font-medium">Numery auta:</span> {zamowienie.response.vehicleNumber}</p>
-                    <p><span className="font-medium">Cena:</span> {zamowienie.response.deliveryPrice} PLN</p>
-                    <p><span className="font-medium">Data odpowiedzi:</span> {formatDate(zamowienie.completedAt)}</p>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-sm"><span className="font-medium">Przewoźnik:</span> {zamowienie.response.driverName} {zamowienie.response.driverSurname}</p>
+                        <p className="text-sm"><span className="font-medium">Telefon:</span> {zamowienie.response.driverPhone}</p>
+                        <p className="text-sm"><span className="font-medium">Numery auta:</span> {zamowienie.response.vehicleNumber}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm"><span className="font-medium">Cena:</span> {zamowienie.response.deliveryPrice} PLN</p>
+                        <p className="text-sm"><span className="font-medium">Odległość:</span> {zamowienie.response.distanceKm || 'N/A'} km</p>
+                        <p className="text-sm"><span className="font-medium">Data odpowiedzi:</span> {formatDate(zamowienie.completedAt)}</p>
+                      </div>
+                    </div>
                     {zamowienie.response.adminNotes && (
-                      <p><span className="font-medium">Uwagi:</span> {zamowienie.response.adminNotes}</p>
+                      <p className="text-sm mt-2"><span className="font-medium">Uwagi:</span> {zamowienie.response.adminNotes}</p>
                     )}
                     
                     <div className="mt-4">
