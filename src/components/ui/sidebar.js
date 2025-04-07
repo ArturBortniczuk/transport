@@ -70,13 +70,15 @@ export const SidebarLink = ({ link }) => {
       )}
     >
       {link.icon}
-      <motion.span
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        className="whitespace-pre text-sm font-medium text-white"
-      >
-        {link.label}
-      </motion.span>
+      {link.label && (
+        <motion.span
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="whitespace-pre text-sm font-medium text-white"
+        >
+          {link.label}
+        </motion.span>
+      )}
     </Link>
   );
 };
