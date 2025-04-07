@@ -168,13 +168,13 @@ export default function KalendarzPage() {
     // Wywołaj funkcję przy montowaniu komponentu
     fetchTransports()
 
-    const refreshInterval = setInterval(() => {
-      const scrollPosition = window.scrollY; // Zapisz pozycję przewijania
-      fetchTransports().then(() => {
+    //const refreshInterval = setInterval(() => {
+      //const scrollPosition = window.scrollY; // Zapisz pozycję przewijania
+      //fetchTransports().then(() => {
         // Przywróć pozycję przewijania po zakończeniu pobierania
-        window.scrollTo(0, scrollPosition);
-      });
-    }, 60000);
+        //window.scrollTo(0, scrollPosition);
+      //});
+    //}, 60000);
     
     // Wyczyść interwał przy odmontowaniu komponentu
     return () => clearInterval(refreshInterval);
