@@ -1,8 +1,53 @@
+// src/app/spedycja/components/SpedycjaForm.js
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 export default function SpedycjaForm({ onSubmit, onCancel, initialData, isResponse }) {
   const [selectedLocation, setSelectedLocation] = useState(initialData?.location || '')
+  const [userMpk, setUserMpk] = useState('')
+  const [users, setUsers] = useState([])
+  const [isForOtherUser, setIsForOtherUser] = useState(false)
+  const [selectedUser, setSelectedUser] = useState(null)
+  const [currentUser, setCurrentUser] = useState({
+    email: '',
+    name: ''
+  })
+
+  // Pobierz listę użytkowników i dane bieżącego użytkownika na początku
+  useEffect(() => {
+    // Pobierz dane bieżącego użytkownika
+    const fetchCurrentUser = async () => {
+      try {
+        const response = await fetch('/api/user');
+        const data = await response.json();
+        
+        if (data.isAuthenticated && data.user) {
+          setCurrentUser({
+            email: data.user.email || '',
+            name: data.user.name || '',
+            mpk: data.user.mpk || ''
+          });
+          setUserMpk(data.user.mpk || '');
+        }
+      } catch (error) {
+        console.error('Błąd pobierania danych użytkownika:', error);
+      }
+    };
+
+    // Pobierz listę wszystkich użytkowników
+    const fetchUsers = async () => {
+      try {
+        const response = await fetch('/api/users/list');
+        const data = await response.json();
+        setUsers(data);
+      } catch (error) {
+        console.error('Błąd pobierania listy użytkowników:', error);
+      }
+    };
+
+    fetchCurrentUser();
+    fetchUsers();
+  }, []);
 
   // Klasy dla przycisków
   const buttonClasses = {
@@ -23,9 +68,22 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
         driverPhone: formData.get('driverPhone'),
         vehicleNumber: formData.get('vehicleNumber'),
         deliveryPrice: Number(formData.get('deliveryPrice')),
+        distanceKm: Number(formData.get('distanceKm') || 0),
         adminNotes: formData.get('adminNotes')
       })
     } else {
+      const mpk = isForOtherUser && selectedUser 
+        ? (users.find(u => u.email === selectedUser)?.mpk || '')
+        : userMpk;
+        
+      const personResponsible = isForOtherUser && selectedUser
+        ? (users.find(u => u.email === selectedUser)?.name || '')
+        : currentUser.name;
+        
+      const responsibleEmail = isForOtherUser && selectedUser
+        ? selectedUser
+        : currentUser.email;
+        
       const data = {
         location: selectedLocation,
         documents: formData.get('documents'),
@@ -44,8 +102,13 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
         loadingContact: formData.get('loadingContact'),
         unloadingContact: formData.get('unloadingContact'),
         deliveryDate: formData.get('deliveryDate'),
-        mpk: formData.get('mpk'),
-        notes: formData.get('notes')
+        mpk: mpk,
+        notes: formData.get('notes'),
+        // Dodajemy informacje o użytkowniku dodającym i odpowiedzialnym
+        createdBy: currentUser.name,
+        createdByEmail: currentUser.email,
+        responsiblePerson: personResponsible,
+        responsibleEmail: responsibleEmail
       }
       onSubmit(data)
     }
@@ -113,14 +176,25 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">Cena transportu</label>
-            <input
-              name="deliveryPrice"
-              type="number"
-              className="w-full p-2 border rounded-md"
-              required
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Cena transportu</label>
+              <input
+                name="deliveryPrice"
+                type="number"
+                className="w-full p-2 border rounded-md"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Odległość (km)</label>
+              <input
+                name="distanceKm"
+                type="number"
+                className="w-full p-2 border rounded-md"
+                required
+              />
+            </div>
           </div>
 
           <div>
@@ -293,13 +367,60 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">Numer MPK</label>
-            <input
-              name="mpk"
-              type="text"
-              className="w-full p-2 border rounded-md"
-              required
-            />
+            <div className="flex justify-between items-center">
+              <label className="block text-sm font-medium mb-1">Numer MPK</label>
+              <button
+                type="button"
+                onClick={() => setIsForOtherUser(!isForOtherUser)}
+                className="text-sm text-blue-600 hover:text-blue-800"
+              >
+                {isForOtherUser ? 'Użyj mojego MPK' : 'To nie dla mnie'}
+              </button>
+            </div>
+            
+            {isForOtherUser ? (
+              <div>
+                <select
+                  className="w-full p-2 border rounded-md"
+                  value={selectedUser || ''}
+                  onChange={(e) => setSelectedUser(e.target.value)}
+                  required
+                >
+                  <option value="">Wybierz osobę odpowiedzialną</option>
+                  {users.map(user => (
+                    <option key={user.email} value={user.email}>
+                      {user.name} {user.mpk ? `(MPK: ${user.mpk})` : ''}
+                    </option>
+                  ))}
+                </select>
+                {selectedUser && (
+                  <div className="mt-2 p-2 bg-blue-50 rounded border border-blue-100">
+                    <div className="text-sm">
+                      <strong>Osoba odpowiedzialna:</strong> {users.find(u => u.email === selectedUser)?.name}
+                    </div>
+                    <div className="text-sm">
+                      <strong>MPK:</strong> {users.find(u => u.email === selectedUser)?.mpk || 'Brak MPK'}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div>
+                <input
+                  name="mpk"
+                  type="text"
+                  value={userMpk}
+                  onChange={(e) => setUserMpk(e.target.value)}
+                  className="w-full p-2 border rounded-md"
+                  readOnly
+                />
+                <div className="mt-2 p-2 bg-blue-50 rounded border border-blue-100">
+                  <div className="text-sm">
+                    <strong>Osoba odpowiedzialna:</strong> {currentUser.name || 'Nie zalogowany'}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           <div>
@@ -314,7 +435,7 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
         </>
       )}
 
-<div className="flex justify-end gap-2">
+      <div className="flex justify-end gap-2">
         <button
           type="submit"
           className={buttonClasses.primary}
