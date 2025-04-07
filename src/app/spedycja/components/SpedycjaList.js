@@ -1,5 +1,6 @@
-// src/app/spedycja/components/SpedycjaList.js
 import React, { useState } from 'react'
+import { format } from 'date-fns'
+import { pl } from 'date-fns/locale'
 import { generateCMR } from '@/lib/utils/generateCMR'
 
 export default function SpedycjaList({ zamowienia, showArchive, isAdmin, onResponse }) {
@@ -16,13 +17,22 @@ export default function SpedycjaList({ zamowienia, showArchive, isAdmin, onRespo
   }
 
   const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleString('pl-PL', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit'
-    })
+    return format(new Date(dateString), 'dd.MM.yyyy', { locale: pl })
+  }
+  
+  const getLoadingCity = (zamowienie) => {
+    if (zamowienie.location === 'Producent' && zamowienie.producerAddress) {
+      return zamowienie.producerAddress.city || '';
+    } else if (zamowienie.location === 'Magazyn Białystok') {
+      return 'Białystok';
+    } else if (zamowienie.location === 'Magazyn Zielonka') {
+      return 'Zielonka';
+    }
+    return '';
+  }
+  
+  const getDeliveryCity = (zamowienie) => {
+    return zamowienie.delivery?.city || '';
   }
 
   return (
@@ -37,10 +47,10 @@ export default function SpedycjaList({ zamowienia, showArchive, isAdmin, onRespo
             >
               <div>
                 <h3 className="font-medium">
-                  {zamowienie.location} → {zamowienie.delivery.city}
+                  {getLoadingCity(zamowienie)} → {getDeliveryCity(zamowienie)}
                 </h3>
                 <p className="text-sm text-gray-500">
-                  Data dostawy: {zamowienie.deliveryDate}
+                  Data dostawy: {formatDate(zamowienie.deliveryDate)}
                 </p>
                 <p className="text-sm text-gray-500">
                   MPK: {zamowienie.mpk}
@@ -103,6 +113,9 @@ export default function SpedycjaList({ zamowienia, showArchive, isAdmin, onRespo
                       <p className="text-sm"><span className="font-medium">MPK:</span> {zamowienie.mpk}</p>
                       <p className="text-sm"><span className="font-medium">Osoba dodająca:</span> {zamowienie.createdBy || zamowienie.requestedBy}</p>
                       <p className="text-sm"><span className="font-medium">Osoba odpowiedzialna:</span> {zamowienie.responsiblePerson || zamowienie.createdBy || zamowienie.requestedBy}</p>
+                      {zamowienie.distanceKm > 0 && (
+                        <p className="text-sm"><span className="font-medium">Odległość:</span> {zamowienie.distanceKm} km</p>
+                      )}
                     </div>
                     <div>
                       <h4 className="font-medium mb-2">Dokumenty i daty</h4>
@@ -126,7 +139,10 @@ export default function SpedycjaList({ zamowienia, showArchive, isAdmin, onRespo
                       </div>
                       <div>
                         <p className="text-sm"><span className="font-medium">Cena:</span> {zamowienie.response.deliveryPrice} PLN</p>
-                        <p className="text-sm"><span className="font-medium">Odległość:</span> {zamowienie.response.distanceKm || 'N/A'} km</p>
+                        <p className="text-sm"><span className="font-medium">Odległość:</span> {zamowienie.response.distanceKm || zamowienie.distanceKm || 'N/A'} km</p>
+                        {zamowienie.response.distanceKm > 0 && zamowienie.response.deliveryPrice > 0 && (
+                          <p className="text-sm"><span className="font-medium">Koszt za km:</span> {(zamowienie.response.deliveryPrice / zamowienie.response.distanceKm).toFixed(2)} PLN/km</p>
+                        )}
                         <p className="text-sm"><span className="font-medium">Data odpowiedzi:</span> {formatDate(zamowienie.completedAt)}</p>
                       </div>
                     </div>
