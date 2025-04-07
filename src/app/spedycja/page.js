@@ -2,22 +2,39 @@
 import { useState, useEffect } from 'react'
 import SpedycjaForm from './components/SpedycjaForm'
 import SpedycjaList from './components/SpedycjaList'
+import Link from 'next/link'
+import { Clipboard, Archive } from 'lucide-react'
 
 export default function SpedycjaPage() {
   const [zamowienia, setZamowienia] = useState([])
   const [userRole, setUserRole] = useState(null)
+  const [isAdmin, setIsAdmin] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [selectedZamowienie, setSelectedZamowienie] = useState(null)
   const [showArchive, setShowArchive] = useState(false)
 
   const buttonClasses = {
-    primary: "px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors",
-    outline: "px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-100 transition-colors"
+    primary: "px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors flex items-center gap-2",
+    outline: "px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-100 transition-colors flex items-center gap-2"
   }
 
   useEffect(() => {
     const role = localStorage.getItem('userRole')
     setUserRole(role)
+    
+    // Sprawdź czy użytkownik jest administratorem
+    const checkAdmin = async () => {
+      try {
+        const response = await fetch('/api/check-admin')
+        const data = await response.json()
+        setIsAdmin(data.isAdmin)
+      } catch (error) {
+        console.error('Błąd sprawdzania uprawnień administratora:', error)
+        setIsAdmin(false)
+      }
+    }
+    
+    checkAdmin()
     
     const savedZamowienia = localStorage.getItem('zamowieniaSpedycja')
     if (savedZamowienia) {
@@ -53,9 +70,10 @@ export default function SpedycjaPage() {
     localStorage.setItem('zamowieniaSpedycja', JSON.stringify(updatedZamowienia))
   }
 
-  // Magazyny mogą dodawać zamówienia, handlowiec odpowiada
-const canAddOrder = userRole === 'handlowiec' 
-  const canRespond = userRole === 'magazyn'
+  // Tworzenie funkcji do sprawdzania, czy użytkownik może dodawać zamówienia
+  const canAddOrder = isAdmin || userRole === 'handlowiec'
+  // Odpowiadać mogą magazynierzy i admini
+  const canRespond = isAdmin || userRole === 'magazyn'
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -68,14 +86,23 @@ const canAddOrder = userRole === 'handlowiec'
             className={!showArchive ? buttonClasses.primary : buttonClasses.outline}
             onClick={() => setShowArchive(false)}
           >
+            <Clipboard size={18} />
             Aktywne
           </button>
           <button 
             className={showArchive ? buttonClasses.primary : buttonClasses.outline}
             onClick={() => setShowArchive(true)}
           >
+            <Archive size={18} />
             Archiwum
           </button>
+          
+          {isAdmin && (
+            <Link href="/archiwum-spedycji" className={buttonClasses.outline}>
+              Pełne archiwum
+            </Link>
+          )}
+          
           {canAddOrder && (
             <button 
               className={buttonClasses.primary}
