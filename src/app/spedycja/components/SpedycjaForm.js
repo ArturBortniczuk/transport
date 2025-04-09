@@ -383,21 +383,6 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
                 required
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Odległość (km)</label>
-              <div className="flex items-center">
-                <input
-                  name="distanceKm"
-                  type="number"
-                  className="w-full p-2 border rounded-md bg-gray-100"
-                  value={initialData.distanceKm || 0}
-                  readOnly
-                />
-              </div>
-              <div className="mt-1 text-xs text-green-600">
-                Automatycznie pobrane z zamówienia
-              </div>
-            </div>
           </div>
 
           <div>
