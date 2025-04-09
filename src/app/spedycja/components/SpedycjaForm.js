@@ -218,12 +218,9 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
     
     // W wariancie isResponse
     if (isResponse) {
-      const distanceKm = formData.get('distanceKm') || 
-                         distance || 
-                         (initialData.response?.distanceKm || initialData.distanceKm || 0);
+      // Pobierz odległość z oryginalnego zamówienia
+      const distanceKm = initialData.distanceKm || 0;
                          
-      console.log('Odległość w odpowiedzi:', distanceKm); // Dodaj log do debugowania
-      
       const deliveryPrice = Number(formData.get('deliveryPrice'));
       const pricePerKm = distanceKm > 0 ? (deliveryPrice / distanceKm).toFixed(2) : 0;
       
@@ -378,7 +375,7 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
                 <input
                   name="distanceKm"
                   type="number"
-                  className="w-full p-2 border rounded-md"
+                  className="w-full p-2 border rounded-md bg-gray-100"
                   value={initialData.distanceKm || distance}
                   readOnly
                 />
