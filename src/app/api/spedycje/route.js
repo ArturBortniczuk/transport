@@ -150,6 +150,7 @@ export async function POST(request) {
       delivery_date: spedycjaData.deliveryDate,
       documents: spedycjaData.documents,
       notes: spedycjaData.notes,
+      distance_km: spedycjaData.distanceKm, // Upewnij się, że to pole jest poprawnie zapisywane
       created_at: db.fn.now()
     };
     
