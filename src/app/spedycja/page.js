@@ -46,18 +46,6 @@ export default function SpedycjaPage() {
       setIsLoading(true)
       setError(null)
       
-      // Próbujemy najpierw pobrać dane z localStorage dla kompatybilności
-      const savedData = localStorage.getItem('zamowieniaSpedycja')
-      if (savedData) {
-        const parsedData = JSON.parse(savedData)
-        const filteredData = showArchive 
-          ? parsedData.filter(item => item.status === 'completed')
-          : parsedData.filter(item => item.status === 'new')
-        setZamowienia(filteredData)
-        setIsLoading(false)
-        return
-      }
-      
       // Pobierz dane z API z filtrem statusu
       const status = showArchive ? 'completed' : 'new'
       const response = await fetch(`/api/spedycje?status=${status}`)
@@ -69,35 +57,36 @@ export default function SpedycjaPage() {
       const data = await response.json()
       
       if (data.success) {
-        // Przetwórz dane do formatu używanego przez komponenty
-        const processedData = data.spedycje.map(item => ({
-          id: item.id,
-          status: item.status,
-          createdBy: item.created_by,
-          createdByEmail: item.created_by_email,
-          responsiblePerson: item.responsible_person,
-          responsibleEmail: item.responsible_email,
-          mpk: item.mpk,
-          location: item.location,
-          producerAddress: item.location_data,
-          delivery: item.delivery_data,
-          loadingContact: item.loading_contact,
-          unloadingContact: item.unloading_contact,
-          deliveryDate: item.delivery_date,
-          documents: item.documents,
-          notes: item.notes,
-          response: item.response_data,
-          completedAt: item.completed_at,
-          createdAt: item.created_at
-        }))
-        
-        setZamowienia(processedData)
+        console.log('Pobrane dane z API:', data.spedycje)
+        setZamowienia(data.spedycje)
       } else {
+        // Próbujemy pobrać dane z localStorage dla kompatybilności
+        const savedData = localStorage.getItem('zamowieniaSpedycja')
+        if (savedData) {
+          const parsedData = JSON.parse(savedData)
+          const filteredData = showArchive 
+            ? parsedData.filter(item => item.status === 'completed')
+            : parsedData.filter(item => item.status === 'new')
+          setZamowienia(filteredData)
+          return
+        }
+        
         throw new Error(data.error || 'Błąd pobierania danych')
       }
     } catch (error) {
       console.error('Błąd pobierania danych spedycji:', error)
-      setError('Wystąpił problem podczas pobierania danych. Spróbuj ponownie później.')
+      
+      // Próbujemy pobrać dane z localStorage dla kompatybilności
+      const savedData = localStorage.getItem('zamowieniaSpedycja')
+      if (savedData) {
+        const parsedData = JSON.parse(savedData)
+        const filteredData = showArchive 
+          ? parsedData.filter(item => item.status === 'completed')
+          : parsedData.filter(item => item.status === 'new')
+        setZamowienia(filteredData)
+      } else {
+        setError('Wystąpił problem podczas pobierania danych. Spróbuj ponownie później.')
+      }
     } finally {
       setIsLoading(false)
     }
@@ -105,6 +94,8 @@ export default function SpedycjaPage() {
 
   const handleDodajZamowienie = async (noweZamowienie) => {
     try {
+      console.log('Dodawanie nowego zamówienia:', noweZamowienie)
+      
       // Najpierw spróbuj zapisać do API
       try {
         const response = await fetch('/api/spedycje', {
@@ -150,6 +141,8 @@ export default function SpedycjaPage() {
 
   const handleResponse = async (zamowienieId, response) => {
     try {
+      console.log('Odpowiedź na zamówienie ID:', zamowienieId, 'Dane odpowiedzi:', response)
+      
       // Najpierw spróbuj użyć API
       try {
         const responseApi = await fetch('/api/spedycje', {
@@ -199,6 +192,44 @@ export default function SpedycjaPage() {
       console.error('Błąd odpowiedzi na zlecenie:', error)
       alert('Wystąpił błąd podczas zapisywania odpowiedzi')
     }
+  }
+
+  // Funkcja do pobierania szczegółowych danych zamówienia przed odpowiedzią
+  const handlePrepareResponse = async (zamowienie) => {
+    console.log('Przygotowanie odpowiedzi dla zamówienia:', zamowienie)
+    
+    // Sprawdź, czy zamówienie ma już wszystkie niezbędne dane
+    if (zamowienie.distanceKm || (zamowienie.distance_km !== undefined && zamowienie.distance_km !== null)) {
+      console.log('Zamówienie już ma dane o odległości:', zamowienie.distanceKm || zamowienie.distance_km)
+      setSelectedZamowienie(zamowienie)
+      setShowForm(true)
+      return
+    }
+    
+    // Próbujemy pobrać pełne dane zamówienia z API
+    try {
+      const response = await fetch(`/api/spedycje/${zamowienie.id}`)
+      
+      if (response.ok) {
+        const data = await response.json()
+        
+        if (data.success && data.spedycja) {
+          console.log('Pobrane szczegółowe dane zamówienia:', data.spedycja)
+          setSelectedZamowienie(data.spedycja)
+        } else {
+          console.log('Używam dostępnych danych zamówienia:', zamowienie)
+          setSelectedZamowienie(zamowienie)
+        }
+      } else {
+        console.log('Błąd pobierania szczegółów, używam dostępnych danych:', zamowienie)
+        setSelectedZamowienie(zamowienie)
+      }
+    } catch (error) {
+      console.error('Błąd pobierania szczegółów zamówienia:', error)
+      setSelectedZamowienie(zamowienie)
+    }
+    
+    setShowForm(true)
   }
 
   // Sprawdzanie, czy użytkownik może dodawać zamówienia
@@ -255,7 +286,10 @@ export default function SpedycjaPage() {
           {canAddOrder && (
             <button 
               className={buttonClasses.primary}
-              onClick={() => setShowForm(true)}
+              onClick={() => {
+                setSelectedZamowienie(null)
+                setShowForm(true)
+              }}
             >
               Nowe zamówienie
             </button>
@@ -271,10 +305,7 @@ export default function SpedycjaPage() {
               zamowienia={zamowienia}
               showArchive={showArchive}
               isAdmin={canRespond}
-              onResponse={(zamowienie) => {
-                setSelectedZamowienie(zamowienie)
-                setShowForm(true)
-              }}
+              onResponse={handlePrepareResponse}
             />
           ) : (
             <div className="p-12 text-center text-gray-500">
