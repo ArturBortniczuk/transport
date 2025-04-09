@@ -35,6 +35,39 @@ export default function SpedycjaList({ zamowienia, showArchive, isAdmin, onRespo
     return zamowienie.delivery?.city || '';
   }
 
+  // Funkcja do generowania linku do Google Maps
+  const generateGoogleMapsLink = (transport) => {
+    // Pobierz dane źródłowe i docelowe
+    let origin = '';
+    let destination = '';
+    
+    // Ustal miejsce załadunku
+    if (transport.location === 'Producent' && transport.producerAddress) {
+      const addr = transport.producerAddress;
+      origin = `${addr.city},${addr.postalCode},${addr.street || ''}`;
+    } else if (transport.location === 'Magazyn Białystok') {
+      origin = 'Białystok';
+    } else if (transport.location === 'Magazyn Zielonka') {
+      origin = 'Zielonka';
+    }
+    
+    // Ustal miejsce dostawy
+    if (transport.delivery) {
+      const addr = transport.delivery;
+      destination = `${addr.city},${addr.postalCode},${addr.street || ''}`;
+    }
+    
+    // Jeśli brakuje któregoś z punktów, zwróć pusty string
+    if (!origin || !destination) return '';
+    
+    // Kodowanie URI komponentów
+    origin = encodeURIComponent(origin);
+    destination = encodeURIComponent(destination);
+    
+    // Zwróć link do Google Maps
+    return `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=driving`;
+  };
+
   return (
     <div className="divide-y">
       {zamowienia
@@ -54,6 +87,7 @@ export default function SpedycjaList({ zamowienia, showArchive, isAdmin, onRespo
                 </p>
                 <p className="text-sm text-gray-500">
                   MPK: {zamowienie.mpk}
+                  {zamowienie.distanceKm > 0 && ` • Odległość: ${zamowienie.distanceKm} km`}
                 </p>
               </div>
               <div className="flex items-center space-x-2">
@@ -116,6 +150,19 @@ export default function SpedycjaList({ zamowienia, showArchive, isAdmin, onRespo
                       {zamowienie.distanceKm > 0 && (
                         <p className="text-sm"><span className="font-medium">Odległość:</span> {zamowienie.distanceKm} km</p>
                       )}
+                      {/* Link do Google Maps */}
+                      {generateGoogleMapsLink(zamowienie) && (
+                        <p className="text-sm mt-2">
+                          <a 
+                            href={generateGoogleMapsLink(zamowienie)} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="text-blue-600 hover:text-blue-800"
+                          >
+                            Zobacz trasę na Google Maps
+                          </a>
+                        </p>
+                      )}
                     </div>
                     <div>
                       <h4 className="font-medium mb-2">Dokumenty i daty</h4>
@@ -140,8 +187,8 @@ export default function SpedycjaList({ zamowienia, showArchive, isAdmin, onRespo
                       <div>
                         <p className="text-sm"><span className="font-medium">Cena:</span> {zamowienie.response.deliveryPrice} PLN</p>
                         <p className="text-sm"><span className="font-medium">Odległość:</span> {zamowienie.response.distanceKm || zamowienie.distanceKm || 'N/A'} km</p>
-                        {zamowienie.response.distanceKm > 0 && zamowienie.response.deliveryPrice > 0 && (
-                          <p className="text-sm"><span className="font-medium">Koszt za km:</span> {(zamowienie.response.deliveryPrice / zamowienie.response.distanceKm).toFixed(2)} PLN/km</p>
+                        {(zamowienie.response.distanceKm > 0 || zamowienie.distanceKm > 0) && zamowienie.response.deliveryPrice > 0 && (
+                          <p className="text-sm"><span className="font-medium">Koszt za km:</span> {(zamowienie.response.deliveryPrice / (zamowienie.response.distanceKm || zamowienie.distanceKm)).toFixed(2)} PLN/km</p>
                         )}
                         <p className="text-sm"><span className="font-medium">Data odpowiedzi:</span> {formatDate(zamowienie.completedAt)}</p>
                       </div>
