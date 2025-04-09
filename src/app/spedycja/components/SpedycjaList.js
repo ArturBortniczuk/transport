@@ -87,9 +87,9 @@ export default function SpedycjaList({ zamowienia, showArchive, isAdmin, onRespo
                 </p>
                 <p className="text-sm text-gray-500">
                   MPK: {zamowienie.mpk}
-                  {/* Upewnij się, że sprawdzamy wszystkie możliwe lokalizacje odległości */}
-                  {(zamowienie.distanceKm > 0 || (zamowienie.response && zamowienie.response.distanceKm > 0)) && 
-                    ` • Odległość: ${zamowienie.response?.distanceKm || zamowienie.distanceKm} km`}
+                  {/* Sprawdź wszystkie możliwe lokalizacje odległości */}
+                  {(zamowienie.distanceKm > 0 || zamowienie.distance_km > 0) && 
+                    ` • Odległość: ${zamowienie.distanceKm || zamowienie.distance_km} km`}
                 </p>
               </div>
               <div className="flex items-center space-x-2">
