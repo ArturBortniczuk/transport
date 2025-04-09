@@ -87,9 +87,7 @@ export default function SpedycjaList({ zamowienia, showArchive, isAdmin, onRespo
                 </p>
                 <p className="text-sm text-gray-500">
                   MPK: {zamowienie.mpk}
-                  {/* Sprawdź wszystkie możliwe lokalizacje odległości */}
-                  {(zamowienie.distanceKm > 0 || zamowienie.distance_km > 0) && 
-                    ` • Odległość: ${zamowienie.distanceKm || zamowienie.distance_km} km`}
+                  {zamowienie.distanceKm > 0 && ` • Odległość: ${zamowienie.distanceKm} km`}
                 </p>
               </div>
               <div className="flex items-center space-x-2">
@@ -188,9 +186,9 @@ export default function SpedycjaList({ zamowienia, showArchive, isAdmin, onRespo
                       </div>
                       <div>
                         <p className="text-sm"><span className="font-medium">Cena:</span> {zamowienie.response.deliveryPrice} PLN</p>
-                        <p className="text-sm"><span className="font-medium">Odległość:</span> {zamowienie.response.distanceKm || zamowienie.distanceKm || 'N/A'} km</p>
-                        {(zamowienie.response.distanceKm > 0 || zamowienie.distanceKm > 0) && zamowienie.response.deliveryPrice > 0 && (
-                          <p className="text-sm"><span className="font-medium">Koszt za km:</span> {(zamowienie.response.deliveryPrice / (zamowienie.response.distanceKm || zamowienie.distanceKm)).toFixed(2)} PLN/km</p>
+                        <p className="text-sm"><span className="font-medium">Odległość:</span> {zamowienie.distanceKm || 'N/A'} km</p>
+                        {zamowienie.distanceKm > 0 && zamowienie.response.deliveryPrice > 0 && (
+                          <p className="text-sm"><span className="font-medium">Koszt za km:</span> {(zamowienie.response.deliveryPrice / zamowienie.distanceKm).toFixed(2)} PLN/km</p>
                         )}
                         <p className="text-sm"><span className="font-medium">Data odpowiedzi:</span> {formatDate(zamowienie.completedAt)}</p>
                       </div>
