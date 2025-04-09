@@ -216,11 +216,14 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
     e.preventDefault();
     const formData = new FormData(e.target);
     
+    // W wariancie isResponse
     if (isResponse) {
       const distanceKm = formData.get('distanceKm') || 
                          distance || 
                          (initialData.response?.distanceKm || initialData.distanceKm || 0);
                          
+      console.log('Odległość w odpowiedzi:', distanceKm); // Dodaj log do debugowania
+      
       const deliveryPrice = Number(formData.get('deliveryPrice'));
       const pricePerKm = distanceKm > 0 ? (deliveryPrice / distanceKm).toFixed(2) : 0;
       
