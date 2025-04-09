@@ -66,6 +66,14 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
     fetchUsers();
   }, []);
 
+  // Dodajmy debugowanie dla formularza odpowiedzi
+  useEffect(() => {
+    if (initialData && isResponse) {
+      console.log('Dane zamówienia przekazane do formularza odpowiedzi:', initialData);
+      console.log('Odległość w km:', initialData.distanceKm);
+    }
+  }, [initialData, isResponse]);
+
   // Klasy dla przycisków
   const buttonClasses = {
     primary: "px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors",
@@ -216,13 +224,20 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
     e.preventDefault();
     const formData = new FormData(e.target);
     
-    // W wariancie isResponse
     if (isResponse) {
-      // Pobierz odległość z oryginalnego zamówienia
+      console.log('Odpowiedź na zamówienie, dane początkowe:', initialData);
+      // Wykorzystaj odległość z oryginalnego zamówienia
       const distanceKm = initialData.distanceKm || 0;
-                         
+      console.log('Odległość używana do obliczeń:', distanceKm);
+                     
       const deliveryPrice = Number(formData.get('deliveryPrice'));
       const pricePerKm = distanceKm > 0 ? (deliveryPrice / distanceKm).toFixed(2) : 0;
+      
+      console.log('Obliczenia:', {
+        deliveryPrice,
+        distanceKm,
+        pricePerKm
+      });
       
       onSubmit(initialData.id, {
         driverName: formData.get('driverName'),
@@ -294,7 +309,6 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
       
       onSubmit(data);
     }
-
     
     onCancel();
   };
@@ -376,15 +390,13 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
                   name="distanceKm"
                   type="number"
                   className="w-full p-2 border rounded-md bg-gray-100"
-                  value={initialData.distanceKm || distance}
+                  value={initialData.distanceKm || 0}
                   readOnly
                 />
               </div>
-              {initialData.distanceKm > 0 && (
-                <div className="mt-1 text-xs text-green-600">
-                  Odległość obliczona automatycznie: {initialData.distanceKm} km
-                </div>
-              )}
+              <div className="mt-1 text-xs text-green-600">
+                Automatycznie pobrane z zamówienia
+              </div>
             </div>
           </div>
 
