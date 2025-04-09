@@ -3,12 +3,13 @@ import { format } from 'date-fns'
 import { pl } from 'date-fns/locale'
 import { generateCMR } from '@/lib/utils/generateCMR'
 
-export default function SpedycjaList({ zamowienia, showArchive, isAdmin, onResponse }) {
+export default function SpedycjaList({ zamowienia, showArchive, isAdmin, onResponse, onMarkAsCompleted }) {
   const [expandedId, setExpandedId] = useState(null)
 
   const buttonClasses = {
     primary: "px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors",
-    outline: "px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-100 transition-colors"
+    outline: "px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-100 transition-colors",
+    success: "px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors"
   }
 
   const formatAddress = (address) => {
@@ -100,16 +101,30 @@ export default function SpedycjaList({ zamowienia, showArchive, isAdmin, onRespo
                   {zamowienie.status === 'new' ? 'Nowe' : 'Zakończone'}
                 </span>
                 {isAdmin && zamowienie.status === 'new' && (
-                  <button 
-                    type="button"
-                    className={buttonClasses.outline}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onResponse(zamowienie)
-                    }}
-                  >
-                    Odpowiedz
-                  </button>
+                  <>
+                    <button 
+                      type="button"
+                      className={buttonClasses.outline}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onResponse(zamowienie)
+                      }}
+                    >
+                      Odpowiedz
+                    </button>
+                    <button 
+                      type="button"
+                      className={buttonClasses.success}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        if (confirm('Czy na pewno chcesz oznaczyć to zlecenie jako zrealizowane?')) {
+                          onMarkAsCompleted(zamowienie.id)
+                        }
+                      }}
+                    >
+                      Zrealizowane
+                    </button>
+                  </>
                 )}
               </div>
             </div>
@@ -178,21 +193,25 @@ export default function SpedycjaList({ zamowienia, showArchive, isAdmin, onRespo
                 {zamowienie.response && (
                   <div className="mt-4 bg-gray-50 p-4 rounded-lg">
                     <h4 className="font-medium mb-2">Szczegóły realizacji</h4>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <p className="text-sm"><span className="font-medium">Przewoźnik:</span> {zamowienie.response.driverName} {zamowienie.response.driverSurname}</p>
-                        <p className="text-sm"><span className="font-medium">Telefon:</span> {zamowienie.response.driverPhone}</p>
-                        <p className="text-sm"><span className="font-medium">Numery auta:</span> {zamowienie.response.vehicleNumber}</p>
+                    {zamowienie.response.completedManually ? (
+                      <p className="text-sm text-blue-600">Zamówienie zostało ręcznie oznaczone jako zrealizowane.</p>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-sm"><span className="font-medium">Przewoźnik:</span> {zamowienie.response.driverName} {zamowienie.response.driverSurname}</p>
+                          <p className="text-sm"><span className="font-medium">Telefon:</span> {zamowienie.response.driverPhone}</p>
+                          <p className="text-sm"><span className="font-medium">Numery auta:</span> {zamowienie.response.vehicleNumber}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm"><span className="font-medium">Cena:</span> {zamowienie.response.deliveryPrice} PLN</p>
+                          <p className="text-sm"><span className="font-medium">Odległość:</span> {zamowienie.distanceKm || 'N/A'} km</p>
+                          {zamowienie.distanceKm > 0 && zamowienie.response.deliveryPrice > 0 && (
+                            <p className="text-sm"><span className="font-medium">Koszt za km:</span> {(zamowienie.response.deliveryPrice / zamowienie.distanceKm).toFixed(2)} PLN/km</p>
+                          )}
+                          <p className="text-sm"><span className="font-medium">Data odpowiedzi:</span> {formatDate(zamowienie.completedAt)}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm"><span className="font-medium">Cena:</span> {zamowienie.response.deliveryPrice} PLN</p>
-                        <p className="text-sm"><span className="font-medium">Odległość:</span> {zamowienie.distanceKm || 'N/A'} km</p>
-                        {zamowienie.distanceKm > 0 && zamowienie.response.deliveryPrice > 0 && (
-                          <p className="text-sm"><span className="font-medium">Koszt za km:</span> {(zamowienie.response.deliveryPrice / zamowienie.distanceKm).toFixed(2)} PLN/km</p>
-                        )}
-                        <p className="text-sm"><span className="font-medium">Data odpowiedzi:</span> {formatDate(zamowienie.completedAt)}</p>
-                      </div>
-                    </div>
+                    )}
                     {zamowienie.response.adminNotes && (
                       <p className="text-sm mt-2"><span className="font-medium">Uwagi:</span> {zamowienie.response.adminNotes}</p>
                     )}
