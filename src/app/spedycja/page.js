@@ -232,6 +232,59 @@ export default function SpedycjaPage() {
     setShowForm(true)
   }
 
+  // Funkcja do oznaczania zamówienia jako zrealizowane
+  const handleMarkAsCompleted = async (id) => {
+    try {
+      // Najpierw spróbuj użyć API
+      try {
+        const response = await fetch('/api/spedycje/complete', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ id })
+        })
+        
+        const data = await response.json()
+        
+        if (data.success) {
+          fetchSpedycje() // Odśwież listę
+          return
+        }
+      } catch (apiError) {
+        console.error('Błąd API, używam localStorage:', apiError)
+      }
+      
+      // Jeśli API zawiedzie, użyj localStorage
+      const savedData = localStorage.getItem('zamowieniaSpedycja')
+      if (savedData) {
+        const zamowienia = JSON.parse(savedData)
+        const updatedZamowienia = zamowienia.map(zam => {
+          if (zam.id === id) {
+            return { 
+              ...zam, 
+              status: 'completed',
+              completedAt: new Date().toISOString(),
+              // Dodajemy minimalne informacje o odpowiedzi
+              response: {
+                completedManually: true,
+                completedBy: 'Admin',
+                completedAt: new Date().toISOString()
+              }
+            }
+          }
+          return zam
+        })
+        
+        localStorage.setItem('zamowieniaSpedycja', JSON.stringify(updatedZamowienia))
+        fetchSpedycje()
+      }
+    } catch (error) {
+      console.error('Błąd oznaczania jako zrealizowane:', error)
+      alert('Wystąpił błąd podczas oznaczania zlecenia jako zrealizowane')
+    }
+  }
+
   // Sprawdzanie, czy użytkownik może dodawać zamówienia
   const canAddOrder = isAdmin || userRole === 'handlowiec'
   // Odpowiadać mogą magazynierzy i admini
@@ -261,34 +314,35 @@ export default function SpedycjaPage() {
         <h1 className="text-3xl font-bold text-gray-900">
           Zamówienia spedycji
         </h1>
-          <div className="flex gap-2">
+        <div className="flex gap-2">
+          <button 
+            className={!showArchive ? buttonClasses.primary : buttonClasses.outline}
+            onClick={() => setShowArchive(false)}
+          >
+            <Clipboard size={18} />
+            Aktywne
+          </button>
+          <Link 
+            href="/archiwum-spedycji"
+            className={buttonClasses.outline}
+          >
+            <Archive size={18} />
+            Archiwum
+          </Link>
+          
+          {canAddOrder && (
             <button 
-              className={!showArchive ? buttonClasses.primary : buttonClasses.outline}
-              onClick={() => setShowArchive(false)}
+              className={buttonClasses.primary}
+              onClick={() => {
+                setSelectedZamowienie(null)
+                setShowForm(true)
+              }}
             >
-              <Clipboard size={18} />
-              Aktywne
+              Nowe zamówienie
             </button>
-            <Link 
-              href="/archiwum-spedycji"
-              className={buttonClasses.outline}
-            >
-              <Archive size={18} />
-              Archiwum
-            </Link>
-            
-            {canAddOrder && (
-              <button 
-                className={buttonClasses.primary}
-                onClick={() => {
-                  setSelectedZamowienie(null)
-                  setShowForm(true)
-                }}
-              >
-                Nowe zamówienie
-              </button>
-            )}
-          </div>
+          )}
+        </div>
+      </div>
 
       {/* Lista zamówień */}
       {!showForm && (
@@ -299,6 +353,7 @@ export default function SpedycjaPage() {
               showArchive={showArchive}
               isAdmin={canRespond}
               onResponse={handlePrepareResponse}
+              onMarkAsCompleted={handleMarkAsCompleted}
             />
           ) : (
             <div className="p-12 text-center text-gray-500">
