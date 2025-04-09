@@ -261,34 +261,34 @@ export default function SpedycjaPage() {
         <h1 className="text-3xl font-bold text-gray-900">
           Zamówienia spedycji
         </h1>
-      <div className="flex gap-2">
-        <button 
-          className={!showArchive ? buttonClasses.primary : buttonClasses.outline}
-          onClick={() => setShowArchive(false)}
-        >
-          <Clipboard size={18} />
-          Aktywne
-        </button>
-        <Link 
-          href="/archiwum-spedycji"
-          className={buttonClasses.outline}
-        >
-          <Archive size={18} />
-          Archiwum
-        </Link>
-        
-        {canAddOrder && (
-          <button 
-            className={buttonClasses.primary}
-            onClick={() => {
-              setSelectedZamowienie(null)
-              setShowForm(true)
-            }}
-          >
-            Nowe zamówienie
-          </button>
-        )}
-      </div>
+          <div className="flex gap-2">
+            <button 
+              className={!showArchive ? buttonClasses.primary : buttonClasses.outline}
+              onClick={() => setShowArchive(false)}
+            >
+              <Clipboard size={18} />
+              Aktywne
+            </button>
+            <Link 
+              href="/archiwum-spedycji"
+              className={buttonClasses.outline}
+            >
+              <Archive size={18} />
+              Archiwum
+            </Link>
+            
+            {canAddOrder && (
+              <button 
+                className={buttonClasses.primary}
+                onClick={() => {
+                  setSelectedZamowienie(null)
+                  setShowForm(true)
+                }}
+              >
+                Nowe zamówienie
+              </button>
+            )}
+          </div>
 
       {/* Lista zamówień */}
       {!showForm && (
