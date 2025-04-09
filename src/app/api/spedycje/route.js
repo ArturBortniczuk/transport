@@ -57,6 +57,15 @@ export async function GET(request) {
         table.string('completed_by');
         table.timestamp('created_at').defaultTo(db.fn.now());
         table.timestamp('completed_at');
+        table.integer('distance_km'); // Dodana kolumna do przechowywania odległości
+      });
+    }
+    
+    // Sprawdź czy kolumna distance_km istnieje, jeśli nie - dodaj ją
+    const hasDistanceColumn = await db.schema.hasColumn('spedycje', 'distance_km');
+    if (!hasDistanceColumn) {
+      await db.schema.table('spedycje', table => {
+        table.integer('distance_km');
       });
     }
     
@@ -89,7 +98,31 @@ export async function GET(request) {
       } catch (e) {
         console.error('Error parsing JSON data in spedycje:', e);
       }
-      return item;
+      
+      // Konwertuj nazwy pól z bazy danych na nazwy używane przez front-end
+      return {
+        ...item,
+        id: item.id,
+        status: item.status,
+        createdBy: item.created_by,
+        createdByEmail: item.created_by_email,
+        responsiblePerson: item.responsible_person,
+        responsibleEmail: item.responsible_email,
+        mpk: item.mpk,
+        location: item.location,
+        producerAddress: item.location_data,
+        delivery: item.delivery_data,
+        loadingContact: item.loading_contact,
+        unloadingContact: item.unloading_contact,
+        deliveryDate: item.delivery_date,
+        documents: item.documents,
+        notes: item.notes,
+        response: item.response_data,
+        completedBy: item.completed_by,
+        createdAt: item.created_at,
+        completedAt: item.completed_at,
+        distanceKm: item.distance_km
+      };
     });
     
     return NextResponse.json({ 
@@ -120,6 +153,7 @@ export async function POST(request) {
     }
     
     const spedycjaData = await request.json();
+    console.log('Otrzymane dane spedycji:', spedycjaData);
     
     // Sprawdzamy czy użytkownik ma uprawnienia
     const user = await db('users')
@@ -150,9 +184,11 @@ export async function POST(request) {
       delivery_date: spedycjaData.deliveryDate,
       documents: spedycjaData.documents,
       notes: spedycjaData.notes,
-      distance_km: spedycjaData.distanceKm, // Upewnij się, że to pole jest poprawnie zapisywane
+      distance_km: spedycjaData.distanceKm || 0, // Upewnij się, że to pole jest poprawnie zapisywane
       created_at: db.fn.now()
     };
+    
+    console.log('Dane do zapisania w bazie:', dataToSave);
     
     // Sprawdź czy tabela istnieje, jeśli nie - utwórz ją
     const tableExists = await db.schema.hasTable('spedycje');
@@ -177,6 +213,15 @@ export async function POST(request) {
         table.string('completed_by');
         table.timestamp('created_at').defaultTo(db.fn.now());
         table.timestamp('completed_at');
+        table.integer('distance_km'); // Dodana kolumna do przechowywania odległości
+      });
+    }
+    
+    // Sprawdź czy kolumna distance_km istnieje, jeśli nie - dodaj ją
+    const hasDistanceColumn = await db.schema.hasColumn('spedycje', 'distance_km');
+    if (!hasDistanceColumn) {
+      await db.schema.table('spedycje', table => {
+        table.integer('distance_km');
       });
     }
     
@@ -211,6 +256,7 @@ export async function PUT(request) {
     }
     
     const { id, ...data } = await request.json();
+    console.log('Otrzymane dane odpowiedzi:', { id, ...data });
     
     // Sprawdzamy czy użytkownik ma uprawnienia
     const user = await db('users')
@@ -232,6 +278,13 @@ export async function PUT(request) {
       completed_at: db.fn.now(),
       completed_by: userId
     };
+    
+    // Jeśli odległość jest podana w odpowiedzi, zapiszmy ją również bezpośrednio
+    if (data.distanceKm) {
+      updateData.distance_km = data.distanceKm;
+    }
+    
+    console.log('Dane odpowiedzi do zapisania:', updateData);
     
     // Aktualizujemy rekord w bazie
     const updated = await db('spedycje')
