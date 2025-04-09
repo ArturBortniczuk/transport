@@ -218,9 +218,9 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
     
     if (isResponse) {
       const distanceKm = formData.get('distanceKm') || 
-                          distance || 
-                          (initialData.response?.distanceKm || 0);
-                          
+                         distance || 
+                         (initialData.response?.distanceKm || initialData.distanceKm || 0);
+                         
       const deliveryPrice = Number(formData.get('deliveryPrice'));
       const pricePerKm = distanceKm > 0 ? (deliveryPrice / distanceKm).toFixed(2) : 0;
       
