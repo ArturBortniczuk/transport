@@ -250,8 +250,17 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
       // Najpierw oblicz odległość, jeśli jeszcze nie obliczona
       let routeDistance = distance;
       if (routeDistance === 0) {
-        routeDistance = await calculateRouteDistance(selectedLocation, 'destination');
+        try {
+          routeDistance = await calculateRouteDistance(selectedLocation, 'destination');
+          console.log('Obliczona odległość:', routeDistance);
+        } catch (error) {
+          console.error('Błąd obliczania odległości:', error);
+        }
       }
+      
+      // Dodaj logs do debugowania
+      console.log('Przygotowanie danych zamówienia do zapisania:');
+      console.log('Odległość:', routeDistance);
       
       const data = {
         location: selectedLocation,
@@ -271,7 +280,7 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
         loadingContact: formData.get('loadingContact'),
         unloadingContact: formData.get('unloadingContact'),
         deliveryDate: formData.get('deliveryDate'),
-        distanceKm: routeDistance,
+        distanceKm: routeDistance, // Upewnij się, że odległość jest zapisywana
         mpk: mpk,
         notes: formData.get('notes'),
         // Dodajemy informacje o użytkowniku dodającym i odpowiedzialnym
@@ -281,8 +290,11 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
         responsibleEmail: responsibleEmail
       };
       
+      console.log('Dane zamówienia do zapisania:', data);
+      
       onSubmit(data);
     }
+
     
     onCancel();
   };
