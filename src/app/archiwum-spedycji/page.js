@@ -494,7 +494,7 @@ export default function ArchiwumSpedycjiPage() {
                   Trasa
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Przewoźnik
+                  Osoba odpowiedzialna
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Numery auta
@@ -540,10 +540,11 @@ export default function ArchiwumSpedycjiPage() {
                         </div>
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {transport.response?.driverName} {transport.response?.driverSurname}
+                        {transport.responsiblePerson || transport.createdBy || 'N/A'}
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {transport.response?.vehicleNumber || 'N/A'}
+                        {/* Pusta kolumna dla numerów auta - będą w szczegółach */}
+                        -
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
                         {transport.mpk || 'N/A'}
@@ -588,6 +589,8 @@ export default function ArchiwumSpedycjiPage() {
                             </div>
                             <div>
                               <h4 className="font-medium mb-2">Szczegóły przewoźnika</h4>
+                              <p className="text-sm"><span className="font-medium">Przewoźnik: </span>{transport.response?.driverName} {transport.response?.driverSurname}</p>
+                              <p className="text-sm"><span className="font-medium">Numery auta: </span>{transport.response?.vehicleNumber || 'N/A'}</p>
                               <p className="text-sm"><span className="font-medium">Telefon: </span>{transport.response?.driverPhone || 'N/A'}</p>
                               <p className="text-sm"><span className="font-medium">Odległość: </span>{transport.response?.distanceKm || transport.distanceKm || 'N/A'} km</p>
                               {transport.response?.adminNotes && (
