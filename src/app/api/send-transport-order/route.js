@@ -118,7 +118,7 @@ export async function POST(request) {
       from: `"System Transportowy" <logistyka@grupaeltron.pl>`,
       to: emailOdbiorcy,
       cc: user.email, // Opcjonalnie dodaj użytkownika inicjującego wysyłkę w kopii
-      subject: `Zlecenie transportowe nr ${spedycjaId}`,
+      subject: `Zlecenie transportowe nr ${spedycja.order_number || spedycja.id}`,
       html: htmlContent
     };
     
@@ -374,8 +374,7 @@ function generateTransportOrderHTML({ spedycja, producerAddress, delivery, respo
       </div>
       
       <div class="footer">
-        <p>Zlecenie wygenerowane automatycznie przez System Zarządzania Transportem.</p>
-        <p>Zlecenie utworzone przez: ${user.name} (${user.email})</p>
+        <p>Zlecenie wygenerowane automatycznie.</p>
       </div>
     </body>
     </html>
