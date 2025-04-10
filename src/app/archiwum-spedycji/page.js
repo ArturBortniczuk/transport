@@ -268,7 +268,39 @@ export default function ArchiwumSpedycjiPage() {
       exportToXLSX(dataToExport, fileName)
     }
   }
-  
+
+  // Funkcja do generowania linku do Google Maps
+  const generateGoogleMapsLink = (transport) => {
+    // Pobierz dane źródłowe i docelowe
+    let origin = '';
+    let destination = '';
+    
+    // Ustal miejsce załadunku
+    if (transport.location === 'Producent' && transport.producerAddress) {
+      const addr = transport.producerAddress;
+      origin = `${addr.city},${addr.postalCode},${addr.street || ''}`;
+    } else if (transport.location === 'Magazyn Białystok') {
+      origin = 'Białystok';
+    } else if (transport.location === 'Magazyn Zielonka') {
+      origin = 'Zielonka';
+    }
+    
+    // Ustal miejsce dostawy
+    if (transport.delivery) {
+      const addr = transport.delivery;
+      destination = `${addr.city},${addr.postalCode},${addr.street || ''}`;
+    }
+    
+    // Jeśli brakuje któregoś z punktów, zwróć pusty string
+    if (!origin || !destination) return '';
+    
+    // Kodowanie URI komponentów
+    origin = encodeURIComponent(origin);
+    destination = encodeURIComponent(destination);
+    
+    // Zwróć link do Google Maps
+    return `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=driving`;
+  };
   // Eksport do CSV
   const exportToCSV = (data, fileName) => {
     // Nagłówki
@@ -497,9 +529,6 @@ export default function ArchiwumSpedycjiPage() {
                   Osoba odpowiedzialna
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Numery auta
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   MPK
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -543,10 +572,6 @@ export default function ArchiwumSpedycjiPage() {
                         {transport.responsiblePerson || transport.createdBy || 'N/A'}
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {/* Pusta kolumna dla numerów auta - będą w szczegółach */}
-                        -
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
                         {transport.mpk || 'N/A'}
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -575,7 +600,7 @@ export default function ArchiwumSpedycjiPage() {
                     </tr>
                     {expandedRowId === transport.id && (
                       <tr>
-                        <td colSpan={isAdmin ? 9 : 8} className="bg-gray-50 p-4">
+                        <td colSpan={isAdmin ? 8 : 7} className="bg-gray-50 p-4">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                               <h4 className="font-medium mb-2">Szczegóły zlecenia</h4>
@@ -583,8 +608,50 @@ export default function ArchiwumSpedycjiPage() {
                               <p className="text-sm"><span className="font-medium">Dokumenty: </span>{transport.documents || 'N/A'}</p>
                               <p className="text-sm"><span className="font-medium">Osoba dodająca: </span>{transport.createdBy || 'N/A'}</p>
                               <p className="text-sm"><span className="font-medium">Osoba odpowiedzialna: </span>{transport.responsiblePerson || transport.createdBy || 'N/A'}</p>
+                              
+                              <div className="mt-3">
+                                <h5 className="font-medium">Miejsce załadunku:</h5>
+                                {transport.location === 'Producent' && transport.producerAddress ? (
+                                  <p className="text-sm">
+                                    {transport.producerAddress.city}, {transport.producerAddress.postalCode}, {transport.producerAddress.street || ''}
+                                  </p>
+                                ) : (
+                                  <p className="text-sm">{transport.location}</p>
+                                )}
+                                <p className="text-sm"><span className="font-medium">Kontakt: </span>{transport.loadingContact || 'N/A'}</p>
+                              </div>
+                              
+                              <div className="mt-3">
+                                <h5 className="font-medium">Miejsce dostawy:</h5>
+                                {transport.delivery && (
+                                  <p className="text-sm">
+                                    {transport.delivery.city}, {transport.delivery.postalCode}, {transport.delivery.street || ''}
+                                  </p>
+                                )}
+                                <p className="text-sm"><span className="font-medium">Kontakt: </span>{transport.unloadingContact || 'N/A'}</p>
+                              </div>
+                              
+                              {/* Link do Google Maps */}
+                              {generateGoogleMapsLink(transport) && (
+                                <a 
+                                  href={generateGoogleMapsLink(transport)} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer" 
+                                  className="mt-3 inline-flex items-center text-blue-600 hover:text-blue-800"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                                  </svg>
+                                  Zobacz trasę w Google Maps
+                                </a>
+                              )}
+                              
                               {transport.notes && (
-                                <p className="text-sm"><span className="font-medium">Uwagi: </span>{transport.notes}</p>
+                                <div className="mt-3">
+                                  <h5 className="font-medium">Uwagi:</h5>
+                                  <p className="text-sm">{transport.notes}</p>
+                                </div>
                               )}
                             </div>
                             <div>
@@ -593,8 +660,15 @@ export default function ArchiwumSpedycjiPage() {
                               <p className="text-sm"><span className="font-medium">Numery auta: </span>{transport.response?.vehicleNumber || 'N/A'}</p>
                               <p className="text-sm"><span className="font-medium">Telefon: </span>{transport.response?.driverPhone || 'N/A'}</p>
                               <p className="text-sm"><span className="font-medium">Odległość: </span>{transport.response?.distanceKm || transport.distanceKm || 'N/A'} km</p>
+                              <p className="text-sm"><span className="font-medium">Cena transportu: </span>{transport.response?.deliveryPrice ? `${transport.response.deliveryPrice} PLN` : 'N/A'}</p>
+                              {transport.response?.distanceKm > 0 && transport.response?.deliveryPrice > 0 && (
+                                <p className="text-sm"><span className="font-medium">Stawka za km: </span>{(transport.response.deliveryPrice / transport.response.distanceKm).toFixed(2)} PLN/km</p>
+                              )}
                               {transport.response?.adminNotes && (
-                                <p className="text-sm"><span className="font-medium">Uwagi przewoźnika: </span>{transport.response.adminNotes}</p>
+                                <div className="mt-3">
+                                  <h5 className="font-medium">Uwagi przewoźnika:</h5>
+                                  <p className="text-sm">{transport.response.adminNotes}</p>
+                                </div>
                               )}
                             </div>
                           </div>
