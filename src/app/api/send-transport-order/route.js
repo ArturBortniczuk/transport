@@ -57,6 +57,7 @@ export async function POST(request) {
     // Pobierz dane spedycji
     const spedycja = await db('spedycje')
       .where('id', spedycjaId)
+      .select('*')  // Pobieramy wszystkie pola
       .first();
     
     if (!spedycja) {
@@ -269,11 +270,11 @@ function generateTransportOrderHTML({ spedycja, producerAddress, delivery, respo
     <body>
       <div class="header">
         <h1>ZLECENIE TRANSPORTOWE</h1>
-        <p>Nr zlecenia: ${spedycja.id} | Data utworzenia: ${formatDate(new Date().toISOString())}</p>
+        <p>Nr zlecenia: ${spedycja.order_number || spedycja.id} | Data utworzenia: ${formatDate(new Date().toISOString())}</p>
       </div>
       
       <div class="important-note">
-        Proszę o dopisanie na fakturze zamieszczonego poniżej numeru MPK oraz numeru zlecenia.
+        Proszę o dopisanie na fakturze zamieszczonego poniżej numeru MPK oraz numeru zlecenia: ${spedycja.order_number || spedycja.id}.
       </div>
       
       <div class="section">
