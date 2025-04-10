@@ -40,6 +40,7 @@ export async function GET(request) {
       await db.schema.createTable('spedycje', table => {
         table.increments('id').primary();
         table.string('status').defaultTo('new');
+        table.string('order_number'); // Dodana kolumna na numer zamówienia
         table.string('created_by');
         table.string('created_by_email');
         table.string('responsible_person');
@@ -58,6 +59,14 @@ export async function GET(request) {
         table.timestamp('created_at').defaultTo(db.fn.now());
         table.timestamp('completed_at');
         table.integer('distance_km'); // Dodana kolumna do przechowywania odległości
+      });
+    }
+    
+    // Sprawdź czy kolumna order_number istnieje, jeśli nie - dodaj ją
+    const hasOrderNumberColumn = await db.schema.hasColumn('spedycje', 'order_number');
+    if (!hasOrderNumberColumn) {
+      await db.schema.table('spedycje', table => {
+        table.string('order_number');
       });
     }
     
@@ -104,6 +113,7 @@ export async function GET(request) {
         ...item,
         id: item.id,
         status: item.status,
+        orderNumber: item.order_number,
         createdBy: item.created_by,
         createdByEmail: item.created_by_email,
         responsiblePerson: item.responsible_person,
@@ -168,9 +178,35 @@ export async function POST(request) {
       }, { status: 403 });
     }
     
+    // Generowanie numeru zamówienia
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1; // Miesiące są 0-indexed w JavaScript
+    
+    // Pobierz ostatni numer zamówienia z tego miesiąca i roku
+    const lastOrderQuery = await db('spedycje')
+      .whereRaw('EXTRACT(MONTH FROM created_at) = ?', [month])
+      .whereRaw('EXTRACT(YEAR FROM created_at) = ?', [year])
+      .orderBy('id', 'desc')
+      .first();
+    
+    // Ustal numer dla nowego zamówienia
+    let orderNumber = 1;
+    if (lastOrderQuery && lastOrderQuery.order_number) {
+      // Jeśli istnieje już zamówienie z tego miesiąca/roku, wyciągnij numer
+      const lastOrderMatch = lastOrderQuery.order_number.match(/^(\d+)\/\d+\/\d+$/);
+      if (lastOrderMatch) {
+        orderNumber = parseInt(lastOrderMatch[1], 10) + 1;
+      }
+    }
+    
+    // Sformatuj numer zamówienia
+    const formattedOrderNumber = `${orderNumber.toString().padStart(4, '0')}/${month}/${year}`;
+    
     // Przygotowujemy dane do zapisania
     const dataToSave = {
       status: 'new',
+      order_number: formattedOrderNumber,
       created_by: user.name,
       created_by_email: userId,
       responsible_person: spedycjaData.responsiblePerson || user.name,
@@ -196,6 +232,7 @@ export async function POST(request) {
       await db.schema.createTable('spedycje', table => {
         table.increments('id').primary();
         table.string('status').defaultTo('new');
+        table.string('order_number');
         table.string('created_by');
         table.string('created_by_email');
         table.string('responsible_person');
@@ -214,6 +251,14 @@ export async function POST(request) {
         table.timestamp('created_at').defaultTo(db.fn.now());
         table.timestamp('completed_at');
         table.integer('distance_km'); // Dodana kolumna do przechowywania odległości
+      });
+    }
+    
+    // Sprawdź czy kolumna order_number istnieje, jeśli nie - dodaj ją
+    const hasOrderNumberColumn = await db.schema.hasColumn('spedycje', 'order_number');
+    if (!hasOrderNumberColumn) {
+      await db.schema.table('spedycje', table => {
+        table.string('order_number');
       });
     }
     
@@ -271,12 +316,9 @@ export async function PUT(request) {
       }, { status: 403 });
     }
     
-    // Przygotowujemy dane odpowiedzi
+    // Przygotowujemy dane odpowiedzi - teraz bez zmiany statusu i daty zakończenia
     const updateData = {
-      status: 'completed',
-      response_data: JSON.stringify(data),
-      completed_at: db.fn.now(),
-      completed_by: userId
+      response_data: JSON.stringify(data)
     };
     
     // Jeśli odległość jest podana w odpowiedzi, zapiszmy ją również bezpośrednio
