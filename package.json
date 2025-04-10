@@ -19,7 +19,6 @@
       "jspdf": "^2.5.2",
       "jspdf-font": "^1.0.7",
       "knex": "^2.5.1",
-      "nodemailer": "^6.9.7",
       "leaflet": "^1.9.4",
       "lucide-react": "^0.471.1",
       "mysql2": "^3.13.0",
@@ -31,6 +30,7 @@
       "react-leaflet": "^4.2.1",
       "sql.js": "^1.8.0",
       "sqlite3": "^5.1.7",
+      "nodemailer": "^6.9.7",
       "xlsx": "^0.18.5"
     },
     "devDependencies": {
