@@ -104,19 +104,19 @@ export async function POST(request) {
     // Konfiguracja transportera mailowego
     const transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST,
-      port: process.env.SMTP_PORT,
+      port: parseInt(process.env.SMTP_PORT || '465'),
       secure: process.env.SMTP_SECURE === 'true',
       auth: {
-        user: process.env.SMTP_USER,
+        user: "logistyka@grupaeltron.pl", // Hardcoded - zawsze ten sam adres
         pass: process.env.SMTP_PASSWORD
       }
     });
     
     // Wysyłanie maila
     const mailOptions = {
-      from: `"${user.name}" <${user.email}>`,
+      from: `"System Transportowy" <logistyka@grupaeltron.pl>`,
       to: emailOdbiorcy,
-      cc: user.email,
+      cc: user.email, // Opcjonalnie dodaj użytkownika inicjującego wysyłkę w kopii
       subject: `Zlecenie transportowe nr ${spedycjaId}`,
       html: htmlContent
     };
