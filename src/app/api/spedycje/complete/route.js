@@ -32,7 +32,7 @@ export async function POST(request) {
     // Sprawdzamy czy użytkownik ma uprawnienia
     const user = await db('users')
       .where('email', userId)
-      .select('role', 'is_admin')
+      .select('role', 'is_admin', 'name')
       .first();
     
     const isAdmin = user?.is_admin === true || user?.is_admin === 1 || user?.role === 'admin';
@@ -53,12 +53,44 @@ export async function POST(request) {
       }, { status: 400 });
     }
     
-    // Przygotowujemy minimalne dane odpowiedzi
-    const responseData = {
+    // Pobierz bieżące dane zlecenia, aby zachować istniejącą odpowiedź
+    const currentSpedycja = await db('spedycje')
+      .where('id', id)
+      .first();
+    
+    if (!currentSpedycja) {
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Nie znaleziono zlecenia spedycji o podanym ID' 
+      }, { status: 404 });
+    }
+    
+    // Przygotuj dane odpowiedzi
+    let responseData = {
       completedManually: true,
       completedBy: user.name || userId,
       completedAt: new Date().toISOString()
     };
+    
+    // Jeśli zlecenie już ma odpowiedź, zachowaj jej dane
+    if (currentSpedycja.response_data) {
+      try {
+        const existingResponseData = JSON.parse(currentSpedycja.response_data);
+        // Zachowaj istniejące dane i dodaj informacje o ręcznym zakończeniu
+        responseData = {
+          ...existingResponseData,
+          completedManually: true,
+          completedBy: user.name || userId,
+          completedAt: new Date().toISOString()
+        };
+      } catch (error) {
+        console.error('Error parsing existing response data:', error);
+        // Jeśli wystąpi błąd podczas parsowania, użyjemy domyślnych danych
+      }
+    }
+    
+    console.log('Aktualizacja zlecenia z ID:', id);
+    console.log('Dane odpowiedzi do zapisania:', responseData);
     
     // Aktualizujemy rekord w bazie
     const updated = await db('spedycje')
@@ -73,8 +105,8 @@ export async function POST(request) {
     if (updated === 0) {
       return NextResponse.json({ 
         success: false, 
-        error: 'Nie znaleziono zlecenia spedycji o podanym ID' 
-      }, { status: 404 });
+        error: 'Nie udało się zaktualizować zlecenia spedycji' 
+      }, { status: 500 });
     }
     
     return NextResponse.json({ 
