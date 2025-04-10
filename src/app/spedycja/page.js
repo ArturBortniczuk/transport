@@ -5,6 +5,8 @@ import SpedycjaForm from './components/SpedycjaForm'
 import SpedycjaList from './components/SpedycjaList'
 import Link from 'next/link'
 import { Clipboard, Archive } from 'lucide-react'
+import TransportOrderForm from './components/TransportOrderForm'
+
 
 export default function SpedycjaPage() {
   const [zamowienia, setZamowienia] = useState([]);
@@ -15,6 +17,7 @@ export default function SpedycjaPage() {
   const [showArchive, setShowArchive] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [selectedOrderZamowienie, setSelectedOrderZamowienie] = useState(null);
 
   const buttonClasses = {
     primary: "px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors flex items-center gap-2",
@@ -194,6 +197,39 @@ export default function SpedycjaPage() {
     }
   };
 
+
+  const handleCreateOrder = (zamowienie) => {
+    setSelectedOrderZamowienie(zamowienie)
+  }
+  
+  // Dodajmy funkcję do wysyłania zamówienia
+  const handleSendOrder = async (orderData) => {
+    try {
+      console.log('Wysyłanie zlecenia transportowego:', orderData)
+      
+      const response = await fetch('/api/send-transport-order', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(orderData)
+      })
+      
+      const data = await response.json()
+      
+      if (data.success) {
+        alert('Zlecenie transportowe zostało wysłane!')
+        setSelectedOrderZamowienie(null)
+        fetchSpedycje() // Odśwież listę po wysłaniu
+      } else {
+        throw new Error(data.error || 'Nie udało się wysłać zlecenia transportowego')
+      }
+    } catch (error) {
+      console.error('Błąd wysyłania zlecenia transportowego:', error)
+      throw error
+    }
+  }
+
   // Funkcja do pobierania szczegółowych danych zamówienia przed odpowiedzią
   const handlePrepareResponse = async (zamowienie) => {
     console.log('Przygotowanie odpowiedzi dla zamówienia:', zamowienie);
@@ -354,6 +390,7 @@ export default function SpedycjaPage() {
               isAdmin={canRespond}
               onResponse={handlePrepareResponse}
               onMarkAsCompleted={handleMarkAsCompleted}
+              onCreateOrder={handleCreateOrder}
             />
           ) : (
             <div className="p-12 text-center text-gray-500">
@@ -379,6 +416,17 @@ export default function SpedycjaPage() {
           </div>
         </div>
       )}
+        {selectedOrderZamowienie && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+            <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+              <TransportOrderForm
+                onSubmit={handleSendOrder}
+                onCancel={() => setSelectedOrderZamowienie(null)}
+                zamowienie={selectedOrderZamowienie}
+              />
+            </div>
+          </div>
+        )}
     </div>
   );
 }
