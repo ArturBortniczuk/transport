@@ -60,27 +60,41 @@ export default function ArchiwumSpedycjiPage() {
   // Pobierz dane archiwum z API
   const fetchArchiveData = async () => {
     try {
-      setLoading(true)
+      setLoading(true);
+      setError(null);
       
-      // W przyszłości tutaj będzie pobieranie z API
-      const savedData = localStorage.getItem('zamowieniaSpedycja')
-      let transporty = []
+      // Używamy API do pobrania zamówień o statusie 'completed'
+      const response = await fetch('/api/spedycje?status=completed');
       
-      if (savedData) {
-        transporty = JSON.parse(savedData)
-          .filter(transport => transport.status === 'completed') // tylko zakończone zlecenia
-          .sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt)) // sortuj od najnowszych
+      if (!response.ok) {
+        throw new Error(`Problem z API: ${response.status}`);
       }
       
-      setArchiwum(transporty)
-      applyFilters(transporty, selectedYear, selectedMonth)
+      const data = await response.json();
+      
+      if (data.success) {
+        console.log('Pobrane dane zrealizowanych spedycji:', data.spedycje);
+        setArchiwum(data.spedycje);
+        applyFilters(data.spedycje, selectedYear, selectedMonth);
+      } else {
+        // Próbujemy pobrać dane z localStorage dla kompatybilności
+        const savedData = localStorage.getItem('zamowieniaSpedycja');
+        if (savedData) {
+          const parsedData = JSON.parse(savedData);
+          const completedOrders = parsedData.filter(item => item.status === 'completed');
+          setArchiwum(completedOrders);
+          applyFilters(completedOrders, selectedYear, selectedMonth);
+        } else {
+          throw new Error(data.error || 'Błąd pobierania danych archiwum');
+        }
+      }
     } catch (error) {
-      console.error('Błąd pobierania archiwum:', error)
-      setError('Wystąpił błąd podczas pobierania danych')
+      console.error('Błąd pobierania archiwum spedycji:', error);
+      setError('Wystąpił problem podczas pobierania danych archiwum');
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   // Funkcja pomocnicza do określania miasta załadunku
   const getLoadingCity = (transport) => {
