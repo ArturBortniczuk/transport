@@ -175,9 +175,9 @@ export default function SpedycjaPage() {
           if (zam.id === zamowienieId) {
             return { 
               ...zam, 
-              status: 'completed', 
+              // status: 'completed', // Usuwamy lub komentujemy tę linię
               response,
-              completedAt: new Date().toISOString()
+              // completedAt: new Date().toISOString() // Usuwamy lub komentujemy tę linię
             };
           }
           return zam;
