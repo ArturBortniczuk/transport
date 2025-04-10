@@ -43,7 +43,7 @@ export async function POST(request) {
       }, { status: 404 });
     }
     
-    // Pobierz dane z żądania
+    // Pobierz dane z żądania, dodaj obsługę additionalPlaces
     const { 
       spedycjaId, 
       towar, 
@@ -51,7 +51,8 @@ export async function POST(request) {
       waga, 
       dataZaladunku, 
       dataRozladunku, 
-      emailOdbiorcy
+      emailOdbiorcy,
+      additionalPlaces = [] // Nowe pole
     } = await request.json();
     
     // Pobierz dane spedycji
@@ -86,6 +87,57 @@ export async function POST(request) {
       console.error('Błąd parsowania danych JSON:', error);
     }
     
+    // Jeśli są dodatkowe miejsca, pobierz dane dla nich
+    const additionalPlacesData = [];
+    
+    if (additionalPlaces && additionalPlaces.length > 0) {
+      for (const place of additionalPlaces) {
+        // Pobierz dane spedycji dla dodatkowego miejsca
+        if (place.transportId) {
+          try {
+            const additionalSpedycja = await db('spedycje')
+              .where('id', place.transportId)
+              .first();
+              
+            if (additionalSpedycja) {
+              // Parsuj dane JSON
+              let additionalProducerAddress = {};
+              let additionalDelivery = {};
+              
+              try {
+                if (additionalSpedycja.location_data) {
+                  additionalProducerAddress = JSON.parse(additionalSpedycja.location_data);
+                }
+                if (additionalSpedycja.delivery_data) {
+                  additionalDelivery = JSON.parse(additionalSpedycja.delivery_data);
+                }
+              } catch (error) {
+                console.error('Błąd parsowania danych JSON dla dodatkowego miejsca:', error);
+              }
+              
+              // Uzupełnij dane miejsca
+              additionalPlacesData.push({
+                type: place.type,
+                transportId: place.transportId,
+                orderNumber: additionalSpedycja.order_number || `${additionalSpedycja.id}`,
+                location: additionalSpedycja.location,
+                producerAddress: additionalProducerAddress,
+                delivery: additionalDelivery,
+                loadingContact: additionalSpedycja.loading_contact,
+                unloadingContact: additionalSpedycja.unloading_contact,
+                route: place.route
+              });
+            }
+          } catch (error) {
+            console.error(`Błąd pobierania danych dla dodatkowego miejsca ID=${place.transportId}:`, error);
+          }
+        } else {
+          // Jeśli nie ma transportId, dodaj miejsce bez dodatkowych danych
+          additionalPlacesData.push(place);
+        }
+      }
+    }
+    
     // Tworzenie HTML zamówienia
     const htmlContent = generateTransportOrderHTML({
       spedycja,
@@ -98,7 +150,8 @@ export async function POST(request) {
         terminPlatnosci,
         waga,
         dataZaladunku,
-        dataRozladunku
+        dataRozladunku,
+        additionalPlaces: additionalPlacesData
       }
     });
     
@@ -137,7 +190,13 @@ export async function POST(request) {
           terminPlatnosci,
           waga,
           dataZaladunku,
-          dataRozladunku
+          dataRozladunku,
+          additionalPlaces: additionalPlacesData.map(place => ({
+            type: place.type,
+            transportId: place.transportId,
+            orderNumber: place.orderNumber,
+            route: place.route
+          }))
         })
       });
     
@@ -155,9 +214,8 @@ export async function POST(request) {
 }
 
 // Funkcja generująca HTML zamówienia
-// Funkcja generująca HTML zamówienia
 function generateTransportOrderHTML({ spedycja, producerAddress, delivery, responseData, user, additionalData }) {
-  const { towar, terminPlatnosci, waga, dataZaladunku, dataRozladunku } = additionalData;
+  const { towar, terminPlatnosci, waga, dataZaladunku, dataRozladunku, additionalPlaces = [] } = additionalData;
   
   const formatDate = (dateString) => {
     if (!dateString) return '';
@@ -191,6 +249,101 @@ function generateTransportOrderHTML({ spedycja, producerAddress, delivery, respo
   const formatPrice = (price) => {
     if (!price) return 'Nie podano';
     return `${price} PLN Netto`;
+  };
+  
+  // Generowanie sekcji dla dodatkowych miejsc
+  const generateAdditionalPlacesHTML = () => {
+    if (!additionalPlaces || additionalPlaces.length === 0) {
+      return '';
+    }
+    
+    // Pogrupuj miejsca według typu
+    const loadingPlaces = additionalPlaces.filter(place => place.type === 'załadunek');
+    const unloadingPlaces = additionalPlaces.filter(place => place.type === 'rozładunek');
+    
+    let html = '';
+    
+    // Generuj sekcje dla dodatkowych miejsc załadunku
+    if (loadingPlaces.length > 0) {
+      loadingPlaces.forEach((place, index) => {
+        html += `
+        <div class="section">
+          <h2>Dodatkowe miejsce załadunku ${index + 1}</h2>
+          <table class="info-table">
+            <tr>
+              <th>Nr zlecenia:</th>
+              <td>${place.orderNumber || ''} (${place.route || ''})</td>
+            </tr>
+        `;
+        
+        let address = 'Brak danych';
+        
+        if (place.location === 'Producent' && place.producerAddress) {
+          address = formatAddress(place.producerAddress);
+        } else if (place.location === 'Magazyn Białystok') {
+          address = 'Magazyn Białystok';
+        } else if (place.location === 'Magazyn Zielonka') {
+          address = 'Magazyn Zielonka';
+        } else if (typeof place.address === 'object') {
+          address = formatAddress(place.address);
+        } else if (typeof place.address === 'string') {
+          address = place.address;
+        }
+        
+        html += `
+            <tr>
+              <th>Miejsce załadunku:</th>
+              <td>${address}</td>
+            </tr>
+            <tr>
+              <th>Kontakt do załadunku:</th>
+              <td>${place.loadingContact || place.contact || 'Nie podano'}</td>
+            </tr>
+          </table>
+        </div>
+        `;
+      });
+    }
+    
+    // Generuj sekcje dla dodatkowych miejsc rozładunku
+    if (unloadingPlaces.length > 0) {
+      unloadingPlaces.forEach((place, index) => {
+        html += `
+        <div class="section">
+          <h2>Dodatkowe miejsce rozładunku ${index + 1}</h2>
+          <table class="info-table">
+            <tr>
+              <th>Nr zlecenia:</th>
+              <td>${place.orderNumber || ''} (${place.route || ''})</td>
+            </tr>
+        `;
+        
+        let address = 'Brak danych';
+        
+        if (place.delivery) {
+          address = formatAddress(place.delivery);
+        } else if (typeof place.address === 'object') {
+          address = formatAddress(place.address);
+        } else if (typeof place.address === 'string') {
+          address = place.address;
+        }
+        
+        html += `
+            <tr>
+              <th>Miejsce rozładunku:</th>
+              <td>${address}</td>
+            </tr>
+            <tr>
+              <th>Kontakt do rozładunku:</th>
+              <td>${place.unloadingContact || place.contact || 'Nie podano'}</td>
+            </tr>
+          </table>
+        </div>
+        `;
+      });
+    }
+    
+    return html;
   };
   
   // Tworzenie HTML-a
@@ -300,7 +453,7 @@ function generateTransportOrderHTML({ spedycja, producerAddress, delivery, respo
       </div>
       
       <div class="section">
-        <h2>Dane załadunku</h2>
+        <h2>${additionalPlaces.some(p => p.type === 'załadunek') ? 'Pierwsze miejsce załadunku' : 'Dane załadunku'}</h2>
         <table class="info-table">
           <tr>
             <th>Miejsce załadunku:</th>
@@ -318,7 +471,7 @@ function generateTransportOrderHTML({ spedycja, producerAddress, delivery, respo
       </div>
       
       <div class="section">
-        <h2>Dane rozładunku</h2>
+        <h2>${additionalPlaces.some(p => p.type === 'rozładunek') ? 'Pierwsze miejsce rozładunku' : 'Dane rozładunku'}</h2>
         <table class="info-table">
           <tr>
             <th>Miejsce rozładunku:</th>
@@ -334,6 +487,8 @@ function generateTransportOrderHTML({ spedycja, producerAddress, delivery, respo
           </tr>
         </table>
       </div>
+      
+      ${generateAdditionalPlacesHTML()}
       
       <div class="section">
         <h2>Dane przewoźnika</h2>
