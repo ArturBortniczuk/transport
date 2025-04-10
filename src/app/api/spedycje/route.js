@@ -77,6 +77,17 @@ export async function GET(request) {
         table.integer('distance_km');
       });
     }
+
+    const hasOrderSentColumn = await db.schema.hasColumn('spedycje', 'order_sent');
+    if (!hasOrderSentColumn) {
+      await db.schema.table('spedycje', table => {
+        table.boolean('order_sent').defaultTo(false);
+        table.timestamp('order_sent_at');
+        table.string('order_sent_by');
+        table.string('order_recipient');
+        table.text('order_data');
+      });
+    }
     
     // Budujemy zapytanie
     let query = db('spedycje');
