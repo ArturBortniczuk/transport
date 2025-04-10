@@ -1,10 +1,9 @@
 'use client'
-import React, { useState, useEffect } from 'react'
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect, Fragment } from 'react'
 import { format } from 'date-fns'
 import { pl } from 'date-fns/locale'
 import * as XLSX from 'xlsx'
-import { ChevronLeft, ChevronRight, FileText, Download } from 'lucide-react'
+import { ChevronLeft, ChevronRight, FileText, Download, Search } from 'lucide-react'
 
 export default function ArchiwumSpedycjiPage() {
   const [archiwum, setArchiwum] = useState([])
@@ -21,6 +20,9 @@ export default function ArchiwumSpedycjiPage() {
   // Filtry
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [selectedMonth, setSelectedMonth] = useState('all')
+  const [mpkFilter, setMpkFilter] = useState('')
+  const [orderNumberFilter, setOrderNumberFilter] = useState('')
+  const [mpkOptions, setMpkOptions] = useState([])
   
   // Lista dostępnych lat i miesięcy
   const currentYear = new Date().getFullYear()
@@ -61,41 +63,57 @@ export default function ArchiwumSpedycjiPage() {
   // Pobierz dane archiwum z API
   const fetchArchiveData = async () => {
     try {
-      setLoading(true);
-      setError(null);
+      setLoading(true)
+      setError(null)
       
-      // Używamy API do pobrania zamówień o statusie 'completed'
-      const response = await fetch('/api/spedycje?status=completed');
+      // Pobierz dane z API zamiast localStorage
+      const response = await fetch('/api/spedycje?status=completed')
       
-      if (!response.ok) {
-        throw new Error(`Problem z API: ${response.status}`);
-      }
-      
-      const data = await response.json();
-      
-      if (data.success) {
-        console.log('Pobrane dane zrealizowanych spedycji:', data.spedycje);
-        setArchiwum(data.spedycje);
-        applyFilters(data.spedycje, selectedYear, selectedMonth);
-      } else {
-        // Próbujemy pobrać dane z localStorage dla kompatybilności
-        const savedData = localStorage.getItem('zamowieniaSpedycja');
-        if (savedData) {
-          const parsedData = JSON.parse(savedData);
-          const completedOrders = parsedData.filter(item => item.status === 'completed');
-          setArchiwum(completedOrders);
-          applyFilters(completedOrders, selectedYear, selectedMonth);
+      if (response.ok) {
+        const data = await response.json()
+        
+        if (data.success) {
+          console.log('Pobrane dane z API:', data.spedycje)
+          setArchiwum(data.spedycje)
+          
+          // Zbierz unikalne wartości MPK dla filtra
+          const uniqueMpks = [...new Set(data.spedycje.map(item => item.mpk).filter(Boolean))]
+          setMpkOptions(uniqueMpks)
+          
+          applyFilters(data.spedycje, selectedYear, selectedMonth, '', '')
         } else {
-          throw new Error(data.error || 'Błąd pobierania danych archiwum');
+          throw new Error(data.error || 'Błąd pobierania danych')
         }
+      } else {
+        throw new Error(`Problem z API: ${response.status}`)
       }
     } catch (error) {
-      console.error('Błąd pobierania archiwum spedycji:', error);
-      setError('Wystąpił problem podczas pobierania danych archiwum');
+      console.error('Błąd pobierania archiwum:', error)
+      setError('Wystąpił błąd podczas pobierania danych')
+      
+      // Fallback do localStorage jako ostateczność
+      try {
+        const savedData = localStorage.getItem('zamowieniaSpedycja')
+        if (savedData) {
+          const transporty = JSON.parse(savedData)
+            .filter(transport => transport.status === 'completed')
+            .sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt))
+          
+          setArchiwum(transporty)
+          
+          // Zbierz unikalne wartości MPK dla filtra
+          const uniqueMpks = [...new Set(transporty.map(item => item.mpk).filter(Boolean))]
+          setMpkOptions(uniqueMpks)
+          
+          applyFilters(transporty, selectedYear, selectedMonth, '', '')
+        }
+      } catch (localStorageError) {
+        console.error('Błąd fallbacku localStorage:', localStorageError)
+      }
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   // Funkcja pomocnicza do określania miasta załadunku
   const getLoadingCity = (transport) => {
@@ -115,13 +133,14 @@ export default function ArchiwumSpedycjiPage() {
   }
 
   // Funkcja filtrująca transporty
-  const applyFilters = (transports, year, month) => {
+  const applyFilters = (transports, year, month, mpkValue, orderNumberValue) => {
     if (!transports || transports.length === 0) {
       setFilteredArchiwum([])
       return
     }
     
     const filtered = transports.filter(transport => {
+      // Pobierz datę z completed_at lub created_at
       const date = new Date(transport.completedAt || transport.createdAt)
       const transportYear = date.getFullYear()
       
@@ -138,6 +157,19 @@ export default function ArchiwumSpedycjiPage() {
         }
       }
       
+      // Filtrowanie po MPK
+      if (mpkValue && (!transport.mpk || !transport.mpk.toLowerCase().includes(mpkValue.toLowerCase()))) {
+        return false
+      }
+      
+      // Filtrowanie po numerze zamówienia
+      if (orderNumberValue) {
+        const orderNumber = transport.orderNumber || transport.order_number || ''
+        if (!orderNumber.toLowerCase().includes(orderNumberValue.toLowerCase())) {
+          return false
+        }
+      }
+      
       return true
     })
     
@@ -147,8 +179,8 @@ export default function ArchiwumSpedycjiPage() {
 
   // Obsługa zmiany filtrów
   useEffect(() => {
-    applyFilters(archiwum, selectedYear, selectedMonth)
-  }, [selectedYear, selectedMonth, archiwum])
+    applyFilters(archiwum, selectedYear, selectedMonth, mpkFilter, orderNumberFilter)
+  }, [selectedYear, selectedMonth, mpkFilter, orderNumberFilter, archiwum])
 
   // Funkcja do usuwania transportu
   const handleDeleteTransport = async (id) => {
@@ -159,18 +191,18 @@ export default function ArchiwumSpedycjiPage() {
     try {
       setDeleteStatus({ type: 'loading', message: 'Usuwanie transportu...' })
       
-      // W przyszłości tutaj będzie wywołanie API
-      // Na razie usuwamy z localStorage
-      const savedData = localStorage.getItem('zamowieniaSpedycja')
-      if (savedData) {
-        const transports = JSON.parse(savedData)
-        const updatedTransports = transports.filter(t => t.id !== id)
-        localStorage.setItem('zamowieniaSpedycja', JSON.stringify(updatedTransports))
-        
-        // Aktualizuj stan
+      // Wywołanie API do usunięcia transportu
+      const response = await fetch(`/api/spedycje?id=${id}`, {
+        method: 'DELETE'
+      })
+      
+      const data = await response.json()
+      
+      if (data.success) {
+        // Usuń transport z lokalnego stanu
         const updatedArchiwum = archiwum.filter(transport => transport.id !== id)
         setArchiwum(updatedArchiwum)
-        applyFilters(updatedArchiwum, selectedYear, selectedMonth)
+        applyFilters(updatedArchiwum, selectedYear, selectedMonth, mpkFilter, orderNumberFilter)
         
         setDeleteStatus({ type: 'success', message: 'Transport został usunięty' })
         
@@ -178,6 +210,8 @@ export default function ArchiwumSpedycjiPage() {
         setTimeout(() => {
           setDeleteStatus(null)
         }, 3000)
+      } else {
+        setDeleteStatus({ type: 'error', message: data.error || 'Nie udało się usunąć transportu' })
       }
     } catch (error) {
       console.error('Błąd usuwania transportu:', error)
@@ -190,6 +224,7 @@ export default function ArchiwumSpedycjiPage() {
     if (!price || !distance || distance === 0) return 0;
     return (price / distance).toFixed(2);
   }
+  
   // Funkcja eksportująca dane do pliku
   const exportData = () => {
     if (filteredArchiwum.length === 0) {
@@ -199,11 +234,12 @@ export default function ArchiwumSpedycjiPage() {
     
     // Przygotuj dane do eksportu
     const dataToExport = filteredArchiwum.map(transport => {
-      const distanceKm = transport.response?.distanceKm || transport.distanceKm || 0;
-      const price = transport.response?.deliveryPrice || 0;
-      const pricePerKm = calculatePricePerKm(price, distanceKm);
+      const distanceKm = transport.response?.distanceKm || transport.distanceKm || 0
+      const price = transport.response?.deliveryPrice || 0
+      const pricePerKm = calculatePricePerKm(price, distanceKm)
       
       return {
+        'Numer zamówienia': transport.orderNumber || '',
         'Data zlecenia': format(new Date(transport.createdAt), 'dd.MM.yyyy', { locale: pl }),
         'Data realizacji': transport.completedAt ? format(new Date(transport.completedAt), 'dd.MM.yyyy', { locale: pl }) : 'Brak',
         'Trasa': `${getLoadingCity(transport)} → ${getDeliveryCity(transport)}`,
@@ -286,6 +322,7 @@ export default function ArchiwumSpedycjiPage() {
   const paginate = (pageNumber) => setCurrentPage(pageNumber)
   
   const selectStyles = "block w-full py-2 pl-3 pr-10 text-base border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+  const inputStyles = "block w-full py-2 pl-3 pr-10 text-base border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
 
   // Obsługa rozwijania wiersza
   const toggleRowExpansion = (id) => {
@@ -321,7 +358,7 @@ export default function ArchiwumSpedycjiPage() {
 
       {/* Filters Section */}
       <div className="mb-8 bg-white rounded-lg shadow p-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
           {/* Rok */}
           <div>
             <label htmlFor="yearSelect" className="block text-sm font-medium text-gray-700 mb-1">
@@ -354,6 +391,52 @@ export default function ArchiwumSpedycjiPage() {
                 <option key={month.value} value={month.value}>{month.label}</option>
               ))}
             </select>
+          </div>
+          
+          {/* MPK Filter */}
+          <div>
+            <label htmlFor="mpkFilter" className="block text-sm font-medium text-gray-700 mb-1">
+              MPK
+            </label>
+            <div className="relative">
+              <input
+                id="mpkFilter"
+                type="text"
+                value={mpkFilter}
+                onChange={(e) => setMpkFilter(e.target.value)}
+                placeholder="Filtruj po MPK"
+                className={inputStyles}
+                list="mpk-options"
+              />
+              <datalist id="mpk-options">
+                {mpkOptions.map((mpk, index) => (
+                  <option key={index} value={mpk} />
+                ))}
+              </datalist>
+              <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                <Search size={18} className="text-gray-400" />
+              </div>
+            </div>
+          </div>
+          
+          {/* Numer zamówienia */}
+          <div>
+            <label htmlFor="orderNumberFilter" className="block text-sm font-medium text-gray-700 mb-1">
+              Numer zamówienia
+            </label>
+            <div className="relative">
+              <input
+                id="orderNumberFilter"
+                type="text"
+                value={orderNumberFilter}
+                onChange={(e) => setOrderNumberFilter(e.target.value)}
+                placeholder="Filtruj po numerze"
+                className={inputStyles}
+              />
+              <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                <Search size={18} className="text-gray-400" />
+              </div>
+            </div>
           </div>
           
           {/* Format eksportu */}
@@ -405,6 +488,9 @@ export default function ArchiwumSpedycjiPage() {
                   Data zlecenia
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Numer
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Trasa
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -432,7 +518,7 @@ export default function ArchiwumSpedycjiPage() {
             <tbody className="bg-white divide-y divide-gray-200">
               {currentItems.length > 0 ? (
                 currentItems.map((transport) => (
-                  <React.Fragment key={transport.id}>
+                  <Fragment key={transport.id}>
                     <tr 
                       className="hover:bg-gray-50 transition-colors cursor-pointer"
                       onClick={() => toggleRowExpansion(transport.id)}
@@ -444,6 +530,9 @@ export default function ArchiwumSpedycjiPage() {
                             Zrealizowano: {formatDate(transport.completedAt)}
                           </div>
                         )}
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-blue-600">
+                        {transport.orderNumber || '-'}
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm">
                         <div className="font-medium text-gray-900">
@@ -485,10 +574,11 @@ export default function ArchiwumSpedycjiPage() {
                     </tr>
                     {expandedRowId === transport.id && (
                       <tr>
-                        <td colSpan={isAdmin ? 8 : 7} className="bg-gray-50 p-4">
+                        <td colSpan={isAdmin ? 9 : 8} className="bg-gray-50 p-4">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                               <h4 className="font-medium mb-2">Szczegóły zlecenia</h4>
+                              <p className="text-sm"><span className="font-medium">Numer zamówienia: </span>{transport.orderNumber || 'N/A'}</p>
                               <p className="text-sm"><span className="font-medium">Dokumenty: </span>{transport.documents || 'N/A'}</p>
                               <p className="text-sm"><span className="font-medium">Osoba dodająca: </span>{transport.createdBy || 'N/A'}</p>
                               <p className="text-sm"><span className="font-medium">Osoba odpowiedzialna: </span>{transport.responsiblePerson || transport.createdBy || 'N/A'}</p>
@@ -508,11 +598,11 @@ export default function ArchiwumSpedycjiPage() {
                         </td>
                       </tr>
                     )}
-                  </React.Fragment>
+                  </Fragment>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={isAdmin ? 8 : 7} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={isAdmin ? 9 : 8} className="px-4 py-8 text-center text-gray-500">
                     <div className="flex flex-col items-center justify-center py-6">
                       <FileText size={48} className="text-gray-400 mb-2" />
                       <p className="text-gray-500">Brak transportów spedycyjnych w wybranym okresie</p>
