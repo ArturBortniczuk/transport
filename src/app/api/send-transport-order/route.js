@@ -310,7 +310,7 @@ function generateTransportOrderHTML({ spedycja, producerAddress, delivery, respo
       unloadingPlaces.forEach((place, index) => {
         html += `
         <div class="section">
-          <h2>Dodatkowe miejsce rozładunku ${index + 1}</h2>
+          <h2>Drugie miejsce rozładunku${index > 0 ? ' ' + (index + 1) : ''}</h2>
           <table class="info-table">
             <tr>
               <th>Nr zlecenia:</th>
