@@ -154,6 +154,7 @@ export async function POST(request) {
 }
 
 // Funkcja generująca HTML zamówienia
+// Funkcja generująca HTML zamówienia
 function generateTransportOrderHTML({ spedycja, producerAddress, delivery, responseData, user, additionalData }) {
   const { towar, terminPlatnosci, waga, dataZaladunku, dataRozladunku } = additionalData;
   
@@ -183,6 +184,12 @@ function generateTransportOrderHTML({ spedycja, producerAddress, delivery, respo
       return 'Magazyn Zielonka';
     }
     return spedycja.location || 'Brak danych';
+  };
+  
+  // Formatowanie ceny z dopiskiem "Netto"
+  const formatPrice = (price) => {
+    if (!price) return 'Nie podano';
+    return `${price} PLN Netto`;
   };
   
   // Tworzenie HTML-a
@@ -250,12 +257,23 @@ function generateTransportOrderHTML({ spedycja, producerAddress, delivery, respo
           border-top: 1px solid #ddd;
           padding-top: 20px;
         }
+        .important-note {
+          background-color: #f2f9ff;
+          border-left: 4px solid #1a71b5;
+          padding: 10px 15px;
+          margin-bottom: 20px;
+          font-weight: bold;
+        }
       </style>
     </head>
     <body>
       <div class="header">
         <h1>ZLECENIE TRANSPORTOWE</h1>
         <p>Nr zlecenia: ${spedycja.id} | Data utworzenia: ${formatDate(new Date().toISOString())}</p>
+      </div>
+      
+      <div class="important-note">
+        Proszę o dopisanie na fakturze zamieszczonego poniżej numeru MPK oraz numeru zlecenia.
       </div>
       
       <div class="section">
@@ -269,24 +287,6 @@ function generateTransportOrderHTML({ spedycja, producerAddress, delivery, respo
             <th>Dokumenty:</th>
             <td>${spedycja.documents || 'Nie podano'}</td>
           </tr>
-          <tr>
-            <th>Przewoźnik:</th>
-            <td>${responseData.driverName || ''} ${responseData.driverSurname || ''}</td>
-          </tr>
-          <tr>
-            <th>Numer rejestracyjny:</th>
-            <td>${responseData.vehicleNumber || 'Nie podano'}</td>
-          </tr>
-          <tr>
-            <th>Telefon do kierowcy:</th>
-            <td>${responseData.driverPhone || 'Nie podano'}</td>
-          </tr>
-        </table>
-      </div>
-      
-      <div class="section">
-        <h2>Dane przewożonego towaru</h2>
-        <table class="info-table">
           <tr>
             <th>Rodzaj towaru:</th>
             <td>${towar || 'Nie podano'}</td>
@@ -335,19 +335,33 @@ function generateTransportOrderHTML({ spedycja, producerAddress, delivery, respo
       </div>
       
       <div class="section">
-        <h2>Dane rozliczenia</h2>
+        <h2>Dane przewoźnika</h2>
+        <table class="info-table">
+          <tr>
+            <th>Przewoźnik:</th>
+            <td>${responseData.driverName || ''} ${responseData.driverSurname || ''}</td>
+          </tr>
+          <tr>
+            <th>Numer rejestracyjny:</th>
+            <td>${responseData.vehicleNumber || 'Nie podano'}</td>
+          </tr>
+          <tr>
+            <th>Telefon do kierowcy:</th>
+            <td>${responseData.driverPhone || 'Nie podano'}</td>
+          </tr>
+        </table>
+      </div>
+      
+      <div class="section">
+        <h2>Płatność</h2>
         <table class="info-table">
           <tr>
             <th>Cena transportu:</th>
-            <td>${responseData.deliveryPrice ? responseData.deliveryPrice + ' PLN' : 'Nie podano'}</td>
+            <td>${responseData.deliveryPrice ? formatPrice(responseData.deliveryPrice) : 'Nie podano'}</td>
           </tr>
           <tr>
             <th>Termin płatności:</th>
             <td>${terminPlatnosci || 'Nie podano'}</td>
-          </tr>
-          <tr>
-            <th>Odległość:</th>
-            <td>${spedycja.distance_km ? spedycja.distance_km + ' km' : 'Nie podano'}</td>
           </tr>
         </table>
       </div>
