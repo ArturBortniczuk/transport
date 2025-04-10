@@ -87,6 +87,7 @@ export default function SpedycjaList({ zamowienia, showArchive, isAdmin, onRespo
                   Data dostawy: {formatDate(zamowienie.deliveryDate)}
                 </p>
                 <p className="text-sm text-gray-500">
+                  {zamowienie.orderNumber && <span className="font-medium mr-2">{zamowienie.orderNumber}</span>}
                   MPK: {zamowienie.mpk}
                   {zamowienie.distanceKm > 0 && ` • Odległość: ${zamowienie.distanceKm} km`}
                 </p>
@@ -159,6 +160,9 @@ export default function SpedycjaList({ zamowienia, showArchive, isAdmin, onRespo
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <h4 className="font-medium mb-2">Dane zlecenia</h4>
+                      {zamowienie.orderNumber && (
+                        <p className="text-sm"><span className="font-medium">Numer zamówienia:</span> {zamowienie.orderNumber}</p>
+                      )}
                       <p className="text-sm"><span className="font-medium">MPK:</span> {zamowienie.mpk}</p>
                       <p className="text-sm"><span className="font-medium">Osoba dodająca:</span> {zamowienie.createdBy || zamowienie.requestedBy}</p>
                       <p className="text-sm"><span className="font-medium">Osoba odpowiedzialna:</span> {zamowienie.responsiblePerson || zamowienie.createdBy || zamowienie.requestedBy}</p>
