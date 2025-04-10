@@ -232,7 +232,6 @@ export default function SpedycjaPage() {
     setShowForm(true);
   };
 
-  // Funkcja do oznaczania zamówienia jako zrealizowane
   const handleMarkAsCompleted = async (id) => {
     try {
       // Najpierw spróbuj użyć API
@@ -267,6 +266,7 @@ export default function SpedycjaPage() {
               completedAt: new Date().toISOString(),
               // Dodajemy minimalne informacje o odpowiedzi
               response: {
+                ...(zam.response || {}), // Zachowujemy istniejącą odpowiedź, jeśli istnieje
                 completedManually: true,
                 completedBy: 'Admin',
                 completedAt: new Date().toISOString()
