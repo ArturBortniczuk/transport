@@ -59,12 +59,6 @@ export default function TransportsList({
 
   const canEdit = userPermissions?.calendar?.edit === true;
   const canMarkAsCompleted = userPermissions?.transport?.markAsCompleted === true;
-  
-  console.log('Uprawnienia w TransportsList:', {
-    canEdit,
-    canMarkAsCompleted,
-    userPermissions
-  });
 
   // Funkcja pomocnicza sprawdzająca czy transport jest połączony z innym
   const isConnectedTransport = (transport) => {
@@ -75,13 +69,29 @@ export default function TransportsList({
     return transportyNaDzien.some(t => t.connected_transport_id === transport.id);
   };
   
-  // Funkcja pomocnicza znajdująca połączony transport
-  const findConnectedTransport = (transport) => {
-    if (transport.connected_transport_id) {
-      return transportyNaDzien.find(t => t.id === transport.connected_transport_id);
+  // Funkcja znajdująca wszystkie połączone transporty w łańcuchu
+  const findAllConnectedTransports = (transport) => {
+    const result = [transport];
+    let currentTransport = transport;
+    
+    // Znajdź wszystkie transporty w łańcuchu "w przód"
+    while (true) {
+      const nextTransport = transportyNaDzien.find(t => t.connected_transport_id === currentTransport.id);
+      if (!nextTransport) break;
+      result.push(nextTransport);
+      currentTransport = nextTransport;
     }
     
-    return transportyNaDzien.find(t => t.connected_transport_id === transport.id);
+    // Znajdź wszystkie transporty w łańcuchu "wstecz"
+    currentTransport = transport;
+    while (currentTransport.connected_transport_id) {
+      const prevTransport = transportyNaDzien.find(t => t.id === currentTransport.connected_transport_id);
+      if (!prevTransport) break;
+      result.unshift(prevTransport);
+      currentTransport = prevTransport;
+    }
+    
+    return result;
   };
 
   // Funkcja do rozłączania transportów
@@ -106,13 +116,33 @@ export default function TransportsList({
       if (data.success) {
         alert('Transport został pomyślnie rozłączony');
         // Tutaj możemy dodać callback do odświeżenia listy transportów
-        window.location.reload(); // Prosta metoda odświeżenia, ale można zastąpić lepszym rozwiązaniem
+        window.location.reload(); // Prosta metoda odświeżenia
       } else {
         alert('Błąd podczas rozłączania transportu: ' + (data.error || 'Nieznany błąd'));
       }
     } catch (error) {
       console.error('Błąd podczas rozłączania transportu:', error);
       alert('Wystąpił nieoczekiwany błąd podczas rozłączania transportu');
+    }
+  };
+
+  // Funkcja do zakończenia całego łańcucha transportów
+  const handleCompleteChain = async (transport) => {
+    if (!confirm('Czy chcesz zakończyć wszystkie transporty w tej trasie?')) {
+      return;
+    }
+    
+    try {
+      const connectedChain = findAllConnectedTransports(transport);
+      
+      for (const chainTransport of connectedChain) {
+        await onZakonczTransport(dateKey, chainTransport.id);
+      }
+      
+      alert('Wszystkie transporty w trasie zostały zakończone!');
+    } catch (error) {
+      console.error('Błąd podczas kończenia łańcucha transportów:', error);
+      alert('Wystąpił błąd podczas kończenia łańcucha transportów');
     }
   };
 
@@ -151,11 +181,15 @@ export default function TransportsList({
             
             // Sprawdź, czy transport jest połączony
             const isConnected = isConnectedTransport(transport);
-            const isSource = transportyNaDzien.some(t => t.connected_transport_id === transport.id);
-            const isTarget = transport.connected_transport_id !== null;
             
-            // Znajdź połączony transport, jeśli istnieje
-            const connectedTransport = isConnected ? findConnectedTransport(transport) : null;
+            // Jeśli jest połączony, znajdź wszystkie transporty w łańcuchu
+            const connectedChain = isConnected ? findAllConnectedTransports(transport) : [transport];
+            const positionInChain = connectedChain.indexOf(transport);
+            const isFirst = positionInChain === 0;
+            const isLast = positionInChain === connectedChain.length - 1;
+            
+            // Oblicz łączną odległość trasy
+            const totalDistance = connectedChain.reduce((sum, t) => sum + (parseInt(t.odleglosc) || 0), 0);
             
             return (
               <div 
@@ -168,14 +202,14 @@ export default function TransportsList({
                 <div className="flex justify-between items-start">
                   <div className="space-y-2">
                     <h3 className="font-medium text-lg flex items-center">
-                      {isConnected && (
-                        <Link2 className="h-4 w-4 mr-2 text-blue-600" />
-                      )}
+                      {!isFirst && <ArrowLeft className="h-4 w-4 mr-2 text-blue-600" />}
+                      {isConnected && <Link2 className="h-4 w-4 mr-2 text-blue-600" />}
                       {transport.miasto} ({transport.kodPocztowy})
+                      {!isLast && <ArrowRight className="h-4 w-4 ml-2 text-blue-600" />}
                       
                       {isConnected && (
                         <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded-full">
-                          {isSource ? 'Źródło trasy' : 'Cel trasy'}
+                          Punkt {positionInChain + 1}/{connectedChain.length}
                         </span>
                       )}
                     </h3>
@@ -185,43 +219,47 @@ export default function TransportsList({
                     )}
                     
                     {/* Wyświetlanie informacji o połączonej trasie */}
-                    {isConnected && connectedTransport && (
+                    {isConnected && (
                       <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
                         <p className="text-sm font-medium text-blue-800 mb-2">
-                          Transport połączony z:
+                          Trasa łączona {isFirst ? '(początek)' : isLast ? '(koniec)' : '(punkt pośredni)'}
                         </p>
-                        <div className="flex items-center">
-                          {isTarget ? (
-                            <>
-                              <div className="flex items-center">
-                                <ArrowLeft className="h-4 w-4 text-blue-600 mr-2" />
-                                <div>
-                                  <div className="font-medium">{connectedTransport.miasto}</div>
-                                  <div className="text-xs text-gray-600">{connectedTransport.kodPocztowy}</div>
-                                </div>
-                              </div>
-                            </>
-                          ) : (
-                            <>
-                              <div className="flex items-center">
-                                <div>
-                                  <div className="font-medium">{connectedTransport.miasto}</div>
-                                  <div className="text-xs text-gray-600">{connectedTransport.kodPocztowy}</div>
-                                </div>
-                                <ArrowRight className="h-4 w-4 text-blue-600 mx-2" />
-                              </div>
-                            </>
-                          )}
+                        
+                        <div className="flex flex-wrap gap-2 mb-2">
+                          {connectedChain.map((t, idx) => (
+                            <div key={t.id} className={`
+                              px-2 py-1 rounded-full text-xs
+                              ${t.id === transport.id ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-800'}
+                            `}>
+                              {idx + 1}. {t.miasto}
+                            </div>
+                          ))}
                         </div>
                         
-                        {/* Przycisk do rozłączania transportów */}
+                        <div className="text-xs text-gray-600 mt-2">
+                          <p>Łączna odległość trasy: {totalDistance} km</p>
+                          <p>Kierowca: {kierowca?.imie} ({kierowca?.tabliceRej})</p>
+                        </div>
+                        
+                        {/* Przyciski akcji dla łańcucha transportów */}
                         {canEdit && (
-                          <button
-                            onClick={() => handleDisconnectTransport(transport.id)}
-                            className="mt-2 px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                          >
-                            Rozłącz transporty
-                          </button>
+                          <div className="mt-2 flex gap-2">
+                            <button
+                              onClick={() => handleDisconnectTransport(transport.id)}
+                              className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                            >
+                              Rozłącz transporty
+                            </button>
+                            
+                            {canMarkAsCompleted && (
+                              <button
+                                onClick={() => handleCompleteChain(transport)}
+                                className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+                              >
+                                Zakończ całą trasę
+                              </button>
+                            )}
+                          </div>
                         )}
                       </div>
                     )}
@@ -251,10 +289,7 @@ export default function TransportsList({
                   <div className="flex flex-col space-y-2">
                     {canMarkAsCompleted && (
                       <button
-                        onClick={() => {
-                          console.log('Kliknięto Zrealizuj dla transportu ID:', transport.id);
-                          onZakonczTransport(dateKey, transport.id);
-                        }}
+                        onClick={() => onZakonczTransport(dateKey, transport.id)}
                         className="px-4 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
                       >
                         Zrealizuj
