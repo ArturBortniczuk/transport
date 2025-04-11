@@ -4,6 +4,7 @@ import { format } from 'date-fns'
 import { pl } from 'date-fns/locale'
 import LocationSelector from './LocationSelector'
 import ConstructionSelector from './ConstructionSelector'
+import { ChevronRight } from 'lucide-react' // Ikona dla połączonych tras
 
 export default function TransportForm({
   selectedDate,
@@ -14,7 +15,8 @@ export default function TransportForm({
   handleUpdateTransport,
   setEdytowanyTransport,
   setNowyTransport,
-  userPermissions
+  userPermissions,
+  transporty // Dodajemy ten prop, aby mieć dostęp do wszystkich transportów
 }) {
   const [users, setUsers] = useState([])
   const [isLoadingUsers, setIsLoadingUsers] = useState(true)
@@ -26,6 +28,8 @@ export default function TransportForm({
     nowyTransport.mpk ? 'construction' : 'sales'
   )
   const [selectedConstruction, setSelectedConstruction] = useState(null)
+  const [connectToExistingTransport, setConnectToExistingTransport] = useState(false)
+  const [selectedSourceTransport, setSelectedSourceTransport] = useState(null)
 
   useEffect(() => {
     async function fetchUsers() {
@@ -64,6 +68,10 @@ export default function TransportForm({
       setRecipientType('sales')
       setSelectedConstruction(null)
     }
+
+    // Resetowanie stanu połączeń przy edycji transportu
+    setConnectToExistingTransport(false)
+    setSelectedSourceTransport(null)
   }, [edytowanyTransport])
 
   // Filtrowanie użytkowników na podstawie wpisanego tekstu
@@ -78,6 +86,23 @@ export default function TransportForm({
       setFilteredUsers(filtered)
     }
   }, [searchTerm, users])
+
+  // Efekt do aktualizacji nowyTransport przy wyborze transportu źródłowego
+  useEffect(() => {
+    if (selectedSourceTransport && connectToExistingTransport) {
+      setNowyTransport(prev => ({
+        ...prev,
+        kierowcaId: selectedSourceTransport.kierowcaId,
+        connectedTransportId: selectedSourceTransport.id
+      }))
+    } else {
+      // Jeśli odłączamy transport, usuwamy powiązanie
+      setNowyTransport(prev => ({
+        ...prev,
+        connectedTransportId: null
+      }))
+    }
+  }, [selectedSourceTransport, connectToExistingTransport, setNowyTransport])
 
   const handleUserSelect = (user) => {
     console.log('Wybrany użytkownik:', user)
@@ -190,6 +215,20 @@ export default function TransportForm({
     }))
   }
 
+  // Funkcja do pobierania dostępnych transportów z tego samego dnia dla połączenia
+  const getAvailableTransportsForConnection = () => {
+    if (!selectedDate) return [];
+    
+    const dateKey = format(selectedDate, 'yyyy-MM-dd');
+    const availableTransports = transporty[dateKey] || [];
+    
+    return availableTransports.filter(t => 
+      (t.status === 'aktywny' || t.status === 'active') && 
+      !t.connected_transport_id && // Nie pokazujemy transportów, które już są połączone jako drugi punkt
+      t.id !== (edytowanyTransport?.id || 0) // Nie pokazujemy aktualnie edytowanego transportu
+    );
+  };
+
   const canEditCalendar = userPermissions?.calendar?.edit === true
   
   // Jeśli użytkownik nie ma uprawnień, nie wyświetlaj formularza
@@ -250,6 +289,80 @@ export default function TransportForm({
         {/* Formularz */}
         <form onSubmit={edytowanyTransport ? handleUpdateTransport : handleSubmit} className="p-6">
           <div className="space-y-6">
+            {/* Sekcja łączenia transportów - nowa sekcja */}
+            {!edytowanyTransport && (
+              <div className={sectionBaseClass}>
+                <h3 className="text-lg font-semibold text-gray-700 mb-4 flex items-center">
+                  <svg className="w-5 h-5 mr-2 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
+                  </svg>
+                  Łączenie transportów
+                </h3>
+                
+                <div className="mb-4">
+                  <div className="flex items-center mb-4">
+                    <input
+                      type="checkbox"
+                      id="connectTransport"
+                      checked={connectToExistingTransport}
+                      onChange={(e) => setConnectToExistingTransport(e.target.checked)}
+                      className="h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                    />
+                    <label htmlFor="connectTransport" className="ml-2 text-sm text-gray-700">
+                      Połącz ten transport z istniejącym (ta sama trasa)
+                    </label>
+                  </div>
+                  
+                  {connectToExistingTransport && (
+                    <div className="mt-2">
+                      <label className={labelBaseClass}>
+                        Wybierz transport początkowy
+                      </label>
+                      <select
+                        value={selectedSourceTransport?.id || ""}
+                        onChange={(e) => {
+                          const transportId = e.target.value;
+                          const transport = getAvailableTransportsForConnection().find(t => t.id === parseInt(transportId));
+                          setSelectedSourceTransport(transport);
+                        }}
+                        className={inputBaseClass}
+                        disabled={!connectToExistingTransport}
+                        required={connectToExistingTransport}
+                      >
+                        <option value="">Wybierz transport</option>
+                        {getAvailableTransportsForConnection().map(transport => (
+                          <option key={transport.id} value={transport.id}>
+                            {transport.miasto} - {transport.kodPocztowy} 
+                            ({KIEROWCY.find(k => k.id === parseInt(transport.kierowcaId))?.imie})
+                          </option>
+                        ))}
+                      </select>
+                      
+                      {selectedSourceTransport && (
+                        <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                          <p className="font-medium">Transport źródłowy:</p>
+                          <div className="flex items-center mt-2">
+                            <div className="text-gray-700">
+                              <span className="font-semibold">{selectedSourceTransport.miasto}</span> 
+                              ({selectedSourceTransport.kodPocztowy})
+                            </div>
+                            <ChevronRight className="mx-2 text-blue-500" />
+                            <div className="text-gray-700">
+                              <span className="font-semibold">{nowyTransport.miasto || "Wybierz cel"}</span>
+                              {nowyTransport.kodPocztowy && ` (${nowyTransport.kodPocztowy})`}
+                            </div>
+                          </div>
+                          <p className="mt-2 text-sm text-gray-600">
+                            Kierowca: {KIEROWCY.find(k => k.id === parseInt(selectedSourceTransport.kierowcaId))?.imie || "Nieznany"}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Sekcja: Lokalizacja */}
             <div className={sectionBaseClass}>
               <div className="flex justify-between items-center mb-4">
@@ -342,6 +455,7 @@ export default function TransportForm({
                     onChange={handleInputChange}
                     className={inputBaseClass}
                     required
+                    disabled={connectToExistingTransport && selectedSourceTransport} // Blokujemy zmianę kierowcy przy połączonych trasach
                   >
                     <option value="">Wybierz kierowcę</option>
                     {KIEROWCY.map(kierowca => (
@@ -350,6 +464,11 @@ export default function TransportForm({
                       </option>
                     ))}
                   </select>
+                  {connectToExistingTransport && selectedSourceTransport && (
+                    <p className="mt-1 text-xs text-blue-600">
+                      Kierowca jest ustawiony automatycznie dla połączonych transportów
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -585,10 +704,11 @@ export default function TransportForm({
                     poziomZaladunku: '',
                     dokumenty: '',
                     trasaCykliczna: false,
-                    magazyn: 'bialystok'
+                    magazyn: 'bialystok',
+                    connectedTransportId: null // Resetujemy również to pole
                   })
                 }}
-                className="flex-1 py-3 px-4 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200"
+                className="flex-1py-3 px-4 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200"
               >
                 Anuluj edycję
               </button>
