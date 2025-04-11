@@ -103,7 +103,9 @@ export default function MapaPage() {
       const processed = await Promise.all(activeTransports.map(async (transport) => {
         // Przygotuj punkt startowy
         let originPoint = {};
-        if (transport.source_warehouse === 'bialystok') {
+        if (transport.source_warehouse === 'bialystok' || 
+            transport.zrodlo === 'bialystok' || 
+            (transport.latitude && transport.latitude > 53)) {
           originPoint = {
             lat: MAGAZYNY.bialystok.lat,
             lng: MAGAZYNY.bialystok.lng,
@@ -134,6 +136,9 @@ export default function MapaPage() {
                 ...coords,
                 name: `${city}, ${postalCode}${street ? `, ${street}` : ''}`
               };
+            } else {
+              console.warn('Brak danych miasta lub kodu pocztowego:', transport);
+              return null;
             }
           } catch (error) {
             console.error('Błąd geokodowania:', error);
@@ -144,13 +149,20 @@ export default function MapaPage() {
           destinationPoint = {
             lat: transport.wspolrzedne?.lat || transport.latitude,
             lng: transport.wspolrzedne?.lng || transport.longitude,
-            name: `${transport.miasto || transport.destination_city}, ${transport.kodPocztowy || transport.postal_code}${(transport.ulica || transport.street) ? `, ${transport.ulica || transport.street}` : ''}`
+            name: `${transport.miasto || transport.destination_city || 'Nieznane miejsce'}, ${transport.kodPocztowy || transport.postal_code || ''}${(transport.ulica || transport.street) ? `, ${transport.ulica || transport.street}` : ''}`
           };
         }
         
         // Ustal dzień dostawy
-        const deliveryDate = new Date(transport.dataDostawy || transport.delivery_date);
-        const dayOfWeek = ['niedziela', 'poniedziałek', 'wtorek', 'środa', 'czwartek', 'piątek', 'sobota'][deliveryDate.getDay()];
+        let dayOfWeek = 'nieznany';
+        if (transport.dataDostawy || transport.delivery_date) {
+          const deliveryDate = new Date(transport.dataDostawy || transport.delivery_date);
+          dayOfWeek = ['niedziela', 'poniedziałek', 'wtorek', 'środa', 'czwartek', 'piątek', 'sobota'][deliveryDate.getDay()];
+        }
+        
+        // Ustal źródłowy magazyn
+        const zrodloId = transport.source_warehouse || transport.zrodlo || 
+                         (destinationPoint.lat && destinationPoint.lat > 53 ? 'bialystok' : 'zielonka');
         
         return {
           ...transport,
@@ -159,8 +171,8 @@ export default function MapaPage() {
           destination: destinationPoint,
           dayOfWeek,
           typ: 'transport',
-          zrodloId: transport.source_warehouse || (transport.wspolrzedne?.lat > 53 ? 'bialystok' : 'zielonka'),
-          displayName: `${transport.miasto || transport.destination_city || 'Brak miasta'} - Transport`
+          zrodloId,
+          displayName: `${transport.miasto || transport.destination_city || 'Nieznane miejsce'} - Transport`
         };
       }));
 
@@ -196,6 +208,7 @@ export default function MapaPage() {
                 name: `${producerCity}, ${producerPostalCode}${producerStreet ? `, ${producerStreet}` : ''} (Producent)`
               };
             } else {
+              console.warn('Brak danych producenta:', spedycja);
               return null; // Brak danych producenta
             }
           } catch (error) {
@@ -235,19 +248,23 @@ export default function MapaPage() {
             return null;
           }
         } else {
+          console.warn('Brak danych dostawy:', spedycja);
           return null; // Brak danych dostawy
         }
         
-        // Sprawdź czy mamy dodatkowe miejsca
+        // Przygotuj punkty dodatkowe (jeśli są)
         let additionalPoints = [];
         if (spedycja.additionalPlaces && Array.isArray(spedycja.additionalPlaces) && spedycja.additionalPlaces.length > 0) {
-          // Tu można dodać logikę dla dodatkowych punktów, jeśli są dostępne
-          // Będzie potrzebne geokodowanie każdego adresu
+          // Przetworzymy to później gdy będziemy mieć dane dodatkowych miejsc
+          // Na razie zostawiamy puste
         }
         
         // Ustal dzień dostawy
-        const deliveryDate = new Date(spedycja.deliveryDate || spedycja.dataRozladunku);
-        const dayOfWeek = ['niedziela', 'poniedziałek', 'wtorek', 'środa', 'czwartek', 'piątek', 'sobota'][deliveryDate.getDay()];
+        let dayOfWeek = 'nieznany';
+        if (spedycja.deliveryDate || spedycja.dataRozladunku) {
+          const deliveryDate = new Date(spedycja.deliveryDate || spedycja.dataRozladunku);
+          dayOfWeek = ['niedziela', 'poniedziałek', 'wtorek', 'środa', 'czwartek', 'piątek', 'sobota'][deliveryDate.getDay()];
+        }
         
         // Przygotuj identyfikator źródła
         let zrodloId = 'zielonka';
@@ -402,15 +419,27 @@ export default function MapaPage() {
                 <span>{magazyn.nazwa}</span>
               </div>
             ))}
+            <div className="flex items-center">
+              <div 
+                className="w-4 h-4 rounded-full mr-2"
+                style={{ backgroundColor: "#9061F9" }}
+              />
+              <span>Spedycja</span>
+            </div>
           </div>
         </div>
 
         <div className="border-t">
           <div className="p-4">
             <h2 className="text-lg font-semibold mb-4">Aktywne transporty ({filteredData.length})</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredData.length > 0 ? (
-                filteredData.map((item) => (
+            
+            {filteredData.length === 0 ? (
+              <div className="text-center text-gray-500 py-4">
+                Brak aktywnych transportów spełniających kryteria filtrów
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredData.map((item) => (
                   <div 
                     key={item.id} 
                     className={`border rounded-lg p-4 ${
@@ -430,6 +459,11 @@ export default function MapaPage() {
                         <p className="text-sm text-gray-500">
                           Dzień: {item.dayOfWeek}
                         </p>
+                        {item.distanceKm && (
+                          <p className="text-sm text-gray-500">
+                            Odległość: {item.distanceKm} km
+                          </p>
+                        )}
                       </div>
                       <div 
                         className="w-3 h-3 rounded-full"
@@ -446,13 +480,9 @@ export default function MapaPage() {
                       </span>
                     </div>
                   </div>
-                ))
-              ) : (
-                <div className="col-span-full text-center text-gray-500 py-4">
-                  Brak aktywnych transportów spełniających kryteria filtrów
-                </div>
-              )}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
