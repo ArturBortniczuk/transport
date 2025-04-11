@@ -63,6 +63,8 @@ export default function GoogleMapWithNoSSR({ transporty = [], magazyny = {} }) {
 
   // Czyszczenie markerów i tras
   const clearMap = () => {
+    console.log("Czyszczenie mapy - usuwanie markerów i tras");
+    
     // Usuń wszystkie markery
     markers.forEach(marker => {
       if (marker) marker.setMap(null);
@@ -87,11 +89,17 @@ export default function GoogleMapWithNoSSR({ transporty = [], magazyny = {} }) {
   useEffect(() => {
     if (!isLoaded || !map || !google) return;
 
+    // Czyścimy poprzednie markery magazynów przed dodaniem nowych
+    markers.forEach(marker => {
+      if (marker) marker.setMap(null);
+    });
+    infoWindows.forEach(infoWindow => {
+      if (infoWindow) infoWindow.close();
+    });
+    
     // Dodaj markery magazynów
     const newMarkers = [];
     const newInfoWindows = [];
-
-    // Dodaj markery magazynów
     Object.entries(magazyny).forEach(([key, magazyn]) => {
       console.log(`Dodaję marker magazynu ${key}:`, magazyn);
       
@@ -142,10 +150,13 @@ export default function GoogleMapWithNoSSR({ transporty = [], magazyny = {} }) {
 
   // Rysowanie tras dla transportów
   useEffect(() => {
-    if (!isLoaded || !map || !google || !transporty.length) return;
+    if (!isLoaded || !map || !google) return;
 
     // Czyścimy poprzednie transporty
     clearMap();
+    
+    // Jeśli nie ma transportów, kończymy
+    if (!transporty.length) return;
 
     const newMarkers = [];
     const newInfoWindows = [];
@@ -187,7 +198,13 @@ export default function GoogleMapWithNoSSR({ transporty = [], magazyny = {} }) {
           const request = {
             origin: { lat: transport.origin.lat, lng: transport.origin.lng },
             destination: { lat: transport.destination.lat, lng: transport.destination.lng },
-            travelMode: google.maps.TravelMode.DRIVING
+            travelMode: google.maps.TravelMode.DRIVING,
+            drivingOptions: {
+              departureTime: new Date(), // Używamy bieżącej daty
+              trafficModel: google.maps.TrafficModel.BEST_GUESS
+            },
+            avoidHighways: false,
+            avoidTolls: false
           };
 
           // Dodaj waypoints jeśli są
@@ -206,7 +223,9 @@ export default function GoogleMapWithNoSSR({ transporty = [], magazyny = {} }) {
               strokeColor: routeColor,
               strokeWeight: 5,
               strokeOpacity: 0.7
-            }
+            },
+            preserveViewport: true, // Zapobiega automatycznemu centrowania mapy na trasie
+            routeIndex: 0
           });
 
           // Wywołaj API kierunków
