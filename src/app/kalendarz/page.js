@@ -195,35 +195,53 @@ export default function KalendarzPage() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     
-    console.log('Dane transportu wysyłane do API:', {
-      miasto: nowyTransport.miasto,
-      osobaZlecajaca: nowyTransport.osobaZlecajaca,
-      mpk: nowyTransport.mpk
-    });
-
     try {
       // Wybór magazynu
-      const wybranyMagazyn = nowyTransport.magazyn || 'bialystok' // Domyślnie Białystok
+      const wybranyMagazyn = nowyTransport.magazyn || 'bialystok'
       
       if (!MAGAZYNY[wybranyMagazyn]) {
         alert('Błąd: Wybierz prawidłowy magazyn')
         return
       }
-    
-      // Pozyskaj współrzędne miejsca docelowego za pomocą Google Geocoding API
+      
+      // Pozyskaj współrzędne miejsca docelowego
       const coordinates = await getGoogleCoordinates(
         nowyTransport.miasto,
         nowyTransport.kodPocztowy,
         nowyTransport.ulica
       )
-    
-      // Oblicz odległość za pomocą Google Distance Matrix API
-      const odleglosc = await calculateDistance(
-        MAGAZYNY[wybranyMagazyn].lat,
-        MAGAZYNY[wybranyMagazyn].lng,
-        coordinates.lat,
-        coordinates.lng
-      )
+      
+      let odleglosc = 0;
+      
+      // Jeśli to jest połączony transport, oblicz odległość od źródłowego punktu
+      if (nowyTransport.connectedTransportId) {
+        // Znajdź transport źródłowy
+        const dateKey = format(selectedDate, 'yyyy-MM-dd');
+        const sourceTransport = transporty[dateKey]?.find(
+          t => t.id === parseInt(nowyTransport.connectedTransportId)
+        );
+        
+        if (sourceTransport && sourceTransport.wspolrzedne) {
+          // Oblicz odległość od punktu źródłowego do nowego celu
+          odleglosc = await calculateDistance(
+            sourceTransport.wspolrzedne.lat,
+            sourceTransport.wspolrzedne.lng,
+            coordinates.lat,
+            coordinates.lng
+          );
+        } else {
+          alert('Błąd: Nie można znaleźć transportu źródłowego lub jego współrzędnych');
+          return;
+        }
+      } else {
+        // Standardowe obliczenie odległości z magazynu
+        odleglosc = await calculateDistance(
+          MAGAZYNY[wybranyMagazyn].lat,
+          MAGAZYNY[wybranyMagazyn].lng,
+          coordinates.lat,
+          coordinates.lng
+        );
+      }
     
       const response = await fetch('/api/transports', {
         method: 'POST',
@@ -238,6 +256,7 @@ export default function KalendarzPage() {
           latitude: coordinates.lat,
           longitude: coordinates.lng,
           distance: odleglosc,
+          connected_transport_id: nowyTransport.connectedTransportId,
           driver_id: nowyTransport.kierowcaId,
           wz_number: nowyTransport.numerWZ,
           client_name: nowyTransport.nazwaKlienta,
