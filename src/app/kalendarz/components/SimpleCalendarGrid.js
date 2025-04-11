@@ -227,7 +227,7 @@ export default function SimpleCalendarGrid({
                               <div className={`
                                 text-xs px-2 py-1 rounded 
                                 ${getMagazynColor(transport.zrodlo)}
-                                ${isConnected ? 'border-l-4 border-blue-500' : ''}
+                                ${isConnected ? 'border-2 border-blue-500 font-semibold' : ''} // Wyraźniejsze oznaczenie
                               `}>
                                 <div className="flex items-center justify-between">
                                   <div className="flex items-center">
