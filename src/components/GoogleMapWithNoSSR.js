@@ -194,17 +194,12 @@ export default function GoogleMapWithNoSSR({ transporty = [], magazyny = {} }) {
             routeColor = magazyny[transport.zrodloId]?.kolor || '#888888';
           }
 
-          // Przygotuj dane trasy
+          // Przygotuj dane trasy - używamy minimalnej konfiguracji
           const request = {
             origin: { lat: transport.origin.lat, lng: transport.origin.lng },
             destination: { lat: transport.destination.lat, lng: transport.destination.lng },
-            travelMode: google.maps.TravelMode.DRIVING,
-            drivingOptions: {
-              departureTime: new Date(), // Używamy bieżącej daty
-              trafficModel: google.maps.TrafficModel.BEST_GUESS
-            },
-            avoidHighways: false,
-            avoidTolls: false
+            travelMode: 'DRIVING', // Używamy stringa zamiast enum
+            optimizeWaypoints: true
           };
 
           // Dodaj waypoints jeśli są
@@ -230,7 +225,8 @@ export default function GoogleMapWithNoSSR({ transporty = [], magazyny = {} }) {
 
           // Wywołaj API kierunków
           directionsService.route(request, (result, status) => {
-            if (status === google.maps.DirectionsStatus.OK) {
+            console.log(`Wynik trasowania dla ${transport.id}:`, status);
+            if (status === 'OK') { // Używamy stringa zamiast enum
               directionsRenderer.setDirections(result);
               newDirectionsRenderers.push(directionsRenderer);
 
@@ -327,35 +323,107 @@ export default function GoogleMapWithNoSSR({ transporty = [], magazyny = {} }) {
             } else {
               console.error(`Błąd wyznaczania trasy dla transportu ${transport.id}:`, status);
               
-              // Jeśli nie można wyznaczyć trasy, dodaj markery i narysuj prostą linię
-              const startMarker = new google.maps.Marker({
-                position: { lat: transport.origin.lat, lng: transport.origin.lng },
-                map: map,
-                icon: createMarkerIcon(routeColor, true),
-                title: `Start: ${transport.origin.name}`
-              });
+              console.error(`Błąd wyznaczania trasy dla transportu ${transport.id}:`, status);
               
-              const endMarker = new google.maps.Marker({
-                position: { lat: transport.destination.lat, lng: transport.destination.lng },
-                map: map,
-                icon: createMarkerIcon(routeColor, false),
-                title: `Cel: ${transport.destination.name}`
-              });
-              
-              // Narysuj prostą linię między punktami
-              const line = new google.maps.Polyline({
-                path: [
-                  { lat: transport.origin.lat, lng: transport.origin.lng },
-                  { lat: transport.destination.lat, lng: transport.destination.lng }
-                ],
-                geodesic: true,
-                strokeColor: routeColor,
-                strokeOpacity: 0.7,
-                strokeWeight: 3,
-                map: map
-              });
-              
-              newMarkers.push(startMarker, endMarker);
+              try {
+                // Ponów próbę bez opcjonalnych parametrów - najprostsze możliwe zapytanie
+                const simpleRequest = {
+                  origin: { lat: transport.origin.lat, lng: transport.origin.lng },
+                  destination: { lat: transport.destination.lat, lng: transport.destination.lng },
+                  travelMode: 'DRIVING'
+                };
+                
+                console.log("Ponawiam próbę z prostszym zapytaniem:", simpleRequest);
+                
+                directionsService.route(simpleRequest, (simpleResult, simpleStatus) => {
+                  if (simpleStatus === 'OK') {
+                    console.log("Drugie podejście udane!");
+                    directionsRenderer.setDirections(simpleResult);
+                    newDirectionsRenderers.push(directionsRenderer);
+                    
+                    // Dodaj markery punktów
+                    const startMarker = new google.maps.Marker({
+                      position: { lat: transport.origin.lat, lng: transport.origin.lng },
+                      map: map,
+                      icon: createMarkerIcon(routeColor, true),
+                      title: `Start: ${transport.origin.name}`
+                    });
+                    
+                    const endMarker = new google.maps.Marker({
+                      position: { lat: transport.destination.lat, lng: transport.destination.lng },
+                      map: map,
+                      icon: createMarkerIcon(routeColor, false),
+                      title: `Cel: ${transport.destination.name}`
+                    });
+                    
+                    newMarkers.push(startMarker, endMarker);
+                  } else {
+                    // Jeśli nadal się nie udaje, użyj prostej linii
+                    console.error("Drugie podejście nieudane, rysuje prostą linię.");
+                    
+                    const startMarker = new google.maps.Marker({
+                      position: { lat: transport.origin.lat, lng: transport.origin.lng },
+                      map: map,
+                      icon: createMarkerIcon(routeColor, true),
+                      title: `Start: ${transport.origin.name}`
+                    });
+                    
+                    const endMarker = new google.maps.Marker({
+                      position: { lat: transport.destination.lat, lng: transport.destination.lng },
+                      map: map,
+                      icon: createMarkerIcon(routeColor, false),
+                      title: `Cel: ${transport.destination.name}`
+                    });
+                    
+                    // Narysuj prostą linię między punktami
+                    const line = new google.maps.Polyline({
+                      path: [
+                        { lat: transport.origin.lat, lng: transport.origin.lng },
+                        { lat: transport.destination.lat, lng: transport.destination.lng }
+                      ],
+                      geodesic: true,
+                      strokeColor: routeColor,
+                      strokeOpacity: 0.7,
+                      strokeWeight: 3,
+                      map: map
+                    });
+                    
+                    newMarkers.push(startMarker, endMarker);
+                  }
+                });
+              } catch (retryError) {
+                console.error("Błąd podczas ponawiania próby:", retryError);
+                
+                // Ostateczne rozwiązanie awaryjne - prosta linia
+                const startMarker = new google.maps.Marker({
+                  position: { lat: transport.origin.lat, lng: transport.origin.lng },
+                  map: map,
+                  icon: createMarkerIcon(routeColor, true),
+                  title: `Start: ${transport.origin.name}`
+                });
+                
+                const endMarker = new google.maps.Marker({
+                  position: { lat: transport.destination.lat, lng: transport.destination.lng },
+                  map: map,
+                  icon: createMarkerIcon(routeColor, false),
+                  title: `Cel: ${transport.destination.name}`
+                });
+                
+                // Narysuj prostą linię między punktami
+                const line = new google.maps.Polyline({
+                  path: [
+                    { lat: transport.origin.lat, lng: transport.origin.lng },
+                    { lat: transport.destination.lat, lng: transport.destination.lng }
+                  ],
+                  geodesic: true,
+                  strokeColor: routeColor,
+                  strokeOpacity: 0.7,
+                  strokeWeight: 3,
+                  map: map
+                });
+                
+                newMarkers.push(startMarker, endMarker);
+              }
             }
           });
         } catch (error) {
