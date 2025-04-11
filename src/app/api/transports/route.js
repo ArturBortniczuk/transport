@@ -68,6 +68,31 @@ export async function GET(request) {
     
     console.log(`Pobrano ${transports.length} transportów o statusie: ${status}`);
     
+    // Dodatkowe logowanie dla transportów połączonych
+    const connectedTransports = transports.filter(t => 
+      t.connected_transport_id !== null || 
+      transports.some(other => other.connected_transport_id === t.id)
+    );
+    
+    if (connectedTransports.length > 0) {
+      console.log(`Znaleziono ${connectedTransports.length} połączonych transportów`);
+      
+      // Mapuj połączenia dla łatwiejszego debugowania
+      const connections = connectedTransports
+        .filter(t => t.connected_transport_id !== null)
+        .map(t => {
+          const sourceTransport = transports.find(st => st.id === t.connected_transport_id);
+          return {
+            from: sourceTransport ? 
+              `${sourceTransport.destination_city} (ID: ${sourceTransport.id})` : 
+              `Nieznany transport (ID: ${t.connected_transport_id})`,
+            to: `${t.destination_city} (ID: ${t.id})`,
+          };
+        });
+      
+      console.log('Połączenia transportów:', connections);
+    }
+    
     return NextResponse.json({ 
       success: true, 
       transports: transports || []
@@ -128,6 +153,44 @@ export async function POST(request) {
     
     const transportData = await request.json();
     console.log('Otrzymane dane transportu:', transportData);
+    
+    // Sprawdzenie i walidacja dla połączonych transportów
+    if (transportData.connected_transport_id) {
+      console.log('Dodawanie transportu połączonego:', {
+        miasto_docelowe: transportData.destination_city,
+        connected_transport_id: transportData.connected_transport_id
+      });
+      
+      // Weryfikacja czy transport źródłowy istnieje
+      const sourceTransport = await db('transports')
+        .where('id', transportData.connected_transport_id)
+        .first();
+        
+      if (!sourceTransport) {
+        console.warn('Uwaga: Źródłowy transport nie istnieje!');
+        return NextResponse.json({ 
+          success: false, 
+          error: 'Transport źródłowy nie istnieje' 
+        }, { status: 400 });
+      } else {
+        console.log('Transport źródłowy:', {
+          id: sourceTransport.id,
+          miasto: sourceTransport.destination_city
+        });
+        
+        // Sprawdź czy transport źródłowy nie jest już połączony z innym
+        const hasConnection = await db('transports')
+          .where('connected_transport_id', sourceTransport.id)
+          .first();
+          
+        if (hasConnection) {
+          console.warn('Uwaga: Transport źródłowy jest już połączony z innym transportem!', {
+            transportId: hasConnection.id,
+            miasto: hasConnection.destination_city
+          });
+        }
+      }
+    }
     
     // Konwersja wartości boolean dla PostgreSQL
     if ('is_cyclical' in transportData) {
@@ -231,6 +294,37 @@ export async function PUT(request) {
     // Przygotowanie danych do aktualizacji
     const updateData = { ...transportData };
     
+    // Sprawdzenie aktualizacji połączenia transportu
+    if ('connected_transport_id' in updateData) {
+      console.log('Aktualizacja połączenia transportu:', {
+        id: id,
+        nowy_connected_id: updateData.connected_transport_id
+      });
+      
+      if (updateData.connected_transport_id) {
+        // Weryfikacja czy transport źródłowy istnieje
+        const sourceTransport = await db('transports')
+          .where('id', updateData.connected_transport_id)
+          .first();
+          
+        if (!sourceTransport) {
+          console.warn('Uwaga: Źródłowy transport nie istnieje!');
+          return NextResponse.json({ 
+            success: false, 
+            error: 'Transport źródłowy nie istnieje' 
+          }, { status: 400 });
+        }
+        
+        // Sprawdź, czy nie tworzymy cyklu w połączeniach
+        if (updateData.connected_transport_id == id) {
+          return NextResponse.json({ 
+            success: false, 
+            error: 'Transport nie może być połączony sam ze sobą' 
+          }, { status: 400 });
+        }
+      }
+    }
+    
     // Konwersja wartości boolean dla PostgreSQL
     if ('is_cyclical' in updateData) {
       updateData.is_cyclical = updateData.is_cyclical === 1 || 
@@ -332,6 +426,20 @@ export async function DELETE(request) {
     
     if (!id) {
       throw new Error('ID is required');
+    }
+    
+    // Sprawdź, czy usuwany transport jest połączony z innymi lub czy inne są połączone z nim
+    const transport = await db('transports').where('id', id).first();
+    
+    if (transport) {
+      // Sprawdź, czy są transporty połączone z tym
+      const connectedToThis = await db('transports')
+        .where('connected_transport_id', id)
+        .update({ connected_transport_id: null });
+        
+      if (connectedToThis > 0) {
+        console.log(`Rozłączono ${connectedToThis} transportów od usuwanego transportu ID: ${id}`);
+      }
     }
 
     // Używamy Knex do usunięcia transportu
