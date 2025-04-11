@@ -296,6 +296,11 @@ export default function MapaPage() {
     .filter(item => !hiddenItems.includes(item.id))
     .filter(item => selectedDay === 'all' || item.dayOfWeek === selectedDay)
     .filter(item => selectedMagazyn === 'all' || item.zrodloId === selectedMagazyn);
+  
+  // Dodajemy efekt dla śledzenia zmian filtrów
+  useEffect(() => {
+    console.log("Zmiana filtrów - wyświetlam transporty:", filteredData.length);
+  }, [showTransporty, showSpedycje, selectedDay, selectedMagazyn, hiddenItems]);
 
   // Funkcja przełączająca widoczność elementu
   const toggleItemVisibility = (id) => {
@@ -444,7 +449,7 @@ export default function MapaPage() {
                     key={item.id} 
                     className={`border rounded-lg p-4 ${
                       item.typ === 'spedycja' ? 'border-purple-200 bg-purple-50' : 'border-blue-200 bg-blue-50'
-                    }`}
+                    } ${hiddenItems.includes(item.id) ? 'opacity-50' : ''}`}
                     onClick={() => toggleItemVisibility(item.id)}
                     style={{ cursor: 'pointer' }}
                   >
