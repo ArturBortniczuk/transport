@@ -604,7 +604,8 @@ export default function KalendarzPage() {
             handleUpdateTransport={handleUpdateTransport}
             setEdytowanyTransport={setEdytowanyTransport}
             setNowyTransport={setNowyTransport}
-            userPermissions={userPermissions} // Dodajemy przekazywanie uprawnień
+            userPermissions={userPermissions}
+            transporty={transporty}
           />
         </>
       )}
