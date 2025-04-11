@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { format, getDate } from 'date-fns'
 import { pl } from 'date-fns/locale'
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd'
-import { Link2, ChevronRight } from 'lucide-react'
+import { Link2, ChevronRight, ChevronLeft, ArrowRight, ArrowLeft } from 'lucide-react'
 
 export default function SimpleCalendarGrid({ 
   daysInMonth, 
@@ -11,7 +11,7 @@ export default function SimpleCalendarGrid({
   currentMonth, 
   transporty,
   onTransportMove,
-  filtryAktywne // Dodajemy props z filtrami
+  filtryAktywne
 }) {
   const [selected, setSelected] = useState(null)
   const [hoverInfo, setHoverInfo] = useState(null)
@@ -67,13 +67,29 @@ export default function SimpleCalendarGrid({
     return allTransports.some(t => t.connected_transport_id === transport.id);
   };
   
-  // Funkcja pomocnicza znajdująca połączony transport
-  const findConnectedTransport = (transport, allTransports) => {
-    if (transport.connected_transport_id) {
-      return allTransports.find(t => t.id === transport.connected_transport_id);
+  // Funkcja pomocnicza znajdująca wszystkie połączone transporty w łańcuchu
+  const findAllConnectedTransports = (transport, allTransports) => {
+    const result = [transport];
+    let currentTransport = transport;
+    
+    // Znajdź wszystkie transporty w łańcuchu "w przód"
+    while (true) {
+      const nextTransport = allTransports.find(t => t.connected_transport_id === currentTransport.id);
+      if (!nextTransport) break;
+      result.push(nextTransport);
+      currentTransport = nextTransport;
     }
     
-    return allTransports.find(t => t.connected_transport_id === transport.id);
+    // Znajdź wszystkie transporty w łańcuchu "wstecz"
+    currentTransport = transport;
+    while (currentTransport.connected_transport_id) {
+      const prevTransport = allTransports.find(t => t.id === currentTransport.connected_transport_id);
+      if (!prevTransport) break;
+      result.unshift(prevTransport);
+      currentTransport = prevTransport;
+    }
+    
+    return result;
   };
 
   // Obsługa zakończenia przeciągania
@@ -99,21 +115,14 @@ export default function SimpleCalendarGrid({
     
     // Sprawdź, czy transport jest częścią połączonej trasy
     if (isConnectedTransport(transport, sourceTransports)) {
+      // Znajdź wszystkie transporty w łańcuchu
+      const connectedChain = findAllConnectedTransports(transport, sourceTransports);
+      
       // Jeśli to połączony transport, najpierw zapytaj użytkownika, czy chce przenieść wszystkie
-      if (confirm("Ten transport jest częścią połączonej trasy. Czy chcesz przenieść wszystkie połączone transporty?")) {
-        // Znajdź wszystkie powiązane transporty
-        const connectedTransport = findConnectedTransport(transport, sourceTransports);
-        if (connectedTransport) {
-          // Przenieś główny transport
-          onTransportMove(transport, destination.droppableId);
-          
-          // Przenieś połączony transport
-          setTimeout(() => {
-            onTransportMove(connectedTransport, destination.droppableId);
-          }, 100);
-        } else {
-          // Jeśli nie znaleziono połączonego transportu, przenieś tylko ten
-          onTransportMove(transport, destination.droppableId);
+      if (confirm(`Ten transport jest częścią łańcucha ${connectedChain.length} połączonych transportów. Czy chcesz przenieść wszystkie na nową datę?`)) {
+        // Przenieś wszystkie transporty z łańcucha
+        for (const chainTransport of connectedChain) {
+          onTransportMove(chainTransport, destination.droppableId);
         }
       } else if (confirm("Czy chcesz rozłączyć transport przed przeniesieniem?")) {
         // Rozłącz transport i przenieś tylko ten
@@ -189,8 +198,16 @@ export default function SimpleCalendarGrid({
                     {filtrowaneTransporty.map((transport, index) => {
                       // Sprawdź, czy transport jest połączony z innym
                       const isConnected = isConnectedTransport(transport, transportyNaDzien);
-                      const isSource = transportyNaDzien.some(t => t.connected_transport_id === transport.id);
-                      const isTarget = transport.connected_transport_id !== null;
+                      
+                      // Znajdź wszystkie połączone transporty, jeśli są
+                      const connectedChain = isConnected ? 
+                        findAllConnectedTransports(transport, transportyNaDzien) : [transport];
+                      
+                      const positionInChain = connectedChain.indexOf(transport);
+                      const isFirst = positionInChain === 0;
+                      const isLast = positionInChain === connectedChain.length - 1;
+                      const hasNext = !isLast;
+                      const hasPrev = !isFirst;
                       
                       return (
                         <Draggable 
@@ -208,38 +225,62 @@ export default function SimpleCalendarGrid({
                               onMouseLeave={() => setHoverInfo(null)}
                             >
                               <div className={`
-                                text-xs px-2 py-1 rounded flex items-center justify-between
+                                text-xs px-2 py-1 rounded 
                                 ${getMagazynColor(transport.zrodlo)}
                                 ${isConnected ? 'border-l-4 border-blue-500' : ''}
                               `}>
-                                <div className="flex items-center">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center">
+                                    {hasPrev && <ArrowLeft className="h-3 w-3 mr-1 text-blue-600" />}
+                                    <span>{transport.miasto}</span>
+                                    {hasNext && <ArrowRight className="h-3 w-3 ml-1 text-blue-600" />}
+                                  </div>
+                                  
                                   {isConnected && (
-                                    <Link2 className="h-3 w-3 mr-1 text-blue-600" />
+                                    <div className="text-xs text-blue-700 ml-1">
+                                      {positionInChain + 1}/{connectedChain.length}
+                                    </div>
                                   )}
-                                  <span>{transport.miasto}</span>
                                 </div>
-                                {isSource && (
-                                  <ChevronRight className="h-3 w-3 text-blue-600" />
-                                )}
                               </div>
                               
                               {/* Tooltip (dymek) z dodatkowymi informacjami */}
                               {hoverInfo === transport.id && !snapshot.isDragging && (
-                                <div className="absolute z-10 left-0 mt-1 w-48 bg-white rounded-md shadow-lg p-3 text-xs border border-gray-200">
+                                <div className="absolute z-10 left-0 mt-1 w-60 bg-white rounded-md shadow-lg p-3 text-xs border border-gray-200">
                                   <p className="font-semibold">{transport.nazwaKlienta || 'Brak nazwy klienta'}</p>
                                   <p className="text-gray-600">{transport.osobaZlecajaca || 'Brak osoby odpowiedzialnej'}</p>
                                   {transport.mpk && <p className="text-gray-600">MPK: {transport.mpk}</p>}
                                   <div className="mt-1 pt-1 border-t border-gray-100">
                                     <p className="text-gray-500">{transport.ulica || ''}</p>
                                     <p className="text-gray-500">{transport.kodPocztowy} {transport.miasto}</p>
+                                    <p className="text-gray-500">Odległość: {transport.odleglosc} km</p>
                                   </div>
+                                  
                                   {isConnected && (
                                     <div className="mt-1 pt-1 border-t border-gray-100 text-blue-600">
-                                      <p className="font-medium">Transport połączony</p>
-                                      {isSource ? 
-                                        <p className="text-xs">Jest źródłem dla innego transportu</p> :
-                                        <p className="text-xs">Połączony z innym transportem</p>
-                                      }
+                                      <p className="font-medium">Transport połączony ({positionInChain + 1}/{connectedChain.length})</p>
+                                      {isFirst ? (
+                                        <p className="text-xs">Początek łańcucha transportowego</p>
+                                      ) : isLast ? (
+                                        <p className="text-xs">Koniec łańcucha transportowego</p>
+                                      ) : (
+                                        <p className="text-xs">Punkt pośredni w łańcuchu</p>
+                                      )}
+                                      
+                                      <div className="mt-1 flex flex-wrap gap-1">
+                                        {connectedChain.map((t, idx) => (
+                                          <span key={t.id} className={`
+                                            px-1 py-0.5 rounded-sm text-xs
+                                            ${t.id === transport.id ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-800'}
+                                          `}>
+                                            {idx + 1}. {t.miasto}
+                                          </span>
+                                        ))}
+                                      </div>
+                                      
+                                      <p className="text-xs mt-1">
+                                        Łączna odległość trasy: {connectedChain.reduce((sum, t) => sum + (parseInt(t.odleglosc) || 0), 0)} km
+                                      </p>
                                     </div>
                                   )}
                                 </div>
