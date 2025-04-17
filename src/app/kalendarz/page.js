@@ -177,7 +177,7 @@ export default function KalendarzPage() {
     //}, 60000);
     
     // Wyczyść interwał przy odmontowaniu komponentu
-    return () => clearInterval(refreshInterval);
+    //return () => clearInterval(refreshInterval);
   }, [])
 
   const handleDateClick = (date) => {
