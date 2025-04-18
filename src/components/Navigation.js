@@ -36,19 +36,32 @@ export default function Navigation() {
       
       setIsLoggedIn(data.isAuthenticated);
       if (data.isAuthenticated && data.user) {
-        setUserRole(data.user.role || null);
+        const role = data.user.role;
+        // Normalizacja roli dla zachowania wstecznej kompatybilności
+        let normalizedRole = role;
+        if (role === 'magazyn_bialystok') normalizedRole = 'magazyn';
+        if (role === 'magazyn_zielonka') normalizedRole = 'magazyn';
+        
+        setUserRole(normalizedRole || null);
         setUserName(data.user.name || '');
         
         // Poprawiona obsługa wartości isAdmin
-        const adminStatus = isTrueValue(data.user.isAdmin) || data.user.role === 'admin';
+        const adminStatus = 
+          data.user.isAdmin === true || 
+          data.user.isAdmin === 1 || 
+          data.user.isAdmin === 't' || 
+          data.user.isAdmin === 'TRUE' ||
+          data.user.isAdmin === 'true' ||
+          data.user.role === 'admin';
+        
         setIsAdmin(adminStatus);
         
         console.log('Stan po aktualizacji:', {
           isLoggedIn: true,
-          userRole: data.user.role,
+          userRole: normalizedRole,
+          originalRole: role,
           userName: data.user.name,
-          isAdmin: adminStatus,
-          rawIsAdmin: data.user.isAdmin // Dodanie surowej wartości dla debugowania
+          isAdmin: adminStatus
         });
       } else {
         setUserRole(null);
