@@ -44,10 +44,10 @@ export default function AdminPage() {
         // Ustaw domyślne uprawnienia, jeśli nie istnieją
         const defaultPermissions = {
           calendar: {
-            edit: user.role === 'magazyn'
+            edit: user.role === 'magazyn' || user.role === 'magazyn_bialystok' || user.role === 'magazyn_zielonka'
           },
           transport: {
-            markAsCompleted: user.role === 'magazyn'
+            markAsCompleted: user.role === 'magazyn' || user.role === 'magazyn_bialystok' || user.role === 'magazyn_zielonka'
           }
         };
         
@@ -142,6 +142,49 @@ export default function AdminPage() {
     }
   };
 
+  const handleRoleChange = async (userId, newRole) => {
+    try {
+      setSavingUserId(userId);
+      setImportStatus('Zapisywanie zmian...');
+      
+      const response = await fetch('/api/users/role', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          userId,
+          role: newRole
+        })
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Nie udało się zaktualizować roli');
+      }
+
+      // Aktualizuj stan lokalnie
+      setUsers(users.map(user => {
+        if (user.email === userId) {
+          return {
+            ...user,
+            role: newRole
+          };
+        }
+        return user;
+      }));
+
+      setImportStatus('Pomyślnie zaktualizowano rolę');
+      setTimeout(() => setImportStatus(''), 3000);
+    } catch (err) {
+      setError('Nie udało się zaktualizować roli: ' + err.message);
+      console.error('Error updating role:', err);
+    } finally {
+      setSavingUserId(null);
+    }
+  };
+
   return (
     <AdminCheck>
       <div className="max-w-6xl mx-auto p-6">
@@ -188,7 +231,7 @@ export default function AdminPage() {
               <p className="text-gray-600 mb-4">
                 Przeglądaj, eksportuj i zarządzaj archiwum zrealizowanych transportów.
               </p>
-              <a
+              
                 href="/archiwum"
                 className="w-full inline-flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
               >
@@ -211,7 +254,7 @@ export default function AdminPage() {
               <p className="text-gray-600 mb-4">
                 Dodawaj, edytuj i usuwaj budowy dla transportów. Zarządzaj ich nazwami i numerami MPK.
               </p>
-              <a
+              
                 href="/admin/constructions"
                 className="w-full inline-flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
@@ -240,6 +283,9 @@ export default function AdminPage() {
                       Email
                     </th>
                     <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Rola
+                    </th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Edycja Kalendarza
                     </th>
                     <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -258,6 +304,25 @@ export default function AdminPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-gray-500">{user.email}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-center">
+                        <div className="relative inline-block">
+                          <select
+                            value={user.role || ''}
+                            onChange={(e) => handleRoleChange(user.email, e.target.value)}
+                            className="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+                            disabled={savingUserId === user.email}
+                          >
+                            <option value="admin">Administrator</option>
+                            <option value="handlowiec">Handlowiec</option>
+                            <option value="magazyn_zielonka">Magazyn Zielonka</option>
+                            <option value="magazyn_bialystok">Magazyn Białystok</option>
+                            <option value="magazyn">Magazyn (stare)</option>
+                          </select>
+                          {savingUserId === user.email && (
+                            <span className="ml-2 text-xs text-blue-500">Zapisywanie...</span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center">
                         <div className="relative inline-block">
