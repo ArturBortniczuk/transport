@@ -2,6 +2,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import AdminCheck from '@/components/AdminCheck'
+import Link from 'next/link'
 
 export default function AdminPage() {
   const [users, setUsers] = useState([])
@@ -231,12 +232,12 @@ export default function AdminPage() {
               <p className="text-gray-600 mb-4">
                 Przeglądaj, eksportuj i zarządzaj archiwum zrealizowanych transportów.
               </p>
-              <a>
+              <Link
                 href="/archiwum"
                 className="w-full inline-flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
               >
                 Przejdź do archiwum
-              </a>
+              </Link>
             </div>
           </div>
           
@@ -254,12 +255,12 @@ export default function AdminPage() {
               <p className="text-gray-600 mb-4">
                 Dodawaj, edytuj i usuwaj budowy dla transportów. Zarządzaj ich nazwami i numerami MPK.
               </p>
-              <a>
+              <Link
                 href="/admin/constructions"
                 className="w-full inline-flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
                 Przejdź do zarządzania
-              </a>
+              </Link>
             </div>
           </div>
         </div>
