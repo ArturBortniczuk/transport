@@ -244,21 +244,21 @@ export default function AdminPage() {
           <div className="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300">
             <div className="p-6">
               <div className="flex items-center mb-4">
-                <div className="bg-blue-100 p-3 rounded-full">
-                  <svg className="w-6 h-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                <div className="bg-green-100 p-3 rounded-full">
+                  <svg className="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
                   </svg>
                 </div>
-                <h3 className="ml-4 text-lg font-medium">Zarządzanie budowami</h3>
+                <h3 className="ml-4 text-lg font-medium">Archiwum transportów</h3>
               </div>
               <p className="text-gray-600 mb-4">
-                Dodawaj, edytuj i usuwaj budowy dla transportów. Zarządzaj ich nazwami i numerami MPK.
+                Przeglądaj, eksportuj i zarządzaj archiwum zrealizowanych transportów.
               </p>
               
-                href="/admin/constructions"
-                className="w-full inline-flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                href="/archiwum"
+                className="w-full inline-flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
               >
-                Przejdź do zarządzania
+                Przejdź do archiwum
               </a>
             </div>
           </div>
