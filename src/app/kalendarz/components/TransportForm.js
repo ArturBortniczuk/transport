@@ -32,6 +32,35 @@ export default function TransportForm({
   const [selectedSourceTransport, setSelectedSourceTransport] = useState(null)
 
   useEffect(() => {
+    const fetchUserRole = async () => {
+      try {
+        const response = await fetch('/api/user');
+        const data = await response.json();
+        
+        if (data.isAuthenticated && data.user) {
+          // Ustawienie domyślnego magazynu na podstawie roli użytkownika
+          if (data.user.role === 'magazyn_bialystok') {
+            setNowyTransport(prev => ({
+              ...prev,
+              magazyn: 'bialystok'
+            }));
+          } else if (data.user.role === 'magazyn_zielonka') {
+            setNowyTransport(prev => ({
+              ...prev,
+              magazyn: 'zielonka'
+            }));
+          }
+        }
+      } catch (error) {
+        console.error('Błąd pobierania roli użytkownika:', error);
+      }
+    };
+
+    fetchUserRole();
+  }, [setNowyTransport]);
+
+  
+  useEffect(() => {
     async function fetchUsers() {
       try {
         const response = await fetch('/api/users/list')
