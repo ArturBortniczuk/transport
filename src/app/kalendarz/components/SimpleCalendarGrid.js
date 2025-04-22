@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { format, getDate } from 'date-fns'
 import { pl } from 'date-fns/locale'
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd'
-import { Link2, ChevronRight } from 'lucide-react'
+import { Link2, ChevronRight, CheckCircle } from 'lucide-react'
 
 export default function SimpleCalendarGrid({ 
   daysInMonth, 
@@ -33,22 +33,11 @@ export default function SimpleCalendarGrid({
     return 'bg-gray-100 text-gray-800'
   }
 
-  // Funkcja filtrująca transporty na podstawie aktywnych filtrów - poprawiona
+  // Funkcja filtrująca transporty na podstawie aktywnych filtrów
   const filtrujTransporty = (transportyNaDzien) => {
     if (!transportyNaDzien || !Array.isArray(transportyNaDzien)) return [];
     
     return transportyNaDzien.filter(transport => {
-      // Upewnij się, że transporty ze statusem 'completed' są filtrowane
-      if (transport.status === 'completed' || transport.status === 'zakończony') {
-        return false;
-      }
-      
-      // Sprawdź czy transport jest aktywny
-      const isActive = transport.status === 'aktywny' || transport.status === 'active';
-      if (!isActive) {
-        return false;
-      }
-      
       // Filtry magazynu, kierowcy i rynku
       const pasujeMagazyn = !filtryAktywne?.magazyn || transport.zrodlo === filtryAktywne.magazyn;
       const pasujeKierowca = !filtryAktywne?.kierowca || transport.kierowcaId === filtryAktywne.kierowca;
@@ -192,11 +181,15 @@ export default function SimpleCalendarGrid({
                       const isSource = transportyNaDzien.some(t => t.connected_transport_id === transport.id);
                       const isTarget = transport.connected_transport_id !== null;
                       
+                      // Sprawdź czy transport jest zrealizowany
+                      const isCompleted = transport.status === 'completed' || transport.status === 'zakończony';
+                      
                       return (
                         <Draggable 
                           key={transport.id} 
                           draggableId={transport.id.toString()} 
                           index={index}
+                          isDragDisabled={isCompleted} // Wyłączamy możliwość przeciągania dla zrealizowanych
                         >
                           {(provided, snapshot) => (
                             <div
@@ -211,14 +204,18 @@ export default function SimpleCalendarGrid({
                                 text-xs px-2 py-1 rounded flex items-center justify-between
                                 ${getMagazynColor(transport.zrodlo)}
                                 ${isConnected ? 'border-l-4 border-blue-500' : ''}
+                                ${isCompleted ? 'opacity-50' : ''}
                               `}>
                                 <div className="flex items-center">
-                                  {isConnected && (
+                                  {isCompleted && (
+                                    <CheckCircle className="h-3 w-3 mr-1 text-green-600" />
+                                  )}
+                                  {isConnected && !isCompleted && (
                                     <Link2 className="h-3 w-3 mr-1 text-blue-600" />
                                   )}
                                   <span>{transport.miasto}</span>
                                 </div>
-                                {isSource && (
+                                {isSource && !isCompleted && (
                                   <ChevronRight className="h-3 w-3 text-blue-600" />
                                 )}
                               </div>
@@ -233,6 +230,11 @@ export default function SimpleCalendarGrid({
                                     <p className="text-gray-500">{transport.ulica || ''}</p>
                                     <p className="text-gray-500">{transport.kodPocztowy} {transport.miasto}</p>
                                   </div>
+                                  {isCompleted && (
+                                    <div className="mt-1 pt-1 border-t border-gray-100 text-green-600">
+                                      <p className="font-medium">Transport zrealizowany</p>
+                                    </div>
+                                  )}
                                   {isConnected && (
                                     <div className="mt-1 pt-1 border-t border-gray-100 text-blue-600">
                                       <p className="font-medium">Transport połączony</p>
