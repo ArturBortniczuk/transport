@@ -2,7 +2,7 @@ import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import { KIEROWCY } from '../constants';
 import { useState, useEffect } from 'react';
-import { Link2, ArrowRight, ArrowLeft } from 'lucide-react';
+import { Link2, ArrowRight, ArrowLeft, CheckCircle } from 'lucide-react';
 
 export default function TransportsList({
   selectedDate,
@@ -18,13 +18,8 @@ export default function TransportsList({
   const dateKey = format(selectedDate, 'yyyy-MM-dd');
   const transportyNaDzien = transporty[dateKey] || [];
   
-  // Najpierw filtrujemy transporty aktywne
-  const aktywneTransporty = transportyNaDzien.filter(t => 
-    t.status === 'aktywny' || t.status === 'active'
-  );
-  
-  // Następnie filtrujemy według aktywnych filtrów
-  const filtrowaneTransporty = aktywneTransporty.filter(transport => {
+  // Filtrujemy według aktywnych filtrów, ale nie filtrujemy po statusie
+  const filtrowaneTransporty = transportyNaDzien.filter(transport => {
     const pasujeMagazyn = !filtryAktywne.magazyn || transport.zrodlo === filtryAktywne.magazyn;
     const pasujeKierowca = !filtryAktywne.kierowca || transport.kierowcaId === filtryAktywne.kierowca;
     const pasujeRynek = !filtryAktywne.rynek || transport.rynek === filtryAktywne.rynek;
@@ -154,6 +149,9 @@ export default function TransportsList({
             const isSource = transportyNaDzien.some(t => t.connected_transport_id === transport.id);
             const isTarget = transport.connected_transport_id !== null;
             
+            // Sprawdź czy transport jest zrealizowany
+            const isCompleted = transport.status === 'completed' || transport.status === 'zakończony';
+            
             // Znajdź połączony transport, jeśli istnieje
             const connectedTransport = isConnected ? findConnectedTransport(transport) : null;
             
@@ -163,19 +161,28 @@ export default function TransportsList({
                 className={`
                   border rounded-lg p-4 hover:shadow-md transition-all duration-200
                   ${isConnected ? 'border-l-4 border-blue-500' : ''}
+                  ${isCompleted ? 'opacity-50 bg-gray-50' : ''}
                 `}
               >
                 <div className="flex justify-between items-start">
                   <div className="space-y-2">
                     <h3 className="font-medium text-lg flex items-center">
-                      {isConnected && (
+                      {isCompleted ? (
+                        <CheckCircle className="h-4 w-4 mr-2 text-green-600" />
+                      ) : isConnected && (
                         <Link2 className="h-4 w-4 mr-2 text-blue-600" />
                       )}
                       {transport.miasto} ({transport.kodPocztowy})
                       
-                      {isConnected && (
+                      {isConnected && !isCompleted && (
                         <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded-full">
                           {isSource ? 'Źródło trasy' : 'Cel trasy'}
+                        </span>
+                      )}
+                      
+                      {isCompleted && (
+                        <span className="ml-2 px-2 py-0.5 bg-green-100 text-green-800 text-xs rounded-full">
+                          Zrealizowany
                         </span>
                       )}
                     </h3>
@@ -185,7 +192,7 @@ export default function TransportsList({
                     )}
                     
                     {/* Wyświetlanie informacji o połączonej trasie */}
-                    {isConnected && connectedTransport && (
+                    {isConnected && connectedTransport && !isCompleted && (
                       <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
                         <p className="text-sm font-medium text-blue-800 mb-2">
                           Transport połączony z:
@@ -248,36 +255,39 @@ export default function TransportsList({
                     </div>
                   </div>
 
-                  <div className="flex flex-col space-y-2">
-                    {canMarkAsCompleted && (
-                      <button
-                        onClick={() => {
-                          console.log('Kliknięto Zrealizuj dla transportu ID:', transport.id);
-                          onZakonczTransport(dateKey, transport.id);
-                        }}
-                        className="px-4 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
-                      >
-                        Zrealizuj
-                      </button>
-                    )}
-                    
-                    {canEdit && userRole === transport.zrodlo && (
-                      <>
+                  {/* Przyciski akcji tylko dla aktywnych transportów */}
+                  {!isCompleted && (
+                    <div className="flex flex-col space-y-2">
+                      {canMarkAsCompleted && (
                         <button
-                          onClick={() => onEditTransport(transport)}
-                          className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                          onClick={() => {
+                            console.log('Kliknięto Zrealizuj dla transportu ID:', transport.id);
+                            onZakonczTransport(dateKey, transport.id);
+                          }}
+                          className="px-4 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
                         >
-                          Edytuj
+                          Zrealizuj
                         </button>
-                        <button
-                          onClick={() => onPrzeniesDoPrzenoszenia(transport)}
-                          className="px-4 py-2 text-sm bg-yellow-600 text-white rounded hover:bg-yellow-700 transition-colors"
-                        >
-                          Przenieś
-                        </button>
-                      </>
-                    )}
-                  </div>
+                      )}
+                      
+                      {canEdit && userRole === transport.zrodlo && (
+                        <>
+                          <button
+                            onClick={() => onEditTransport(transport)}
+                            className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                          >
+                            Edytuj
+                          </button>
+                          <button
+                            onClick={() => onPrzeniesDoPrzenoszenia(transport)}
+                            className="px-4 py-2 text-sm bg-yellow-600 text-white rounded hover:bg-yellow-700 transition-colors"
+                          >
+                            Przenieś
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             );
