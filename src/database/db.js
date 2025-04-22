@@ -106,6 +106,25 @@ const initializeDatabase = async () => {
       });
     }
 
+    const packagingsExists = await db.schema.hasTable('packagings');
+    if (!packagingsExists) {
+      await db.schema.createTable('packagings', table => {
+        table.increments('id').primary();
+        table.string('description').notNullable();
+        table.string('client_name');
+        table.string('city').notNullable();
+        table.string('postal_code');
+        table.string('street');
+        table.float('latitude');
+        table.float('longitude');
+        table.string('status').defaultTo('pending'); // pending, scheduled, completed
+        table.integer('transport_id').references('id').inTable('transports');
+        table.timestamp('created_at').defaultTo(db.fn.now());
+        table.timestamp('updated_at').defaultTo(db.fn.now());
+      });
+    }
+
+    
     // Tabela budów
     const constructionsExists = await db.schema.hasTable('constructions');
     if (!constructionsExists) {
