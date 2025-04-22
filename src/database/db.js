@@ -110,6 +110,7 @@ const initializeDatabase = async () => {
     if (!packagingsExists) {
       await db.schema.createTable('packagings', table => {
         table.increments('id').primary();
+        table.string('external_id'); // ID z Google MyMaps
         table.string('description').notNullable();
         table.string('client_name');
         table.string('city').notNullable();
