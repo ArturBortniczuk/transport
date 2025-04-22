@@ -9,6 +9,7 @@ import SimpleCalendarGrid from './components/SimpleCalendarGrid'
 import TransportForm from './components/TransportForm'
 import FilterPanel from './components/FilterPanel'
 import TransportsList from './components/TransportsList'
+import PackagingsList from './components/PackagingsList'
 import { MAGAZYNY } from './constants'
 
 export default function KalendarzPage() {
@@ -37,7 +38,8 @@ export default function KalendarzPage() {
     poziomZaladunku: '',
     dokumenty: '',
     trasaCykliczna: false,
-    magazyn: 'bialystok'
+    magazyn: 'bialystok',
+    packagingId: null
   })
   const [filtryAktywne, setFiltryAktywne] = useState({
     magazyn: '',
@@ -107,7 +109,8 @@ export default function KalendarzPage() {
               lat: transport.latitude,
               lng: transport.longitude
             },
-            odleglosc: transport.distance
+            odleglosc: transport.distance,
+            packagingId: transport.packaging_id
           })
           return acc
         }, {})
@@ -247,13 +250,29 @@ export default function KalendarzPage() {
           notes: nowyTransport.informacje,
           is_cyclical: nowyTransport.trasaCykliczna ? 1 : 0,
           delivery_date: format(selectedDate, "yyyy-MM-dd'T'HH:mm:ss"),
-          status: 'active'
+          status: 'active',
+          packaging_id: nowyTransport.packagingId
         })
       });
       
       const data = await response.json();
   
       if (data.success) {
+        // Jeśli transport dotyczy odbioru opakowania, zaktualizuj opakowanie
+        if (nowyTransport.packagingId) {
+          await fetch('/api/packagings', {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              id: nowyTransport.packagingId,
+              transport_id: data.id,
+              status: 'scheduled'
+            })
+          });
+        }
+        
         await fetchTransports()
         setNowyTransport({
           miasto: '',
@@ -268,7 +287,8 @@ export default function KalendarzPage() {
           poziomZaladunku: '',
           dokumenty: '',
           trasaCykliczna: false,
-          magazyn: 'bialystok'
+          magazyn: 'bialystok',
+          packagingId: null
         })
         alert('Transport został dodany!')
       } else {
@@ -292,6 +312,11 @@ export default function KalendarzPage() {
         transportId
       });
       
+      // Znajdź transport aby sprawdzić czy ma powiązane opakowanie
+      const transportNaDzien = transporty[dateKey] || [];
+      const transport = transportNaDzien.find(t => t.id === transportId);
+      const packagingId = transport?.packagingId;
+      
       // Oznacz transport jako zakończony w bazie danych
       const response = await fetch(`/api/transports`, {
         method: 'PUT',
@@ -311,6 +336,20 @@ export default function KalendarzPage() {
       console.log('Odpowiedź z API po oznaczeniu transportu jako zakończony:', data);
   
       if (data.success) {
+        // Jeśli transport miał powiązane opakowanie, oznacz je jako odebrane
+        if (packagingId) {
+          await fetch('/api/packagings', {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              id: packagingId,
+              status: 'completed'
+            })
+          });
+        }
+        
         // Zamiast usuwać transport z lokalnego stanu, aktualizujemy jego status
         setTransporty(prevTransporty => {
           const updatedTransporty = { ...prevTransporty };
@@ -347,6 +386,7 @@ export default function KalendarzPage() {
       trasaCykliczna: false
     })
   }
+  
   const handleUpdateTransport = async (e) => {
     e.preventDefault()
     
@@ -386,7 +426,8 @@ export default function KalendarzPage() {
           latitude: coordinates.lat,
           longitude: coordinates.lng,
           distance: odleglosc,
-          delivery_date: selectedDate ? format(selectedDate, "yyyy-MM-dd'T'HH:mm:ss") : edytowanyTransport.delivery_date
+          delivery_date: selectedDate ? format(selectedDate, "yyyy-MM-dd'T'HH:mm:ss") : edytowanyTransport.delivery_date,
+          packaging_id: nowyTransport.packagingId
         })
       })
   
@@ -411,7 +452,8 @@ export default function KalendarzPage() {
           rynek: '',
           poziomZaladunku: '',
           dokumenty: '',
-          trasaCykliczna: false
+          trasaCykliczna: false,
+          packagingId: null
         })
         alert('Transport został zaktualizowany!')
       } else {
@@ -459,6 +501,60 @@ export default function KalendarzPage() {
       alert('Wystąpił błąd podczas przenoszenia transportu')
     }
   }
+
+  // Funkcja do obsługi upuszczenia opakowania na datę
+  const handlePackagingDrop = async (packaging, dateKey) => {
+    // Pokaż potwierdzenie
+    if (!confirm(`Czy chcesz zaplanować odbiór opakowań od ${packaging.client_name} na dzień ${format(new Date(dateKey), 'd MMMM yyyy', { locale: pl })}?`)) {
+      return;
+    }
+    
+    try {
+      // Otwórz formularz dodawania transportu z wypełnionymi danymi opakowania
+      setSelectedDate(new Date(dateKey));
+      
+      // Przygotuj dane do formularza
+      setNowyTransport({
+        miasto: packaging.city,
+        kodPocztowy: packaging.postal_code,
+        ulica: packaging.street || '',
+        informacje: `Odbiór opakowań: ${packaging.description}`,
+        status: 'aktywny',
+        kierowcaId: '',
+        numerWZ: '',
+        nazwaKlienta: packaging.client_name,
+        osobaZlecajaca: '',
+        emailZlecajacego: '',
+        mpk: '',
+        rynek: '',
+        poziomZaladunku: '',
+        dokumenty: '',
+        trasaCykliczna: false,
+        magazyn: 'bialystok',
+        packagingId: packaging.id // Dodajemy ID opakowania
+      });
+      
+      // Oznacz opakowanie jako zaplanowane w bazie danych
+      const response = await fetch('/api/packagings', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: packaging.id,
+          status: 'scheduled'
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Nie udało się zaktualizować statusu opakowania');
+      }
+      
+    } catch (error) {
+      console.error('Błąd podczas planowania odbioru opakowania:', error);
+      alert('Wystąpił błąd podczas planowania odbioru opakowania');
+    }
+  };
 
   // Nowa funkcja do obsługi przenoszenia transportu przez drag & drop
   const handleTransportMove = (transport, newDateKey) => {
@@ -514,6 +610,44 @@ export default function KalendarzPage() {
       (userId === 'bialystok' || userId === 'zielonka');
   };
 
+  // Funkcja do zapisywania lokalizacji w localStorage
+  const saveLocationToStorage = (transportData) => {
+    if (!transportData.miasto || !transportData.kodPocztowy) {
+      return;
+    }
+    
+    try {
+      // Pobierz aktualną listę zapisanych lokalizacji
+      const savedLocations = localStorage.getItem('savedLocations');
+      let locations = [];
+      
+      if (savedLocations) {
+        locations = JSON.parse(savedLocations);
+      }
+      
+      // Sprawdź czy lokalizacja już istnieje
+      const locationExists = locations.some(loc => 
+        loc.miasto === transportData.miasto && 
+        loc.kodPocztowy === transportData.kodPocztowy && 
+        loc.ulica === transportData.ulica
+      );
+      
+      // Jeśli nie istnieje, dodaj ją
+      if (!locationExists) {
+        locations.push({
+          miasto: transportData.miasto,
+          kodPocztowy: transportData.kodPocztowy,
+          ulica: transportData.ulica || '',
+          nazwaKlienta: transportData.nazwaKlienta || ''
+        });
+        
+        localStorage.setItem('savedLocations', JSON.stringify(locations));
+      }
+    } catch (error) {
+      console.error('Błąd zapisywania lokalizacji:', error);
+    }
+  };
+
   if (isLoading) {
     return <div className="flex justify-center items-center h-64">Ładowanie...</div>
   }
@@ -555,13 +689,16 @@ export default function KalendarzPage() {
         setFiltryAktywne={setFiltryAktywne}
       />
 
+      {/* Dodajemy komponent do wyświetlania opakowań do odbioru */}
+      <PackagingsList onDragEnd={handlePackagingDrop} />
+
       <SimpleCalendarGrid 
         daysInMonth={daysInMonth}
         onDateSelect={handleDateClick}
         currentMonth={currentMonth}
         transporty={transporty}
         onTransportMove={handleTransportMove}
-        filtryAktywne={filtryAktywne} // Dodaj tę linię
+        filtryAktywne={filtryAktywne}
       />
       <TransportsList
         selectedDate={selectedDate}
@@ -570,7 +707,7 @@ export default function KalendarzPage() {
         onZakonczTransport={handleZakonczTransport}
         onEditTransport={handleEditTransport}
         onPrzeniesDoPrzenoszenia={handlePrzeniesDoPrzenoszenia}
-        filtryAktywne={filtryAktywne} // dodaj tę linię, jeśli jej nie ma
+        filtryAktywne={filtryAktywne}
       />
 
       {selectedDate && (
