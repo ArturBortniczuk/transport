@@ -56,11 +56,12 @@ export default function KalendarzPage() {
     newDate: null
   });
 
+  // Znajdź funkcję fetchTransports i zmodyfikuj ją:
   const fetchTransports = async () => {
     try {
       setIsLoading(true);
-      // Dodajemy parametr status=active, żeby jawnie pobrać tylko aktywne transporty
-      const response = await fetch('/api/transports?status=active', {
+      // Usuwamy parametr status=active, aby pobrać wszystkie transporty
+      const response = await fetch('/api/transports', {
         headers: {
           'Cache-Control': 'no-cache, no-store, must-revalidate',
           'Pragma': 'no-cache',
@@ -75,16 +76,12 @@ export default function KalendarzPage() {
       
       const data = await response.json();
       
-      console.log(`Pobrano ${data.transports?.length || 0} aktywnych transportów`);
+      console.log(`Pobrano ${data.transports?.length || 0} transportów`);
     
       if (data.success) {
         // Przekształć listę transportów na format obiektu z datami jako kluczami
         const transportsByDate = data.transports.reduce((acc, transport) => {
-          // Upewnij się, że to jest aktywny transport
-          if (transport.status !== 'active' && transport.status !== 'aktywny') {
-            return acc; // Pomiń nieaktywne transporty
-          }
-          
+          // Pobieramy wszystkie transporty, nie tylko aktywne
           const dateKey = format(new Date(transport.delivery_date), 'yyyy-MM-dd')
           if (!acc[dateKey]) {
             acc[dateKey] = []
