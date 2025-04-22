@@ -1,8 +1,9 @@
+// src/app/admin/packagings/page.js
 'use client'
 import { useState, useEffect } from 'react'
 import AdminCheck from '@/components/AdminCheck'
 
-export default function ManagePackagingsPage() {
+export default function PackagingsAdminPage() {
   const [mapId, setMapId] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [syncResult, setSyncResult] = useState(null)
@@ -223,5 +224,5 @@ export default function ManagePackagingsPage() {
         </div>
       </div>
     </AdminCheck>
-  )
+  );
 }
