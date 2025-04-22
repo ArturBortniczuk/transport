@@ -1,7 +1,7 @@
 // src/app/api/packagings/sync-mymaps/route.js
 import { NextResponse } from 'next/server';
 import db from '@/database/db';
-import { getGoogleCoordinates } from '@/services/geocoding-google';
+import { getGoogleCoordinates } from '../../../services/geocoding-google';
 
 // Funkcja pomocnicza do weryfikacji sesji
 const validateSession = async (authToken) => {
