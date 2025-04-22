@@ -30,6 +30,8 @@ export default function TransportForm({
   const [selectedConstruction, setSelectedConstruction] = useState(null)
   const [connectToExistingTransport, setConnectToExistingTransport] = useState(false)
   const [selectedSourceTransport, setSelectedSourceTransport] = useState(null)
+  const [defaultMagazyn, setDefaultMagazyn] = useState(null)
+
 
   useEffect(() => {
     const fetchUserRole = async () => {
@@ -38,24 +40,28 @@ export default function TransportForm({
         const data = await response.json();
         
         if (data.isAuthenticated && data.user) {
+          let defaultMag = 'bialystok'; // Domyślnie Białystok
+          
           // Ustawienie domyślnego magazynu na podstawie roli użytkownika
           if (data.user.role === 'magazyn_bialystok') {
-            setNowyTransport(prev => ({
-              ...prev,
-              magazyn: 'bialystok'
-            }));
+            defaultMag = 'bialystok';
           } else if (data.user.role === 'magazyn_zielonka') {
-            setNowyTransport(prev => ({
-              ...prev,
-              magazyn: 'zielonka'
-            }));
+            defaultMag = 'zielonka';
           }
+          
+          setDefaultMagazyn(defaultMag);
+          
+          // Ustaw magazyn w formularzu
+          setNowyTransport(prev => ({
+            ...prev,
+            magazyn: defaultMag
+          }));
         }
       } catch (error) {
         console.error('Błąd pobierania roli użytkownika:', error);
       }
     };
-
+  
     fetchUserRole();
   }, [setNowyTransport]);
 
@@ -294,22 +300,20 @@ export default function TransportForm({
           <button
             type="button"
             onClick={() => handleMagazynSelect('bialystok')}
-            className={`flex-1 py-4 rounded-lg text-lg font-medium transition-colors ${
-              nowyTransport.magazyn === 'bialystok' 
-                ? 'bg-red-600 text-white shadow-lg' 
-                : 'bg-red-100 text-red-800 hover:bg-red-200'
-            }`}
+            className={`
+              ${nowyTransport.magazyn === 'bialystok' ? 'bg-red-600 text-white shadow-lg' : 'bg-red-100 text-red-800 hover:bg-red-200'}
+              ${defaultMagazyn === 'bialystok' ? 'flex-grow py-4 rounded-lg text-lg font-medium transition-colors' : 'p-2 rounded-md text-sm'}
+            `}
           >
             MAGAZYN BIAŁYSTOK
           </button>
           <button
             type="button"
             onClick={() => handleMagazynSelect('zielonka')}
-            className={`flex-1 py-4 rounded-lg text-lg font-medium transition-colors ${
-              nowyTransport.magazyn === 'zielonka' 
-                ? 'bg-blue-600 text-white shadow-lg' 
-                : 'bg-blue-100 text-blue-800 hover:bg-blue-200'
-            }`}
+            className={`
+              ${nowyTransport.magazyn === 'zielonka' ? 'bg-blue-600 text-white shadow-lg' : 'bg-blue-100 text-blue-800 hover:bg-blue-200'}
+              ${defaultMagazyn === 'zielonka' ? 'flex-grow py-4 rounded-lg text-lg font-medium transition-colors' : 'p-2 rounded-md text-sm'}
+            `}
           >
             MAGAZYN ZIELONKA
           </button>
