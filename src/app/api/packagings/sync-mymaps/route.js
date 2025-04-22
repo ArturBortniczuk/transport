@@ -20,7 +20,7 @@ const validateSession = async (authToken) => {
 };
 
 // Funkcja pomocnicza do parsowania KML
-const parseKML = (kmlText) => {
+const parseKML = async (kmlText) => {
   try {
     const parser = new DOMParser();
     const xmlDoc = parser.parseFromString(kmlText, "text/xml");
