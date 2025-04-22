@@ -282,8 +282,8 @@ export default function KalendarzPage() {
   const handleZakonczTransport = async (dateKey, transportId) => {
     try {
       // Dodaj potwierdzenie przed oznaczenem jako zrealizowane
-      if (!confirm('Czy na pewno chcesz oznaczyć ten transport jako zrealizowany? Transport zostanie przeniesiony do archiwum.')) {
-        return; // Przerwij jeśli użytkownik anuluje
+      if (!confirm('Czy na pewno chcesz oznaczyć ten transport jako zrealizowany? Transport zostanie zarchiwizowany.')) {
+        return;
       }
       
       console.log('Rozpoczęcie procesu oznaczania transportu jako zakończony:', {
@@ -310,20 +310,17 @@ export default function KalendarzPage() {
       console.log('Odpowiedź z API po oznaczeniu transportu jako zakończony:', data);
   
       if (data.success) {
-        // Natychmiast usuń transport z lokalnego stanu
+        // Zamiast usuwać transport z lokalnego stanu, aktualizujemy jego status
         setTransporty(prevTransporty => {
           const updatedTransporty = { ...prevTransporty };
           
-          // Usuń transport z listy tylko jeśli istnieje
           if (updatedTransporty[dateKey]) {
-            updatedTransporty[dateKey] = updatedTransporty[dateKey].filter(
-              t => t.id !== transportId
-            );
-            
-            // Jeśli nie ma już transportów na tę datę, usuń klucz
-            if (updatedTransporty[dateKey].length === 0) {
-              delete updatedTransporty[dateKey];
-            }
+            updatedTransporty[dateKey] = updatedTransporty[dateKey].map(t => {
+              if (t.id === transportId) {
+                return { ...t, status: 'completed', completed_at: new Date().toISOString() };
+              }
+              return t;
+            });
           }
           
           return updatedTransporty;
@@ -332,7 +329,7 @@ export default function KalendarzPage() {
         // Odśwież dane transportów aby upewnić się, że stan jest aktualny
         setTimeout(() => fetchTransports(), 500);
         
-        alert('Transport został pomyślnie zrealizowany i przeniesiony do archiwum!');
+        alert('Transport został pomyślnie zrealizowany i zarchiwizowany!');
       } else {
         throw new Error(data.error || 'Nie udało się zakończyć transportu');
       }
