@@ -60,8 +60,8 @@ export default function KalendarzPage() {
   const fetchTransports = async () => {
     try {
       setIsLoading(true);
-      // Usuwamy parametr status=active, aby pobrać wszystkie transporty
-      const response = await fetch('/api/transports', {
+      // Kluczowa zmiana - usunięcie parametru status=active lub zmiana na all
+      const response = await fetch('/api/transports?status=all', {
         headers: {
           'Cache-Control': 'no-cache, no-store, must-revalidate',
           'Pragma': 'no-cache',
