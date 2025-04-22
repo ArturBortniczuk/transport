@@ -22,20 +22,29 @@ const validateSession = async (authToken) => {
 // Funkcja pomocnicza do parsowania KML
 const parseKML = async (kmlText) => {
   try {
-    // Używamy biblioteki fast-xml-parser zamiast DOMParser, który jest dostępny tylko w przeglądarce
+    // Konfiguracja parsera XML z większą tolerancją
     const parser = new XMLParser({
       ignoreAttributes: false,
       attributeNamePrefix: "@_",
-      trimValues: true
+      trimValues: true,
+      parseAttributeValue: true,
+      allowBooleanAttributes: true,
+      parseTagValue: true
     });
     
     const parsed = parser.parse(kmlText);
+    console.log('Odparsowany KML - struktura:', JSON.stringify(parsed, null, 2));
+
     const packagings = [];
     
-    // Pobierz placemarks z kml > Document > Placemark (dostosuj ścieżkę w razie potrzeby)
-    const placemarks = parsed?.kml?.Document?.Placemark || [];
-    const placemarksArray = Array.isArray(placemarks) ? placemarks : [placemarks];
+    // Bardziej elastyczne pobieranie placemarks
+    const placemarks = parsed?.kml?.Document?.Placemark || 
+                       parsed?.kml?.Placemark || 
+                       [];
+    const placemarksArray = Array.isArray(placemarks) ? placemarks : [placemarks].filter(Boolean);
     
+    console.log(`Liczba znalezionych placemarks: ${placemarksArray.length}`);
+
     for (let i = 0; i < placemarksArray.length; i++) {
       const placemark = placemarksArray[i];
       
@@ -52,11 +61,14 @@ const parseKML = async (kmlText) => {
       // Obsługuj różne struktury dla współrzędnych
       if (placemark.Point && placemark.Point.coordinates) {
         const coordsText = placemark.Point.coordinates;
+        console.log(`Surowe współrzędne dla ${name}:`, coordsText);
+        
         const coordParts = coordsText.split(',');
         
         if (coordParts.length >= 2) {
           lng = parseFloat(coordParts[0]);
           lat = parseFloat(coordParts[1]);
+          console.log(`Współrzędne dla ${name}:`, { lat, lng });
         }
       }
       
@@ -143,6 +155,7 @@ const parseKML = async (kmlText) => {
       }
     }
     
+    console.log(`Przygotowano ${packagings.length} opakowań do importu`);
     return packagings;
   } catch (error) {
     console.error('Błąd podczas parsowania KML:', error);
@@ -197,10 +210,13 @@ export async function POST(request) {
     const response = await fetch(kmlEndpoint);
     
     if (!response.ok) {
-      throw new Error(`Błąd pobierania KML: ${response.status}`);
+      const errorText = await response.text();
+      console.error(`Błąd pobierania KML: ${response.status}`, errorText);
+      throw new Error(`Błąd pobierania KML: ${response.status} ${errorText}`);
     }
     
     const kmlText = await response.text();
+    console.log('Długość pobranego KML:', kmlText.length);
     
     // Parsuj KML i wyodrębnij dane
     const packagings = await parseKML(kmlText);
