@@ -318,7 +318,6 @@ export default function AdminPage() {
                             <option value="handlowiec">Handlowiec</option>
                             <option value="magazyn_zielonka">Magazyn Zielonka</option>
                             <option value="magazyn_bialystok">Magazyn Białystok</option>
-                            <option value="magazyn">Magazyn (stare)</option>
                           </select>
                           {savingUserId === user.email && (
                             <span className="ml-2 text-xs text-blue-500">Zapisywanie...</span>
