@@ -5,7 +5,7 @@ export default function FilterPanel({ filtryAktywne, setFiltryAktywne }) {
   return (
     <div className="mb-6 bg-white p-4 rounded-lg shadow">
       <h3 className="text-lg font-medium text-gray-900 mb-4">Filtry</h3>
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div>
           <label className="block text-sm font-medium text-gray-700">
             Magazyn
@@ -27,7 +27,7 @@ export default function FilterPanel({ filtryAktywne, setFiltryAktywne }) {
           </label>
           <select
             value={filtryAktywne.kierowca}
-            onChange={(e) => setFiltryAktywne(prev => ({...prev, kierowca: e.target.value}))}
+            onChange={(e) => setFiltryAktywne(prev => ({...prev, kierowca: e.target.value ? parseInt(e.target.value) : ''}))}
             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
           >
             <option value="">Wszyscy kierowcy</option>
@@ -55,6 +55,25 @@ export default function FilterPanel({ filtryAktywne, setFiltryAktywne }) {
               </option>
             ))}
           </select>
+        </div>
+        
+        {/* Dodajemy nowy przełącznik dla transportów zrealizowanych */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Status transportów
+          </label>
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              id="pokazZrealizowane"
+              checked={filtryAktywne.pokazZrealizowane === true}
+              onChange={(e) => setFiltryAktywne(prev => ({...prev, pokazZrealizowane: e.target.checked}))}
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+            />
+            <label htmlFor="pokazZrealizowane" className="ml-2 block text-sm text-gray-700">
+              Pokaż zrealizowane transporty
+            </label>
+          </div>
         </div>
       </div>
     </div>
