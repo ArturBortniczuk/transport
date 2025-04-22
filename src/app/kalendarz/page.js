@@ -42,7 +42,8 @@ export default function KalendarzPage() {
   const [filtryAktywne, setFiltryAktywne] = useState({
     magazyn: '',
     kierowca: '',
-    rynek: ''
+    rynek: ''.
+    pokazZrealizowane: true // Domyślnie pokazuj zrealizowane transporty
   })
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState(null)
