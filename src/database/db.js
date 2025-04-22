@@ -155,16 +155,18 @@ const initializeUsersFromExcel = async () => {
 
     // Przygotuj domyślne uprawnienia
     const getDefaultPermissions = (role, isAdmin) => {
+      const isMagazyn = role === 'magazyn_bialystok' || role === 'magazyn_zielonka' || role === 'magazyn';
+      
       const permissions = {
         calendar: {
           view: true,
-          edit: role === 'magazyn'
+          edit: isMagazyn || isAdmin
         },
         map: {
           view: true
         },
         transport: {
-          markAsCompleted: role === 'magazyn' || isAdmin
+          markAsCompleted: isMagazyn || isAdmin
         }
       };
       return JSON.stringify(permissions);
