@@ -1,4 +1,3 @@
-// src/app/admin/page.js
 'use client'
 import { useState, useEffect } from 'react'
 import AdminCheck from '@/components/AdminCheck'
@@ -218,7 +217,7 @@ export default function AdminPage() {
             </div>
           </div>
           
-          {/* Karta archiwum transportów */}
+          {/* Karta zarządzania opakowaniami */}
           <div className="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300">
             <div className="p-6">
               <div className="flex items-center mb-4">
@@ -227,16 +226,16 @@ export default function AdminPage() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
                   </svg>
                 </div>
-                <h3 className="ml-4 text-lg font-medium">Archiwum transportów</h3>
+                <h3 className="ml-4 text-lg font-medium">Zarządzanie opakowaniami</h3>
               </div>
               <p className="text-gray-600 mb-4">
-                Przeglądaj, eksportuj i zarządzaj archiwum zrealizowanych transportów.
+                Synchronizuj, przeglądaj i zarządzaj opakowaniami do odbioru z Google MyMaps.
               </p>
               <Link
-                href="/archiwum"
+                href="/admin/packagings"
                 className="w-full inline-flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
               >
-                Przejdź do archiwum
+                Przejdź do zarządzania
               </Link>
             </div>
           </div>
