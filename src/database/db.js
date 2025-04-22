@@ -173,8 +173,10 @@ const initializeUsersFromExcel = async () => {
     // Dodaj użytkowników do bazy - batch insert
     const usersToInsert = data.map(row => {
       const isAdmin = row.email === 'a.bortniczuk@grupaeltron.pl';
+      // Zaktualizowana logika ról
       const role = isAdmin ? 'admin' : 
-                row.position.toLowerCase().includes('handlowy') ? 'handlowiec' : 'magazyn';
+                row.position.toLowerCase().includes('handlowy') ? 'handlowiec' : 
+                row.position.toLowerCase().includes('zielonka') ? 'magazyn_zielonka' : 'magazyn_bialystok';
       
       return {
         email: row.email,
