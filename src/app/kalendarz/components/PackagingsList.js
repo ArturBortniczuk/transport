@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react'
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd'
 import { Package } from 'lucide-react'
 import { getGoogleCoordinates } from '../../services/geocoding-google'
+import { format } from 'date-fns';
+import { pl } from 'date-fns/locale';
 
 export default function PackagingsList({ onDragEnd }) {
   const [packagings, setPackagings] = useState([])
@@ -89,7 +91,6 @@ export default function PackagingsList({ onDragEnd }) {
             <div className="text-center py-4">Ładowanie opakowań...</div>
           ) : packagings.length === 0 ? (
             <div className="text-center py-4 text-gray-500">
-              Ostatnia synchronizacja: {format(lastSync, 'dd.MM.yyyy HH:mm')}
               Brak opakowań do odbioru
             </div>
           ) : (
