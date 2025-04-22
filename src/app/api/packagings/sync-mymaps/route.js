@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server';
 import db from '@/database/db';
 import { getGoogleCoordinates } from '../../../services/geocoding-google';
-import { DOMParser } from 'xmldom';
+import { XMLParser } from 'fast-xml-parser';
 
 // Funkcja pomocnicza do weryfikacji sesji
 const validateSession = async (authToken) => {
@@ -22,32 +22,36 @@ const validateSession = async (authToken) => {
 // Funkcja pomocnicza do parsowania KML
 const parseKML = async (kmlText) => {
   try {
-    const parser = new DOMParser();
-    const xmlDoc = parser.parseFromString(kmlText, "text/xml");
+    // Używamy biblioteki fast-xml-parser zamiast DOMParser, który jest dostępny tylko w przeglądarce
+    const parser = new XMLParser({
+      ignoreAttributes: false,
+      attributeNamePrefix: "@_",
+      trimValues: true
+    });
     
+    const parsed = parser.parse(kmlText);
     const packagings = [];
     
-    // Pobierz wszystkie znaczniki placemark
-    const placemarks = xmlDoc.getElementsByTagName("Placemark");
+    // Pobierz placemarks z kml > Document > Placemark (dostosuj ścieżkę w razie potrzeby)
+    const placemarks = parsed?.kml?.Document?.Placemark || [];
+    const placemarksArray = Array.isArray(placemarks) ? placemarks : [placemarks];
     
-    for (let i = 0; i < placemarks.length; i++) {
-      const placemark = placemarks[i];
+    for (let i = 0; i < placemarksArray.length; i++) {
+      const placemark = placemarksArray[i];
       
       // Pobierz nazwę
-      const nameNodes = placemark.getElementsByTagName("name");
-      const name = nameNodes.length > 0 ? nameNodes[0].textContent : 'Bez nazwy';
+      const name = placemark.name || 'Bez nazwy';
       
       // Pobierz opis
-      const descNodes = placemark.getElementsByTagName("description");
-      const description = descNodes.length > 0 ? descNodes[0].textContent : '';
+      const description = placemark.description || '';
       
       // Pobierz współrzędne
-      const coordNodes = placemark.getElementsByTagName("coordinates");
       let lat = null;
       let lng = null;
       
-      if (coordNodes.length > 0) {
-        const coordsText = coordNodes[0].textContent.trim();
+      // Obsługuj różne struktury dla współrzędnych
+      if (placemark.Point && placemark.Point.coordinates) {
+        const coordsText = placemark.Point.coordinates;
         const coordParts = coordsText.split(',');
         
         if (coordParts.length >= 2) {
@@ -126,7 +130,7 @@ const parseKML = async (kmlText) => {
         packagings.push({
           external_id: placemarkId,
           client_name: clientName,
-          description: cleanDescription || description,
+          description: description,
           city: city,
           postal_code: postalCode || '',
           street: street || '',
