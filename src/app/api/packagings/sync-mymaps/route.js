@@ -21,28 +21,32 @@ const validateSession = async (authToken) => {
 // Funkcja do synchronizacji z Google MyMaps
 export async function POST(request) {
   try {
-    // Sprawdzamy uwierzytelnienie
-    const authToken = request.cookies.get('authToken')?.value;
-    const userId = await validateSession(authToken);
-    
-    if (!userId) {
+    // Sprawdzamy uwierzytelnienie - albo przez cookie, albo przez nagłówek dla crona
+    const cronAuth = request.headers.get('X-Cron-Auth');
+    let isAuthenticated = false;
+
+    if (cronAuth && cronAuth === process.env.CRON_SECRET) {
+      isAuthenticated = true;
+    } else {
+      const authToken = request.cookies.get('authToken')?.value;
+      const userId = await validateSession(authToken);
+      
+      if (userId) {
+        // Sprawdź czy użytkownik jest adminem
+        const user = await db('users')
+          .where('email', userId)
+          .select('is_admin')
+          .first();
+          
+        isAuthenticated = user?.is_admin === true;
+      }
+    }
+
+    if (!isAuthenticated) {
       return NextResponse.json({ 
         success: false, 
         error: 'Unauthorized' 
       }, { status: 401 });
-    }
-    
-    // Sprawdź czy użytkownik jest adminem
-    const user = await db('users')
-      .where('email', userId)
-      .select('is_admin')
-      .first();
-      
-    if (!user?.is_admin) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Wymagane uprawnienia administratora' 
-      }, { status: 403 });
     }
     
     const { mapId } = await request.json();
@@ -108,6 +112,12 @@ export async function POST(request) {
           if (postalCodeMatch) {
             postalCode = postalCodeMatch[1];
             city = postalCodeMatch[2].trim();
+          } else {
+            // Jeśli nie ma kodu pocztowego w standardowym formacie, spróbuj wyodrębnić miasto
+            const cityMatch = address.match(/([^,]+)$/);
+            if (cityMatch) {
+              city = cityMatch[1].trim();
+            }
           }
           
           // Próba wyodrębnienia ulicy
@@ -190,11 +200,21 @@ export async function POST(request) {
       }
     }
     
+    // Aktualizuj datę ostatniej synchronizacji
+    await db('app_settings')
+      .insert({
+        key: 'last_mymaps_sync',
+        value: new Date().toISOString()
+      })
+      .onConflict('key')
+      .merge();
+    
     return NextResponse.json({ 
       success: true, 
       message: `Zaimportowano dane z MyMaps: dodano ${importResults.added}, zaktualizowano ${importResults.updated}, błędy: ${importResults.errors}`,
       imported: importResults.added + importResults.updated,
-      results: importResults
+      results: importResults,
+      lastSync: new Date().toISOString()
     });
   } catch (error) {
     console.error('Error importing MyMaps data:', error);
