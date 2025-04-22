@@ -38,9 +38,17 @@ export default function SimpleCalendarGrid({
     if (!transportyNaDzien || !Array.isArray(transportyNaDzien)) return [];
     
     return transportyNaDzien.filter(transport => {
+      // Sprawdź czy transport jest zrealizowany
+      const isCompleted = transport.status === 'completed' || transport.status === 'zakończony';
+      
+      // Jeśli transport jest zrealizowany i nie chcemy pokazywać zrealizowanych, odfiltrowujemy
+      if (isCompleted && !filtryAktywne.pokazZrealizowane) {
+        return false;
+      }
+      
       // Filtry magazynu, kierowcy i rynku
       const pasujeMagazyn = !filtryAktywne?.magazyn || transport.zrodlo === filtryAktywne.magazyn;
-      const pasujeKierowca = !filtryAktywne?.kierowca || transport.kierowcaId === filtryAktywne.kierowca;
+      const pasujeKierowca = !filtryAktywne.kierowca || parseInt(transport.kierowcaId) === filtryAktywne.kierowca;
       const pasujeRynek = !filtryAktywne?.rynek || transport.rynek === filtryAktywne.rynek;
       
       return pasujeMagazyn && pasujeKierowca && pasujeRynek;
