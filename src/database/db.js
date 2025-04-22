@@ -125,6 +125,14 @@ const initializeDatabase = async () => {
       });
     }
 
+    const appSettingsExists = await db.schema.hasTable('app_settings');
+    if (!appSettingsExists) {
+      await db.schema.createTable('app_settings', table => {
+        table.string('key').primary();
+        table.text('value');
+        table.timestamp('updated_at').defaultTo(db.fn.now());
+      });
+    }
     
     // Tabela budów
     const constructionsExists = await db.schema.hasTable('constructions');
