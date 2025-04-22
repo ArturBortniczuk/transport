@@ -9,6 +9,7 @@ export default function PackagingsList({ onDragEnd }) {
   const [packagings, setPackagings] = useState([])
   const [isExpanded, setIsExpanded] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [lastSync, setLastSync] = useState(null)
 
   // Pobierz opakowania
   const fetchPackagings = async () => {
@@ -31,8 +32,21 @@ export default function PackagingsList({ onDragEnd }) {
 
   // Pobierz opakowania przy montowaniu komponentu
   useEffect(() => {
-    fetchPackagings()
-  }, [])
+    const fetchLastSync = async () => {
+      try {
+        const response = await fetch('/api/packagings/last-sync');
+        const data = await response.json();
+        
+        if (data.success && data.lastSync) {
+          setLastSync(new Date(data.lastSync));
+        }
+      } catch (error) {
+        console.error('Błąd pobierania informacji o synchronizacji:', error);
+      }
+    };
+    
+    fetchLastSync();
+  }, []);
 
   // Obsługa przeciągania
   const handleDragEnd = (result) => {
@@ -75,6 +89,7 @@ export default function PackagingsList({ onDragEnd }) {
             <div className="text-center py-4">Ładowanie opakowań...</div>
           ) : packagings.length === 0 ? (
             <div className="text-center py-4 text-gray-500">
+              Ostatnia synchronizacja: {format(lastSync, 'dd.MM.yyyy HH:mm')}
               Brak opakowań do odbioru
             </div>
           ) : (
