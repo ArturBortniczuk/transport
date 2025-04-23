@@ -11,6 +11,7 @@ export default function PackagingsList({ onDragEnd }) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [lastSync, setLastSync] = useState(null)
+  const [hoverPackaging, setHoverPackaging] = useState(null)
 
   // Pobierz opakowania
   const fetchPackagings = async () => {
@@ -31,7 +32,7 @@ export default function PackagingsList({ onDragEnd }) {
     }
   }
 
-  // Pobierz opakowania przy montowaniu komponentu i informację o ostatniej synchronizacji
+  // Pobierz opakowania przy montowaniu komponentu
   useEffect(() => {
     fetchPackagings();
     
@@ -66,23 +67,30 @@ export default function PackagingsList({ onDragEnd }) {
     }
   }
 
+  // Funkcja pomocnicza do formatowania opisu opakowania
+  const formatDescription = (desc) => {
+    if (!desc) return '';
+    // Ogranicz opis do 50 znaków
+    return desc.length > 50 ? desc.substring(0, 50) + '...' : desc;
+  }
+
   return (
     <div className="mb-8 bg-white rounded-lg shadow-md overflow-hidden">
       <div 
-        className="p-4 bg-gradient-to-r from-blue-700 to-blue-800 text-white flex justify-between items-center cursor-pointer"
+        className="p-3 bg-gradient-to-r from-blue-700 to-blue-800 text-white flex justify-between items-center cursor-pointer"
         onClick={() => setIsExpanded(!isExpanded)}
       >
         <div className="flex items-center">
-          <Package className="mr-2" size={20} />
-          <h3 className="text-lg font-semibold">Opakowania do odbioru</h3>
+          <Package className="mr-2" size={18} />
+          <h3 className="font-semibold">Opakowania do odbioru</h3>
         </div>
         <div className="flex items-center">
           {lastSync && (
             <span className="text-xs text-blue-200 mr-2">
-              Ostatnia synchronizacja: {format(lastSync, 'dd.MM.yyyy HH:mm', {locale: pl})}
+              Ostatnia synchronizacja: {format(lastSync, 'dd.MM.yyyy', {locale: pl})}
             </span>
           )}
-          <span className="bg-blue-600 text-white px-2 py-1 rounded-full text-xs">
+          <span className="bg-blue-600 text-white px-2 py-0.5 rounded-full text-xs">
             {packagings.length}
           </span>
           <span className="ml-2">
@@ -94,9 +102,9 @@ export default function PackagingsList({ onDragEnd }) {
       {isExpanded && (
         <div className="p-4">
           {isLoading ? (
-            <div className="text-center py-4">Ładowanie opakowań...</div>
+            <div className="text-center py-2 text-sm">Ładowanie opakowań...</div>
           ) : packagings.length === 0 ? (
-            <div className="text-center py-4 text-gray-500">
+            <div className="text-center py-2 text-sm text-gray-500">
               Brak opakowań do odbioru
             </div>
           ) : (
@@ -106,7 +114,7 @@ export default function PackagingsList({ onDragEnd }) {
                   <div 
                     ref={provided.innerRef}
                     {...provided.droppableProps}
-                    className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4"
+                    className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2"
                   >
                     {packagings.map((packaging, index) => (
                       <Draggable
@@ -120,21 +128,34 @@ export default function PackagingsList({ onDragEnd }) {
                             {...provided.draggableProps}
                             {...provided.dragHandleProps}
                             className={`
-                              p-4 border rounded-lg bg-blue-50 border-blue-200
+                              p-2 border rounded-md bg-blue-50 border-blue-200 relative
                               ${snapshot.isDragging ? 'shadow-lg' : ''}
+                              hover:bg-blue-100 transition-colors
                             `}
+                            onMouseEnter={() => setHoverPackaging(packaging.id)}
+                            onMouseLeave={() => setHoverPackaging(null)}
                           >
-                            <h4 className="font-medium">{packaging.client_name}</h4>
-                            <p className="text-sm text-gray-600">
-                              {packaging.city}, {packaging.postal_code}
-                              {packaging.street && <span>, {packaging.street}</span>}
+                            <h4 className="font-medium text-sm truncate">{packaging.client_name}</h4>
+                            <p className="text-xs text-gray-600 truncate">
+                              {packaging.city}
                             </p>
-                            <div className="mt-2 text-sm text-gray-700 line-clamp-2">
-                              {packaging.description}
-                            </div>
-                            <div className="mt-2 text-xs text-blue-600">
-                              Przeciągnij na datę, aby zaplanować odbiór
-                            </div>
+                            
+                            {/* Tooltip z dodatkowymi informacjami */}
+                            {hoverPackaging === packaging.id && (
+                              <div className="absolute z-10 left-0 top-full mt-1 w-64 bg-white rounded-md shadow-lg p-3 text-xs border border-gray-200">
+                                <p className="font-semibold">{packaging.client_name}</p>
+                                <p className="text-gray-600">
+                                  {packaging.city}, {packaging.postal_code}
+                                  {packaging.street && <span>, {packaging.street}</span>}
+                                </p>
+                                <div className="mt-1 text-gray-700 border-t pt-1">
+                                  {packaging.description}
+                                </div>
+                                <div className="mt-1 text-blue-600">
+                                  Przeciągnij na datę, aby zaplanować odbiór
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
                       </Draggable>
@@ -146,10 +167,10 @@ export default function PackagingsList({ onDragEnd }) {
             </DragDropContext>
           )}
           
-          <div className="mt-4 flex justify-end">
+          <div className="mt-3 flex justify-end">
             <button
               onClick={fetchPackagings}
-              className="px-3 py-1 bg-blue-100 text-blue-700 text-sm rounded hover:bg-blue-200"
+              className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded hover:bg-blue-200"
             >
               Odśwież listę
             </button>
