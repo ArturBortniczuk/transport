@@ -204,6 +204,33 @@ const parseKML = async (kmlText) => {
 // Funkcja do synchronizacji z Google MyMaps
 export async function POST(request) {
   try {
+    // Na początku funkcji POST
+    console.log('----------------------');
+    console.log('Rozpoczęcie nowej synchronizacji');
+    console.log('----------------------');
+    
+    // Sprawdź połączenie z bazą danych
+    try {
+      const testQuery = await db.raw('SELECT 1 as test');
+      console.log('Test połączenia z bazą danych:', testQuery.rows);
+    } catch (dbError) {
+      console.error('BŁĄD POŁĄCZENIA Z BAZĄ DANYCH:', dbError);
+      throw new Error('Nie można połączyć się z bazą danych: ' + dbError.message);
+    }
+    
+    // Sprawdź strukturę tabeli packagings
+    try {
+      const tableColumns = await db.raw(`
+        SELECT column_name, data_type, is_nullable
+        FROM information_schema.columns
+        WHERE table_name = 'packagings'
+      `);
+      console.log('Struktura tabeli packagings:', tableColumns.rows);
+    } catch (tableError) {
+      console.error('Błąd sprawdzania struktury tabeli:', tableError);
+    }
+    
+    try {
     // Sprawdzamy uwierzytelnienie - albo przez cookie, albo przez nagłówek dla crona
     const cronAuth = request.headers.get('X-Cron-Auth');
     let isAuthenticated = false;
@@ -286,6 +313,22 @@ export async function POST(request) {
           .where('external_id', packaging.external_id)
           .first();
         
+        // Upewnij się, że opis nie jest pusty (pole wymagane w bazie)
+        if (!packaging.description || packaging.description.trim() === '') {
+          packaging.description = packaging.client_name || 'Opis niedostępny';
+        }
+        
+        // Dodaj debugowanie
+        console.log('Dane opakowania przed zapisaniem:', {
+          external_id: packaging.external_id,
+          client_name: packaging.client_name,
+          description_length: packaging.description ? packaging.description.length : 0,
+          city: packaging.city,
+          latitude: packaging.latitude,
+          longitude: packaging.longitude,
+          status: packaging.status
+        });
+        
         if (existingPackaging) {
           // Zaktualizuj istniejące opakowanie, ale tylko jeśli status jest 'pending'
           if (existingPackaging.status === 'pending') {
@@ -293,35 +336,56 @@ export async function POST(request) {
               await db('packagings')
                 .where('id', existingPackaging.id)
                 .update({
-                  ...packaging,
+                  client_name: packaging.client_name,
+                  description: packaging.description,
+                  city: packaging.city,
+                  postal_code: packaging.postal_code,
+                  street: packaging.street,
+                  latitude: packaging.latitude,
+                  longitude: packaging.longitude,
                   updated_at: new Date().toISOString()
                 });
               importResults.updated++;
               console.log(`Zaktualizowano opakowanie ID ${existingPackaging.id}: ${packaging.client_name}`);
             } catch (updateError) {
               console.error(`Błąd aktualizacji opakowania ${existingPackaging.id}:`, updateError);
+              console.error('Pełny błąd:', updateError.stack);
               importResults.errors++;
             }
           }
         } else {
-          // Dodaj nowe opakowanie, z osobną obsługą błędów dla operacji INSERT
+          // Dodaj nowe opakowanie, używając innego podejścia do operacji INSERT
           try {
-            // Logujemy dokładnie jakie dane próbujemy wstawić
-            console.log('Próba dodania opakowania:', JSON.stringify(packaging));
+            // Używamy .returning() aby uzyskać ID nowo utworzonego rekordu
+            const newId = await db('packagings').insert({
+              external_id: packaging.external_id,
+              client_name: packaging.client_name,
+              description: packaging.description,
+              city: packaging.city,
+              postal_code: packaging.postal_code || '',
+              street: packaging.street || '',
+              latitude: packaging.latitude,
+              longitude: packaging.longitude,
+              status: 'pending',
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            }).returning('id');
             
-            const insertResult = await db('packagings').insert(packaging);
-            console.log('Wynik dodawania:', insertResult);
-            
-            importResults.added++;
-            console.log(`Dodano nowe opakowanie: ${packaging.client_name}, ID: ${insertResult}`);
+            if (newId && newId.length > 0) {
+              importResults.added++;
+              console.log(`Pomyślnie dodano opakowanie: ${packaging.client_name}, ID: ${newId[0]}`);
+            } else {
+              throw new Error('Nie otrzymano ID po insercie');
+            }
           } catch (insertError) {
-            console.error(`Błąd dodawania nowego opakowania (${packaging.client_name}):`, insertError.message);
-            console.error('Pełne dane powodujące błąd:', JSON.stringify(packaging));
+            console.error(`Błąd dodawania opakowania (${packaging.client_name}):`, insertError.message);
+            console.error('Pełny błąd:', insertError.stack);
             importResults.errors++;
           }
         }
       } catch (error) {
-        console.error('Błąd podczas importu opakowania:', error);
+        console.error('Ogólny błąd podczas importu opakowania:', error);
+        console.error('Pełny błąd:', error.stack);
         importResults.errors++;
       }
     }
