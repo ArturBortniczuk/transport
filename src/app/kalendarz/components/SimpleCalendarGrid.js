@@ -180,7 +180,7 @@ export default function SimpleCalendarGrid({
                   <div
                     ref={provided.innerRef}
                     {...provided.droppableProps}
-                    className="mt-2 space-y-1 min-h-[80px]"
+                    className="bg-yellow-200 border-2 border-red-500 min-h-[80px] mt-2"
                   >
                     {/* Wyświetlanie transportów z obsługą przeciągania */}
                     {filtrowaneTransporty.map((transport, index) => {
