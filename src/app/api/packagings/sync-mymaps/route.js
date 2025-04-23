@@ -278,7 +278,7 @@ export async function POST(request) {
       errors: 0
     };
     
-    // W pętli for dla każdego opakowania w funkcji POST, zmodyfikuj kod:
+    // W funkcji POST, zmodyfikuj pętlę dla każdego opakowania:
     for (const packaging of packagings) {
       try {
         // Sprawdź czy opakowanie o takim external_id już istnieje
@@ -289,24 +289,35 @@ export async function POST(request) {
         if (existingPackaging) {
           // Zaktualizuj istniejące opakowanie, ale tylko jeśli status jest 'pending'
           if (existingPackaging.status === 'pending') {
-            await db('packagings')
-              .where('id', existingPackaging.id)
-              .update({
-                ...packaging,
-                updated_at: new Date().toISOString()
-              });
-            importResults.updated++;
-            console.log(`Zaktualizowano opakowanie ID ${existingPackaging.id}: ${packaging.client_name}`);
+            try {
+              await db('packagings')
+                .where('id', existingPackaging.id)
+                .update({
+                  ...packaging,
+                  updated_at: new Date().toISOString()
+                });
+              importResults.updated++;
+              console.log(`Zaktualizowano opakowanie ID ${existingPackaging.id}: ${packaging.client_name}`);
+            } catch (updateError) {
+              console.error(`Błąd aktualizacji opakowania ${existingPackaging.id}:`, updateError);
+              importResults.errors++;
+            }
           }
         } else {
-          // Dodaj nowe opakowanie
-          const insertResult = await db('packagings').insert(packaging);
-          if (insertResult) {
+          // Dodaj nowe opakowanie, z osobną obsługą błędów dla operacji INSERT
+          try {
+            // Logujemy dokładnie jakie dane próbujemy wstawić
+            console.log('Próba dodania opakowania:', JSON.stringify(packaging));
+            
+            const insertResult = await db('packagings').insert(packaging);
+            console.log('Wynik dodawania:', insertResult);
+            
             importResults.added++;
-            console.log(`Dodano nowe opakowanie: ${packaging.client_name}`);
-          } else {
+            console.log(`Dodano nowe opakowanie: ${packaging.client_name}, ID: ${insertResult}`);
+          } catch (insertError) {
+            console.error(`Błąd dodawania nowego opakowania (${packaging.client_name}):`, insertError.message);
+            console.error('Pełne dane powodujące błąd:', JSON.stringify(packaging));
             importResults.errors++;
-            console.error(`Błąd dodawania opakowania: ${packaging.client_name}`);
           }
         }
       } catch (error) {
