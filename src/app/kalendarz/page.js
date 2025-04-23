@@ -550,6 +550,31 @@ export default function KalendarzPage() {
         throw new Error('Nie udało się zaktualizować statusu opakowania');
       }
       
+      // Wysyłanie SMS-a
+      const magazyn = nowyTransport.magazyn === 'bialystok' ? 'Magazyn Białystok' : 'Magazyn Zielonka';
+      const bebnyInfo = packaging.description ? 
+        packaging.description.includes('bęben') ? packaging.description : `bębny: ${packaging.description}` : 
+        'bębny';
+      const smsMessage = `Cześć Edzia, ${magazyn} odbierze ${bebnyInfo} z miejscowości ${packaging.city} w dniu ${format(new Date(dateKey), 'dd.MM.yyyy', { locale: pl })}.`;
+      
+      const smsResponse = await fetch('/api/sms', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          phoneNumber: "48885851594", // Podaj numer docelowy
+          message: smsMessage
+        })
+      });
+      
+      const smsData = await smsResponse.json();
+      if (smsData.success) {
+        console.log('SMS został wysłany pomyślnie');
+      } else {
+        console.error('Błąd wysyłania SMS:', smsData.error);
+      }
+      
     } catch (error) {
       console.error('Błąd podczas planowania odbioru opakowania:', error);
       alert('Wystąpił błąd podczas planowania odbioru opakowania');
