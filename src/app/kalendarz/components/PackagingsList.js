@@ -128,15 +128,15 @@ export default function PackagingsList({ onDragEnd }) {
                             {...provided.draggableProps}
                             {...provided.dragHandleProps}
                             className={`
-                              p-2 border rounded-md bg-blue-50 border-blue-200 relative
+                              p-2 border rounded-md bg-gray-900 border-gray-700 relative text-white
                               ${snapshot.isDragging ? 'shadow-lg' : ''}
-                              hover:bg-blue-100 transition-colors
+                              hover:bg-gray-800 transition-colors
                             `}
                             onMouseEnter={() => setHoverPackaging(packaging.id)}
                             onMouseLeave={() => setHoverPackaging(null)}
                           >
                             <h4 className="font-medium text-sm truncate">{packaging.client_name}</h4>
-                            <p className="text-xs text-gray-600 truncate">
+                            <p className="text-xs text-gray-300 truncate">
                               {packaging.city}
                             </p>
                             
