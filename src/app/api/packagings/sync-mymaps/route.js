@@ -216,38 +216,82 @@ export async function POST(request) {
       }
     }
     
-    // Sprawdzamy uwierzytelnienie
+    // Zmodyfikuj część kodu obsługującą uwierzytelnianie
     const cronAuth = request.headers.get('X-Cron-Auth');
     let isAuthenticated = false;
-
-    if (cronAuth && cronAuth === process.env.CRON_SECRET) {
-      isAuthenticated = true;
-    } else {
-      const authToken = request.cookies.get('authToken')?.value;
-      const userId = await validateSession(authToken);
-      
-      if (userId) {
-        // Sprawdź czy użytkownik jest adminem
-        const user = await db('users')
-          .where('email', userId)
-          .select('is_admin')
-          .first();
+    
+    try {
+      if (cronAuth && cronAuth === process.env.CRON_SECRET) {
+        isAuthenticated = true;
+        console.log('Uwierzytelnienie przez nagłówek X-Cron-Auth');
+      } else {
+        const authToken = request.cookies.get('authToken')?.value;
+        
+        if (!authToken) {
+          console.log('Brak tokenu uwierzytelniającego');
+          return NextResponse.json({ 
+            success: false, 
+            error: 'Brak tokenu uwierzytelniającego' 
+          }, { status: 401 });
+        }
+        
+        try {
+          const session = await db('sessions')
+            .where('token', authToken)
+            .whereRaw('expires_at > NOW()')
+            .select('user_id')
+            .first();
           
-        isAuthenticated = user?.is_admin === true;
+          if (!session) {
+            console.log('Sesja wygasła lub jest nieprawidłowa');
+            return NextResponse.json({ 
+              success: false, 
+              error: 'Sesja wygasła lub jest nieprawidłowa' 
+            }, { status: 401 });
+          }
+          
+          const userId = session.user_id;
+          
+          // Sprawdź czy użytkownik jest adminem
+          const user = await db('users')
+            .where('email', userId)
+            .select('is_admin')
+            .first();
+          
+          if (!user) {
+            console.log('Nie znaleziono użytkownika');
+            return NextResponse.json({ 
+              success: false, 
+              error: 'Nie znaleziono użytkownika' 
+            }, { status: 401 });
+          }
+          
+          isAuthenticated = user.is_admin === true;
+          console.log(`Uwierzytelnienie dla użytkownika ${userId}: ${isAuthenticated ? 'sukces' : 'brak uprawnień'}`);
+        } catch (sessionError) {
+          console.error('Błąd podczas weryfikacji sesji:', sessionError);
+          return NextResponse.json({ 
+            success: false, 
+            error: 'Błąd podczas weryfikacji sesji' 
+          }, { status: 500 });
+        }
       }
-    }
-
-    if (!isAuthenticated) {
+    
+      if (!isAuthenticated) {
+        console.log('Brak uprawnień administratora');
+        return NextResponse.json({ 
+          success: false, 
+          error: 'Brak uprawnień administratora' 
+        }, { status: 403 });
+      }
+    
+    const { mapId: rawMapId } = requestData;
+    if (!rawMapId) {
       return NextResponse.json({ 
         success: false, 
-        error: 'Unauthorized' 
-      }, { status: 401 });
+        error: 'Brak ID mapy MyMaps' 
+      }, { status: 400 });
     }
-    
-    const { mapId: rawMapId } = await request.json();
-    // Wyodrębnij ID mapy bez dodatkowych parametrów
-    const mapId = rawMapId.split('&')[0];
-    console.log('ID mapy do synchronizacji:', mapId);
     
     if (!mapId) {
       return NextResponse.json({ 
