@@ -21,6 +21,7 @@ async function hasColumn(tableName, columnName) {
 }
 
 // Funkcja pomocnicza do parsowania KML
+// W pliku src/app/api/packagings/sync-mymaps/route.js
 const parseKML = async (kmlText) => {
   try {
     console.log('Rozpoczynam parsowanie pliku KML...');
@@ -38,7 +39,7 @@ const parseKML = async (kmlText) => {
     const packagings = [];
     let allPlacemarks = [];
     
-    // Sprawdź, czy placemarks są bezpośrednio w Document
+    // Zbieramy wszystkie placemarks (pineski)
     if (parsed?.kml?.Document?.Placemark) {
       console.log('Znaleziono placemarks bezpośrednio w Document');
       const docPlacemarks = Array.isArray(parsed.kml.Document.Placemark) ? 
@@ -46,7 +47,7 @@ const parseKML = async (kmlText) => {
       allPlacemarks = [...allPlacemarks, ...docPlacemarks];
     }
     
-    // Sprawdź, czy placemarks są w folderach
+    // Zbieramy placemarks z folderów (szczególnie z folderu "Bębny")
     if (parsed?.kml?.Document?.Folder) {
       const folders = Array.isArray(parsed.kml.Document.Folder) ? 
         parsed.kml.Document.Folder : [parsed.kml.Document.Folder];
@@ -54,7 +55,13 @@ const parseKML = async (kmlText) => {
       console.log(`Znaleziono ${folders.length} folderów w dokumencie KML`);
       
       for (const folder of folders) {
-        if (folder.Placemark) {
+        // Interesują nas głównie pineski z folderu "Bębny"
+        if (folder.name === "Bębny" && folder.Placemark) {
+          const folderPlacemarks = Array.isArray(folder.Placemark) ? 
+            folder.Placemark : [folder.Placemark];
+          console.log(`Znaleziono ${folderPlacemarks.length} placemarks w folderze "Bębny"`);
+          allPlacemarks = [...allPlacemarks, ...folderPlacemarks];
+        } else if (folder.Placemark) {
           const folderPlacemarks = Array.isArray(folder.Placemark) ? 
             folder.Placemark : [folder.Placemark];
           console.log(`Znaleziono ${folderPlacemarks.length} placemarks w folderze "${folder.name || 'bez nazwy'}"`);
@@ -65,14 +72,14 @@ const parseKML = async (kmlText) => {
     
     console.log(`Łącznie znaleziono ${allPlacemarks.length} placemarks`);
     
-    // Przejdź przez wszystkie znalezione placemarks
+    // Przetwarzanie każdej pineski
     for (let i = 0; i < allPlacemarks.length; i++) {
       const placemark = allPlacemarks[i];
       
-      // Pobierz nazwę
+      // Pobierz nazwę - może zawierać nazwę firmy i/lub kod pocztowy
       const name = placemark.name || 'Bez nazwy';
       
-      // Pobierz opis
+      // Pobierz opis - zwykle zawiera szczegóły adresu, kontaktu i opakowań
       const description = placemark.description || '';
       
       // Pobierz współrzędne
@@ -92,78 +99,127 @@ const parseKML = async (kmlText) => {
       // Generuj unikalny ID dla Placemark
       const placemarkId = `placemark_${i}_${Date.now()}`;
       
-      // Parsuj dane klienta i adres z opisu
-      let clientName = name;
-      let city = 'Nieznane';
+      // Podstawowe dane
+      let clientName = '';
+      let city = '';
       let postalCode = '';
       let street = '';
+      let notes = '';
+      let contact = '';
+      let packaging = '';
       
-      // Wyodrębnij informacje z opisu HTML
-      if (description) {
-        // Usuń tagi CDATA i HTML z opisu
-        const cleanDescription = description
-          .replace(/<!\[CDATA\[|\]\]>/g, '')
-          .replace(/<[^>]*>/g, ' ')
-          .replace(/\s+/g, ' ')
-          .trim();
-        
-        // Próbujemy wyodrębnić kod pocztowy
-        const postalCodeMatch = cleanDescription.match(/\b\d{2}-\d{3}\b/);
-        if (postalCodeMatch) {
-          postalCode = postalCodeMatch[0];
+      // Ekstrakcja nazwy klienta - pierwsza część nazwy przed słowem kluczowym lub kodem pocztowym
+      clientName = name.split('/')[0].trim();
+      
+      // Oczyszczamy opis z tagów HTML
+      const cleanDescription = description
+        .replace(/<!\[CDATA\[|\]\]>/g, '')
+        .replace(/<br>/g, '\n')  // Zamień <br> na nowe linie
+        .replace(/<[^>]*>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      
+      // Podział opisu na linie
+      const lines = cleanDescription.split('\n').map(line => line.trim());
+      
+      // Próba ekstrakcji kodu pocztowego - zwykle w jednej z linii adresu
+      const postalCodePattern = /\b\d{2}-\d{3}\b/;
+      for (const line of lines) {
+        const match = line.match(postalCodePattern);
+        if (match) {
+          postalCode = match[0];
           
-          // Spróbuj znaleźć miasto przed lub po kodzie pocztowym
-          const beforePostalCode = cleanDescription.split(postalCode)[0].trim();
-          const afterPostalCode = cleanDescription.split(postalCode)[1].trim();
-          
-          // Znajdź miasto
-          const beforeWords = beforePostalCode.split(/\s+/);
-          const afterWords = afterPostalCode.split(/\s+/);
-          
-          if (afterWords.length > 0) {
-            city = afterWords[0].replace(/,/g, '');
-          } else if (beforeWords.length > 0) {
-            city = beforeWords[beforeWords.length - 1].replace(/,/g, '');
+          // Jeśli znaleźliśmy kod pocztowy, spróbujmy znaleźć miasto
+          // Typowo format to: "kod pocztowy miasto" lub "miasto kod pocztowy"
+          const lineParts = line.split(postalCode);
+          if (lineParts.length >= 2) {
+            // Sprawdźmy, czy miasto jest przed czy po kodzie
+            if (lineParts[0].trim() === '') {
+              // Miasto jest po kodzie
+              city = lineParts[1].trim().split(',')[0].trim();
+            } else {
+              // Miasto jest przed kodem
+              city = lineParts[0].trim().split(',')[0].trim();
+            }
           }
-        } else {
-          // Alternatywne podejście - szukanie typowych nazw miast
-          const cityMatch = cleanDescription.match(/(?:ul\.|ulica)\s+[^,]+,\s*([^,\d]+)/i);
-          if (cityMatch) {
-            city = cityMatch[1].trim();
-          }
-        }
-        
-        // Próbujemy wyodrębnić ulicę
-        const streetMatch = cleanDescription.match(/(?:ul\.|ulica)\s+([^,]+)/i);
-        if (streetMatch) {
-          street = streetMatch[1].trim();
-        }
-        
-        // Jeśli nazwa klienta nie została wyodrębniona, użyj pierwszej linii opisu
-        if (clientName === 'Bez nazwy' || clientName === name) {
-          const firstLine = cleanDescription.split(',')[0].trim();
-          if (firstLine) clientName = firstLine;
+          break;
         }
       }
       
-      // Jeśli nie mamy współrzędnych, próbujemy geokodować
-      if ((!lat || !lng) && city !== 'Nieznane') {
-        try {
-          const coords = await getGoogleCoordinates(city, postalCode, street);
-          lat = coords.lat;
-          lng = coords.lng;
-        } catch (error) {
-          console.error(`Błąd geokodowania dla ${city}, ${postalCode}, ${street}:`, error);
+      // Jeśli nie znaleźliśmy kodu pocztowego w linii, szukajmy go w całym opisie
+      if (!postalCode) {
+        const match = cleanDescription.match(postalCodePattern);
+        if (match) {
+          postalCode = match[0];
         }
       }
       
-      // Dodaj tylko jeśli mamy współrzędne i miasto
-      if (lat && lng) {
+      // Ekstrakcja ulicy - zwykle w linii po kodzie pocztowym lub w linii z kodem
+      let streetFound = false;
+      for (let i = 0; i < lines.length; i++) {
+        if (lines[i].includes(postalCode) && i < lines.length - 1) {
+          // Sprawdź czy następna linia to ulica
+          street = lines[i + 1].trim();
+          streetFound = true;
+          break;
+        } else if (lines[i].includes('ul.') || lines[i].includes('ulica')) {
+          street = lines[i].trim();
+          streetFound = true;
+          break;
+        }
+      }
+      
+      // Jeśli nadal nie mamy ulicy, a mamy linię z miastem, sprawdźmy tę linię
+      if (!streetFound && city) {
+        for (const line of lines) {
+          if (line.includes(city) && line.includes('ul.')) {
+            const parts = line.split('ul.');
+            if (parts.length > 1) {
+              street = 'ul. ' + parts[1].trim();
+              break;
+            }
+          }
+        }
+      }
+      
+      // Rozpoznanie kontaktu - szukamy numeru telefonu
+      const phonePattern = /(?:\+48\s*)?(?:[\d-]{9,12})/g;
+      const phoneMatches = cleanDescription.match(phonePattern);
+      if (phoneMatches) {
+        // Znajdź linię zawierającą ten numer
+        for (const line of lines) {
+          if (phoneMatches.some(phone => line.includes(phone))) {
+            contact = line.trim();
+            break;
+          }
+        }
+      }
+      
+      // Rozpoznanie danych o opakowaniach - szukamy numerów bębnów
+      const packagingPattern = /[\d]+[A-Z]-[\d]+/g;
+      const packagingMatches = cleanDescription.match(packagingPattern);
+      if (packagingMatches) {
+        packaging = 'Opakowania: ' + packagingMatches.join(', ');
+      }
+      
+      // Próba wykrycia linii z "Opakowania:" lub podobnymi
+      for (const line of lines) {
+        if (line.toLowerCase().includes('opakowania:') || line.toLowerCase().includes('opakowania ')) {
+          packaging = line.trim();
+          break;
+        }
+      }
+      
+      // Kompilacja notatek - wszystko, co nie zostało przypisane do innych kategorii
+      notes = cleanDescription;
+      
+      // Dodaj tylko jeśli mamy współrzędne i przynajmniej nazwę klienta
+      if (lat && lng && clientName) {
         packagings.push({
           external_id: placemarkId,
           client_name: clientName,
-          description: description || 'Brak opisu',
-          city: city,
+          description: `Uwagi: ${notes}\nKontakt: ${contact}\nOpakowania: ${packaging}`,
+          city: city || 'Nieznane',
           postal_code: postalCode || '',
           street: street || '',
           latitude: lat,
