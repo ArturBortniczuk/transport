@@ -21,7 +21,6 @@ async function hasColumn(tableName, columnName) {
 }
 
 // Funkcja pomocnicza do parsowania KML
-// W pliku src/app/api/packagings/sync-mymaps/route.js
 const parseKML = async (kmlText) => {
   try {
     console.log('Rozpoczynam parsowanie pliku KML...');
@@ -52,16 +51,8 @@ const parseKML = async (kmlText) => {
       const folders = Array.isArray(parsed.kml.Document.Folder) ? 
         parsed.kml.Document.Folder : [parsed.kml.Document.Folder];
       
-      console.log(`Znaleziono ${folders.length} folderów w dokumencie KML`);
-      
       for (const folder of folders) {
-        // Interesują nas głównie pineski z folderu "Bębny"
-        if (folder.name === "Bębny" && folder.Placemark) {
-          const folderPlacemarks = Array.isArray(folder.Placemark) ? 
-            folder.Placemark : [folder.Placemark];
-          console.log(`Znaleziono ${folderPlacemarks.length} placemarks w folderze "Bębny"`);
-          allPlacemarks = [...allPlacemarks, ...folderPlacemarks];
-        } else if (folder.Placemark) {
+        if (folder.Placemark) {
           const folderPlacemarks = Array.isArray(folder.Placemark) ? 
             folder.Placemark : [folder.Placemark];
           console.log(`Znaleziono ${folderPlacemarks.length} placemarks w folderze "${folder.name || 'bez nazwy'}"`);
@@ -74,160 +65,105 @@ const parseKML = async (kmlText) => {
     
     // Przetwarzanie każdej pineski
     for (let i = 0; i < allPlacemarks.length; i++) {
-      const placemark = allPlacemarks[i];
-      
-      // Pobierz nazwę - może zawierać nazwę firmy i/lub kod pocztowy
-      const name = placemark.name || 'Bez nazwy';
-      
-      // Pobierz opis - zwykle zawiera szczegóły adresu, kontaktu i opakowań
-      const description = placemark.description || '';
-      
-      // Pobierz współrzędne
-      let lat = null;
-      let lng = null;
-      
-      if (placemark.Point && placemark.Point.coordinates) {
-        const coordsText = placemark.Point.coordinates;
-        const coordParts = coordsText.trim().split(',');
+      try {
+        const placemark = allPlacemarks[i];
         
-        if (coordParts.length >= 2) {
-          lng = parseFloat(coordParts[0]);
-          lat = parseFloat(coordParts[1]);
+        // Pobierz nazwę - zawiera nazwę firmy
+        const name = placemark.name || 'Bez nazwy';
+        
+        // Pobierz opis
+        let description = '';
+        if (placemark.description) {
+          // Usuń tagi CDATA i zamień <br> na nowe linie
+          description = placemark.description
+            .replace(/<!\[CDATA\[|\]\]>/g, '')
+            .replace(/<br>/gi, '\n')
+            .replace(/<[^>]*>/g, '')
+            .trim();
         }
-      }
-      
-      // Generuj unikalny ID dla Placemark
-      const placemarkId = `placemark_${i}_${Date.now()}`;
-      
-      // Podstawowe dane
-      let clientName = '';
-      let city = '';
-      let postalCode = '';
-      let street = '';
-      let notes = '';
-      let contact = '';
-      let packaging = '';
-      
-      // Ekstrakcja nazwy klienta - pierwsza część nazwy przed słowem kluczowym lub kodem pocztowym
-      clientName = name.split('/')[0].trim();
-      
-      // Oczyszczamy opis z tagów HTML
-      const cleanDescription = description
-        .replace(/<!\[CDATA\[|\]\]>/g, '')
-        .replace(/<br>/g, '\n')  // Zamień <br> na nowe linie
-        .replace(/<[^>]*>/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-      
-      // Podział opisu na linie
-      const lines = cleanDescription.split('\n').map(line => line.trim());
-      
-      // Próba ekstrakcji kodu pocztowego - zwykle w jednej z linii adresu
-      const postalCodePattern = /\b\d{2}-\d{3}\b/;
-      for (const line of lines) {
-        const match = line.match(postalCodePattern);
-        if (match) {
-          postalCode = match[0];
+        
+        // Pobierz współrzędne
+        let lat = null;
+        let lng = null;
+        
+        if (placemark.Point && placemark.Point.coordinates) {
+          const coordsText = placemark.Point.coordinates;
+          const coordParts = coordsText.trim().split(',');
           
-          // Jeśli znaleźliśmy kod pocztowy, spróbujmy znaleźć miasto
-          // Typowo format to: "kod pocztowy miasto" lub "miasto kod pocztowy"
-          const lineParts = line.split(postalCode);
-          if (lineParts.length >= 2) {
-            // Sprawdźmy, czy miasto jest przed czy po kodzie
-            if (lineParts[0].trim() === '') {
-              // Miasto jest po kodzie
-              city = lineParts[1].trim().split(',')[0].trim();
-            } else {
-              // Miasto jest przed kodem
-              city = lineParts[0].trim().split(',')[0].trim();
-            }
+          if (coordParts.length >= 2) {
+            lng = parseFloat(coordParts[0]);
+            lat = parseFloat(coordParts[1]);
           }
-          break;
         }
-      }
-      
-      // Jeśli nie znaleźliśmy kodu pocztowego w linii, szukajmy go w całym opisie
-      if (!postalCode) {
-        const match = cleanDescription.match(postalCodePattern);
-        if (match) {
-          postalCode = match[0];
+        
+        // Pomiń placemarki bez współrzędnych
+        if (!lat || !lng) {
+          console.log(`Pominięto placemark bez współrzędnych: ${name}`);
+          continue;
         }
-      }
-      
-      // Ekstrakcja ulicy - zwykle w linii po kodzie pocztowym lub w linii z kodem
-      let streetFound = false;
-      for (let i = 0; i < lines.length; i++) {
-        if (lines[i].includes(postalCode) && i < lines.length - 1) {
-          // Sprawdź czy następna linia to ulica
-          street = lines[i + 1].trim();
-          streetFound = true;
-          break;
-        } else if (lines[i].includes('ul.') || lines[i].includes('ulica')) {
-          street = lines[i].trim();
-          streetFound = true;
-          break;
+        
+        // Generuj unikalny ID dla Placemark
+        const placemarkId = `placemark_${i}_${Date.now()}`;
+        
+        // Domyślne wartości
+        let clientName = name;
+        let city = 'Nieznane';
+        let postalCode = '';
+        let street = '';
+        
+        // Spróbuj znaleźć kod pocztowy w opisie
+        const postalCodePattern = /\b\d{2}-\d{3}\b/;
+        const postalCodeMatch = description.match(postalCodePattern);
+        if (postalCodeMatch) {
+          postalCode = postalCodeMatch[0];
         }
-      }
-      
-      // Jeśli nadal nie mamy ulicy, a mamy linię z miastem, sprawdźmy tę linię
-      if (!streetFound && city) {
-        for (const line of lines) {
-          if (line.includes(city) && line.includes('ul.')) {
-            const parts = line.split('ul.');
-            if (parts.length > 1) {
-              street = 'ul. ' + parts[1].trim();
-              break;
+        
+        // Spróbuj znaleźć adres w opisie
+        const lines = description.split('\n');
+        for (let j = 0; j < lines.length; j++) {
+          const line = lines[j].trim();
+          
+          // Szukaj ulicy (linie zawierające "ul." lub "ulica" itp.)
+          if (line.includes('ul.') || line.includes('ulica') || line.includes('Ulica')) {
+            street = line;
+          }
+          
+          // Szukaj miasta i kodu pocztowego
+          if (postalCode && line.includes(postalCode)) {
+            const parts = line.split(postalCode);
+            if (parts.length > 1 && parts[1].trim()) {
+              city = parts[1].trim();
+            } else if (parts.length > 0 && parts[0].trim()) {
+              city = parts[0].trim();
             }
           }
         }
-      }
-      
-      // Rozpoznanie kontaktu - szukamy numeru telefonu
-      const phonePattern = /(?:\+48\s*)?(?:[\d-]{9,12})/g;
-      const phoneMatches = cleanDescription.match(phonePattern);
-      if (phoneMatches) {
-        // Znajdź linię zawierającą ten numer
-        for (const line of lines) {
-          if (phoneMatches.some(phone => line.includes(phone))) {
-            contact = line.trim();
-            break;
+        
+        // Jeśli nie znaleziono miasta, szukaj w nazwie pineski
+        if (city === 'Nieznane' && name.includes('/')) {
+          const nameParts = name.split('/');
+          if (nameParts.length > 1) {
+            city = nameParts[1].trim();
           }
         }
-      }
-      
-      // Rozpoznanie danych o opakowaniach - szukamy numerów bębnów
-      const packagingPattern = /[\d]+[A-Z]-[\d]+/g;
-      const packagingMatches = cleanDescription.match(packagingPattern);
-      if (packagingMatches) {
-        packaging = 'Opakowania: ' + packagingMatches.join(', ');
-      }
-      
-      // Próba wykrycia linii z "Opakowania:" lub podobnymi
-      for (const line of lines) {
-        if (line.toLowerCase().includes('opakowania:') || line.toLowerCase().includes('opakowania ')) {
-          packaging = line.trim();
-          break;
-        }
-      }
-      
-      // Kompilacja notatek - wszystko, co nie zostało przypisane do innych kategorii
-      notes = cleanDescription;
-      
-      // Dodaj tylko jeśli mamy współrzędne i przynajmniej nazwę klienta
-      if (lat && lng && clientName) {
+        
         packagings.push({
           external_id: placemarkId,
           client_name: clientName,
-          description: `Uwagi: ${notes}\nKontakt: ${contact}\nOpakowania: ${packaging}`,
-          city: city || 'Nieznane',
-          postal_code: postalCode || '',
-          street: street || '',
+          description: description,
+          city: city,
+          postal_code: postalCode,
+          street: street,
           latitude: lat,
           longitude: lng,
           status: 'pending',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         });
+      } catch (placemarkError) {
+        console.error(`Błąd podczas przetwarzania placemark ${i}:`, placemarkError);
+        // Kontynuuj mimo błędu z pojedynczym placemarket
+        continue;
       }
     }
     
@@ -259,7 +195,7 @@ export async function POST(request) {
       }
     }
     
-    // Zmodyfikowana obsługa uwierzytelniania z lepszą obsługą błędów
+    // Zmodyfikowana obsługa uwierzytelniania
     const cronAuth = request.headers.get('X-Cron-Auth');
     let isAuthenticated = false;
 
@@ -278,46 +214,69 @@ export async function POST(request) {
           }, { status: 401 });
         }
         
+        // Zwiększamy timeout na zapytanie do bazy danych
+        const sessionTimeout = 30000; // 30 sekund na operację
+        let session = null;
+        
         try {
-          const session = await db('sessions')
-            .where('token', authToken)
-            .whereRaw('expires_at > NOW()')
-            .select('user_id')
-            .first();
-          
-          if (!session) {
-            console.log('Sesja wygasła lub jest nieprawidłowa');
-            return NextResponse.json({ 
-              success: false, 
-              error: 'Sesja wygasła lub jest nieprawidłowa' 
-            }, { status: 401 });
-          }
-          
-          const userId = session.user_id;
-          
-          // Sprawdź czy użytkownik jest adminem
-          const user = await db('users')
-            .where('email', userId)
-            .select('is_admin')
-            .first();
-          
-          if (!user) {
-            console.log('Nie znaleziono użytkownika');
-            return NextResponse.json({ 
-              success: false, 
-              error: 'Nie znaleziono użytkownika' 
-            }, { status: 401 });
-          }
-          
-          isAuthenticated = user.is_admin === true;
-          console.log(`Uwierzytelnienie dla użytkownika ${userId}: ${isAuthenticated ? 'sukces' : 'brak uprawnień'}`);
-        } catch (sessionError) {
-          console.error('Błąd podczas weryfikacji sesji:', sessionError);
+          session = await Promise.race([
+            db('sessions')
+              .where('token', authToken)
+              .whereRaw('expires_at > NOW()')
+              .select('user_id')
+              .first(),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Timeout podczas sprawdzania sesji')), sessionTimeout)
+            )
+          ]);
+        } catch (dbError) {
+          console.error('Błąd dostępu do bazy danych:', dbError);
           return NextResponse.json({ 
             success: false, 
-            error: 'Błąd podczas weryfikacji sesji' 
+            error: 'Błąd podczas weryfikacji sesji: ' + dbError.message 
           }, { status: 500 });
         }
+        
+        if (!session) {
+          console.log('Sesja wygasła lub jest nieprawidłowa');
+          return NextResponse.json({ 
+            success: false, 
+            error: 'Sesja wygasła lub jest nieprawidłowa' 
+          }, { status: 401 });
+        }
+        
+        const userId = session.user_id;
+        
+        // Sprawdź czy użytkownik jest adminem
+        let user = null;
+        try {
+          user = await Promise.race([
+            db('users')
+              .where('email', userId)
+              .select('is_admin')
+              .first(),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Timeout podczas sprawdzania uprawnień')), sessionTimeout)
+            )
+          ]);
+        } catch (userError) {
+          console.error('Błąd dostępu do danych użytkownika:', userError);
+          return NextResponse.json({ 
+            success: false, 
+            error: 'Błąd podczas weryfikacji uprawnień: ' + userError.message 
+          }, { status: 500 });
+        }
+        
+        if (!user) {
+          console.log('Nie znaleziono użytkownika');
+          return NextResponse.json({ 
+            success: false, 
+            error: 'Nie znaleziono użytkownika' 
+          }, { status: 401 });
+        }
+        
+        isAuthenticated = user.is_admin === true || user.is_admin === 1;
+        console.log(`Uwierzytelnienie dla użytkownika ${userId}: ${isAuthenticated ? 'sukces' : 'brak uprawnień'}`);
       }
 
       if (!isAuthenticated) {
@@ -356,7 +315,7 @@ export async function POST(request) {
     }
     
     // Wyodrębnij ID mapy bez dodatkowych parametrów
-    const mapId = rawMapId.split('&')[0];
+    const mapId = rawMapId.includes('&') ? rawMapId.split('&')[0] : rawMapId;
     console.log('ID mapy do synchronizacji:', mapId);
     
     // Pobierz dane z Google MyMaps w formacie KML
@@ -364,7 +323,19 @@ export async function POST(request) {
     
     let response;
     try {
-      response = await fetch(kmlEndpoint);
+      // Uwaga: fetch w Next.js/Node.js nie obsługuje opcji timeout bezpośrednio,
+      // więc używamy AbortController z timeoutem
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 sekund timeout
+      
+      response = await fetch(kmlEndpoint, { 
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'TransportSystem/1.0'
+        }
+      });
+      
+      clearTimeout(timeoutId);
       
       if (!response.ok) {
         throw new Error(`Błąd pobierania KML: ${response.status}`);
@@ -377,8 +348,21 @@ export async function POST(request) {
       }, { status: 500 });
     }
     
-    const kmlText = await response.text();
-    console.log(`Pobrano plik KML, długość: ${kmlText.length} znaków`);
+    let kmlText;
+    try {
+      kmlText = await response.text();
+      console.log(`Pobrano plik KML, długość: ${kmlText.length} znaków`);
+      
+      if (kmlText.length < 100) {
+        throw new Error('Otrzymano zbyt krótki plik KML - prawdopodobnie błąd dostępu lub nieprawidłowe ID mapy');
+      }
+    } catch (textError) {
+      console.error('Błąd odczytu KML:', textError);
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Błąd odczytu danych KML: ' + textError.message 
+      }, { status: 500 });
+    }
     
     // Parsuj KML i wyodrębnij dane
     let packagings;
@@ -410,39 +394,34 @@ export async function POST(request) {
     // Przetwarzaj opakowania - użyj współrzędnych jako alternatywnego identyfikatora
     for (const packaging of packagings) {
       try {
-        // Warunek wyszukiwania - używaj współrzędnych zamiast external_id
+        // Warunek wyszukiwania - używaj współrzędnych z pewną tolerancją
         const existingPackaging = await db('packagings')
-          .where({ 
-            latitude: packaging.latitude,
-            longitude: packaging.longitude
-          })
+          .whereRaw(`
+            ROUND(latitude::numeric, 5) = ROUND(${packaging.latitude}::numeric, 5) AND 
+            ROUND(longitude::numeric, 5) = ROUND(${packaging.longitude}::numeric, 5)
+          `)
           .first();
         
         if (existingPackaging) {
           // Zaktualizuj istniejące opakowanie, ale tylko jeśli status jest 'pending'
           if (existingPackaging.status === 'pending') {
-            const updateFields = {
-              client_name: packaging.client_name,
-              description: packaging.description,
-              city: packaging.city,
-              postal_code: packaging.postal_code,
-              street: packaging.street,
-              updated_at: new Date().toISOString()
-            };
-            
-            if (hasExternalId) {
-              updateFields.external_id = packaging.external_id;
-            }
-            
             await db('packagings')
               .where('id', existingPackaging.id)
-              .update(updateFields);
+              .update({
+                client_name: packaging.client_name,
+                description: packaging.description,
+                city: packaging.city,
+                postal_code: packaging.postal_code,
+                street: packaging.street,
+                external_id: packaging.external_id,
+                updated_at: new Date().toISOString()
+              });
               
             importResults.updated++;
           }
         } else {
           // Dodaj nowe opakowanie
-          const insertFields = {
+          await db('packagings').insert({
             client_name: packaging.client_name,
             description: packaging.description,
             city: packaging.city,
@@ -450,16 +429,11 @@ export async function POST(request) {
             street: packaging.street || '',
             latitude: packaging.latitude,
             longitude: packaging.longitude,
+            external_id: packaging.external_id,
             status: 'pending',
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
-          };
-          
-          if (hasExternalId) {
-            insertFields.external_id = packaging.external_id;
-          }
-          
-          await db('packagings').insert(insertFields);
+          });
           importResults.added++;
         }
       } catch (error) {
@@ -468,24 +442,28 @@ export async function POST(request) {
       }
     }
     
-    // Sprawdź czy tabela app_settings istnieje
-    const appSettingsExists = await db.schema.hasTable('app_settings');
-    if (!appSettingsExists) {
-      await db.schema.createTable('app_settings', table => {
-        table.string('key').primary();
-        table.text('value');
-        table.timestamp('updated_at').defaultTo(db.fn.now());
-      });
-    }
-    
     // Aktualizuj datę ostatniej synchronizacji
-    await db('app_settings')
-      .insert({
-        key: 'last_mymaps_sync',
-        value: new Date().toISOString()
-      })
-      .onConflict('key')
-      .merge();
+    try {
+      const appSettingsExists = await db.schema.hasTable('app_settings');
+      if (!appSettingsExists) {
+        await db.schema.createTable('app_settings', table => {
+          table.string('key').primary();
+          table.text('value');
+          table.timestamp('updated_at').defaultTo(db.fn.now());
+        });
+      }
+      
+      await db('app_settings')
+        .insert({
+          key: 'last_mymaps_sync',
+          value: new Date().toISOString()
+        })
+        .onConflict('key')
+        .merge();
+    } catch (settingsError) {
+      console.error('Błąd aktualizacji daty synchronizacji:', settingsError);
+      // Nie przerywamy procesu z powodu tego błędu
+    }
     
     console.log(`Podsumowanie synchronizacji: dodano ${importResults.added}, zaktualizowano ${importResults.updated}, błędy: ${importResults.errors}`);
     
