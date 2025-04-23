@@ -4,19 +4,6 @@ import db from '@/database/db';
 import { getGoogleCoordinates } from '../../../services/geocoding-google';
 import { XMLParser } from 'fast-xml-parser';
 
-// Funkcja pomocnicza do weryfikacji sesji
-const validateSession = async (authToken) => {
-  if (!authToken) return null;
-  
-  const session = await db('sessions')
-    .where('token', authToken)
-    .whereRaw('expires_at > NOW()')
-    .select('user_id')
-    .first();
-  
-  return session?.user_id;
-};
-
 // Funkcja pomocnicza do sprawdzania czy kolumna istnieje
 async function hasColumn(tableName, columnName) {
   try {
@@ -216,10 +203,10 @@ export async function POST(request) {
       }
     }
     
-    // Zmodyfikuj część kodu obsługującą uwierzytelnianie
+    // Zmodyfikowana obsługa uwierzytelniania z lepszą obsługą błędów
     const cronAuth = request.headers.get('X-Cron-Auth');
     let isAuthenticated = false;
-    
+
     try {
       if (cronAuth && cronAuth === process.env.CRON_SECRET) {
         isAuthenticated = true;
@@ -276,7 +263,7 @@ export async function POST(request) {
           }, { status: 500 });
         }
       }
-    
+
       if (!isAuthenticated) {
         console.log('Brak uprawnień administratora');
         return NextResponse.json({ 
@@ -284,6 +271,25 @@ export async function POST(request) {
           error: 'Brak uprawnień administratora' 
         }, { status: 403 });
       }
+    } catch (authError) {
+      console.error('Błąd uwierzytelniania:', authError);
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Błąd uwierzytelniania: ' + authError.message 
+      }, { status: 500 });
+    }
+    
+    // Bezpieczne parsowanie danych JSON z żądania
+    let requestData;
+    try {
+      requestData = await request.json();
+    } catch (parseError) {
+      console.error('Błąd parsowania JSON z żądania:', parseError);
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Nieprawidłowy format danych' 
+      }, { status: 400 });
+    }
     
     const { mapId: rawMapId } = requestData;
     if (!rawMapId) {
@@ -293,26 +299,42 @@ export async function POST(request) {
       }, { status: 400 });
     }
     
-    if (!mapId) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Brak ID mapy MyMaps' 
-      }, { status: 400 });
-    }
+    // Wyodrębnij ID mapy bez dodatkowych parametrów
+    const mapId = rawMapId.split('&')[0];
+    console.log('ID mapy do synchronizacji:', mapId);
     
     // Pobierz dane z Google MyMaps w formacie KML
     const kmlEndpoint = `https://www.google.com/maps/d/kml?mid=${mapId}&forcekml=1`;
-    const response = await fetch(kmlEndpoint);
     
-    if (!response.ok) {
-      throw new Error(`Błąd pobierania KML: ${response.status}`);
+    let response;
+    try {
+      response = await fetch(kmlEndpoint);
+      
+      if (!response.ok) {
+        throw new Error(`Błąd pobierania KML: ${response.status}`);
+      }
+    } catch (fetchError) {
+      console.error('Błąd pobierania KML:', fetchError);
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Błąd pobierania danych z Google MyMaps: ' + fetchError.message 
+      }, { status: 500 });
     }
     
     const kmlText = await response.text();
     console.log(`Pobrano plik KML, długość: ${kmlText.length} znaków`);
     
     // Parsuj KML i wyodrębnij dane
-    const packagings = await parseKML(kmlText);
+    let packagings;
+    try {
+      packagings = await parseKML(kmlText);
+    } catch (parseError) {
+      console.error('Błąd parsowania KML:', parseError);
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Błąd parsowania danych KML: ' + parseError.message 
+      }, { status: 500 });
+    }
     
     if (packagings.length === 0) {
       return NextResponse.json({ 
@@ -332,25 +354,13 @@ export async function POST(request) {
     // Przetwarzaj opakowania - użyj współrzędnych jako alternatywnego identyfikatora
     for (const packaging of packagings) {
       try {
-        // Warunek wyszukiwania - używaj external_id jeśli kolumna istnieje, w przeciwnym razie użyj współrzędnych
-        let existingPackaging;
-        
-        if (await hasColumn('packagings', 'external_id')) {
-          existingPackaging = await db('packagings')
-            .where({ 
-              latitude: packaging.latitude,
-              longitude: packaging.longitude
-            })
-            .orWhere({ external_id: packaging.external_id })
-            .first();
-        } else {
-          existingPackaging = await db('packagings')
-            .where({ 
-              latitude: packaging.latitude,
-              longitude: packaging.longitude
-            })
-            .first();
-        }
+        // Warunek wyszukiwania - używaj współrzędnych zamiast external_id
+        const existingPackaging = await db('packagings')
+          .where({ 
+            latitude: packaging.latitude,
+            longitude: packaging.longitude
+          })
+          .first();
         
         if (existingPackaging) {
           // Zaktualizuj istniejące opakowanie, ale tylko jeśli status jest 'pending'
@@ -364,7 +374,7 @@ export async function POST(request) {
               updated_at: new Date().toISOString()
             };
             
-            if (await hasColumn('packagings', 'external_id')) {
+            if (hasExternalId) {
               updateFields.external_id = packaging.external_id;
             }
             
@@ -389,7 +399,7 @@ export async function POST(request) {
             updated_at: new Date().toISOString()
           };
           
-          if (await hasColumn('packagings', 'external_id')) {
+          if (hasExternalId) {
             insertFields.external_id = packaging.external_id;
           }
           
@@ -434,7 +444,7 @@ export async function POST(request) {
     console.error('Error importing MyMaps data:', error);
     return NextResponse.json({ 
       success: false, 
-      error: error.message 
+      error: 'Błąd podczas importu danych: ' + error.message 
     }, { status: 500 });
   }
 }
