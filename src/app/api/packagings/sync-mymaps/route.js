@@ -16,90 +16,166 @@ const validateSession = async (authToken) => {
   return session?.user_id;
 };
 
+// Funkcja pomocnicza do parsowania KML
 const parseKML = async (kmlText) => {
   try {
+    // Logowanie początku tekstu KML dla diagnostyki
+    console.log('Surowy tekst KML (początek):', kmlText.substring(0, 500) + '...');
+    
+    // Używamy biblioteki fast-xml-parser z lepszą konfiguracją
     const parser = new XMLParser({
       ignoreAttributes: false,
       attributeNamePrefix: "@_",
       trimValues: true,
-      parseTagValue: true,
-      allowBooleanAttributes: true
+      parseAttributeValue: true,
+      isArray: (name) => ['Placemark', 'Folder'].includes(name)
     });
     
     const parsed = parser.parse(kmlText);
-    const packagings = [];
-
-    // Funkcja do rekurencyjnego przeszukiwania folderów
-    const extractPlacemarks = (folder) => {
-      if (folder.Placemark) {
-        const placemarks = Array.isArray(folder.Placemark) ? folder.Placemark : [folder.Placemark];
-        return placemarks;
-      }
-      
-      // Jeśli folder zawiera podfoldery, przeszukaj je rekurencyjnie
-      if (folder.Folder) {
-        const subFolders = Array.isArray(folder.Folder) ? folder.Folder : [folder.Folder];
-        return subFolders.flatMap(extractPlacemarks);
-      }
-      
-      return [];
-    };
-
-    // Ekstrakcja wszystkich placemarks z całego dokumentu
-    const allPlacemarks = extractPlacemarks(parsed.kml.Document);
+    console.log('Struktura po parsowaniu (próbka):', JSON.stringify(parsed, null, 2).substring(0, 500) + '...');
     
-    console.log(`Znaleziono ${allPlacemarks.length} placemarks`);
-
+    const packagings = [];
+    
+    // Szukamy placemarks w różnych możliwych strukturach
+    let allPlacemarks = [];
+    
+    // Sprawdź, czy placemarks są bezpośrednio w Document
+    if (parsed?.kml?.Document?.Placemark) {
+      console.log('Znaleziono placemarks bezpośrednio w Document');
+      const docPlacemarks = Array.isArray(parsed.kml.Document.Placemark) ? 
+        parsed.kml.Document.Placemark : [parsed.kml.Document.Placemark];
+      allPlacemarks = [...allPlacemarks, ...docPlacemarks];
+    }
+    
+    // Sprawdź, czy placemarks są w folderach
+    if (parsed?.kml?.Document?.Folder) {
+      const folders = Array.isArray(parsed.kml.Document.Folder) ? 
+        parsed.kml.Document.Folder : [parsed.kml.Document.Folder];
+      
+      console.log(`Znaleziono ${folders.length} folderów w dokumencie KML`);
+      
+      for (const folder of folders) {
+        if (folder.Placemark) {
+          const folderPlacemarks = Array.isArray(folder.Placemark) ? 
+            folder.Placemark : [folder.Placemark];
+          console.log(`Znaleziono ${folderPlacemarks.length} placemarks w folderze "${folder.name || 'bez nazwy'}"`);
+          allPlacemarks = [...allPlacemarks, ...folderPlacemarks];
+        }
+      }
+    }
+    
+    console.log(`Łącznie znaleziono ${allPlacemarks.length} placemarks`);
+    
+    // Przejdź przez wszystkie znalezione placemarks
     for (let i = 0; i < allPlacemarks.length; i++) {
       const placemark = allPlacemarks[i];
       
+      // Pobierz nazwę
       const name = placemark.name || 'Bez nazwy';
+      console.log(`Przetwarzanie placemark: ${name}`);
+      
+      // Pobierz opis
       const description = placemark.description || '';
       
-      // Parsowanie współrzędnych
-      let lng = null, lat = null;
-      if (placemark.Point?.coordinates) {
-        const [longitude, latitude] = placemark.Point.coordinates.split(',').map(parseFloat);
-        lng = longitude;
-        lat = latitude;
-      }
-
-      // Próba wyodrębnienia adresu z opisu
-      const cleanDescription = description.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+      // Pobierz współrzędne
+      let lat = null;
+      let lng = null;
       
+      // Obsługuj różne struktury dla współrzędnych
+      if (placemark.Point && placemark.Point.coordinates) {
+        const coordsText = placemark.Point.coordinates;
+        console.log(`Współrzędne dla ${name}: ${coordsText}`);
+        
+        // Oczyść i podziel tekst współrzędnych
+        const coordParts = coordsText.trim().split(',');
+        
+        if (coordParts.length >= 2) {
+          lng = parseFloat(coordParts[0]);
+          lat = parseFloat(coordParts[1]);
+          console.log(`Parsowane współrzędne: lat=${lat}, lng=${lng}`);
+        }
+      } else {
+        console.log(`Brak współrzędnych dla ${name}`);
+      }
+      
+      // Generuj unikalny ID dla Placemark
+      const placemarkId = `placemark_${i}_${Date.now()}`;
+      
+      // Parsuj dane klienta i adres z opisu
+      let clientName = name;
+      let address = '';
       let city = 'Nieznane';
       let postalCode = '';
       let street = '';
-      let clientName = name;
-
-      // Wzorce do ekstrakcji danych
-      const cityMatch = cleanDescription.match(/(\d{2}-\d{3})\s+([^,\n]+)/);
-      if (cityMatch) {
-        postalCode = cityMatch[1];
-        city = cityMatch[2].trim();
+      
+      // Wyodrębnij informacje z opisu HTML
+      if (description) {
+        // Usuń tagi CDATA i HTML z opisu
+        const cleanDescription = description
+          .replace(/<!\[CDATA\[|\]\]>/g, '')
+          .replace(/<[^>]*>/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+        
+        console.log(`Oczyszczony opis: ${cleanDescription.substring(0, 100)}...`);
+        
+        // Próbujemy wyodrębnić kod pocztowy z formatu XX-XXX
+        const postalCodeMatch = cleanDescription.match(/\b\d{2}-\d{3}\b/);
+        if (postalCodeMatch) {
+          postalCode = postalCodeMatch[0];
+          console.log(`Znaleziono kod pocztowy: ${postalCode}`);
+          
+          // Spróbuj znaleźć miasto przed lub po kodzie pocztowym
+          const beforePostalCode = cleanDescription.split(postalCode)[0].trim();
+          const afterPostalCode = cleanDescription.split(postalCode)[1].trim();
+          
+          // Znajdź miasto - zazwyczaj tuż przed lub po kodzie pocztowym
+          const beforeWords = beforePostalCode.split(/\s+/);
+          const afterWords = afterPostalCode.split(/\s+/);
+          
+          if (afterWords.length > 0) {
+            city = afterWords[0].replace(/,/g, '');
+          } else if (beforeWords.length > 0) {
+            city = beforeWords[beforeWords.length - 1].replace(/,/g, '');
+          }
+        } else {
+          // Alternatywne podejście - szukanie typowych nazw miast
+          const cityMatch = cleanDescription.match(/(?:ul\.|ulica)\s+[^,]+,\s*([^,\d]+)/i);
+          if (cityMatch) {
+            city = cityMatch[1].trim();
+          }
+        }
+        
+        // Próbujemy wyodrębnić ulicę
+        const streetMatch = cleanDescription.match(/(?:ul\.|ulica)\s+([^,]+)/i);
+        if (streetMatch) {
+          street = streetMatch[1].trim();
+          console.log(`Znaleziono ulicę: ${street}`);
+        }
+        
+        // Jeśli nazwa klienta nie została wyodrębniona, użyj pierwszej linii opisu
+        if (clientName === 'Bez nazwy' || clientName === name) {
+          const firstLine = cleanDescription.split(',')[0].trim();
+          if (firstLine) clientName = firstLine;
+        }
       }
-
-      // Próba wyodrębnienia nazwy klienta
-      const clientMatch = cleanDescription.match(/Klient:\s*([^,\n]+)/i);
-      if (clientMatch) {
-        clientName = clientMatch[1].trim();
-      }
-
+      
       // Jeśli nie mamy współrzędnych, próbujemy geokodować
       if ((!lat || !lng) && city !== 'Nieznane') {
         try {
+          console.log(`Geokodowanie: ${city}, ${postalCode}, ${street}`);
           const coords = await getGoogleCoordinates(city, postalCode, street);
           lat = coords.lat;
           lng = coords.lng;
         } catch (error) {
-          console.error(`Błąd geokodowania dla ${name}:`, error);
+          console.error(`Błąd geokodowania dla ${address}:`, error);
         }
       }
-
-      // Dodaj tylko jeśli mamy współrzędne
+      
+      // Dodaj tylko jeśli mamy współrzędne i miasto
       if (lat && lng) {
         packagings.push({
-          external_id: `placemark_${i}_${Date.now()}`,
+          external_id: placemarkId,
           client_name: clientName,
           description: description,
           city: city,
@@ -111,10 +187,13 @@ const parseKML = async (kmlText) => {
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         });
+        console.log(`Dodano opakowanie: ${clientName}, ${city}`);
+      } else {
+        console.log(`Pominięto opakowanie bez współrzędnych: ${clientName}`);
       }
     }
-
-    console.log(`Przygotowano ${packagings.length} opakowań do importu`);
+    
+    console.log(`Przetworzono ${allPlacemarks.length} placemarks, znaleziono ${packagings.length} opakowań z poprawnymi danymi`);
     return packagings;
   } catch (error) {
     console.error('Błąd podczas parsowania KML:', error);
@@ -122,28 +201,34 @@ const parseKML = async (kmlText) => {
   }
 };
 
+// Funkcja do synchronizacji z Google MyMaps
 export async function POST(request) {
   try {
+    // Sprawdzamy uwierzytelnienie - albo przez cookie, albo przez nagłówek dla crona
     const cronAuth = request.headers.get('X-Cron-Auth');
     let isAuthenticated = false;
 
     if (cronAuth && cronAuth === process.env.CRON_SECRET) {
       isAuthenticated = true;
+      console.log('Uwierzytelnienie przez nagłówek X-Cron-Auth');
     } else {
       const authToken = request.cookies.get('authToken')?.value;
       const userId = await validateSession(authToken);
       
       if (userId) {
+        // Sprawdź czy użytkownik jest adminem
         const user = await db('users')
           .where('email', userId)
           .select('is_admin')
           .first();
           
         isAuthenticated = user?.is_admin === true;
+        console.log(`Uwierzytelnienie przez cookie dla użytkownika ${userId}: ${isAuthenticated ? 'sukces' : 'brak uprawnień'}`);
       }
     }
 
     if (!isAuthenticated) {
+      console.log('Brak uwierzytelnienia - odmowa dostępu');
       return NextResponse.json({ 
         success: false, 
         error: 'Unauthorized' 
@@ -151,6 +236,7 @@ export async function POST(request) {
     }
     
     const { mapId } = await request.json();
+    console.log('Rozpoczynam synchronizację mapy z ID:', mapId);
     
     if (!mapId) {
       return NextResponse.json({ 
@@ -159,23 +245,25 @@ export async function POST(request) {
       }, { status: 400 });
     }
     
+    // Pobierz dane z Google MyMaps w formacie KML
     const kmlEndpoint = `https://www.google.com/maps/d/kml?mid=${mapId}&forcekml=1`;
     console.log(`Pobieranie KML z: ${kmlEndpoint}`);
     
     const response = await fetch(kmlEndpoint);
     
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`Błąd pobierania KML: ${response.status}`, errorText);
-      throw new Error(`Błąd pobierania KML: ${response.status} ${errorText}`);
+      console.error(`Błąd pobierania KML: ${response.status}`);
+      throw new Error(`Błąd pobierania KML: ${response.status}`);
     }
     
     const kmlText = await response.text();
-    console.log('Długość pobranego KML:', kmlText.length);
+    console.log(`Pobrano plik KML, długość: ${kmlText.length} znaków`);
     
+    // Parsuj KML i wyodrębnij dane
     const packagings = await parseKML(kmlText);
     
     if (packagings.length === 0) {
+      console.log('Nie znaleziono opakowań do importu');
       return NextResponse.json({ 
         success: true, 
         message: 'Nie znaleziono opakowań do importu',
@@ -183,6 +271,7 @@ export async function POST(request) {
       });
     }
     
+    // Zaktualizuj istniejące i dodaj nowe opakowania
     const importResults = {
       added: 0,
       updated: 0,
@@ -191,11 +280,13 @@ export async function POST(request) {
     
     for (const packaging of packagings) {
       try {
+        // Sprawdź czy opakowanie o takim external_id już istnieje
         const existingPackaging = await db('packagings')
           .where('external_id', packaging.external_id)
           .first();
         
         if (existingPackaging) {
+          // Zaktualizuj istniejące opakowanie, ale tylko jeśli status jest 'pending'
           if (existingPackaging.status === 'pending') {
             await db('packagings')
               .where('id', existingPackaging.id)
@@ -204,10 +295,13 @@ export async function POST(request) {
                 updated_at: new Date().toISOString()
               });
             importResults.updated++;
+            console.log(`Zaktualizowano opakowanie ID ${existingPackaging.id}: ${packaging.client_name}`);
           }
         } else {
+          // Dodaj nowe opakowanie
           await db('packagings').insert(packaging);
           importResults.added++;
+          console.log(`Dodano nowe opakowanie: ${packaging.client_name}`);
         }
       } catch (error) {
         console.error('Błąd podczas importu opakowania:', error);
@@ -215,6 +309,7 @@ export async function POST(request) {
       }
     }
     
+    // Sprawdź czy tabela app_settings istnieje
     const appSettingsExists = await db.schema.hasTable('app_settings');
     if (!appSettingsExists) {
       await db.schema.createTable('app_settings', table => {
@@ -222,8 +317,10 @@ export async function POST(request) {
         table.text('value');
         table.timestamp('updated_at').defaultTo(db.fn.now());
       });
+      console.log('Utworzono tabelę app_settings');
     }
     
+    // Aktualizuj datę ostatniej synchronizacji
     await db('app_settings')
       .insert({
         key: 'last_mymaps_sync',
@@ -231,6 +328,8 @@ export async function POST(request) {
       })
       .onConflict('key')
       .merge();
+    
+    console.log(`Zakończono synchronizację: dodano ${importResults.added}, zaktualizowano ${importResults.updated}, błędy: ${importResults.errors}`);
     
     return NextResponse.json({ 
       success: true, 
