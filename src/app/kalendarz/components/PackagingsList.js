@@ -3,9 +3,8 @@
 import { useState, useEffect } from 'react'
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd'
 import { Package } from 'lucide-react'
-import { getGoogleCoordinates } from '../../services/geocoding-google'
-import { format } from 'date-fns';
-import { pl } from 'date-fns/locale';
+import { format } from 'date-fns'
+import { pl } from 'date-fns/locale'
 
 export default function PackagingsList({ onDragEnd }) {
   const [packagings, setPackagings] = useState([])
@@ -32,8 +31,10 @@ export default function PackagingsList({ onDragEnd }) {
     }
   }
 
-  // Pobierz opakowania przy montowaniu komponentu
+  // Pobierz opakowania przy montowaniu komponentu i informację o ostatniej synchronizacji
   useEffect(() => {
+    fetchPackagings();
+    
     const fetchLastSync = async () => {
       try {
         const response = await fetch('/api/packagings/last-sync');
@@ -75,7 +76,12 @@ export default function PackagingsList({ onDragEnd }) {
           <Package className="mr-2" size={20} />
           <h3 className="text-lg font-semibold">Opakowania do odbioru</h3>
         </div>
-        <div>
+        <div className="flex items-center">
+          {lastSync && (
+            <span className="text-xs text-blue-200 mr-2">
+              Ostatnia synchronizacja: {format(lastSync, 'dd.MM.yyyy HH:mm', {locale: pl})}
+            </span>
+          )}
           <span className="bg-blue-600 text-white px-2 py-1 rounded-full text-xs">
             {packagings.length}
           </span>
@@ -123,9 +129,9 @@ export default function PackagingsList({ onDragEnd }) {
                               {packaging.city}, {packaging.postal_code}
                               {packaging.street && <span>, {packaging.street}</span>}
                             </p>
-                            <p className="mt-2 text-sm text-gray-700">
+                            <div className="mt-2 text-sm text-gray-700 line-clamp-2">
                               {packaging.description}
-                            </p>
+                            </div>
                             <div className="mt-2 text-xs text-blue-600">
                               Przeciągnij na datę, aby zaplanować odbiór
                             </div>
@@ -139,6 +145,15 @@ export default function PackagingsList({ onDragEnd }) {
               </Droppable>
             </DragDropContext>
           )}
+          
+          <div className="mt-4 flex justify-end">
+            <button
+              onClick={fetchPackagings}
+              className="px-3 py-1 bg-blue-100 text-blue-700 text-sm rounded hover:bg-blue-200"
+            >
+              Odśwież listę
+            </button>
+          </div>
         </div>
       )}
     </div>
