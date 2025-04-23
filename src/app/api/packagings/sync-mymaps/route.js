@@ -38,30 +38,27 @@ const parseKML = async (kmlText) => {
     const packagings = [];
     let allPlacemarks = [];
     
-    // Zbieramy wszystkie placemarks (pineski)
-    if (parsed?.kml?.Document?.Placemark) {
-      console.log('Znaleziono placemarks bezpośrednio w Document');
-      const docPlacemarks = Array.isArray(parsed.kml.Document.Placemark) ? 
-        parsed.kml.Document.Placemark : [parsed.kml.Document.Placemark];
-      allPlacemarks = [...allPlacemarks, ...docPlacemarks];
-    }
-    
-    // Zbieramy placemarks z folderów (szczególnie z folderu "Bębny")
+    // Zbieramy wszystkie placemarks (pineski) - tylko z folderu "Bębny"
     if (parsed?.kml?.Document?.Folder) {
       const folders = Array.isArray(parsed.kml.Document.Folder) ? 
         parsed.kml.Document.Folder : [parsed.kml.Document.Folder];
       
+      console.log(`Znaleziono ${folders.length} folderów w dokumencie KML`);
+      
       for (const folder of folders) {
-        if (folder.Placemark) {
+        // Przetwarzamy tylko folder "Bębny"
+        if (folder.name === "Bębny" && folder.Placemark) {
           const folderPlacemarks = Array.isArray(folder.Placemark) ? 
             folder.Placemark : [folder.Placemark];
-          console.log(`Znaleziono ${folderPlacemarks.length} placemarks w folderze "${folder.name || 'bez nazwy'}"`);
+          console.log(`Znaleziono ${folderPlacemarks.length} placemarks w folderze "Bębny"`);
           allPlacemarks = [...allPlacemarks, ...folderPlacemarks];
+        } else {
+          console.log(`Pomijam folder "${folder.name || 'bez nazwy'}" - interesuje nas tylko folder "Bębny"`);
         }
       }
     }
     
-    console.log(`Łącznie znaleziono ${allPlacemarks.length} placemarks`);
+    console.log(`Łącznie znaleziono ${allPlacemarks.length} placemarks do przetworzenia`);
     
     // Przetwarzanie każdej pineski
     for (let i = 0; i < allPlacemarks.length; i++) {
@@ -498,54 +495,66 @@ export async function POST(request) {
       errors: 0
     };
     
-    // Przetwarzaj opakowania - użyj współrzędnych jako alternatywnego identyfikatora
-    for (const packaging of packagings) {
-      try {
-        // Warunek wyszukiwania - używaj współrzędnych z pewną tolerancją
-        const existingPackaging = await db('packagings')
-          .whereRaw(`
-            ROUND(latitude::numeric, 5) = ROUND(${packaging.latitude}::numeric, 5) AND 
-            ROUND(longitude::numeric, 5) = ROUND(${packaging.longitude}::numeric, 5)
-          `)
-          .first();
-        
-        if (existingPackaging) {
-          // Zaktualizuj istniejące opakowanie, ale tylko jeśli status jest 'pending'
-          if (existingPackaging.status === 'pending') {
-            await db('packagings')
-              .where('id', existingPackaging.id)
-              .update({
-                client_name: packaging.client_name,
-                description: packaging.description,
-                city: packaging.city,
-                postal_code: packaging.postal_code,
-                street: packaging.street,
-                external_id: packaging.external_id,
-                updated_at: new Date().toISOString()
-              });
-              
-            importResults.updated++;
+    // Przetwarzanie w mniejszych partiach, aby uniknąć timeoutu
+    const BATCH_SIZE = 10; // Przetwarzaj po 10 elementów na raz
+    
+    for (let i = 0; i < packagings.length; i += BATCH_SIZE) {
+      const batch = packagings.slice(i, i + BATCH_SIZE);
+      
+      console.log(`Przetwarzanie partii ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(packagings.length / BATCH_SIZE)} (${batch.length} elementów)`);
+      
+      // Przetwarzaj opakowania w batchu
+      for (const packaging of batch) {
+        try {
+          // Warunek wyszukiwania - używaj współrzędnych z pewną tolerancją
+          const existingPackaging = await db('packagings')
+            .whereRaw(`
+              ROUND(latitude::numeric, 5) = ROUND(${packaging.latitude}::numeric, 5) AND 
+              ROUND(longitude::numeric, 5) = ROUND(${packaging.longitude}::numeric, 5)
+            `)
+            .first();
+          
+          if (existingPackaging) {
+            // Zaktualizuj istniejące opakowanie, ale tylko jeśli status jest 'pending'
+            if (existingPackaging.status === 'pending') {
+              await db('packagings')
+                .where('id', existingPackaging.id)
+                .update({
+                  client_name: packaging.client_name,
+                  description: packaging.description,
+                  city: packaging.city,
+                  postal_code: packaging.postal_code,
+                  street: packaging.street,
+                  external_id: packaging.external_id,
+                  updated_at: new Date().toISOString()
+                });
+                
+              importResults.updated++;
+            }
+          } else {
+            // Dodaj nowe opakowanie
+            await db('packagings').insert({
+              client_name: packaging.client_name,
+              description: packaging.description,
+              city: packaging.city,
+              postal_code: packaging.postal_code || '',
+              street: packaging.street || '',
+              latitude: packaging.latitude,
+              longitude: packaging.longitude,
+              external_id: packaging.external_id,
+              status: 'pending',
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            });
+            importResults.added++;
           }
-        } else {
-          // Dodaj nowe opakowanie
-          await db('packagings').insert({
-            client_name: packaging.client_name,
-            description: packaging.description,
-            city: packaging.city,
-            postal_code: packaging.postal_code || '',
-            street: packaging.street || '',
-            latitude: packaging.latitude,
-            longitude: packaging.longitude,
-            external_id: packaging.external_id,
-            status: 'pending',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          });
-          importResults.added++;
+        } catch (error) {
+          console.error('Błąd podczas importu opakowania:', error);
+          importResults.errors++;
         }
-      } catch (error) {
-        console.error('Błąd podczas importu opakowania:', error);
-        importResults.errors++;
+        
+        // Dodajmy małe opóźnienie między zapytaniami, aby nie przeciążać bazy danych
+        await new Promise(resolve => setTimeout(resolve, 50));
       }
     }
     
