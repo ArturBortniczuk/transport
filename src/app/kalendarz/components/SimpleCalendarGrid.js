@@ -175,12 +175,12 @@ export default function SimpleCalendarGrid({
               </div>
               
               {/* Obszar, na który można upuścić transport */}
-              <Droppable droppableId={dateKey} type="calendar-day">
+              <Droppable droppableId={dateKey}>
                 {(provided) => (
                   <div
                     ref={provided.innerRef}
                     {...provided.droppableProps}
-                    className="bg-yellow-200 border-2 border-red-500 min-h-[80px] mt-2"
+                    className="mt-2 space-y-1 min-h-[20px]"
                   >
                     {/* Wyświetlanie transportów z obsługą przeciągania */}
                     {filtrowaneTransporty.map((transport, index) => {
