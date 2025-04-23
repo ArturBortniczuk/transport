@@ -115,7 +115,7 @@ export default function PackagingsList({ onDragEnd }) {
             </div>
           ) : (
             <DragDropContext onDragEnd={handleDragEnd}>
-              <Droppable droppableId="packagings-list">
+              <Droppable droppableId="packagings-list" type="calendar-day">
                 {(provided) => (
                   <div 
                     ref={provided.innerRef}
