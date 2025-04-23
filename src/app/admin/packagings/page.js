@@ -9,6 +9,7 @@ export default function PackagingsAdminPage() {
   const [syncResult, setSyncResult] = useState(null)
   const [packagings, setPackagings] = useState([])
   const [isLoadingPackagings, setIsLoadingPackagings] = useState(false)
+  const [expandedPackaging, setExpandedPackaging] = useState(null)
 
   // Funkcja do pobierania listy opakowań
   const fetchPackagings = async () => {
@@ -103,6 +104,92 @@ export default function PackagingsAdminPage() {
     }
   }
 
+  // Funkcja do formatowania informacji o opakowaniach
+  const formatPackagingInfo = (description) => {
+    if (!description) return null;
+    
+    // Podziel opis na sekcje
+    const sections = {};
+    const lines = description.split('\n');
+    
+    let currentSection = 'Uwagi';
+    sections[currentSection] = [];
+    
+    for (const line of lines) {
+      if (line.startsWith('Kontakt:')) {
+        currentSection = 'Kontakt';
+        sections[currentSection] = [line.replace('Kontakt:', '').trim()];
+      } else if (line.startsWith('Opakowania:')) {
+        currentSection = 'Opakowania';
+        sections[currentSection] = [line.replace('Opakowania:', '').trim()];
+      } else if (line.trim()) {
+        if (sections[currentSection]) {
+          sections[currentSection].push(line.trim());
+        } else {
+          sections[currentSection] = [line.trim()];
+        }
+      }
+    }
+    
+    return sections;
+  }
+  
+  // Formatowanie wyświetlania opakowań
+  const renderPackagingDetails = (packaging) => {
+    const info = formatPackagingInfo(packaging.description);
+    return (
+      <div className="p-4 bg-gray-50 rounded-b-lg border-t border-gray-200">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <h4 className="font-semibold text-gray-700 mb-2">Adres:</h4>
+            <p className="mb-1">
+              {packaging.city}, {packaging.postal_code}
+            </p>
+            {packaging.street && <p className="mb-1">{packaging.street}</p>}
+            
+            {info && info['Kontakt'] && (
+              <>
+                <h4 className="font-semibold text-gray-700 mt-4 mb-2">Kontakt:</h4>
+                {info['Kontakt'].map((line, i) => (
+                  <p key={i} className="mb-1">{line}</p>
+                ))}
+              </>
+            )}
+          </div>
+          
+          <div>
+            {info && info['Opakowania'] && (
+              <>
+                <h4 className="font-semibold text-gray-700 mb-2">Opakowania:</h4>
+                {info['Opakowania'].map((line, i) => (
+                  <p key={i} className="mb-1">{line}</p>
+                ))}
+              </>
+            )}
+            
+            {info && info['Uwagi'] && info['Uwagi'].length > 0 && (
+              <>
+                <h4 className="font-semibold text-gray-700 mt-4 mb-2">Uwagi:</h4>
+                {info['Uwagi'].map((line, i) => (
+                  <p key={i} className="mb-1">{line}</p>
+                ))}
+              </>
+            )}
+          </div>
+        </div>
+        
+        <div className="mt-4 flex justify-end">
+          <button
+            onClick={() => setExpandedPackaging(null)}
+            className="px-3 py-1 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+          >
+            Zwiń szczegóły
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <AdminCheck>
       <div className="max-w-6xl mx-auto p-4">
@@ -174,51 +261,69 @@ export default function PackagingsAdminPage() {
               Brak opakowań do odbioru
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Klient</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Adres</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Akcje</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {packagings.map((packaging) => (
-                    <tr key={packaging.id}>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="font-medium text-gray-900">{packaging.client_name}</div>
-                        <div className="text-sm text-gray-500">{packaging.description.substring(0, 50)}...</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div>{packaging.city}, {packaging.postal_code}</div>
-                        <div className="text-sm text-gray-500">{packaging.street}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          packaging.status === 'completed' ? 'bg-green-100 text-green-800' :
-                          packaging.status === 'scheduled' ? 'bg-blue-100 text-blue-800' :
-                          'bg-yellow-100 text-yellow-800'
-                        }`}>
-                          {packaging.status === 'completed' ? 'Zrealizowane' :
-                          packaging.status === 'scheduled' ? 'Zaplanowane' :
-                          'Oczekujące'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+            <div className="overflow-hidden rounded-lg border border-gray-200">
+              {packagings.map((packaging) => (
+                <div key={packaging.id} className="border-b border-gray-200 last:border-b-0">
+                  <div 
+                    className={`flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 transition-colors ${
+                      expandedPackaging === packaging.id ? 'bg-blue-50' : ''
+                    }`}
+                    onClick={() => setExpandedPackaging(expandedPackaging === packaging.id ? null : packaging.id)}
+                  >
+                    <div className="flex-1">
+                      <h3 className="font-bold text-gray-900">{packaging.client_name}</h3>
+                      <p className="text-sm text-gray-600">
+                        {packaging.city}, {packaging.postal_code}
+                        {packaging.street ? `, ${packaging.street}` : ''}
+                      </p>
+                    </div>
+                    
+                    <div className="flex items-center space-x-4">
+                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                        packaging.status === 'completed' ? 'bg-green-100 text-green-800' :
+                        packaging.status === 'scheduled' ? 'bg-blue-100 text-blue-800' :
+                        'bg-yellow-100 text-yellow-800'
+                      }`}>
+                        {packaging.status === 'completed' ? 'Zrealizowane' :
+                        packaging.status === 'scheduled' ? 'Zaplanowane' :
+                        'Oczekujące'}
+                      </span>
+                      
+                      {packaging.status === 'pending' && (
                         <button
-                          onClick={() => handleDeletePackaging(packaging.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeletePackaging(packaging.id);
+                          }}
                           className="text-red-600 hover:text-red-900"
-                          disabled={packaging.status !== 'pending'}
                         >
                           Usuń
                         </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      )}
+                      
+                      <button
+                        className="text-gray-500"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setExpandedPackaging(expandedPackaging === packaging.id ? null : packaging.id);
+                        }}
+                      >
+                        {expandedPackaging === packaging.id ? (
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                          </svg>
+                        ) : (
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                  
+                  {expandedPackaging === packaging.id && renderPackagingDetails(packaging)}
+                </div>
+              ))}
             </div>
           )}
         </div>
