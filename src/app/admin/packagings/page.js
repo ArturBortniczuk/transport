@@ -109,27 +109,49 @@ export default function PackagingsAdminPage() {
     if (!description) return null;
     
     // Podziel opis na sekcje
-    const sections = {};
+    const sections = {
+      'Uwagi': [],
+      'Adres': [],
+      'Kontakt': [],
+      'Opakowania': []
+    };
+    
     const lines = description.split('\n');
     
-    let currentSection = 'Uwagi';
-    sections[currentSection] = [];
+    let currentSection = null;
     
     for (const line of lines) {
-      if (line.startsWith('Kontakt:')) {
+      // Sprawdź czy linia zaczyna się od nazwy sekcji
+      if (line.startsWith('Uwagi:')) {
+        currentSection = 'Uwagi';
+        // Nie dodawaj samego nagłówka "Uwagi:" do zawartości
+        continue;
+      } else if (line.startsWith('Adres:')) {
+        currentSection = 'Adres';
+        // Nie dodawaj samego nagłówka "Adres:" do zawartości
+        continue;
+      } else if (line.startsWith('Kontakt:')) {
         currentSection = 'Kontakt';
-        sections[currentSection] = [line.replace('Kontakt:', '').trim()];
+        // Nie dodawaj samego nagłówka "Kontakt:" do zawartości
+        continue;
       } else if (line.startsWith('Opakowania:')) {
         currentSection = 'Opakowania';
-        sections[currentSection] = [line.replace('Opakowania:', '').trim()];
-      } else if (line.trim()) {
-        if (sections[currentSection]) {
-          sections[currentSection].push(line.trim());
-        } else {
-          sections[currentSection] = [line.trim()];
-        }
+        // Nie dodawaj samego nagłówka "Opakowania:" do zawartości
+        continue;
+      }
+      
+      // Jeśli mamy aktualną sekcję i linia nie jest pusta, dodaj ją
+      if (currentSection && line.trim()) {
+        sections[currentSection].push(line.trim());
       }
     }
+    
+    // Usuń puste sekcje
+    Object.keys(sections).forEach(key => {
+      if (sections[key].length === 0) {
+        delete sections[key];
+      }
+    });
     
     return sections;
   }
@@ -137,6 +159,7 @@ export default function PackagingsAdminPage() {
   // Formatowanie wyświetlania opakowań
   const renderPackagingDetails = (packaging) => {
     const info = formatPackagingInfo(packaging.description);
+    
     return (
       <div className="p-4 bg-gray-50 rounded-b-lg border-t border-gray-200">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -147,7 +170,7 @@ export default function PackagingsAdminPage() {
             </p>
             {packaging.street && <p className="mb-1">{packaging.street}</p>}
             
-            {info && info['Kontakt'] && (
+            {info && info['Kontakt'] && info['Kontakt'].length > 0 && (
               <>
                 <h4 className="font-semibold text-gray-700 mt-4 mb-2">Kontakt:</h4>
                 {info['Kontakt'].map((line, i) => (
@@ -158,7 +181,7 @@ export default function PackagingsAdminPage() {
           </div>
           
           <div>
-            {info && info['Opakowania'] && (
+            {info && info['Opakowania'] && info['Opakowania'].length > 0 && (
               <>
                 <h4 className="font-semibold text-gray-700 mb-2">Opakowania:</h4>
                 {info['Opakowania'].map((line, i) => (
@@ -170,7 +193,13 @@ export default function PackagingsAdminPage() {
             {info && info['Uwagi'] && info['Uwagi'].length > 0 && (
               <>
                 <h4 className="font-semibold text-gray-700 mt-4 mb-2">Uwagi:</h4>
-                {info['Uwagi'].map((line, i) => (
+                {info['Uwagi'].filter(line => 
+                  // Filtrujemy linie zawierające adres, który już wyświetlamy w sekcji Adres
+                  !line.includes(packaging.city) && 
+                  !line.includes(packaging.postal_code) && 
+                  !line.includes(packaging.street) &&
+                  !line.startsWith('od ') // Zakładam, że linie zaczynające się od "od " zwykle zawierają daty
+                ).map((line, i) => (
                   <p key={i} className="mb-1">{line}</p>
                 ))}
               </>
