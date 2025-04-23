@@ -278,6 +278,7 @@ export async function POST(request) {
       errors: 0
     };
     
+    // W pętli for dla każdego opakowania w funkcji POST, zmodyfikuj kod:
     for (const packaging of packagings) {
       try {
         // Sprawdź czy opakowanie o takim external_id już istnieje
@@ -299,9 +300,14 @@ export async function POST(request) {
           }
         } else {
           // Dodaj nowe opakowanie
-          await db('packagings').insert(packaging);
-          importResults.added++;
-          console.log(`Dodano nowe opakowanie: ${packaging.client_name}`);
+          const insertResult = await db('packagings').insert(packaging);
+          if (insertResult) {
+            importResults.added++;
+            console.log(`Dodano nowe opakowanie: ${packaging.client_name}`);
+          } else {
+            importResults.errors++;
+            console.error(`Błąd dodawania opakowania: ${packaging.client_name}`);
+          }
         }
       } catch (error) {
         console.error('Błąd podczas importu opakowania:', error);
