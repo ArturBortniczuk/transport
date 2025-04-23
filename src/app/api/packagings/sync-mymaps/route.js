@@ -68,7 +68,7 @@ const parseKML = async (kmlText) => {
       try {
         const placemark = allPlacemarks[i];
         
-        // Pobierz nazwę - zawiera nazwę firmy
+        // Pobierz nazwę - zazwyczaj zawiera nazwę firmy i czasem kod pocztowy
         const name = placemark.name || 'Bez nazwy';
         
         // Pobierz opis
@@ -105,55 +105,162 @@ const parseKML = async (kmlText) => {
         // Generuj unikalny ID dla Placemark
         const placemarkId = `placemark_${i}_${Date.now()}`;
         
-        // Domyślne wartości
-        let clientName = name;
-        let city = 'Nieznane';
+        // Analizujemy dane z opisu - wyodrębniamy sekcje
+        let clientName = '';
+        let city = '';
         let postalCode = '';
         let street = '';
+        let notes = '';
+        let contact = '';
+        let packagingInfo = '';
         
-        // Spróbuj znaleźć kod pocztowy w opisie
-        const postalCodePattern = /\b\d{2}-\d{3}\b/;
-        const postalCodeMatch = description.match(postalCodePattern);
-        if (postalCodeMatch) {
-          postalCode = postalCodeMatch[0];
+        // Ekstrahuj tylko nazwę klienta z nazwy - bez kodu pocztowego czy adresu
+        if (name.includes('/')) {
+          // Format "NAZWA_KLIENTA/LOKALIZACJA"
+          clientName = name.split('/')[0].trim();
+        } else if (name.includes(' ') && /\d{2}-\d{3}/.test(name)) {
+          // Format "NAZWA_KLIENTA KOD_POCZTOWY"
+          const postalCodeMatch = name.match(/\d{2}-\d{3}/);
+          if (postalCodeMatch) {
+            const postalCodeIndex = name.indexOf(postalCodeMatch[0]);
+            clientName = name.substring(0, postalCodeIndex).trim();
+          } else {
+            clientName = name;
+          }
+        } else {
+          clientName = name;
         }
         
-        // Spróbuj znaleźć adres w opisie
+        // Szczegółowa analiza opisu
         const lines = description.split('\n');
-        for (let j = 0; j < lines.length; j++) {
-          const line = lines[j].trim();
+        
+        // Inicjujemy sekcje
+        let currentSection = null;
+        const sections = {
+          'Uwagi': [],
+          'Adres': [],
+          'Kontakt': [],
+          'Opakowania': []
+        };
+        
+        // Przetwarzamy linie opisu i segregujemy je według sekcji
+        for (const line of lines) {
+          const trimmedLine = line.trim();
+          if (!trimmedLine) continue;
           
-          // Szukaj ulicy (linie zawierające "ul." lub "ulica" itp.)
-          if (line.includes('ul.') || line.includes('ulica') || line.includes('Ulica')) {
-            street = line;
+          if (trimmedLine.startsWith('Uwagi:')) {
+            currentSection = 'Uwagi';
+            // Sprawdź czy w tej samej linii są jakieś dane
+            const content = trimmedLine.replace('Uwagi:', '').trim();
+            if (content) sections[currentSection].push(content);
+          } else if (trimmedLine.startsWith('Adres:')) {
+            currentSection = 'Adres';
+            // Sprawdź czy w tej samej linii są jakieś dane
+            const content = trimmedLine.replace('Adres:', '').trim();
+            if (content) sections[currentSection].push(content);
+          } else if (trimmedLine.startsWith('Kontakt:')) {
+            currentSection = 'Kontakt';
+            // Sprawdź czy w tej samej linii są jakieś dane
+            const content = trimmedLine.replace('Kontakt:', '').trim();
+            if (content) sections[currentSection].push(content);
+          } else if (trimmedLine.startsWith('Opakowania:')) {
+            currentSection = 'Opakowania';
+            // Sprawdź czy w tej samej linii są jakieś dane
+            const content = trimmedLine.replace('Opakowania:', '').trim();
+            if (content) sections[currentSection].push(content);
+          } else if (currentSection) {
+            // Dopisujemy linię do aktualnej sekcji
+            sections[currentSection].push(trimmedLine);
+          } else {
+            // Jeśli nie mamy jeszcze żadnej sekcji, domyślnie traktujemy jako uwagi
+            sections['Uwagi'].push(trimmedLine);
           }
+        }
+        
+        // Przetwarzamy adres
+        if (sections['Adres'] && sections['Adres'].length > 0) {
+          // Typowo pierwsza linia zawiera miasto i kod pocztowy
+          const firstLine = sections['Adres'][0];
           
-          // Szukaj miasta i kodu pocztowego
-          if (postalCode && line.includes(postalCode)) {
-            const parts = line.split(postalCode);
+          // Próbujemy znaleźć kod pocztowy
+          const postalCodeMatch = firstLine.match(/\d{2}-\d{3}/);
+          if (postalCodeMatch) {
+            postalCode = postalCodeMatch[0];
+            
+            // Wyodrębnij miasto na podstawie kodu pocztowego
+            const parts = firstLine.split(postalCode);
             if (parts.length > 1 && parts[1].trim()) {
               city = parts[1].trim();
             } else if (parts.length > 0 && parts[0].trim()) {
               city = parts[0].trim();
             }
+          } else {
+            // Jeśli nie ma kodu pocztowego, spróbuj wyodrębnić miasto
+            city = firstLine;
+          }
+          
+          // Jeśli mamy drugą linię, to zwykle zawiera ulicę
+          if (sections['Adres'].length > 1) {
+            street = sections['Adres'][1];
           }
         }
         
-        // Jeśli nie znaleziono miasta, szukaj w nazwie pineski
-        if (city === 'Nieznane' && name.includes('/')) {
-          const nameParts = name.split('/');
-          if (nameParts.length > 1) {
-            city = nameParts[1].trim();
+        // Jeśli nie udało się wyodrębnić miasta i kodu z sekcji adresu, spróbuj z nazwy
+        if (!city || !postalCode) {
+          const postalCodeMatch = name.match(/\d{2}-\d{3}/);
+          if (postalCodeMatch) {
+            postalCode = postalCodeMatch[0];
+            
+            // Jeśli kod pocztowy jest w nazwie, to często miasto też jest
+            const parts = name.split(postalCode);
+            if (parts.length > 1 && parts[1].trim()) {
+              // Miasto po kodzie pocztowym
+              city = parts[1].trim();
+            } else if (parts.length > 0) {
+              // Spróbuj wyciągnąć miasto przed kodem
+              const beforePostal = parts[0].trim();
+              const cityMatch = beforePostal.match(/\s([A-ZŻŹĆĄŚĘŁÓŃ][a-zżźćńółęąś]+)$/);
+              if (cityMatch) {
+                city = cityMatch[1];
+              }
+            }
           }
+        }
+        
+        // Przygotowujemy dane kontaktowe
+        if (sections['Kontakt'] && sections['Kontakt'].length > 0) {
+          contact = sections['Kontakt'].join('\n');
+        }
+        
+        // Przygotowujemy informacje o opakowaniach
+        if (sections['Opakowania'] && sections['Opakowania'].length > 0) {
+          packagingInfo = sections['Opakowania'].join('\n');
+        }
+        
+        // Przygotowujemy uwagi
+        if (sections['Uwagi'] && sections['Uwagi'].length > 0) {
+          notes = sections['Uwagi'].join('\n');
+        }
+        
+        // Stwórz nowy opis z poprawnie wydzielonymi sekcjami
+        const structuredDescription = [
+          notes ? `Uwagi:\n${notes}` : '',
+          contact ? `Kontakt:\n${contact}` : '',
+          packagingInfo ? `Opakowania:\n${packagingInfo}` : ''
+        ].filter(Boolean).join('\n\n');
+        
+        // Jeśli miasto wciąż nie jest znane, ustaw wartość domyślną
+        if (!city) {
+          city = 'Nieznane';
         }
         
         packagings.push({
           external_id: placemarkId,
           client_name: clientName,
-          description: description,
+          description: structuredDescription,
           city: city,
-          postal_code: postalCode,
-          street: street,
+          postal_code: postalCode || '',
+          street: street || '',
           latitude: lat,
           longitude: lng,
           status: 'pending',
