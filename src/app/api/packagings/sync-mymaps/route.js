@@ -488,6 +488,23 @@ export async function POST(request) {
       });
     }
     
+    // NOWY KOD - usuwamy wszystkie oczekujące opakowania przed importem
+    console.log('Czyszczenie istniejących oczekujących opakowań przed importem...');
+    try {
+      // Usuwamy tylko opakowania ze statusem 'pending', zachowujemy zaplanowane i zrealizowane
+      const deleted = await db('packagings')
+        .where('status', 'pending')
+        .delete();
+      
+      console.log(`Usunięto ${deleted} oczekujących opakowań`);
+    } catch (deleteError) {
+      console.error('Błąd podczas czyszczenia bazy danych:', deleteError);
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Błąd podczas czyszczenia bazy danych: ' + deleteError.message 
+      }, { status: 500 });
+    }
+    
     // Zaktualizuj istniejące i dodaj nowe opakowania
     const importResults = {
       added: 0,
