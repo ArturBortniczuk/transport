@@ -555,32 +555,38 @@ export default function KalendarzPage() {
       const bebnyInfo = packaging.description ? 
         packaging.description.includes('bęben') ? packaging.description : `bębny: ${packaging.description}` : 
         'bębny';
+      
+      // Tworzymy treść wiadomości
       const smsMessage = `Cześć Edzia, ${magazyn} odbierze ${bebnyInfo} z miejscowości ${packaging.city} w dniu ${format(new Date(dateKey), 'dd.MM.yyyy', { locale: pl })}.`;
       
-      const smsResponse = await fetch('/api/sms', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          phoneNumber: "48885851594", // Podaj numer docelowy
-          message: smsMessage
-        })
-      });
+      // Tutaj dane do autoryzacji
+      const login = 'ArturBortniczuk';            // Zastąp swoim loginem do MultiInfo
+      const password = 'ArtBor.2024';        // Zastąp swoim hasłem
+      const serviceId = '21370';   // Zastąp swoim Service ID
+      const destinationPhone = '48885851594'; // Numer docelowy
       
-      const smsData = await smsResponse.json();
-      if (smsData.success) {
-        console.log('SMS został wysłany pomyślnie');
-      } else {
-        console.error('Błąd wysyłania SMS:', smsData.error);
+      try {
+        // Wysłanie SMS-a
+        const smsResponse = await fetch(`https://api2.multiinfo.plus.pl/sendsms.aspx?serviceId=${serviceId}&login=${login}&password=${password}&dest=${destinationPhone}&text=${encodeURIComponent(smsMessage)}&stat=testowy-SMS`);
+        
+        const smsResult = await smsResponse.text();
+        console.log('Wynik wysłania SMS:', smsResult);
+        
+        // Sprawdzenie wyniku
+        if (smsResult && smsResult.startsWith('0')) {
+          console.log('SMS został wysłany pomyślnie');
+        } else {
+          console.error('Błąd wysyłania SMS:', smsResult);
+        }
+      } catch (error) {
+        console.error('Błąd podczas wysyłania SMS:', error);
       }
-      
     } catch (error) {
       console.error('Błąd podczas planowania odbioru opakowania:', error);
       alert('Wystąpił błąd podczas planowania odbioru opakowania');
     }
   };
-
+  
   // Nowa funkcja do obsługi przenoszenia transportu przez drag & drop
   const handleTransportMove = (transport, newDateKey) => {
     setConfirmModal({
@@ -589,7 +595,7 @@ export default function KalendarzPage() {
       newDate: newDateKey
     });
   }
-
+  
   // Funkcja do potwierdzenia przeniesienia transportu
   const handleConfirmMove = () => {
     const { transport, newDate } = confirmModal;
@@ -599,7 +605,7 @@ export default function KalendarzPage() {
     });
     setConfirmModal({ isOpen: false, transport: null, newDate: null });
   }
-
+  
   const daysInMonth = eachDayOfInterval({
     start: startOfWeek(startOfMonth(currentMonth), { weekStartsOn: 1 }),
     end: endOfWeek(endOfMonth(currentMonth), { weekStartsOn: 1 })
