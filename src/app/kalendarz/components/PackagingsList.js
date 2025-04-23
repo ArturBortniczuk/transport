@@ -54,16 +54,22 @@ export default function PackagingsList({ onDragEnd }) {
 
   // Obsługa przeciągania
   const handleDragEnd = (result) => {
-    // Jeśli upuszczono poza celem, nic nie rób
-    if (!result.destination) return
+    console.log('Drag end result:', result);
     
-    // Znajdź przeciągnięte opakowanie
+    if (!result.destination) {
+      console.log('Upuszczono poza obszarem docelowym');
+      return;
+    }
+    
     const draggedPackaging = packagings.find(
       pkg => pkg.id.toString() === result.draggableId
-    )
+    );
+    
+    console.log('Przeciągnięte opakowanie:', draggedPackaging);
+    console.log('Cel upuszczenia:', result.destination.droppableId);
     
     if (draggedPackaging && onDragEnd) {
-      onDragEnd(draggedPackaging, result.destination.droppableId)
+      onDragEnd(draggedPackaging, result.destination.droppableId);
     }
   }
 
