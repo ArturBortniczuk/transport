@@ -1,12 +1,12 @@
 // src/app/kalendarz/components/PackagingsList.js
 'use client'
 import { useState, useEffect } from 'react'
-import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd'
+import { Droppable, Draggable } from '@hello-pangea/dnd' // Usunąłem DragDropContext z importów
 import { Package } from 'lucide-react'
 import { format } from 'date-fns'
 import { pl } from 'date-fns/locale'
 
-export default function PackagingsList({ onDragEnd }) {
+export default function PackagingsList({ noOwnDragDropContext = false }) {
   const [packagings, setPackagings] = useState([])
   const [isExpanded, setIsExpanded] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
@@ -52,30 +52,6 @@ export default function PackagingsList({ onDragEnd }) {
     fetchLastSync();
   }, []);
 
-  // Obsługa przeciągania
-  const handleDragEnd = (result) => {
-    console.log('DragEnd result:', result);
-    
-    // Jeśli upuszczono poza celem, nic nie rób
-    if (!result.destination) {
-      console.log('No destination, drag cancelled');
-      return;
-    }
-    
-    // Znajdź przeciągnięte opakowanie
-    const draggedPackaging = packagings.find(
-      pkg => pkg.id.toString() === result.draggableId
-    );
-    
-    if (draggedPackaging && onDragEnd) {
-      console.log('Calling onDragEnd with:', draggedPackaging, result.destination.droppableId);
-      // Wywołaj funkcję przekazaną jako props
-      onDragEnd(draggedPackaging, result.destination.droppableId);
-    } else {
-      console.log('Cannot handle drop - no packaging found or no onDragEnd handler');
-    }
-  }
-
   if (isLoading) {
     return (
       <div className="mb-8 bg-white rounded-lg shadow-md overflow-hidden">
@@ -91,6 +67,82 @@ export default function PackagingsList({ onDragEnd }) {
       </div>
     )
   }
+
+  // Zawartość sekcji opakowań
+  const packagingsList = (
+    <div className="p-4">
+      {packagings.length === 0 ? (
+        <div className="text-center py-2 text-sm text-gray-500">
+          Brak opakowań do odbioru
+        </div>
+      ) : (
+        <Droppable droppableId="packagings-list" type="PACKAGING">
+          {(provided) => (
+            <div 
+              ref={provided.innerRef}
+              {...provided.droppableProps}
+              className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2"
+            >
+              {packagings.map((packaging, index) => (
+                <Draggable
+                  key={packaging.id}
+                  draggableId={packaging.id.toString()}
+                  index={index}
+                >
+                  {(provided, snapshot) => (
+                    <div
+                      ref={provided.innerRef}
+                      {...provided.draggableProps}
+                      {...provided.dragHandleProps}
+                      className={`
+                        p-2 border rounded-md bg-gray-900 border-gray-700 relative text-white
+                        ${snapshot.isDragging ? 'shadow-lg' : ''}
+                        hover:bg-gray-800 transition-colors
+                      `}
+                      onMouseEnter={() => setHoverPackaging(packaging.id)}
+                      onMouseLeave={() => setHoverPackaging(null)}
+                    >
+                      <h4 className="font-medium text-sm truncate">{packaging.client_name}</h4>
+                      <p className="text-xs text-gray-300 truncate">
+                        {packaging.city}
+                      </p>
+                      
+                      {/* Tooltip z dodatkowymi informacjami */}
+                      {hoverPackaging === packaging.id && (
+                        <div className="absolute z-10 left-0 top-full mt-1 w-64 bg-white rounded-md shadow-lg p-3 text-xs border border-gray-200">
+                          <p className="font-semibold text-gray-900">{packaging.client_name}</p>
+                          <p className="text-gray-600">
+                            {packaging.city}, {packaging.postal_code}
+                            {packaging.street && <span>, {packaging.street}</span>}
+                          </p>
+                          <div className="mt-1 text-gray-700 border-t pt-1">
+                            {packaging.description}
+                          </div>
+                          <div className="mt-1 text-blue-600">
+                            Przeciągnij na datę, aby zaplanować odbiór
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </Draggable>
+              ))}
+              {provided.placeholder}
+            </div>
+          )}
+        </Droppable>
+      )}
+      
+      <div className="mt-3 flex justify-end">
+        <button
+          onClick={fetchPackagings}
+          className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded hover:bg-blue-200"
+        >
+          Odśwież listę
+        </button>
+      </div>
+    </div>
+  );
 
   return (
     <div className="mb-8 bg-white rounded-lg shadow-md overflow-hidden">
@@ -117,83 +169,7 @@ export default function PackagingsList({ onDragEnd }) {
         </div>
       </div>
       
-      {isExpanded && (
-        <div className="p-4">
-          {packagings.length === 0 ? (
-            <div className="text-center py-2 text-sm text-gray-500">
-              Brak opakowań do odbioru
-            </div>
-          ) : (
-            <DragDropContext onDragEnd={handleDragEnd}>
-              <Droppable droppableId="packagings-list" type="PACKAGING">
-                {(provided) => (
-                  <div 
-                    ref={provided.innerRef}
-                    {...provided.droppableProps}
-                    className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2"
-                  >
-                    {packagings.map((packaging, index) => (
-                      <Draggable
-                        key={packaging.id}
-                        draggableId={packaging.id.toString()}
-                        index={index}
-                        type="PACKAGING" // Dodaj jawnie typ
-                      >
-                        {(provided, snapshot) => (
-                          <div
-                            ref={provided.innerRef}
-                            {...provided.draggableProps}
-                            {...provided.dragHandleProps}
-                            className={`
-                              p-2 border rounded-md bg-gray-900 border-gray-700 relative text-white
-                              ${snapshot.isDragging ? 'shadow-lg' : ''}
-                              hover:bg-gray-800 transition-colors
-                            `}
-                            onMouseEnter={() => setHoverPackaging(packaging.id)}
-                            onMouseLeave={() => setHoverPackaging(null)}
-                          >
-                            <h4 className="font-medium text-sm truncate">{packaging.client_name}</h4>
-                            <p className="text-xs text-gray-300 truncate">
-                              {packaging.city}
-                            </p>
-                            
-                            {/* Tooltip z dodatkowymi informacjami */}
-                            {hoverPackaging === packaging.id && (
-                              <div className="absolute z-10 left-0 top-full mt-1 w-64 bg-white rounded-md shadow-lg p-3 text-xs border border-gray-200">
-                                <p className="font-semibold text-gray-900">{packaging.client_name}</p>
-                                <p className="text-gray-600">
-                                  {packaging.city}, {packaging.postal_code}
-                                  {packaging.street && <span>, {packaging.street}</span>}
-                                </p>
-                                <div className="mt-1 text-gray-700 border-t pt-1">
-                                  {packaging.description}
-                                </div>
-                                <div className="mt-1 text-blue-600">
-                                  Przeciągnij na datę, aby zaplanować odbiór
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </Draggable>
-                    ))}
-                    {provided.placeholder}
-                  </div>
-                )}
-              </Droppable>
-            </DragDropContext>
-          )}
-          
-          <div className="mt-3 flex justify-end">
-            <button
-              onClick={fetchPackagings}
-              className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded hover:bg-blue-200"
-            >
-              Odśwież listę
-            </button>
-          </div>
-        </div>
-      )}
+      {isExpanded && packagingsList}
     </div>
-  )
+  );
 }
