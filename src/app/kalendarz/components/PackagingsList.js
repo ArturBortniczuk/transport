@@ -88,6 +88,7 @@ export default function PackagingsList({ noOwnDragDropContext = false }) {
                   key={packaging.id}
                   draggableId={packaging.id.toString()}
                   index={index}
+                  type="PACKAGING" // Upewnij się, że jest to określone
                 >
                   {(provided, snapshot) => (
                     <div
