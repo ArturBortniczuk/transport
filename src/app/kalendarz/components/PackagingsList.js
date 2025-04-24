@@ -67,11 +67,20 @@ export default function PackagingsList({ onDragEnd }) {
     }
   }
 
-  // Funkcja pomocnicza do formatowania opisu opakowania
-  const formatDescription = (desc) => {
-    if (!desc) return '';
-    // Ogranicz opis do 50 znaków
-    return desc.length > 50 ? desc.substring(0, 50) + '...' : desc;
+  if (isLoading) {
+    return (
+      <div className="mb-8 bg-white rounded-lg shadow-md overflow-hidden">
+        <div className="p-3 bg-gradient-to-r from-blue-700 to-blue-800 text-white">
+          <div className="flex items-center">
+            <Package className="mr-2" size={18} />
+            <h3 className="font-semibold">Opakowania do odbioru</h3>
+          </div>
+        </div>
+        <div className="p-4">
+          <div className="text-center py-2 text-sm">Ładowanie opakowań...</div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -101,15 +110,13 @@ export default function PackagingsList({ onDragEnd }) {
       
       {isExpanded && (
         <div className="p-4">
-          {isLoading ? (
-            <div className="text-center py-2 text-sm">Ładowanie opakowań...</div>
-          ) : packagings.length === 0 ? (
+          {packagings.length === 0 ? (
             <div className="text-center py-2 text-sm text-gray-500">
               Brak opakowań do odbioru
             </div>
           ) : (
             <DragDropContext onDragEnd={handleDragEnd}>
-              <Droppable droppableId="packagings-list">
+              <Droppable droppableId="packagings-list" type="PACKAGING">
                 {(provided) => (
                   <div 
                     ref={provided.innerRef}
@@ -143,7 +150,7 @@ export default function PackagingsList({ onDragEnd }) {
                             {/* Tooltip z dodatkowymi informacjami */}
                             {hoverPackaging === packaging.id && (
                               <div className="absolute z-10 left-0 top-full mt-1 w-64 bg-white rounded-md shadow-lg p-3 text-xs border border-gray-200">
-                                <p className="font-semibold">{packaging.client_name}</p>
+                                <p className="font-semibold text-gray-900">{packaging.client_name}</p>
                                 <p className="text-gray-600">
                                   {packaging.city}, {packaging.postal_code}
                                   {packaging.street && <span>, {packaging.street}</span>}
