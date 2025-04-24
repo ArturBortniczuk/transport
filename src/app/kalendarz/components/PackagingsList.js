@@ -137,6 +137,7 @@ export default function PackagingsList({ onDragEnd }) {
                         key={packaging.id}
                         draggableId={packaging.id.toString()}
                         index={index}
+                        type="PACKAGING" // Dodaj jawnie typ
                       >
                         {(provided, snapshot) => (
                           <div
