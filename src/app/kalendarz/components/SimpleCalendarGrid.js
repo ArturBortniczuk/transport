@@ -75,24 +75,41 @@ export default function SimpleCalendarGrid({
 
   // Obsługa zakończenia przeciągania
   const handleDragEnd = (result) => {
-    const { source, destination, draggableId } = result
+    console.log('Transport drag result:', result);
+    
+    const { source, destination, draggableId, type } = result;
 
     // Jeśli przeciągnięto poza obszar docelowy lub do tego samego miejsca
-    if (!destination || (
-      destination.droppableId === source.droppableId
-    )) {
-      return
+    if (!destination) {
+      console.log('No destination found, cancelling drag');
+      return;
+    }
+    
+    // Sprawdź czy to opakowanie czy transport
+    if (type === 'PACKAGING') {
+      console.log('Packaging dragged - this should be handled by parent component');
+      return; // Obsługa w komponencie nadrzędnym
+    }
+    
+    // Poniżej obsługa dla transportu
+    if (destination.droppableId === source.droppableId) {
+      console.log('Dropped in the same place, no action needed');
+      return;
     }
 
     // Pobierz transport przez ID
-    const sourceDate = source.droppableId
-    const sourceTransports = transporty[sourceDate] || []
-    const transportIndex = sourceTransports.findIndex(t => t.id.toString() === draggableId)
+    const sourceDate = source.droppableId;
+    const sourceTransports = transporty[sourceDate] || [];
+    const transportIndex = sourceTransports.findIndex(t => t.id.toString() === draggableId);
     
-    if (transportIndex === -1) return
+    if (transportIndex === -1) {
+      console.log('Transport not found, id:', draggableId);
+      return;
+    }
     
     // Wywołaj callback z informacją o przeniesieniu
-    const transport = sourceTransports[transportIndex]
+    const transport = sourceTransports[transportIndex];
+    console.log('Moving transport:', transport);
     
     // Sprawdź, czy transport jest częścią połączonej trasy
     if (isConnectedTransport(transport, sourceTransports)) {
@@ -142,47 +159,61 @@ export default function SimpleCalendarGrid({
     }
   }
   
+  // Renderowanie komponentu
   return (
-    <DragDropContext onDragEnd={handleDragEnd}>
-      <div className="grid grid-cols-7 gap-2">
-        {['Pon', 'Wt', 'Śr', 'Czw', 'Pt', 'Sob', 'Ndz'].map((day) => (
-          <div key={day} className="text-center font-semibold p-2">
-            {day}
-          </div>
-        ))}
+    <div className="grid grid-cols-7 gap-2">
+      {['Pon', 'Wt', 'Śr', 'Czw', 'Pt', 'Sob', 'Ndz'].map((day) => (
+        <div key={day} className="text-center font-semibold p-2">
+          {day}
+        </div>
+      ))}
 
-        {daysInMonth.map((day) => {
-          const dateKey = format(day, 'yyyy-MM-dd')
-          const isCurrentMonth = format(day, 'M') === format(currentMonth, 'M')
-          
-          // Pobierz transporty dla danego dnia i filtruj je
-          const transportyNaDzien = transporty[dateKey] || []
-          const filtrowaneTransporty = filtrujTransporty(transportyNaDzien)
-          
-          return (
-            <div
-              key={dateKey}
-              onClick={() => handleClick(day)}
-              className={`
-                p-4 border rounded-lg cursor-pointer
-                ${selected && format(selected, 'yyyy-MM-dd') === dateKey ? 'ring-2 ring-blue-500' : ''}
-                ${!isCurrentMonth ? 'opacity-50 bg-gray-50' : 'hover:bg-gray-100'}
-                min-h-[100px]
-              `}
-            >
-              <div className={`font-medium ${!isCurrentMonth ? 'text-gray-400' : ''}`}>
-                {getDate(day)}
-              </div>
-              
-              {/* Obszar, na który można upuścić transport */}
-              <Droppable droppableId={dateKey} type="PACKAGING">
+      {daysInMonth.map((day) => {
+        const dateKey = format(day, 'yyyy-MM-dd')
+        const isCurrentMonth = format(day, 'M') === format(currentMonth, 'M')
+        
+        // Pobierz transporty dla danego dnia i filtruj je
+        const transportyNaDzien = transporty[dateKey] || []
+        const filtrowaneTransporty = filtrujTransporty(transportyNaDzien)
+        
+        return (
+          <div
+            key={dateKey}
+            onClick={() => handleClick(day)}
+            className={`
+              p-4 border rounded-lg cursor-pointer
+              ${selected && format(selected, 'yyyy-MM-dd') === dateKey ? 'ring-2 ring-blue-500' : ''}
+              ${!isCurrentMonth ? 'opacity-50 bg-gray-50' : 'hover:bg-gray-100'}
+              min-h-[100px]
+            `}
+          >
+            <div className={`font-medium ${!isCurrentMonth ? 'text-gray-400' : ''}`}>
+              {getDate(day)}
+            </div>
+            
+            {/* Obszar, na który można upuścić packaging */}
+            <Droppable droppableId={dateKey} type="PACKAGING">
+              {(provided) => (
+                <div
+                  ref={provided.innerRef}
+                  {...provided.droppableProps}
+                  className="mt-2 space-y-1 min-h-[20px]"
+                  data-droppable-date={dateKey}
+                >
+                  {provided.placeholder}
+                </div>
+              )}
+            </Droppable>
+
+            {/* Wyświetlanie transportów z obsługą przeciągania */}
+            <DragDropContext onDragEnd={handleDragEnd}>
+              <Droppable droppableId={dateKey} type="TRANSPORT">
                 {(provided) => (
                   <div
                     ref={provided.innerRef}
                     {...provided.droppableProps}
                     className="mt-2 space-y-1 min-h-[20px]"
                   >
-                    {/* Wyświetlanie transportów z obsługą przeciągania */}
                     {filtrowaneTransporty.map((transport, index) => {
                       // Sprawdź, czy transport jest połączony z innym
                       const isConnected = isConnectedTransport(transport, transportyNaDzien);
@@ -263,10 +294,10 @@ export default function SimpleCalendarGrid({
                   </div>
                 )}
               </Droppable>
-            </div>
-          )
-        })}
-      </div>
-    </DragDropContext>
+            </DragDropContext>
+          </div>
+        )
+      })}
+    </div>
   )
 }
