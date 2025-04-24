@@ -127,6 +127,20 @@ export default function KalendarzPage() {
       setIsLoading(false);
     }
   }
+  
+  // Nowa funkcja do pobierania danych o opakowaniach
+  const fetchPackagings = async () => {
+    try {
+      const response = await fetch('/api/packagings?status=pending');
+      const data = await response.json();
+      
+      if (!data.success) {
+        console.error('Błąd pobierania opakowań:', data.error);
+      }
+    } catch (error) {
+      console.error('Błąd komunikacji z API opakowań:', error);
+    }
+  }
 
   useEffect(() => {
     const role = localStorage.getItem('userRole')
@@ -168,17 +182,9 @@ export default function KalendarzPage() {
     
     // Wywołaj funkcję przy montowaniu komponentu
     fetchTransports()
-
-    //const refreshInterval = setInterval(() => {
-      //const scrollPosition = window.scrollY; // Zapisz pozycję przewijania
-      //fetchTransports().then(() => {
-        // Przywróć pozycję przewijania po zakończeniu pobierania
-        //window.scrollTo(0, scrollPosition);
-      //});
-    //}, 60000);
     
-    // Wyczyść interwał przy odmontowaniu komponentu
-    //return () => clearInterval(refreshInterval);
+    // Opcjonalnie możemy też pobrać dane o opakowaniach
+    fetchPackagings()
   }, [])
 
   const handleDateClick = (date) => {
@@ -469,7 +475,7 @@ export default function KalendarzPage() {
     setPrzenoszonyTransport(transport)
   }
 
-  const handlePrzenoszenieTransportu = async (options) => {
+const handlePrzenoszenieTransportu = async (options) => {
     if (!options) return;
     
     const { id, newDate } = options;
@@ -504,9 +510,11 @@ export default function KalendarzPage() {
 
   // Funkcja do obsługi upuszczenia opakowania na datę
   const handlePackagingDrop = async (packaging, dateKey) => {
+    console.log('Upuszczono opakowanie:', packaging, 'na datę:', dateKey);
+    
     // Pokaż potwierdzenie
     if (!confirm(`Czy chcesz zaplanować odbiór opakowań od ${packaging.client_name} na dzień ${format(new Date(dateKey), 'd MMMM yyyy', { locale: pl })}?`)) {
-      return;
+      return; // Jeśli użytkownik anuluje, przerywamy
     }
     
     try {
@@ -578,9 +586,22 @@ export default function KalendarzPage() {
         } else {
           console.error('Błąd wysyłania SMS:', smsResult);
         }
-      } catch (error) {
-        console.error('Błąd podczas wysyłania SMS:', error);
+      } catch (smsError) {
+        console.error('Błąd podczas wysyłania SMS:', smsError);
+        // Nie przerywamy całego procesu, jeśli SMS się nie wysłał
       }
+      
+      // Po zakończeniu odśwież dane
+      await fetchPackagings();
+      
+      // Przewiń stronę do formularza
+      const formElement = document.getElementById('transport-form');
+      if (formElement) {
+        setTimeout(() => {
+          formElement.scrollIntoView({ behavior: 'smooth' });
+        }, 300); // Daj chwilę na renderowanie przed przewijaniem
+      }
+      
     } catch (error) {
       console.error('Błąd podczas planowania odbioru opakowania:', error);
       alert('Wystąpił błąd podczas planowania odbioru opakowania');
