@@ -54,16 +54,25 @@ export default function PackagingsList({ onDragEnd }) {
 
   // Obsługa przeciągania
   const handleDragEnd = (result) => {
+    console.log('DragEnd result:', result);
+    
     // Jeśli upuszczono poza celem, nic nie rób
-    if (!result.destination) return
+    if (!result.destination) {
+      console.log('No destination, drag cancelled');
+      return;
+    }
     
     // Znajdź przeciągnięte opakowanie
     const draggedPackaging = packagings.find(
       pkg => pkg.id.toString() === result.draggableId
-    )
+    );
     
     if (draggedPackaging && onDragEnd) {
-      onDragEnd(draggedPackaging, result.destination.droppableId)
+      console.log('Calling onDragEnd with:', draggedPackaging, result.destination.droppableId);
+      // Wywołaj funkcję przekazaną jako props
+      onDragEnd(draggedPackaging, result.destination.droppableId);
+    } else {
+      console.log('Cannot handle drop - no packaging found or no onDragEnd handler');
     }
   }
 
