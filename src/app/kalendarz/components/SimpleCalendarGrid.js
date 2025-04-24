@@ -175,7 +175,7 @@ export default function SimpleCalendarGrid({
               </div>
               
               {/* Obszar, na który można upuścić transport */}
-              <Droppable droppableId={dateKey} type="calendar-day">
+              <Droppable droppableId={dateKey} type="PACKAGING">
                 {(provided) => (
                   <div
                     ref={provided.innerRef}
