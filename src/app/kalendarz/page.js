@@ -11,6 +11,7 @@ import FilterPanel from './components/FilterPanel'
 import TransportsList from './components/TransportsList'
 import PackagingsList from './components/PackagingsList'
 import { MAGAZYNY } from './constants'
+import { DragDropContext } from '@hello-pangea/dnd'
 
 export default function KalendarzPage() {
   const [currentMonth, setCurrentMonth] = useState(new Date())
@@ -741,17 +742,53 @@ const handlePrzenoszenieTransportu = async (options) => {
         setFiltryAktywne={setFiltryAktywne}
       />
 
-      {/* Dodajemy komponent do wyświetlania opakowań do odbioru */}
-      <PackagingsList onDragEnd={handlePackagingDrop} />
+      {/* Wspólny DragDropContext dla opakowań i kalendarza */}
+      <DragDropContext onDragEnd={(result) => {
+        console.log("Main DragDropContext onDragEnd:", result);
+        
+        if (!result.destination) {
+          console.log("Drag cancelled - no destination");
+          return;
+        }
+        
+        // Sprawdź typ przeciąganego elementu
+        if (result.type === 'PACKAGING') {
+          // Znajdź opakowanie
+          const packagingId = result.draggableId;
+          const newDateKey = result.destination.droppableId;
+          
+          // Sprawdź czy to z listy opakowań do dnia
+          if (result.source.droppableId === 'packagings-list') {
+            // Pobierz dane opakowania z API lub z cache lokalnego
+            fetch('/api/packagings?id=' + packagingId)
+              .then(res => res.json())
+              .then(data => {
+                if (data.success && data.packaging) {
+                  // Wywołaj funkcję obsługi upuszczenia opakowania
+                  handlePackagingDrop(data.packaging, newDateKey);
+                }
+              })
+              .catch(err => {
+                console.error("Error fetching packaging details:", err);
+              });
+          }
+        }
+      }}>
+        {/* Modyfikujemy PackagingsList, aby nie używał własnego DragDropContext */}
+        <PackagingsList noOwnDragDropContext={true} />
 
-      <SimpleCalendarGrid 
-        daysInMonth={daysInMonth}
-        onDateSelect={handleDateClick}
-        currentMonth={currentMonth}
-        transporty={transporty}
-        onTransportMove={handleTransportMove}
-        filtryAktywne={filtryAktywne}
-      />
+        {/* Modyfikujemy SimpleCalendarGrid, aby nie używał własnego DragDropContext dla opakowań */}
+        <SimpleCalendarGrid 
+          daysInMonth={daysInMonth}
+          onDateSelect={handleDateClick}
+          currentMonth={currentMonth}
+          transporty={transporty}
+          onTransportMove={handleTransportMove}
+          filtryAktywne={filtryAktywne}
+          noOwnDragDropContext={true}
+        />
+      </DragDropContext>
+
       <TransportsList
         selectedDate={selectedDate}
         transporty={transporty}
