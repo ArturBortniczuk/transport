@@ -772,12 +772,15 @@ const handlePrzenoszenieTransportu = async (options) => {
                 console.error("Error fetching packaging details:", err);
               });
           }
+        } else if (result.type === 'TRANSPORT') {
+          // Już istniejąca logika obsługi transportów
+          handleDragEnd(result);
         }
       }}>
         {/* Modyfikujemy PackagingsList, aby nie używał własnego DragDropContext */}
         <PackagingsList noOwnDragDropContext={true} />
-
-        {/* Modyfikujemy SimpleCalendarGrid, aby nie używał własnego DragDropContext dla opakowań */}
+  
+        {/* Modyfikujemy SimpleCalendarGrid, aby nie używał własnego DragDropContext */}
         <SimpleCalendarGrid 
           daysInMonth={daysInMonth}
           onDateSelect={handleDateClick}
