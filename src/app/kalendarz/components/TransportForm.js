@@ -18,7 +18,8 @@ export default function TransportForm({
   userPermissions,
   currentUserEmail, // <-- NOWO DODANE
   userRole, // <-- NOWO DODANE
-  transporty // Dodajemy ten prop, aby mieć dostęp do wszystkich transportów
+  transporty, // Dodajemy ten prop, aby mieć dostęp do wszystkich transportów
+  userName
 }) {
   const [users, setUsers] = useState([])
   const [isLoadingUsers, setIsLoadingUsers] = useState(true)
