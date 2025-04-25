@@ -69,13 +69,25 @@ export default function TransportsList({
     // Admin może zawsze edytować
     if (userRole === 'admin') return true;
     
+    // Sprawdź czy użytkownik ma rolę magazynu
+    const isMagazynRole = userRole === 'magazyn' || 
+                         userRole?.startsWith('magazyn_') ||
+                         userRole === 'magazyn_bialystok' ||
+                         userRole === 'magazyn_zielonka';
+    
     // Sprawdzamy czy użytkownik ma odpowiednie uprawnienia
     const hasPermission = userPermissions?.calendar?.edit === true;
+    
+    // Dla roli magazynu sprawdzamy, czy to jego magazyn
+    const isCorrectMagazyn = transport.zrodlo === 'bialystok' && 
+                           (userRole === 'magazyn_bialystok' || userRole === 'magazyn') ||
+                           transport.zrodlo === 'zielonka' && 
+                           (userRole === 'magazyn_zielonka' || userRole === 'magazyn');
     
     // Sprawdzamy czy transport został utworzony przez tego użytkownika
     const isCreator = transport.emailZlecajacego === userEmail;
     
-    return hasPermission && isCreator;
+    return hasPermission && (isCreator || isCorrectMagazyn);
   };
   
   console.log('Uprawnienia w TransportsList:', {
