@@ -11,6 +11,7 @@ import FilterPanel from './components/FilterPanel'
 import TransportsList from './components/TransportsList'
 import PackagingsList from './components/PackagingsList'
 import { MAGAZYNY } from './constants'
+import { KIEROWCY } from './constants'
 
 export default function KalendarzPage() {
   const [currentMonth, setCurrentMonth] = useState(new Date())
@@ -948,7 +949,9 @@ export default function KalendarzPage() {
                           {transport.kodPocztowy} - {transport.ulica || 'brak ulicy'}
                         </div>
                         <div className="text-xs text-gray-500">
-                          Kierowca: {KIEROWCY.find(k => k.id === parseInt(transport.kierowcaId))?.imie || 'Nieznany'}
+                          Kierowca: {transport.kierowcaId 
+                            ? KIEROWCY.find(k => k.id === parseInt(transport.kierowcaId))?.imie || 'Nieznany'
+                            : 'Nie przypisano'}
                         </div>
                       </div>
                     ))}
