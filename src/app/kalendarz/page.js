@@ -130,59 +130,40 @@ export default function KalendarzPage() {
   }
 
   useEffect(() => {
-    const role = localStorage.getItem('userRole')
-    const id = localStorage.getItem('userId')
-    const mpk = localStorage.getItem('userMpk')
-    const email = localStorage.getItem('userEmail')
-    console.log('Ustawiam rolę, ID i MPK:', { role, id, mpk })
-    setUserEmail(email)
-    setUserRole(role)
-    setUserId(id)
-    setUserMpk(mpk)
-    
-    // Ładowanie uprawnień
-    try {
-      const permissionsStr = localStorage.getItem('userPermissions')
-      if (permissionsStr) {
-        const permissions = JSON.parse(permissionsStr)
-        console.log('Załadowane uprawnienia:', permissions) // Dodaj log
-        setUserPermissions(permissions)
-      } else {
-        console.log('Brak uprawnień w localStorage')
-        // Ustaw domyślne uprawnienia
-        setUserPermissions({
-          calendar: { edit: role === 'magazyn' },
-          transport: { markAsCompleted: role === 'magazyn' }
-        })
+    const fetchUserData = async () => {
+      try {
+        setIsLoading(true);
+        const response = await fetch('/api/user');
+        const data = await response.json();
+        
+        if (data.isAuthenticated && data.user) {
+          setUserRole(data.user.role);
+          setUserId(data.user.email); // Zakładam, że to unikalny identyfikator
+          setUserEmail(data.user.email);
+          setUserMpk(data.user.mpk || '');
+          setUserPermissions(data.user.permissions || {});
+          console.log('Pobrane dane użytkownika z API:', {
+            role: data.user.role,
+            permissions: data.user.permissions
+          });
+        }
+      } catch (error) {
+        console.error('Błąd pobierania danych użytkownika:', error);
+        setError('Wystąpił błąd podczas pobierania danych użytkownika.');
+      } finally {
+        setIsLoading(false);
       }
-    } catch (e) {
-      console.error('Błąd parsowania uprawnień:', e)
-      // Ustaw domyślne uprawnienia w przypadku błędu
-      setUserPermissions({
-        calendar: { edit: role === 'magazyn' },
-        transport: { markAsCompleted: role === 'magazyn' }
-      })
-    }
-    
-    const savedZamowienia = localStorage.getItem('zamowieniaSpedycja')
+    };
+  
+    fetchUserData();
+  
+    const savedZamowienia = localStorage.getItem('zamowieniaSpedycja');
     if (savedZamowienia) {
-      setZamowienia(JSON.parse(savedZamowienia))
+      setZamowienia(JSON.parse(savedZamowienia));
     }
-    
-    // Wywołaj funkcję przy montowaniu komponentu
-    fetchTransports()
-
-    //const refreshInterval = setInterval(() => {
-      //const scrollPosition = window.scrollY; // Zapisz pozycję przewijania
-      //fetchTransports().then(() => {
-        // Przywróć pozycję przewijania po zakończeniu pobierania
-        //window.scrollTo(0, scrollPosition);
-      //});
-    //}, 60000);
-    
-    // Wyczyść interwał przy odmontowaniu komponentu
-    //return () => clearInterval(refreshInterval);
-  }, [])
+  
+    fetchTransports();
+  }, []);
 
   const handleDateClick = (date) => {
     setSelectedDate(date);
