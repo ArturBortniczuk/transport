@@ -23,6 +23,8 @@ export default function KalendarzPage() {
   const [userPermissions, setUserPermissions] = useState({})
   const [userMpk, setUserMpk] = useState('')
   const [userEmail, setUserEmail] = useState('')
+  const [connectingTransport, setConnectingTransport] = useState(null)
+  const [showConnectModal, setShowConnectModal] = useState(false)
   const [nowyTransport, setNowyTransport] = useState({
     miasto: '',
     kodPocztowy: '',
@@ -59,6 +61,51 @@ export default function KalendarzPage() {
     transport: null,
     newDate: null
   });
+
+  const handleConnectTransport = (transport) => {
+    setConnectingTransport(transport);
+    setShowConnectModal(true);
+  };
+  
+  // Funkcja do faktycznego łączenia transportów
+  const handleConfirmConnect = async (sourceTransport, targetTransport) => {
+    try {
+      // Upewnij się, że kierowcy obu transportów są tacy sami
+      if (sourceTransport.kierowcaId !== targetTransport.kierowcaId) {
+        if (!confirm('Transporty mają różnych kierowców. Czy na pewno chcesz je połączyć?')) {
+          return;
+        }
+      }
+      
+      // Wywołaj API do połączenia transportów
+      const response = await fetch('/api/transports/connect', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          sourceTransportId: sourceTransport.id,
+          targetTransportId: targetTransport.id
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        alert('Transporty zostały połączone!');
+        setShowConnectModal(false);
+        setConnectingTransport(null);
+        
+        // Odświeżenie danych
+        await fetchTransports();
+      } else {
+        throw new Error(data.error || 'Nie udało się połączyć transportów');
+      }
+    } catch (error) {
+      console.error('Błąd podczas łączenia transportów:', error);
+      alert('Wystąpił błąd podczas łączenia transportów: ' + error.message);
+    }
+  };
 
   // Znajdź funkcję fetchTransports i zmodyfikuj ją:
   const fetchTransports = async () => {
