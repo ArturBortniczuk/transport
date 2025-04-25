@@ -208,12 +208,36 @@ export default function KalendarzPage() {
       )
     
       // Oblicz odległość za pomocą Google Distance Matrix API
-      const odleglosc = await calculateDistance(
-        MAGAZYNY[wybranyMagazyn].lat,
-        MAGAZYNY[wybranyMagazyn].lng,
-        coordinates.lat,
-        coordinates.lng
-      )
+      let odleglosc = 0;
+      
+      if (nowyTransport.connectedTransportId) {
+        const dateKey = format(selectedDate, 'yyyy-MM-dd');
+        const sourceTransports = transporty[dateKey] || [];
+        const sourceTransport = sourceTransports.find(t => t.id === parseInt(nowyTransport.connectedTransportId));
+      
+        if (sourceTransport?.wspolrzedne) {
+          odleglosc = await calculateDistance(
+            sourceTransport.wspolrzedne.lat,
+            sourceTransport.wspolrzedne.lng,
+            coordinates.lat,
+            coordinates.lng
+          );
+        } else {
+          odleglosc = await calculateDistance(
+            MAGAZYNY[wybranyMagazyn].lat,
+            MAGAZYNY[wybranyMagazyn].lng,
+            coordinates.lat,
+            coordinates.lng
+          );
+        }
+      } else {
+        odleglosc = await calculateDistance(
+          MAGAZYNY[wybranyMagazyn].lat,
+          MAGAZYNY[wybranyMagazyn].lng,
+          coordinates.lat,
+          coordinates.lng
+        );
+      }
     
       const response = await fetch('/api/transports', {
         method: 'POST',
