@@ -7,7 +7,7 @@ export async function POST(request) {
   try {
     const { email, password } = await request.json();
     console.log('Próba logowania dla użytkownika:', email);
-
+    
     // Zmiana z SQLite na Knex
     const user = await db('users')
       .where({ 
@@ -15,7 +15,7 @@ export async function POST(request) {
         password: password 
       })
       .first();
-
+    
     if (user) {
       console.log('Zalogowano użytkownika:', {
         email: user.email,
@@ -49,7 +49,7 @@ export async function POST(request) {
       } catch (e) {
         console.error('Błąd parsowania uprawnień:', e);
       }
-
+      
       // Utwórz token sesji
       const sessionToken = `session_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
       
@@ -80,10 +80,14 @@ export async function POST(request) {
       const authCookie = serialize('authToken', sessionToken, cookieOptions);
       const roleCookie = serialize('userRole', user.role, { ...cookieOptions, httpOnly: false });
       
+      // Dodaj nowe ciasteczko przechowujące email użytkownika (niezbędne do sprawdzania utworzycieli transportów)
+      const emailCookie = serialize('userEmail', user.email, { ...cookieOptions, httpOnly: false });
+      
       const response = NextResponse.json({ 
         success: true,
         user: {
           name: user.name,
+          email: user.email, // Dodajemy email do odpowiedzi
           role: user.role,
           permissions: permissions,
           mpk: user.mpk || ''
@@ -93,7 +97,8 @@ export async function POST(request) {
       // Dodaj ciasteczka do odpowiedzi
       response.headers.append('Set-Cookie', authCookie);
       response.headers.append('Set-Cookie', roleCookie);
-
+      response.headers.append('Set-Cookie', emailCookie); // Dodajemy nowe ciasteczko z emailem
+      
       return response;
     }
     
@@ -103,7 +108,6 @@ export async function POST(request) {
     }, {
       status: 401
     });
-
   } catch (error) {
     console.error('Login error:', error);
     return NextResponse.json({ 
