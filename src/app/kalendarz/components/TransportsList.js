@@ -227,7 +227,7 @@ export default function TransportsList({
                     )}
                     
                     {/* Wyświetlanie informacji o połączonej trasie */}
-                    {isConnected && connectedTransport && !isCompleted && (
+                    {isConnected && !isCompleted && (
                       <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
                         <p className="text-sm font-medium text-blue-800 mb-2">
                           Transport połączony z:
@@ -255,6 +255,8 @@ export default function TransportsList({
                             </>
                           )}
                         </div>
+                      </div>
+                    )}
                         
                         {/* Przycisk do rozłączania transportów */}
                         {canEdit && (
