@@ -743,6 +743,7 @@ export default function KalendarzPage() {
             userPermissions={userPermissions}
             transporty={transporty}
             currentUserEmail={userEmail} // Dodajemy przekazanie emaila
+            userName={localStorage.getItem('userName')} // Dodajemy nazwę użytkownika
           />
         </>
       )}
