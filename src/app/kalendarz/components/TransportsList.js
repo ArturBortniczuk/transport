@@ -8,6 +8,7 @@ export default function TransportsList({
   selectedDate,
   transporty,
   userRole,
+  userEmail, // Nowy prop
   onZakonczTransport,
   onEditTransport,
   onPrzeniesDoPrzenoszenia,
@@ -62,6 +63,16 @@ export default function TransportsList({
 
   const canEdit = userPermissions?.calendar?.edit === true;
   const canMarkAsCompleted = userPermissions?.transport?.markAsCompleted === true;
+
+  // Funkcja pomocnicza do sprawdzania, czy użytkownik może edytować ten transport
+  const canEditTransport = (transport) => {
+    if (userRole === 'admin') return true;
+  
+    const hasPermission = userPermissions?.calendar?.edit === true;
+    const isCreator = transport.emailZlecajacego === userEmail;
+  
+    return hasPermission && isCreator;
+  };
   
   console.log('Uprawnienia w TransportsList:', {
     canEdit,
@@ -278,7 +289,7 @@ export default function TransportsList({
                         </button>
                       )}
                       
-                      {canEdit && userRole === transport.zrodlo && (
+                      {canEditTransport(transport) && (
                         <>
                           <button
                             onClick={() => onEditTransport(transport)}
