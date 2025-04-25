@@ -131,7 +131,6 @@ export default function KalendarzPage() {
 
   useEffect(() => {
     const role = localStorage.getItem('userRole')
-    const role = localStorage.getItem('userRole')
     const id = localStorage.getItem('userId')
     const mpk = localStorage.getItem('userMpk')
     console.log('Ustawiam rolę, ID i MPK:', { role, id, mpk })
