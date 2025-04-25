@@ -22,6 +22,7 @@ export default function KalendarzPage() {
   const [nowaData, setNowaData] = useState('')
   const [userPermissions, setUserPermissions] = useState({})
   const [userMpk, setUserMpk] = useState('')
+  const [userEmail, setUserEmail] = useState('')
   const [nowyTransport, setNowyTransport] = useState({
     miasto: '',
     kodPocztowy: '',
@@ -130,9 +131,11 @@ export default function KalendarzPage() {
 
   useEffect(() => {
     const role = localStorage.getItem('userRole')
+    const role = localStorage.getItem('userRole')
     const id = localStorage.getItem('userId')
     const mpk = localStorage.getItem('userMpk')
     console.log('Ustawiam rolę, ID i MPK:', { role, id, mpk })
+    setUserEmail(email)
     setUserRole(role)
     setUserId(id)
     setUserMpk(mpk)
@@ -704,6 +707,7 @@ export default function KalendarzPage() {
         selectedDate={selectedDate}
         transporty={transporty}
         userRole={userRole}
+        userEmail={userEmail} // Dodajemy przekazanie emaila
         onZakonczTransport={handleZakonczTransport}
         onEditTransport={handleEditTransport}
         onPrzeniesDoPrzenoszenia={handlePrzeniesDoPrzenoszenia}
@@ -738,6 +742,7 @@ export default function KalendarzPage() {
             setNowyTransport={setNowyTransport}
             userPermissions={userPermissions}
             transporty={transporty}
+            currentUserEmail={userEmail} // Dodajemy przekazanie emaila
           />
         </>
       )}
