@@ -32,6 +32,7 @@ const LoginPage = () => {
       console.log('Odpowiedź logowania:', data);
   
       if (data.success) {
+        localStorage.setItem('userEmail', email);
         // Emitujemy zdarzenie, aby powiadomić o zmianie stanu uwierzytelnienia
         window.dispatchEvent(new Event('auth-state-changed'));
         
