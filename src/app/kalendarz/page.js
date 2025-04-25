@@ -912,6 +912,66 @@ export default function KalendarzPage() {
           </div>
         </div>
       )}
+      {/* Modal wyboru transportu do połączenia */}
+      {showConnectModal && connectingTransport && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Połącz transport</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              Wybierz transport, który chcesz połączyć z transportem do {connectingTransport.miasto}
+            </p>
+            
+            <div className="max-h-64 overflow-y-auto mb-4">
+              {Object.entries(transporty).map(([dateKey, transportsOnDay]) => {
+                const filteredTransports = transportsOnDay.filter(t => 
+                  t.id !== connectingTransport.id && 
+                  t.status === 'active' &&
+                  !t.connected_transport_id &&
+                  !transportsOnDay.some(ot => ot.connected_transport_id === t.id)
+                );
+                
+                if (filteredTransports.length === 0) return null;
+                
+                return (
+                  <div key={dateKey} className="mb-2">
+                    <h4 className="font-medium text-sm text-gray-700">
+                      {format(new Date(dateKey), 'd MMMM yyyy', { locale: pl })}
+                    </h4>
+                    {filteredTransports.map(transport => (
+                      <div 
+                        key={transport.id}
+                        className="p-2 border rounded mt-1 cursor-pointer hover:bg-blue-50"
+                        onClick={() => handleConfirmConnect(connectingTransport, transport)}
+                      >
+                        <div className="font-medium">{transport.miasto}</div>
+                        <div className="text-sm text-gray-600">
+                          {transport.kodPocztowy} - {transport.ulica || 'brak ulicy'}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          Kierowca: {KIEROWCY.find(k => k.id === parseInt(transport.kierowcaId))?.imie || 'Nieznany'}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+            
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowConnectModal(false);
+                  setConnectingTransport(null);
+                }}
+                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition-colors"
+              >
+                Anuluj
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
