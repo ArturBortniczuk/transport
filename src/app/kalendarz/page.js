@@ -111,7 +111,8 @@ export default function KalendarzPage() {
               lng: transport.longitude
             },
             odleglosc: transport.distance,
-            packagingId: transport.packaging_id
+            packagingId: transport.packaging_id,
+            connected_transport_id: transport.connected_transport_id // Dodaj tę linię
           })
           return acc
         }, {})
@@ -264,7 +265,8 @@ export default function KalendarzPage() {
           is_cyclical: nowyTransport.trasaCykliczna ? 1 : 0,
           delivery_date: format(selectedDate, "yyyy-MM-dd'T'HH:mm:ss"),
           status: 'active',
-          packaging_id: nowyTransport.packagingId
+          packaging_id: nowyTransport.packagingId,
+          connected_transport_id: nowyTransport.connectedTransportId // Dodaj tę linię
         })
       });
       
@@ -412,13 +414,41 @@ export default function KalendarzPage() {
       )
   
       // Oblicz odległość za pomocą Google Distance Matrix API
-      const wybranyMagazyn = nowyTransport.zrodlo || 'bialystok'
-      const odleglosc = await calculateDistance(
-        MAGAZYNY[wybranyMagazyn].lat,
-        MAGAZYNY[wybranyMagazyn].lng,
-        coordinates.lat,
-        coordinates.lng
-      )
+      let odleglosc = 0;
+      const wybranyMagazyn = nowyTransport.zrodlo || 'bialystok';
+      
+      if (nowyTransport.connected_transport_id) {
+        // To jest transport połączony z innym
+        const dateKey = format(selectedDate || new Date(edytowanyTransport.dataDostawy), 'yyyy-MM-dd');
+        const sourceTransports = transporty[dateKey] || [];
+        const sourceTransport = sourceTransports.find(t => t.id === parseInt(nowyTransport.connected_transport_id));
+        
+        if (sourceTransport?.wspolrzedne) {
+          // Obliczamy odległość od poprzedniego przystanku
+          odleglosc = await calculateDistance(
+            sourceTransport.wspolrzedne.lat,
+            sourceTransport.wspolrzedne.lng,
+            coordinates.lat,
+            coordinates.lng
+          );
+        } else {
+          // Jeśli nie udało się znaleźć transportu źródłowego, obliczamy standardowo
+          odleglosc = await calculateDistance(
+            MAGAZYNY[wybranyMagazyn].lat,
+            MAGAZYNY[wybranyMagazyn].lng,
+            coordinates.lat,
+            coordinates.lng
+          );
+        }
+      } else {
+        // Standardowe obliczanie odległości od magazynu
+        odleglosc = await calculateDistance(
+          MAGAZYNY[wybranyMagazyn].lat,
+          MAGAZYNY[wybranyMagazyn].lng,
+          coordinates.lat,
+          coordinates.lng
+        );
+      }
   
       const response = await fetch(`/api/transports`, {
         method: 'PUT',
@@ -440,7 +470,8 @@ export default function KalendarzPage() {
           longitude: coordinates.lng,
           distance: odleglosc,
           delivery_date: selectedDate ? format(selectedDate, "yyyy-MM-dd'T'HH:mm:ss") : edytowanyTransport.delivery_date,
-          packaging_id: nowyTransport.packagingId
+          packaging_id: nowyTransport.packagingId,
+          connected_transport_id: nowyTransport.connected_transport_id // Dodaj tę linię
         })
       })
   
