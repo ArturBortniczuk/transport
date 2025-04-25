@@ -803,6 +803,7 @@ export default function KalendarzPage() {
         onZakonczTransport={handleZakonczTransport}
         onEditTransport={handleEditTransport}
         onPrzeniesDoPrzenoszenia={handlePrzeniesDoPrzenoszenia}
+        onConnectTransport={handleConnectTransport} // Dodaj tę linię
         filtryAktywne={filtryAktywne}
       />
 
