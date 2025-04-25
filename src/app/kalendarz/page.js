@@ -595,8 +595,7 @@ export default function KalendarzPage() {
                          userRole === 'magazyn_zielonka';
     
     // Użytkownicy z rolą magazynu lub admini mają uprawnienia
-    return (userPermissions?.calendar?.edit === true && isMagazynRole) || 
-           userRole === 'admin';
+    return userPermissions?.calendar?.edit === true || userRole === 'admin';
   };
 
   // Funkcja do zapisywania lokalizacji w localStorage
