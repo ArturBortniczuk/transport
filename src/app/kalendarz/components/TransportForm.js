@@ -37,11 +37,11 @@ export default function TransportForm({
 
   // ✅ Funkcja sprawdzająca, czy użytkownik może edytować transport
   const canEditTransport = (transport) => {
-    const hasPermission = userPermissions?.calendar?.edit === true;
-    const isCreator = transport?.emailZlecajacego === currentUserEmail;
-    const isAdmin = userRole === 'admin';
-  
-    return hasPermission && (isCreator || isAdmin);
+    // Albo użytkownik ma uprawnienie calendar.edit,
+    // albo jest adminem, albo jest twórcą transportu
+    return userPermissions?.calendar?.edit === true || 
+           userRole === 'admin' || 
+           transport?.emailZlecajacego === currentUserEmail;
   };
 
   useEffect(() => {
