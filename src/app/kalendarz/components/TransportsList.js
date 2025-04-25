@@ -66,11 +66,15 @@ export default function TransportsList({
 
   // Funkcja pomocnicza do sprawdzania, czy użytkownik może edytować ten transport
   const canEditTransport = (transport) => {
+    // Admin może zawsze edytować
     if (userRole === 'admin') return true;
-  
+    
+    // Sprawdzamy czy użytkownik ma odpowiednie uprawnienia
     const hasPermission = userPermissions?.calendar?.edit === true;
+    
+    // Sprawdzamy czy transport został utworzony przez tego użytkownika
     const isCreator = transport.emailZlecajacego === userEmail;
-  
+    
     return hasPermission && isCreator;
   };
   
