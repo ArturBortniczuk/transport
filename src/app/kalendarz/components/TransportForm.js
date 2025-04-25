@@ -16,6 +16,8 @@ export default function TransportForm({
   setEdytowanyTransport,
   setNowyTransport,
   userPermissions,
+  currentUserEmail, // <-- NOWO DODANE
+  userRole, // <-- NOWO DODANE
   transporty // Dodajemy ten prop, aby mieć dostęp do wszystkich transportów
 }) {
   const [users, setUsers] = useState([])
@@ -32,6 +34,14 @@ export default function TransportForm({
   const [selectedSourceTransport, setSelectedSourceTransport] = useState(null)
   const [defaultMagazyn, setDefaultMagazyn] = useState(null)
 
+  // ✅ Funkcja sprawdzająca, czy użytkownik może edytować transport
+  const canEditTransport = (transport) => {
+    const hasPermission = userPermissions?.calendar?.edit === true;
+    const isCreator = transport?.emailZlecajacego === currentUserEmail;
+    const isAdmin = userRole === 'admin';
+  
+    return hasPermission && (isCreator || isAdmin);
+  };
 
   useEffect(() => {
     const fetchUserRole = async () => {
@@ -264,14 +274,11 @@ export default function TransportForm({
     );
   };
 
-  const canEditCalendar = userPermissions?.calendar?.edit === true
-  
-  // Jeśli użytkownik nie ma uprawnień, nie wyświetlaj formularza
-  if (!canEditCalendar) {
+  if (!canEditTransport(edytowanyTransport || {})) {
     return (
       <div className="mt-8 bg-white rounded-xl shadow-lg p-6 text-center">
         <p className="text-gray-500">
-          Nie masz uprawnień do dodawania lub edycji transportów.
+          Nie masz uprawnień do dodawania lub edycji tego transportu.
         </p>
       </div>
     )
