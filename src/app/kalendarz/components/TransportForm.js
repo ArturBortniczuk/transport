@@ -177,18 +177,18 @@ export default function TransportForm({
 
   // Obsługa zmiany typu odbiorcy
   const handleRecipientTypeChange = (type) => {
-    setRecipientType(type)
+    setRecipientType(type);
     
     // Resetuj pola zależne od typu
     if (type === 'construction') {
       setNowyTransport(prev => ({
         ...prev,
-        // Zamiast stałej wartości "Admin" używamy aktualnej nazwy użytkownika i emaila
+        // Używamy danych zalogowanego użytkownika
         osobaZlecajaca: userName || localStorage.getItem('userName') || 'Użytkownik', 
-        emailZlecajacego: userEmail || localStorage.getItem('userEmail') || '',
+        emailZlecajacego: currentUserEmail || localStorage.getItem('userEmail') || '',
       }))
     } else {
-      setSelectedConstruction(null)
+      setSelectedConstruction(null);
       setNowyTransport(prev => ({
         ...prev,
         mpk: ''
