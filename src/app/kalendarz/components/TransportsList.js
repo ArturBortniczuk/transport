@@ -61,8 +61,8 @@ export default function TransportsList({
     fetchUserPermissions();
   }, []);
 
-  const canEdit = userPermissions?.calendar?.edit === true;
-  const canMarkAsCompleted = userPermissions?.transport?.markAsCompleted === true;
+  const canEdit = userPermissions?.calendar?.edit === true || userRole === 'admin';
+  const canMarkAsCompleted = userPermissions?.transport?.markAsCompleted === true || userRole === 'admin';
 
   // Funkcja pomocnicza do sprawdzania, czy użytkownik może edytować ten transport
   const canEditTransport = (transport) => {
