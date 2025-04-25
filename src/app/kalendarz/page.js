@@ -608,9 +608,11 @@ export default function KalendarzPage() {
       userId
     });
     
+    // Sprawdź czy rola użytkownika to magazyn (starsza wersja) lub zaczyna się od "magazyn_" (nowsza wersja)
+    const isMagazynRole = userRole === 'magazyn' || userRole?.startsWith('magazyn_');
+    
     return userPermissions?.calendar?.edit === true && 
-      userRole === 'magazyn' && 
-      (userId === 'bialystok' || userId === 'zielonka');
+      isMagazynRole;
   };
 
   // Funkcja do zapisywania lokalizacji w localStorage
