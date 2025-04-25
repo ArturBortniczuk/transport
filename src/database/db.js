@@ -271,6 +271,14 @@ const checkTransportsTable = async () => {
       });
       console.log('Dodano kolumnę connected_transport_id do tabeli transports');
     }
+
+    // Sprawdź czy kolumna packaging_id istnieje
+    if (!columnNames.includes('packaging_id')) {
+      await db.schema.table('transports', table => {
+        table.integer('packaging_id').references('id').inTable('packagings');
+      });
+      console.log('Dodano kolumnę packaging_id do tabeli transports');
+    }
   } catch (error) {
     console.error('Błąd sprawdzania tabeli transportów:', error);
   }
