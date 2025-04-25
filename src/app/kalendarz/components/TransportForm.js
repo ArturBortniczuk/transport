@@ -182,8 +182,9 @@ export default function TransportForm({
     if (type === 'construction') {
       setNowyTransport(prev => ({
         ...prev,
-        osobaZlecajaca: 'Admin', // Domyślna wartość dla budowy
-        emailZlecajacego: 'admin@firma.pl', // Domyślny email
+        // Zamiast stałej wartości "Admin" używamy aktualnej nazwy użytkownika i emaila
+        osobaZlecajaca: userName || localStorage.getItem('userName') || 'Użytkownik', 
+        emailZlecajacego: userEmail || localStorage.getItem('userEmail') || '',
       }))
     } else {
       setSelectedConstruction(null)
