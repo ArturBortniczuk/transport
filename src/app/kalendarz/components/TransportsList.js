@@ -2,17 +2,18 @@ import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import { KIEROWCY } from '../constants';
 import { useState, useEffect } from 'react';
-import { Link2, ArrowRight, ArrowLeft, CheckCircle } from 'lucide-react';
+import { Link2, ArrowRight, ArrowLeft, CheckCircle, Link } from 'lucide-react';
 
 export default function TransportsList({
   selectedDate,
   transporty,
   userRole,
-  userEmail, // Nowy prop
+  userEmail,
   onZakonczTransport,
   onEditTransport,
   onPrzeniesDoPrzenoszenia,
-  filtryAktywne = {} // Domyślna wartość, jeśli nie przekazano filtrów
+  onConnectTransport, // Nowy prop do obsługi łączenia transportów
+  filtryAktywne = {}
 }) {
   if (!selectedDate) return null;
 
@@ -146,6 +147,11 @@ export default function TransportsList({
     }
   };
 
+  // Sprawdź, czy transport może być połączony (nie jest już połączony i jest aktywny)
+  const canBeConnected = (transport) => {
+    return !isConnectedTransport(transport) && transport.status === 'active' && canEdit;
+  };
+
   if (isLoading) {
     return (
       <div className="mt-8 bg-white rounded-xl shadow-lg p-6">
@@ -227,7 +233,7 @@ export default function TransportsList({
                     )}
                     
                     {/* Wyświetlanie informacji o połączonej trasie */}
-                    {isConnected && !isCompleted && (
+                    {isConnected && connectedTransport && !isCompleted && (
                       <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
                         <p className="text-sm font-medium text-blue-800 mb-2">
                           Transport połączony z:
@@ -255,7 +261,7 @@ export default function TransportsList({
                             </>
                           )}
                         </div>
-
+                        
                         {/* Przycisk do rozłączania transportów */}
                         {canEdit && (
                           <button
@@ -319,6 +325,15 @@ export default function TransportsList({
                           >
                             Przenieś
                           </button>
+                          {/* Nowy przycisk do łączenia transportów */}
+                          {canBeConnected(transport) && onConnectTransport && (
+                            <button
+                              onClick={() => onConnectTransport(transport)}
+                              className="px-4 py-2 text-sm bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors"
+                            >
+                              Połącz
+                            </button>
+                          )}
                         </>
                       )}
                     </div>
