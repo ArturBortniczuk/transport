@@ -138,10 +138,15 @@ export default function KalendarzPage() {
         
         if (data.isAuthenticated && data.user) {
           setUserRole(data.user.role);
-          setUserId(data.user.email); // Zakładam, że to unikalny identyfikator
+          setUserId(data.user.email);
           setUserEmail(data.user.email);
           setUserMpk(data.user.mpk || '');
           setUserPermissions(data.user.permissions || {});
+          
+          // Dodane: zapisz dane użytkownika do localStorage
+          localStorage.setItem('userName', data.user.name || data.user.email);
+          localStorage.setItem('userEmail', data.user.email);
+          
           console.log('Pobrane dane użytkownika z API:', {
             role: data.user.role,
             permissions: data.user.permissions
@@ -728,7 +733,7 @@ export default function KalendarzPage() {
             userPermissions={userPermissions}
             transporty={transporty}
             currentUserEmail={userEmail} // Dodajemy przekazanie emaila
-            userName={localStorage.getItem('userName')} // Dodajemy nazwę użytkownika
+            userName={localStorage.getItem('userName') || userEmail} // Nazwa użytkownika lub jako fallback jego email
           />
         </>
       )}
