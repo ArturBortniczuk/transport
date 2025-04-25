@@ -255,9 +255,7 @@ export default function TransportsList({
                             </>
                           )}
                         </div>
-                      </div>
-                    )}
-                        
+
                         {/* Przycisk do rozłączania transportów */}
                         {canEdit && (
                           <button
