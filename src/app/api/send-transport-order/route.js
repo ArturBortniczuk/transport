@@ -34,6 +34,7 @@ export async function POST(request) {
     // Pobierz dane użytkownika
     const user = await db('users')
       .where('email', userId)
+      .select('*')
       .first();
     
     if (!user) {
@@ -41,6 +42,27 @@ export async function POST(request) {
         success: false,
         error: 'Nie znaleziono użytkownika'
       }, { status: 404 });
+    }
+    
+    // Sprawdź uprawnienia
+    let permissions = {};
+    try {
+      if (user.permissions && typeof user.permissions === 'string') {
+        permissions = JSON.parse(user.permissions);
+      }
+    } catch (e) {
+      console.error('Błąd parsowania uprawnień:', e);
+    }
+    
+    // Sprawdź czy użytkownik ma uprawnienie do wysyłania zlecenia transportowego
+    const isAdmin = user.is_admin === 1 || user.is_admin === true || user.role === 'admin';
+    const canSendTransportOrder = isAdmin || permissions?.spedycja?.sendOrder === true;
+    
+    if (!canSendTransportOrder) {
+      return NextResponse.json({
+        success: false,
+        error: 'Brak uprawnień do wysyłania zlecenia transportowego'
+      }, { status: 403 });
     }
     
     // Pobierz dane z żądania, dodaj obsługę additionalPlaces
