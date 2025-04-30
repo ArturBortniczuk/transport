@@ -3,7 +3,15 @@ import { format } from 'date-fns'
 import { pl } from 'date-fns/locale'
 import { generateCMR } from '@/lib/utils/generateCMR'
 
-export default function SpedycjaList({ zamowienia, showArchive, isAdmin, onResponse, onMarkAsCompleted, onCreateOrder }) {
+export default function SpedycjaList({ 
+  zamowienia, 
+  showArchive, 
+  isAdmin, 
+  onResponse, 
+  onMarkAsCompleted, 
+  onCreateOrder, 
+  canSendOrder  // Nowa właściwość
+}) {
   const [expandedId, setExpandedId] = useState(null)
 
   const buttonClasses = {
@@ -228,7 +236,7 @@ export default function SpedycjaList({ zamowienia, showArchive, isAdmin, onRespo
                       >
                         Generuj CMR
                       </button>
-                      {zamowienie.response && !showArchive && (
+                      {zamowienie.response && !showArchive && canSendOrder && (
                         <button 
                           type="button"
                           className={`${buttonClasses.primary} ml-2`}
