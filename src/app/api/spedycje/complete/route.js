@@ -20,7 +20,7 @@ const sendSms = async (phoneNumber, message) => {
     }
     
     const login = 'ArturBortniczuk';
-    const password = 'ArtBor.2024';
+    const password = 'ArtBor.2025';
     const serviceId = '21370';
     
     const smsUrl = `https://api2.multiinfo.plus.pl/Api61/sendsms.aspx?serviceId=${serviceId}&login=${login}&password=${password}&dest=${phoneNumber}&text=${encodeURIComponent(message)}`;
