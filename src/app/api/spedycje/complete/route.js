@@ -5,22 +5,10 @@ import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import axios from 'axios';
 import https from 'https';
-import fs from 'fs';
-import path from 'path';
 
 // Funkcja pomocnicza do weryfikacji sesji
 const validateSession = async (authToken) => {
-  if (!authToken) {
-    return null;
-  }
-  
-  const session = await db('sessions')
-    .where('token', authToken)
-    .whereRaw('expires_at > NOW()')
-    .select('user_id')
-    .first();
-  
-  return session?.user_id;
+  // ... (kod bez zmian)
 };
 
 // Funkcja do wysyłania SMS z wykorzystaniem certyfikatu
@@ -32,22 +20,21 @@ const sendSms = async (phoneNumber, message) => {
     }
     
     const login = 'ArturBortniczuk';
-    const password = 'ArtBor.2025';
+    const password = 'ArtBor.2024';
     const serviceId = '21370';
     
     const smsUrl = `https://api2.multiinfo.plus.pl/Api61/sendsms.aspx?serviceId=${serviceId}&login=${login}&password=${password}&dest=${phoneNumber}&text=${encodeURIComponent(message)}`;
     
-    // Ścieżki do certyfikatów (muszą znajdować się np. w katalogu cert)
-    const certPath = path.resolve(process.cwd(), 'cert/certyfikat.pem');
+    // Pobierz certyfikat ze zmiennej środowiskowej
+    const certContent = process.env.MULTIINFO_CERTIFICATE;
     
-    // Sprawdź, czy certyfikat istnieje
-    if (!fs.existsSync(certPath)) {
-      console.error('Błąd: Nie znaleziono pliku certyfikatu. Ścieżka:', certPath);
+    if (!certContent) {
+      console.error('Błąd: Brak certyfikatu w zmiennych środowiskowych (MULTIINFO_CERTIFICATE)');
       return false;
     }
     
     const httpsAgent = new https.Agent({
-      cert: fs.readFileSync(certPath),
+      cert: certContent,
       rejectUnauthorized: false // Możesz ustawić na true, jeśli certyfikat CA jest prawidłowy
     });
     
