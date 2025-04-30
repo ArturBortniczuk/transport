@@ -1,6 +1,8 @@
-// Modyfikacja pliku api/spedycje/complete/route.js
+// src/app/api/spedycje/complete/route.js
 import { NextResponse } from 'next/server';
 import db from '@/database/db';
+import { format } from 'date-fns';
+import { pl } from 'date-fns/locale';
 
 // Funkcja pomocnicza do weryfikacji sesji
 const validateSession = async (authToken) => {
@@ -26,41 +28,26 @@ const sendSms = async (phoneNumber, message) => {
       return false;
     }
     
-    // Konfiguracja API Plus MultiInfo (użyj prawdziwych danych z procesu.env)
-    const apiUrl = 'https://api2.multiinfo.plus.pl/messages';
-    const apiKey = process.env.MULTIINFO_API_KEY;
+    // Konfiguracja API MultiInfo
+    const login = 'ArturBortniczuk';  // Używamy danych, które już działają
+    const password = 'ArtBor.2024';
+    const serviceId = '21370';
     
-    if (!apiKey) {
-      console.error('Brak klucza API do MultiInfo');
+    // Przygotowanie URL do API
+    const smsUrl = `https://api2.multiinfo.plus.pl/sendsms.aspx?serviceId=${serviceId}&login=${login}&password=${password}&dest=${phoneNumber}&text=${encodeURIComponent(message)}&stat=spedycja-SMS`;
+    
+    // Wysłanie SMS-a
+    const response = await fetch(smsUrl);
+    const result = await response.text();
+    
+    // Sprawdzenie wyniku
+    if (result && result.startsWith('0')) {
+      console.log('SMS został wysłany pomyślnie');
+      return true;
+    } else {
+      console.error('Błąd wysyłania SMS:', result);
       return false;
     }
-    
-    // Przygotowanie danych dla API
-    const smsData = {
-      recipient: phoneNumber,
-      text: message,
-      sender: "TRANSPORT", // Twój zdefiniowany nadawca (SENDER ID)
-      type: "sms"
-    };
-    
-    // Wysłanie SMS-a przez API
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify(smsData)
-    });
-    
-    const data = await response.json();
-    
-    if (!response.ok) {
-      console.error('Błąd odpowiedzi API SMS:', data);
-      return false;
-    }
-    
-    return true;
   } catch (error) {
     console.error('Błąd podczas wysyłania SMS:', error);
     return false;
@@ -140,6 +127,9 @@ export async function POST(request) {
       }
     }
     
+    console.log('Aktualizacja zlecenia z ID:', id);
+    console.log('Dane odpowiedzi do zapisania:', responseData);
+    
     // Aktualizujemy rekord w bazie
     const updated = await db('spedycje')
       .where('id', id)
@@ -169,7 +159,8 @@ export async function POST(request) {
       if (creator && creator.phone) {
         // Przygotuj informacje potrzebne do SMS-a
         const orderNumber = currentSpedycja.order_number || id;
-        const deliveryDate = new Date(currentSpedycja.delivery_date).toLocaleDateString('pl-PL');
+        const deliveryDateObj = new Date(currentSpedycja.delivery_date);
+        const deliveryDate = format(deliveryDateObj, 'dd.MM.yyyy', { locale: pl });
         
         // Przygotuj informacje o kierowcy (jeśli dostępne)
         let driverInfo = '';
@@ -178,18 +169,16 @@ export async function POST(request) {
           if (responseData.driverPhone) {
             driverInfo += `, tel. ${responseData.driverPhone}`;
           }
+        } else {
+          driverInfo = 'Informacje niedostępne';
         }
         
         // Przygotuj treść wiadomości
-        let message = `Zlecenie spedycji ${orderNumber} zostało zrealizowane.`;
-        message += ` Auto zostało znalezione na ${deliveryDate}.`;
-        if (driverInfo) {
-          message += ` Kierowca: ${driverInfo}`;
-        }
+        let message = `Zlecenie spedycji ${orderNumber} zostało zrealizowane. Auto zostało znalezione na ${deliveryDate}. Kierowca: ${driverInfo}`;
         
         // Wyślij SMS
-        await sendSms(creator.phone, message);
-        console.log(`SMS wysłany do ${creator.name} (${creator.phone})`);
+        const smsSent = await sendSms(creator.phone, message);
+        console.log(`SMS wysłany do ${creator.name} (${creator.phone}): ${smsSent ? 'sukces' : 'błąd'}`);
       } else {
         console.log('Nie znaleziono numeru telefonu dla twórcy spedycji:', creatorEmail);
       }
