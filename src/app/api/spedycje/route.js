@@ -179,10 +179,24 @@ export async function POST(request) {
     // Sprawdzamy czy użytkownik ma uprawnienia
     const user = await db('users')
       .where('email', userId)
-      .select('role', 'name')
+      .select('role', 'name', 'permissions', 'is_admin')
       .first();
     
-    if (!user || (user.role !== 'handlowiec' && user.role !== 'admin' && user.role !== 'magazyn')) {
+    // Pobierz uprawnienia użytkownika
+    let permissions = {};
+    try {
+      if (user.permissions && typeof user.permissions === 'string') {
+        permissions = JSON.parse(user.permissions);
+      }
+    } catch (e) {
+      console.error('Błąd parsowania uprawnień:', e);
+    }
+
+    // Sprawdź czy użytkownik ma uprawnienie do dodawania spedycji
+    const isAdmin = user.is_admin === 1 || user.is_admin === true || user.role === 'admin';
+    const canAddSpedycja = isAdmin || permissions?.spedycja?.add === true;
+
+    if (!canAddSpedycja) {
       return NextResponse.json({ 
         success: false, 
         error: 'Brak uprawnień do dodawania spedycji' 
@@ -317,10 +331,24 @@ export async function PUT(request) {
     // Sprawdzamy czy użytkownik ma uprawnienia
     const user = await db('users')
       .where('email', userId)
-      .select('role')
+      .select('role', 'permissions', 'is_admin')
       .first();
     
-    if (!user || (user.role !== 'magazyn' && user.role !== 'admin')) {
+    // Pobierz uprawnienia użytkownika
+    let permissions = {};
+    try {
+      if (user.permissions && typeof user.permissions === 'string') {
+        permissions = JSON.parse(user.permissions);
+      }
+    } catch (e) {
+      console.error('Błąd parsowania uprawnień:', e);
+    }
+
+    // Sprawdź czy użytkownik ma uprawnienie do odpowiadania na spedycje
+    const isAdmin = user.is_admin === 1 || user.is_admin === true || user.role === 'admin';
+    const canRespondToSpedycja = isAdmin || permissions?.spedycja?.respond === true;
+
+    if (!canRespondToSpedycja) {
       return NextResponse.json({ 
         success: false, 
         error: 'Brak uprawnień do odpowiadania na zlecenia spedycji' 
