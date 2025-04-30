@@ -321,10 +321,44 @@ export default function SpedycjaPage() {
     }
   };
 
-  // Sprawdzanie, czy użytkownik może dodawać zamówienia
-  const canAddOrder = isAdmin || userRole === 'handlowiec';
-  // Odpowiadać mogą magazynierzy i admini
-  const canRespond = isAdmin || userRole === 'magazyn';
+  useEffect(() => {
+    // Pobierz pełne uprawnienia użytkownika
+    const fetchUserPermissions = async () => {
+      try {
+        const response = await fetch('/api/user');
+        const data = await response.json();
+        
+        if (data.isAuthenticated && data.user) {
+          setUserRole(data.user.role);
+          setIsAdmin(data.user.isAdmin);
+          
+          // Ustaw uprawnienia na podstawie danych z API
+          const permissions = data.user.permissions || {};
+          
+          // Domyślnie admin ma wszystkie uprawnienia
+          if (data.user.isAdmin) {
+            setCanAddOrder(true);
+            setCanRespond(true);
+            setCanSendOrder(true);
+          } else {
+            // Sprawdź uprawnienia spedycyjne
+            setCanAddOrder(permissions?.spedycja?.add || false);
+            setCanRespond(permissions?.spedycja?.respond || false);
+            setCanSendOrder(permissions?.spedycja?.sendOrder || false);
+          }
+        }
+      } catch (error) {
+        console.error('Błąd pobierania danych użytkownika:', error);
+      }
+    };
+    
+    fetchUserPermissions();
+  }, []);
+  
+  // Dodajemy nowe stany do komponentu
+  const [canAddOrder, setCanAddOrder] = useState(false);
+  const [canRespond, setCanRespond] = useState(false);
+  const [canSendOrder, setCanSendOrder] = useState(false);
 
   if (isLoading) {
     return (
