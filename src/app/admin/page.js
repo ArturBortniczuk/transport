@@ -48,6 +48,11 @@ export default function AdminPage() {
           },
           transport: {
             markAsCompleted: user.role === 'magazyn' || user.role === 'magazyn_bialystok' || user.role === 'magazyn_zielonka'
+          },
+          spedycja: {
+            add: false,
+            respond: false,
+            sendOrder: false
           }
         };
         
@@ -291,6 +296,16 @@ export default function AdminPage() {
                     <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Oznaczanie jako Zrealizowane
                     </th>
+                    {/* Nowe kolumny uprawnień */}
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Dodawanie Spedycji
+                    </th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Odpowiadanie na Spedycje
+                    </th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Wysyłanie Zlecenia
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -343,6 +358,51 @@ export default function AdminPage() {
                             type="checkbox"
                             checked={user.permissions?.transport?.markAsCompleted || false}
                             onChange={() => handlePermissionChange(user.email, 'transport', 'markAsCompleted')}
+                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                            disabled={savingUserId === user.email}
+                          />
+                          {savingUserId === user.email && (
+                            <span className="ml-2 text-xs text-blue-500">Zapisywanie...</span>
+                          )}
+                        </div>
+                      </td>
+                      {/* Dodawanie Spedycji */}
+                      <td className="px-6 py-4 whitespace-nowrap text-center">
+                        <div className="relative inline-block">
+                          <input
+                            type="checkbox"
+                            checked={user.permissions?.spedycja?.add || false}
+                            onChange={() => handlePermissionChange(user.email, 'spedycja', 'add')}
+                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                            disabled={savingUserId === user.email}
+                          />
+                          {savingUserId === user.email && (
+                            <span className="ml-2 text-xs text-blue-500">Zapisywanie...</span>
+                          )}
+                        </div>
+                      </td>
+                      {/* Odpowiadanie na Spedycje */}
+                      <td className="px-6 py-4 whitespace-nowrap text-center">
+                        <div className="relative inline-block">
+                          <input
+                            type="checkbox"
+                            checked={user.permissions?.spedycja?.respond || false}
+                            onChange={() => handlePermissionChange(user.email, 'spedycja', 'respond')}
+                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                            disabled={savingUserId === user.email}
+                          />
+                          {savingUserId === user.email && (
+                            <span className="ml-2 text-xs text-blue-500">Zapisywanie...</span>
+                          )}
+                        </div>
+                      </td>
+                      {/* Wysyłanie Zlecenia */}
+                      <td className="px-6 py-4 whitespace-nowrap text-center">
+                        <div className="relative inline-block">
+                          <input
+                            type="checkbox"
+                            checked={user.permissions?.spedycja?.sendOrder || false}
+                            onChange={() => handlePermissionChange(user.email, 'spedycja', 'sendOrder')}
                             className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                             disabled={savingUserId === user.email}
                           />
