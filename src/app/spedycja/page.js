@@ -425,6 +425,7 @@ export default function SpedycjaPage() {
               onResponse={handlePrepareResponse}
               onMarkAsCompleted={handleMarkAsCompleted}
               onCreateOrder={handleCreateOrder}
+              canSendOrder={canSendOrder}
             />
           ) : (
             <div className="p-12 text-center text-gray-500">
