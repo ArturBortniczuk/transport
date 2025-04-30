@@ -3,6 +3,10 @@ import { NextResponse } from 'next/server';
 import db from '@/database/db';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
+import axios from 'axios';
+import https from 'https';
+import fs from 'fs';
+import path from 'path';
 
 // Funkcja pomocnicza do weryfikacji sesji
 const validateSession = async (authToken) => {
@@ -19,29 +23,38 @@ const validateSession = async (authToken) => {
   return session?.user_id;
 };
 
-// Funkcja do wysyłania SMS
+// Funkcja do wysyłania SMS z wykorzystaniem certyfikatu
 const sendSms = async (phoneNumber, message) => {
   try {
-    // Sprawdź czy istnieją wymagane dane
     if (!phoneNumber || !message) {
       console.error('Brak numeru telefonu lub treści wiadomości do wysłania SMS');
       return false;
     }
     
-    // Konfiguracja API MultiInfo
-    const login = 'ArturBortniczuk';  // Używamy danych, które już działają
-    const password = 'ArtBor.2024';
+    const login = 'ArturBortniczuk';
+    const password = 'ArtBor.2025';
     const serviceId = '21370';
     
-    // Przygotowanie URL do API
-    const smsUrl = `https://api2.multiinfo.plus.pl/sendsms.aspx?serviceId=${serviceId}&login=${login}&password=${password}&dest=${phoneNumber}&text=${encodeURIComponent(message)}&stat=spedycja-SMS`;
+    const smsUrl = `https://api2.multiinfo.plus.pl/Api61/sendsms.aspx?serviceId=${serviceId}&login=${login}&password=${password}&dest=${phoneNumber}&text=${encodeURIComponent(message)}`;
     
-    // Wysłanie SMS-a
-    const response = await fetch(smsUrl);
-    const result = await response.text();
+    // Ścieżki do certyfikatów (muszą znajdować się np. w katalogu cert)
+    const certPath = path.resolve(process.cwd(), 'cert/certyfikat.pem');
     
-    // Sprawdzenie wyniku
-    if (result && result.startsWith('0')) {
+    // Sprawdź, czy certyfikat istnieje
+    if (!fs.existsSync(certPath)) {
+      console.error('Błąd: Nie znaleziono pliku certyfikatu. Ścieżka:', certPath);
+      return false;
+    }
+    
+    const httpsAgent = new https.Agent({
+      cert: fs.readFileSync(certPath),
+      rejectUnauthorized: false // Możesz ustawić na true, jeśli certyfikat CA jest prawidłowy
+    });
+    
+    const response = await axios.get(smsUrl, { httpsAgent });
+    const result = response.data;
+    
+    if (result && result.toString().startsWith('0')) {
       console.log('SMS został wysłany pomyślnie');
       return true;
     } else {
