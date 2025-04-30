@@ -1,3 +1,4 @@
+// Modyfikacja pliku api/spedycje/complete/route.js
 import { NextResponse } from 'next/server';
 import db from '@/database/db';
 
@@ -14,6 +15,35 @@ const validateSession = async (authToken) => {
     .first();
   
   return session?.user_id;
+};
+
+// Funkcja do wysyłania SMS po oznaczeniu spedycji jako zrealizowanej
+const sendCompletionSms = async (phoneNumber, orderNumber, deliveryDate, driverInfo) => {
+  try {
+    // Przygotuj treść wiadomości
+    const message = `Zlecenie spedycji ${orderNumber} zostało zrealizowane. Auto zostało znalezione na ${deliveryDate}. ${driverInfo ? 'Kierowca: ' + driverInfo : ''}`;
+    
+    // Wywołaj API do wysyłania SMS
+    const response = await fetch(new URL('/api/sms', request.url).toString(), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ phoneNumber, message })
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      console.error('Błąd wysyłania SMS:', data.error);
+      return false;
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Błąd podczas próby wysłania SMS:', error);
+    return false;
+  }
 };
 
 export async function POST(request) {
@@ -107,6 +137,40 @@ export async function POST(request) {
         success: false, 
         error: 'Nie udało się zaktualizować zlecenia spedycji' 
       }, { status: 500 });
+    }
+    
+    // Teraz wyślij SMS do osoby, która utworzyła spedycję
+    try {
+      // Pobierz numer telefonu osoby, która utworzyła spedycję
+      const creatorEmail = currentSpedycja.created_by_email;
+      const creator = await db('users')
+        .where('email', creatorEmail)
+        .select('phone')
+        .first();
+      
+      if (creator && creator.phone) {
+        // Przygotuj informacje potrzebne do SMS-a
+        const orderNumber = currentSpedycja.order_number || id;
+        const deliveryDate = new Date(currentSpedycja.delivery_date).toLocaleDateString('pl-PL');
+        
+        // Przygotuj informacje o kierowcy (jeśli dostępne)
+        let driverInfo = '';
+        if (responseData.driverName && responseData.driverSurname) {
+          driverInfo = `${responseData.driverName} ${responseData.driverSurname}`;
+          if (responseData.driverPhone) {
+            driverInfo += `, tel. ${responseData.driverPhone}`;
+          }
+        }
+        
+        // Wyślij SMS
+        const smsSent = await sendCompletionSms(creator.phone, orderNumber, deliveryDate, driverInfo);
+        console.log('SMS wysłany:', smsSent);
+      } else {
+        console.log('Nie znaleziono numeru telefonu dla twórcy spedycji:', creatorEmail);
+      }
+    } catch (smsError) {
+      console.error('Błąd podczas wysyłania SMS:', smsError);
+      // Nie zwracamy błędu, bo oznaczenie jako zrealizowane się udało
     }
     
     return NextResponse.json({ 
