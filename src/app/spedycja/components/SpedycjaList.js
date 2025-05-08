@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import { format } from 'date-fns'
 import { pl } from 'date-fns/locale'
 import { generateCMR } from '@/lib/utils/generateCMR'
@@ -14,19 +14,6 @@ export default function SpedycjaList({
   canSendOrder  
 }) {
   const [expandedId, setExpandedId] = useState(null)
-  
-  // Dodajmy useEffect do logowania danych przy pierwszym renderowaniu
-  useEffect(() => {
-    console.log('SpedycjaList - otrzymane zamówienia:', zamowienia);
-    // Zobaczmy szczegóły miast
-    zamowienia.forEach((z, index) => {
-      console.log(`Zamówienie ${index}:`, {
-        'id': z.id,
-        'miasto załadunku (raw)': z.location === 'Producent' ? z.producerAddress?.city : z.location,
-        'miasto dostawy (raw)': z.delivery?.city
-      });
-    });
-  }, [zamowienia]);
 
   const buttonClasses = {
     primary: "px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors",
@@ -35,9 +22,21 @@ export default function SpedycjaList({
     icon: "p-2 rounded-full hover:bg-gray-100 transition-colors"
   }
 
+  // Nowa funkcja bezpiecznego czyszczenia nazw miast
+  const cleanCityName = (cityName) => {
+    // Jeśli nazwa miasta jest null, undefined lub pusta - zwróć pusty string
+    if (!cityName) return '';
+    
+    // Sprawdź czy nazwa kończy się na "0" - jeśli tak, usuń to zero
+    return cityName.endsWith('0') ? cityName.slice(0, -1) : cityName;
+  }
+
   const formatAddress = (address) => {
     if (!address) return '';
-    return `${address.city}, ${address.postalCode}, ${address.street || ''}`;
+    
+    // Użyj cleanCityName do oczyszczenia nazwy miasta
+    const cleanCity = cleanCityName(address.city) || '';
+    return `${cleanCity}, ${address.postalCode || ''}, ${address.street || ''}`;
   }
 
   const formatDate = (dateString) => {
@@ -49,37 +48,52 @@ export default function SpedycjaList({
     if (!dateString) return 'N/A';
     return format(new Date(dateString), 'dd.MM.yyyy HH:mm', { locale: pl });
   }
+  
+  // Funkcje pobierania miast z czyszczeniem nazw
+  const getLoadingCity = (zamowienie) => {
+    if (zamowienie.location === 'Producent' && zamowienie.producerAddress) {
+      return cleanCityName(zamowienie.producerAddress.city) || '';
+    } else if (zamowienie.location === 'Magazyn Białystok') {
+      return 'Białystok';
+    } else if (zamowienie.location === 'Magazyn Zielonka') {
+      return 'Zielonka';
+    }
+    return '';
+  }
+  
+  const getDeliveryCity = (zamowienie) => {
+    // Używamy naszej funkcji czyszczącej nazwy miast
+    return cleanCityName(zamowienie.delivery?.city) || '';
+  }
 
-  // Funkcja do generowania linku do Google Maps
+  // Funkcja do generowania linku do Google Maps z czyszczeniem nazw miast
   const generateGoogleMapsLink = (transport) => {
-    // Pobierz dane źródłowe i docelowe
     let origin = '';
     let destination = '';
     
-    // Ustal miejsce załadunku
     if (transport.location === 'Producent' && transport.producerAddress) {
       const addr = transport.producerAddress;
-      origin = `${addr.city},${addr.postalCode},${addr.street || ''}`;
+      // Czyścimy nazwę miasta
+      const cleanCity = cleanCityName(addr.city) || '';
+      origin = `${cleanCity},${addr.postalCode || ''},${addr.street || ''}`;
     } else if (transport.location === 'Magazyn Białystok') {
       origin = 'Białystok';
     } else if (transport.location === 'Magazyn Zielonka') {
       origin = 'Zielonka';
     }
     
-    // Ustal miejsce dostawy
     if (transport.delivery) {
       const addr = transport.delivery;
-      destination = `${addr.city},${addr.postalCode},${addr.street || ''}`;
+      // Czyścimy nazwę miasta
+      const cleanCity = cleanCityName(addr.city) || '';
+      destination = `${cleanCity},${addr.postalCode || ''},${addr.street || ''}`;
     }
     
-    // Jeśli brakuje któregoś z punktów, zwróć pusty string
     if (!origin || !destination) return '';
     
-    // Kodowanie URI komponentów
     origin = encodeURIComponent(origin);
     destination = encodeURIComponent(destination);
     
-    // Zwróć link do Google Maps
     return `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=driving`;
   };
 
@@ -122,24 +136,6 @@ export default function SpedycjaList({
           const daysSinceCreated = getDaysSinceCreated(zamowienie.createdAt);
           const isOld = daysSinceCreated && daysSinceCreated > 7;
           
-          // Przygotuj nazwy miast bezpośrednio w renderze
-          let loadingCity = '';
-          if (zamowienie.location === 'Producent' && zamowienie.producerAddress) {
-            loadingCity = zamowienie.producerAddress.city || '';
-          } else if (zamowienie.location === 'Magazyn Białystok') {
-            loadingCity = 'Białystok';
-          } else if (zamowienie.location === 'Magazyn Zielonka') {
-            loadingCity = 'Zielonka';
-          }
-          
-          const deliveryCity = zamowienie.delivery?.city || '';
-          
-          // Sprawdźmy wartości przed i po renderowaniu
-          console.log(`Render zamówienia ${zamowienie.id}:`, {
-            'loadingCity': loadingCity,
-            'deliveryCity': deliveryCity
-          });
-          
           return (
             <div key={zamowienie.id} className={`p-4 ${isOld ? 'bg-red-50' : ''}`}>
               <div 
@@ -149,8 +145,7 @@ export default function SpedycjaList({
                 <div className="flex-1">
                   <div className="flex items-center">
                     <h3 className="font-medium text-lg">
-                      {/* Bezpośrednie użycie zmiennych bez funkcji pomocniczych */}
-                      {loadingCity} → {deliveryCity}
+                      {getLoadingCity(zamowienie)} → {getDeliveryCity(zamowienie)}
                     </h3>
                     {isOld && (
                       <span className="ml-2 text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded-full">
