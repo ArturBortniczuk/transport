@@ -49,7 +49,12 @@ export default function SpedycjaList({
   }
   
   const getDeliveryCity = (zamowienie) => {
-    return zamowienie.delivery?.city || '';
+    if (!zamowienie.delivery?.city) return '';
+    
+    // Usuwamy cyfry z końca nazwy miasta
+    const cityName = zamowienie.delivery.city.replace(/\d+$/, '');
+    
+    return cityName;
   }
 
   // Funkcja do generowania linku do Google Maps
