@@ -565,34 +565,40 @@ export default function ArchiwumSpedycjiPage() {
                           <ArrowRight size={16} className="mx-1 text-gray-500" /> 
                           {getDeliveryCity(transport)}
                         </h3>
-                        <p className="text-sm text-gray-500 flex items-center mt-1">
-                          <Calendar size={14} className="mr-1" />
-                          Data dostawy: 
-                          {dateChanged ? (
-                            <span className="ml-1 flex items-center">
-                              <span className="line-through text-gray-400">{formatDate(transport.deliveryDate)}</span>
-                              <ArrowRight size={12} className="mx-1 text-yellow-500" />
-                              <span className="bg-yellow-50 px-1.5 py-0.5 rounded text-yellow-700 font-medium">
-                                {formatDate(displayDate)}
+                        <div className="flex flex-wrap items-center gap-3 mt-1">
+                          <p className="text-sm text-gray-600 flex items-center">
+                            <Calendar size={14} className="mr-1" />
+                            {formatDate(displayDate)}
+                          </p>
+                          
+                          <p className="text-sm text-gray-600 flex items-center">
+                            <FileText size={14} className="mr-1" />
+                            {transport.orderNumber || '-'}
+                          </p>
+                          
+                          <p className="text-sm text-gray-600 flex items-center">
+                            <span className="font-medium">MPK:</span>
+                            <span className="ml-1">{transport.mpk}</span>
+                          </p>
+                          
+                          {transport.response && transport.response.deliveryPrice && transport.distanceKm > 0 && (
+                            <p className="text-sm flex items-center">
+                              <DollarSign size={14} className="mr-1 text-green-600" />
+                              <span className="bg-green-50 px-2 py-0.5 rounded font-medium text-green-700">
+                                {(transport.response.deliveryPrice / transport.distanceKm).toFixed(2)} PLN/km
                               </span>
-                            </span>
-                          ) : (
-                            <span className="ml-1">{formatDate(displayDate)}</span>
+                            </p>
                           )}
-                        </p>
-                        <p className="text-sm text-gray-500 flex items-center mt-1">
-                          <FileText size={14} className="mr-1" />
-                          {transport.orderNumber && <span className="font-medium mr-2">{transport.orderNumber}</span>}
-                          MPK: {transport.mpk}
-                        </p>
+                          
+                          <p className="text-sm text-gray-600 flex items-center">
+                            <User size={14} className="mr-1" />
+                            <span className="font-medium">Dla:</span>
+                            <span className="ml-1">{transport.responsiblePerson || transport.createdBy || 'Brak'}</span>
+                          </p>
+                        </div>
                       </div>
                     </div>
                     <div className="flex items-center space-x-2">
-                      <span className={`px-3 py-1 rounded-full text-sm flex items-center ${statusInfo.className}`}>
-                        {statusInfo.icon}
-                        {statusInfo.label}
-                      </span>
-                      
                       {expandedRowId === transport.id ? (
                         <button 
                           className="p-1 rounded-full hover:bg-gray-200"
