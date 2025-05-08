@@ -615,16 +615,24 @@ export default function KalendarzPage() {
         kierowcaId: '',
         numerWZ: '',
         nazwaKlienta: packaging.client_name,
-        osobaZlecajaca: '',
-        emailZlecajacego: '',
+        osobaZlecajaca: userName || '',
+        emailZlecajacego: userEmail || '',
         mpk: '',
         rynek: '',
         poziomZaladunku: '',
         dokumenty: '',
         trasaCykliczna: false,
-        magazyn: 'bialystok',
+        magazyn: defaultMagazyn || 'bialystok',
         packagingId: packaging.id // Dodajemy ID opakowania
       });
+      
+      // Informacja dla użytkownika
+      alert(`Zaplanowano wstępnie odbiór opakowań od ${packaging.client_name}. Uzupełnij dane transportu i kliknij "Dodaj transport" aby potwierdzić.`);
+    } catch (error) {
+      console.error('Błąd podczas planowania odbioru opakowania:', error);
+      alert('Wystąpił błąd podczas planowania odbioru opakowania');
+    }
+  };
       
       // Oznacz opakowanie jako zaplanowane w bazie danych
       const response = await fetch('/api/packagings', {
