@@ -111,7 +111,7 @@ export default function KalendarzPage() {
       
       if (transport) {
         // Sprawdź, czy transport jest częścią połączonej trasy
-        const isConnected = transporty[sourceDate].some(t => 
+        const isConnected = sourceTransports.some(t => 
           t.connected_transport_id === transport.id || 
           transport.connected_transport_id === t.id
         );
@@ -215,7 +215,7 @@ export default function KalendarzPage() {
       alert('Wystąpił błąd podczas łączenia transportów: ' + error.message);
     }
   };
-  
+
   // Znajdź funkcję fetchTransports i zmodyfikuj ją:
   const fetchTransports = async () => {
     try {
@@ -268,7 +268,7 @@ export default function KalendarzPage() {
             },
             odleglosc: transport.distance,
             packagingId: transport.packaging_id,
-            connected_transport_id: transport.connected_transport_id // Dodaj tę linię
+            connected_transport_id: transport.connected_transport_id
           })
           return acc
         }, {})
@@ -299,6 +299,7 @@ export default function KalendarzPage() {
           setUserEmail(data.user.email);
           setUserMpk(data.user.mpk || '');
           setUserPermissions(data.user.permissions || {});
+          setUserName(data.user.name || data.user.email);
           
           // Dodane: zapisz dane użytkownika do localStorage
           localStorage.setItem('userName', data.user.name || data.user.email);
@@ -412,7 +413,7 @@ export default function KalendarzPage() {
           driver_id: nowyTransport.kierowcaId,
           wz_number: nowyTransport.numerWZ,
           client_name: nowyTransport.nazwaKlienta,
-          requester_name: nowyTransport.osobaZlecajaca, // Dodaje osobę odpowiedzialną
+          requester_name: nowyTransport.osobaZlecajaca,
           requester_email: nowyTransport.emailZlecajacego,
           mpk: nowyTransport.mpk,
           market: nowyTransport.rynek,
@@ -422,7 +423,7 @@ export default function KalendarzPage() {
           delivery_date: format(selectedDate, "yyyy-MM-dd'T'HH:mm:ss"),
           status: 'active',
           packaging_id: nowyTransport.packagingId,
-          connected_transport_id: nowyTransport.connectedTransportId // Dodaj tę linię
+          connected_transport_id: nowyTransport.connectedTransportId
         })
       });
       
@@ -458,7 +459,7 @@ export default function KalendarzPage() {
           poziomZaladunku: '',
           dokumenty: '',
           trasaCykliczna: false,
-          magazyn: 'bialystok',
+          magazyn: defaultMagazyn,
           packagingId: null
         })
         alert('Transport został dodany!')
@@ -627,7 +628,7 @@ export default function KalendarzPage() {
           distance: odleglosc,
           delivery_date: selectedDate ? format(selectedDate, "yyyy-MM-dd'T'HH:mm:ss") : edytowanyTransport.delivery_date,
           packaging_id: nowyTransport.packagingId,
-          connected_transport_id: nowyTransport.connected_transport_id // Dodaj tę linię
+          connected_transport_id: nowyTransport.connected_transport_id
         })
       })
   
@@ -653,7 +654,8 @@ export default function KalendarzPage() {
           poziomZaladunku: '',
           dokumenty: '',
           trasaCykliczna: false,
-          packagingId: null
+          packagingId: null,
+          magazyn: defaultMagazyn
         })
         alert('Transport został zaktualizowany!')
       } else {
@@ -702,8 +704,7 @@ export default function KalendarzPage() {
     }
   }
 
-
-  // Funkcja do obsługi upuszczenia opakowania na datę w komponencie page.js
+  // Funkcja do obsługi upuszczenia opakowania na datę
   const handlePackagingDrop = async (packaging, dateKey) => {
     // Sprawdź, czy dateKey jest poprawne
     console.log("Upuszczono opakowanie na datę:", dateKey, "Opakowanie:", packaging);
@@ -756,332 +757,336 @@ export default function KalendarzPage() {
   };
 
   // Nowa funkcja do obsługi przenoszenia transportu przez drag & drop
-  const handleTransportMove = (transport, newDateKey) => {
-    setConfirmModal({
-      isOpen: true,
-      transport,
-      newDate: newDateKey
-    });
-  }
-
-  // Funkcja do potwierdzenia przeniesienia transportu
-  const handleConfirmMove = () => {
-    const { transport, newDate } = confirmModal;
-    handlePrzenoszenieTransportu({
-      id: transport.id,
-      newDate: newDate
-    });
-    setConfirmModal({ isOpen: false, transport: null, newDate: null });
-  }
-
-  const daysInMonth = eachDayOfInterval({
-    start: startOfWeek(startOfMonth(currentMonth), { weekStartsOn: 1 }),
-    end: endOfWeek(endOfMonth(currentMonth), { weekStartsOn: 1 })
-  });
+   const handleTransportMove = (transport, newDateKey) => {
+     setConfirmModal({
+       isOpen: true,
+       transport,
+       newDate: newDateKey
+     });
+   }
   
-  useEffect(() => {
-    const fetchUserPermissions = async () => {
-      try {
-        const response = await fetch('/api/user');
-        const data = await response.json();
-        
-        if (data.isAuthenticated && data.user) {
-          setUserPermissions(data.user.permissions || {});
-        }
-      } catch (error) {
-        console.error('Błąd pobierania uprawnień użytkownika:', error);
-      }
-    };
-    
-    fetchUserPermissions();
-  }, []);
+   // Funkcja do potwierdzenia przeniesienia transportu
+   const handleConfirmMove = () => {
+     const { transport, newDate } = confirmModal;
+     handlePrzenoszenieTransportu({
+       id: transport.id,
+       newDate: newDate
+     });
+     setConfirmModal({ isOpen: false, transport: null, newDate: null });
+   }
   
-  // Funkcja sprawdzająca, czy użytkownik może dodawać transporty
-  const canAddTransport = () => {
-    console.log('Sprawdzam uprawnienia:', {
-      calendarEdit: userPermissions?.calendar?.edit, 
-      userRole, 
-      userId
-    });
-    
-    const isMagazynRole = userRole === 'magazyn' || 
-                         userRole?.startsWith('magazyn_') ||
-                         userRole === 'magazyn_bialystok' ||
-                         userRole === 'magazyn_zielonka';
-    
-    // Użytkownicy z rolą magazynu lub admini mają uprawnienia
-    return userPermissions?.calendar?.edit === true || userRole === 'admin';
-  };
-
-  // Funkcja do zapisywania lokalizacji w localStorage
-  const saveLocationToStorage = (transportData) => {
-    if (!transportData.miasto || !transportData.kodPocztowy) {
-      return;
-    }
-    
-    try {
-      // Pobierz aktualną listę zapisanych lokalizacji
-      const savedLocations = localStorage.getItem('savedLocations');
-      let locations = [];
-      
-      if (savedLocations) {
-        locations = JSON.parse(savedLocations);
-      }
-      
-      // Sprawdź czy lokalizacja już istnieje
-      const locationExists = locations.some(loc => 
-        loc.miasto === transportData.miasto && 
-        loc.kodPocztowy === transportData.kodPocztowy && 
-        loc.ulica === transportData.ulica
-      );
-      
-      // Jeśli nie istnieje, dodaj ją
-      if (!locationExists) {
-        locations.push({
-          miasto: transportData.miasto,
-          kodPocztowy: transportData.kodPocztowy,
-          ulica: transportData.ulica || '',
-          nazwaKlienta: transportData.nazwaKlienta || ''
-        });
-        
-        localStorage.setItem('savedLocations', JSON.stringify(locations));
-      }
-    } catch (error) {
-      console.error('Błąd zapisywania lokalizacji:', error);
-    }
-  };
-
-  if (isLoading) {
-    return <div className="flex justify-center items-center h-64">Ładowanie...</div>
+   const daysInMonth = eachDayOfInterval({
+     start: startOfWeek(startOfMonth(currentMonth), { weekStartsOn: 1 }),
+     end: endOfWeek(endOfMonth(currentMonth), { weekStartsOn: 1 })
+   });
+   
+   useEffect(() => {
+     const fetchUserPermissions = async () => {
+       try {
+         const response = await fetch('/api/user');
+         const data = await response.json();
+         
+         if (data.isAuthenticated && data.user) {
+           setUserPermissions(data.user.permissions || {});
+         }
+       } catch (error) {
+         console.error('Błąd pobierania uprawnień użytkownika:', error);
+       }
+     };
+     
+     fetchUserPermissions();
+   }, []);
+   
+   // Funkcja sprawdzająca, czy użytkownik może dodawać transporty
+   const canAddTransport = () => {
+     console.log('Sprawdzam uprawnienia:', {
+       calendarEdit: userPermissions?.calendar?.edit, 
+       userRole, 
+       userId
+     });
+     
+     const isMagazynRole = userRole === 'magazyn' || 
+                          userRole?.startsWith('magazyn_') ||
+                          userRole === 'magazyn_bialystok' ||
+                          userRole === 'magazyn_zielonka';
+     
+     // Użytkownicy z rolą magazynu lub admini mają uprawnienia
+     return userPermissions?.calendar?.edit === true || userRole === 'admin';
+   };
+  
+   // Funkcja do zapisywania lokalizacji w localStorage
+   const saveLocationToStorage = (transportData) => {
+     if (!transportData.miasto || !transportData.kodPocztowy) {
+       return;
+     }
+     
+     try {
+       // Pobierz aktualną listę zapisanych lokalizacji
+       const savedLocations = localStorage.getItem('savedLocations');
+       let locations = [];
+       
+       if (savedLocations) {
+         locations = JSON.parse(savedLocations);
+       }
+       
+       // Sprawdź czy lokalizacja już istnieje
+       const locationExists = locations.some(loc => 
+         loc.miasto === transportData.miasto && 
+         loc.kodPocztowy === transportData.kodPocztowy && 
+         loc.ulica === transportData.ulica
+       );
+       
+       // Jeśli nie istnieje, dodaj ją
+       if (!locationExists) {
+         locations.push({
+           miasto: transportData.miasto,
+           kodPocztowy: transportData.kodPocztowy,
+           ulica: transportData.ulica || '',
+           nazwaKlienta: transportData.nazwaKlienta || ''
+         });
+         
+         localStorage.setItem('savedLocations', JSON.stringify(locations));
+       }
+     } catch (error) {
+       console.error('Błąd zapisywania lokalizacji:', error);
+     }
+   };
+  
+   if (isLoading) {
+     return <div className="flex justify-center items-center h-64">Ładowanie...</div>
+   }
+  
+   if (error) {
+     return <div className="text-red-500 text-center p-4">{error}</div>
+   }
+  
+   return (
+     <DragDropContext onDragEnd={handleMainDragEnd}>
+       <div className="max-w-6xl mx-auto">
+         <div className="mb-8 flex justify-between items-center">
+           <h1 className="text-3xl font-bold text-gray-900">
+             Kalendarz Transportów - {format(currentMonth, 'LLLL yyyy', { locale: pl })}
+           </h1>
+           <div className="flex gap-4">
+             <button
+               onClick={() => setCurrentMonth(prev => addMonths(prev, -1))}
+               className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+             >
+               Poprzedni miesiąc
+             </button>
+             <button
+               onClick={() => setCurrentMonth(prev => addMonths(prev, 1))}
+               className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+             >
+               Następny miesiąc
+             </button>
+             <a 
+               href="/archiwum" 
+               className="px-4 py-2 text-sm font-medium text-blue-600 bg-white border border-blue-300 rounded-md hover:bg-blue-50"
+             >
+               Archiwum transportów
+             </a>
+           </div>
+         </div>
+  
+         <FilterPanel 
+           filtryAktywne={filtryAktywne} 
+           setFiltryAktywne={setFiltryAktywne}
+         />
+  
+         {/* Dodajemy komponent do wyświetlania opakowań do odbioru - bez onDragEnd */}
+         <PackagingsList />
+  
+         <SimpleCalendarGrid 
+           daysInMonth={daysInMonth}
+           onDateSelect={handleDateClick}
+           currentMonth={currentMonth}
+           transporty={transporty}
+           filtryAktywne={filtryAktywne}
+         />
+         
+         <TransportsList
+           selectedDate={selectedDate}
+           transporty={transporty}
+           userRole={userRole}
+           userEmail={userEmail}
+           onZakonczTransport={handleZakonczTransport}
+           onEditTransport={handleEditTransport}
+           onPrzeniesDoPrzenoszenia={handlePrzeniesDoPrzenoszenia}
+           onConnectTransport={handleConnectTransport}
+           filtryAktywne={filtryAktywne}
+         />
+  
+         {selectedDate && (
+           <>
+             <div>
+               <div className="space-y-2">
+                 {transporty[format(selectedDate, 'yyyy-MM-dd')]?.filter(t => {
+                   const pasujeMagazyn = !filtryAktywne.magazyn || t.zrodlo === filtryAktywne.magazyn;
+                   const pasujeKierowca = !filtryAktywne.kierowca || t.kierowcaId === filtryAktywne.kierowca;
+                   const pasujeRynek = !filtryAktywne.rynek || t.rynek === filtryAktywne.rynek;
+                   return pasujeMagazyn && pasujeKierowca && pasujeRynek && t.status === 'aktywny';
+                 }).map(t => (
+                   <div key={t.id} className="border p-2 rounded">
+                     {t.miasto} - {t.kodPocztowy}
+                   </div>
+                 ))}
+               </div>
+             </div>
+             
+             <TransportForm
+               selectedDate={selectedDate}
+               nowyTransport={nowyTransport}
+               handleInputChange={handleInputChange}
+               handleSubmit={handleSubmit}
+               edytowanyTransport={edytowanyTransport}
+               handleUpdateTransport={handleUpdateTransport}
+               setEdytowanyTransport={setEdytowanyTransport}
+               setNowyTransport={setNowyTransport}
+               userPermissions={userPermissions}
+               transporty={transporty}
+               currentUserEmail={userEmail}
+               userName={userName || localStorage.getItem('userName') || userEmail}
+             />
+           </>
+         )}
+         
+         {przenoszonyTransport && (
+           <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+             <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+               <div className="mt-3 text-center">
+                 <h3 className="text-lg leading-6 font-medium text-gray-900">
+                   Przenieś transport
+                 </h3>
+                 <div className="mt-2 px-7 py-3">
+                   <p className="text-sm text-gray-500 mb-4">
+                     Wybierz nową datę dla transportu do {przenoszonyTransport.miasto}
+                   </p>
+                   <input
+                     type="datetime-local"
+                     value={nowaData}
+                     onChange={(e) => setNowaData(e.target.value)}
+                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                     required
+                   />
+                 </div>
+                 <div className="flex justify-center gap-4 px-4 py-3">
+                   <button
+                     onClick={() => handlePrzenoszenieTransportu({
+                       id: przenoszonyTransport.id,
+                       newDate: nowaData
+                     })}
+                     className="px-4 py-2 bg-blue-600 text-white text-base font-medium rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                   >
+                     Przenieś
+                   </button>
+                   <button
+                     onClick={() => {
+                       setPrzenoszonyTransport(null)
+                       setNowaData('')
+                     }}
+                     className="px-4 py-2 bg-gray-200 text-gray-800 text-base font-medium rounded-md shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                   >
+                     Anuluj
+                   </button>
+                 </div>
+               </div>
+             </div>
+           </div>
+         )}
+  
+         {/* Modal potwierdzenia przeniesienia transportu */}
+         {confirmModal.isOpen && confirmModal.transport && (
+           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+             <div className="bg-white rounded-lg p-6 max-w-md w-full">
+               <h3 className="text-lg font-medium text-gray-900 mb-4">Przenieś transport</h3>
+               <p className="text-sm text-gray-500 mb-4">
+                 Czy na pewno chcesz przenieść transport do {confirmModal.transport.miasto} na dzień {format(new Date(confirmModal.newDate), 'd MMMM yyyy', { locale: pl })}?
+               </p>
+               
+               <div className="flex justify-end gap-3">
+                 <button
+                   type="button"
+                   onClick={() => setConfirmModal({ isOpen: false, transport: null, newDate: null })}
+                   className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition-colors"
+                 >
+                   Anuluj
+                 </button>
+                 <button
+                   type="button"
+                   onClick={handleConfirmMove}
+                   className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                 >
+                   Przenieś
+                 </button>
+               </div>
+             </div>
+           </div>
+         )}
+         
+         {/* Modal wyboru transportu do połączenia */}
+         {showConnectModal && connectingTransport && (
+           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+             <div className="bg-white rounded-lg p-6 max-w-md w-full">
+               <h3 className="text-lg font-medium text-gray-900 mb-4">Połącz transport</h3>
+               <p className="text-sm text-gray-500 mb-4">
+                 Wybierz transport, który chcesz połączyć z transportem do {connectingTransport.miasto}
+               </p>
+               
+               <div className="max-h-64 overflow-y-auto mb-4">
+                 {Object.entries(transporty).map(([dateKey, transportsOnDay]) => {
+                   const filteredTransports = transportsOnDay.filter(t => 
+                     t.id !== connectingTransport.id && 
+                     t.status === 'active' &&
+                     !t.connected_transport_id &&
+                     !transportsOnDay.some(ot => ot.connected_transport_id === t.id)
+                   );
+                   
+                   if (filteredTransports.length === 0) return null;
+                   
+                   return (
+                     <div key={dateKey} className="mb-2">
+                       <h4 className="font-medium text-sm text-gray-700">
+                         {format(new Date(dateKey), 'd MMMM yyyy', { locale: pl })}
+                       </h4>
+                       {filteredTransports.map(transport => (
+                         <div 
+                           key={transport.id}
+                           className="p-2 border rounded mt-1 cursor-pointer hover:bg-blue-50"
+                           onClick={() => handleConfirmConnect(connectingTransport, transport)}
+                         >
+                           <div className="font-medium">{transport.miasto}</div>
+                           <div className="text-sm text-gray-600">
+                             {transport.kodPocztowy} - {transport.ulica || 'brak ulicy'}
+                           </div>
+                           <div className="text-xs text-gray-500">
+                             Kierowca: {transport.kierowcaId 
+                               ? KIEROWCY.find(k => k.id === parseInt(transport.kierowcaId))?.imie || 'Nieznany'
+                               : 'Nie przypisano'}
+                           </div>
+                         </div>
+                       ))}
+                     </div>
+                   );
+                 })}
+               </div>
+               
+               <div className="flex justify-end gap-3">
+                 <button
+                   type="button"
+                   onClick={() => {
+                     setShowConnectModal(false);
+                     setConnectingTransport(null);
+                   }}
+                   className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition-colors"
+                 >
+                   Anuluj
+                 </button>
+               </div>
+             </div>
+           </div>
+         )}
+       </div>
+     </DragDropContext>
+   )
   }
-
-  if (error) {
-    return <div className="text-red-500 text-center p-4">{error}</div>
-  }
-
-  return (
-    <div className="max-w-6xl mx-auto">
-      <div className="mb-8 flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-gray-900">
-          Kalendarz Transportów - {format(currentMonth, 'LLLL yyyy', { locale: pl })}
-        </h1>
-        <div className="flex gap-4">
-          <button
-            onClick={() => setCurrentMonth(prev => addMonths(prev, -1))}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-          >
-            Poprzedni miesiąc
-          </button>
-          <button
-            onClick={() => setCurrentMonth(prev => addMonths(prev, 1))}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-          >
-            Następny miesiąc
-          </button>
-          <a 
-            href="/archiwum" 
-            className="px-4 py-2 text-sm font-medium text-blue-600 bg-white border border-blue-300 rounded-md hover:bg-blue-50"
-          >
-            Archiwum transportów
-          </a>
-        </div>
-      </div>
-
-      <FilterPanel 
-        filtryAktywne={filtryAktywne} 
-        setFiltryAktywne={setFiltryAktywne}
-      />
-
-      {/* Dodajemy komponent do wyświetlania opakowań do odbioru */}
-      <PackagingsList onDragEnd={handlePackagingDrop} />
-
-      <SimpleCalendarGrid 
-        daysInMonth={daysInMonth}
-        onDateSelect={handleDateClick}
-        currentMonth={currentMonth}
-        transporty={transporty}
-        onTransportMove={handleTransportMove}
-        filtryAktywne={filtryAktywne}
-      />
-      <TransportsList
-        selectedDate={selectedDate}
-        transporty={transporty}
-        userRole={userRole}
-        userEmail={userEmail} // Dodajemy przekazanie emaila
-        onZakonczTransport={handleZakonczTransport}
-        onEditTransport={handleEditTransport}
-        onPrzeniesDoPrzenoszenia={handlePrzeniesDoPrzenoszenia}
-        onConnectTransport={handleConnectTransport} // Dodaj tę linię
-        filtryAktywne={filtryAktywne}
-      />
-
-      {selectedDate && (
-        <>
-          <div>
-            <div className="space-y-2">
-              {transporty[format(selectedDate, 'yyyy-MM-dd')]?.filter(t => {
-                const pasujeMagazyn = !filtryAktywne.magazyn || t.zrodlo === filtryAktywne.magazyn;
-                const pasujeKierowca = !filtryAktywne.kierowca || t.kierowcaId === filtryAktywne.kierowca;
-                const pasujeRynek = !filtryAktywne.rynek || t.rynek === filtryAktywne.rynek;
-                return pasujeMagazyn && pasujeKierowca && pasujeRynek && t.status === 'aktywny';
-              }).map(t => (
-                <div key={t.id} className="border p-2 rounded">
-                  {t.miasto} - {t.kodPocztowy}
-                </div>
-              ))}
-            </div>
-          </div>
-          
-          <TransportForm
-            selectedDate={selectedDate}
-            nowyTransport={nowyTransport}
-            handleInputChange={handleInputChange}
-            handleSubmit={handleSubmit}
-            edytowanyTransport={edytowanyTransport}
-            handleUpdateTransport={handleUpdateTransport}
-            setEdytowanyTransport={setEdytowanyTransport}
-            setNowyTransport={setNowyTransport}
-            userPermissions={userPermissions}
-            transporty={transporty}
-            currentUserEmail={userEmail} // Dodajemy przekazanie emaila
-            userName={localStorage.getItem('userName') || userEmail} // Nazwa użytkownika lub jako fallback jego email
-          />
-        </>
-      )}
-      {przenoszonyTransport && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div className="mt-3 text-center">
-              <h3 className="text-lg leading-6 font-medium text-gray-900">
-                Przenieś transport
-              </h3>
-              <div className="mt-2 px-7 py-3">
-                <p className="text-sm text-gray-500 mb-4">
-                  Wybierz nową datę dla transportu do {przenoszonyTransport.miasto}
-                </p>
-                <input
-                  type="datetime-local"
-                  value={nowaData}
-                  onChange={(e) => setNowaData(e.target.value)}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                  required
-                />
-              </div>
-              <div className="flex justify-center gap-4 px-4 py-3">
-                <button
-                  onClick={() => handlePrzenoszenieTransportu({
-                    id: przenoszonyTransport.id,
-                    newDate: nowaData
-                  })}
-                  className="px-4 py-2 bg-blue-600 text-white text-base font-medium rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  Przenieś
-                </button>
-                <button
-                  onClick={() => {
-                    setPrzenoszonyTransport(null)
-                    setNowaData('')
-                  }}
-                  className="px-4 py-2 bg-gray-200 text-gray-800 text-base font-medium rounded-md shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500"
-                >
-                  Anuluj
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal potwierdzenia przeniesienia transportu */}
-      {confirmModal.isOpen && confirmModal.transport && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Przenieś transport</h3>
-            <p className="text-sm text-gray-500 mb-4">
-              Czy na pewno chcesz przenieść transport do {confirmModal.transport.miasto} na dzień {format(new Date(confirmModal.newDate), 'd MMMM yyyy', { locale: pl })}?
-            </p>
-            
-            <div className="flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setConfirmModal({ isOpen: false, transport: null, newDate: null })}
-                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition-colors"
-              >
-                Anuluj
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmMove}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-              >
-                Przenieś
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      {/* Modal wyboru transportu do połączenia */}
-      {showConnectModal && connectingTransport && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Połącz transport</h3>
-            <p className="text-sm text-gray-500 mb-4">
-              Wybierz transport, który chcesz połączyć z transportem do {connectingTransport.miasto}
-            </p>
-            
-            <div className="max-h-64 overflow-y-auto mb-4">
-              {Object.entries(transporty).map(([dateKey, transportsOnDay]) => {
-                const filteredTransports = transportsOnDay.filter(t => 
-                  t.id !== connectingTransport.id && 
-                  t.status === 'active' &&
-                  !t.connected_transport_id &&
-                  !transportsOnDay.some(ot => ot.connected_transport_id === t.id)
-                );
-                
-                if (filteredTransports.length === 0) return null;
-                
-                return (
-                  <div key={dateKey} className="mb-2">
-                    <h4 className="font-medium text-sm text-gray-700">
-                      {format(new Date(dateKey), 'd MMMM yyyy', { locale: pl })}
-                    </h4>
-                    {filteredTransports.map(transport => (
-                      <div 
-                        key={transport.id}
-                        className="p-2 border rounded mt-1 cursor-pointer hover:bg-blue-50"
-                        onClick={() => handleConfirmConnect(connectingTransport, transport)}
-                      >
-                        <div className="font-medium">{transport.miasto}</div>
-                        <div className="text-sm text-gray-600">
-                          {transport.kodPocztowy} - {transport.ulica || 'brak ulicy'}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          Kierowca: {transport.kierowcaId 
-                            ? KIEROWCY.find(k => k.id === parseInt(transport.kierowcaId))?.imie || 'Nieznany'
-                            : 'Nie przypisano'}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })}
-            </div>
-            
-            <div className="flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowConnectModal(false);
-                  setConnectingTransport(null);
-                }}
-                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition-colors"
-              >
-                Anuluj
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
