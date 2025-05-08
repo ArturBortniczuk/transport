@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { format } from 'date-fns'
 import { pl } from 'date-fns/locale'
 import { generateCMR } from '@/lib/utils/generateCMR'
@@ -14,6 +14,19 @@ export default function SpedycjaList({
   canSendOrder  
 }) {
   const [expandedId, setExpandedId] = useState(null)
+  
+  // Dodajmy useEffect do logowania danych przy pierwszym renderowaniu
+  useEffect(() => {
+    console.log('SpedycjaList - otrzymane zamówienia:', zamowienia);
+    // Zobaczmy szczegóły miast
+    zamowienia.forEach((z, index) => {
+      console.log(`Zamówienie ${index}:`, {
+        'id': z.id,
+        'miasto załadunku (raw)': z.location === 'Producent' ? z.producerAddress?.city : z.location,
+        'miasto dostawy (raw)': z.delivery?.city
+      });
+    });
+  }, [zamowienia]);
 
   const buttonClasses = {
     primary: "px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors",
@@ -35,22 +48,6 @@ export default function SpedycjaList({
   const formatDateTime = (dateString) => {
     if (!dateString) return 'N/A';
     return format(new Date(dateString), 'dd.MM.yyyy HH:mm', { locale: pl });
-  }
-  
-  // Przywrócone oryginalne funkcje bez dodatkowej modyfikacji nazw miast
-  const getLoadingCity = (zamowienie) => {
-    if (zamowienie.location === 'Producent' && zamowienie.producerAddress) {
-      return zamowienie.producerAddress.city || '';
-    } else if (zamowienie.location === 'Magazyn Białystok') {
-      return 'Białystok';
-    } else if (zamowienie.location === 'Magazyn Zielonka') {
-      return 'Zielonka';
-    }
-    return '';
-  }
-  
-  const getDeliveryCity = (zamowienie) => {
-    return zamowienie.delivery?.city || '';
   }
 
   // Funkcja do generowania linku do Google Maps
@@ -125,6 +122,24 @@ export default function SpedycjaList({
           const daysSinceCreated = getDaysSinceCreated(zamowienie.createdAt);
           const isOld = daysSinceCreated && daysSinceCreated > 7;
           
+          // Przygotuj nazwy miast bezpośrednio w renderze
+          let loadingCity = '';
+          if (zamowienie.location === 'Producent' && zamowienie.producerAddress) {
+            loadingCity = zamowienie.producerAddress.city || '';
+          } else if (zamowienie.location === 'Magazyn Białystok') {
+            loadingCity = 'Białystok';
+          } else if (zamowienie.location === 'Magazyn Zielonka') {
+            loadingCity = 'Zielonka';
+          }
+          
+          const deliveryCity = zamowienie.delivery?.city || '';
+          
+          // Sprawdźmy wartości przed i po renderowaniu
+          console.log(`Render zamówienia ${zamowienie.id}:`, {
+            'loadingCity': loadingCity,
+            'deliveryCity': deliveryCity
+          });
+          
           return (
             <div key={zamowienie.id} className={`p-4 ${isOld ? 'bg-red-50' : ''}`}>
               <div 
@@ -134,7 +149,8 @@ export default function SpedycjaList({
                 <div className="flex-1">
                   <div className="flex items-center">
                     <h3 className="font-medium text-lg">
-                      {getLoadingCity(zamowienie)} → {getDeliveryCity(zamowienie)}
+                      {/* Bezpośrednie użycie zmiennych bez funkcji pomocniczych */}
+                      {loadingCity} → {deliveryCity}
                     </h3>
                     {isOld && (
                       <span className="ml-2 text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded-full">
