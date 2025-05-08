@@ -22,21 +22,13 @@ export default function SpedycjaList({
     icon: "p-2 rounded-full hover:bg-gray-100 transition-colors"
   }
 
-  // Funkcja do czyszczenia nazw miejscowości
-  const cleanCityName = (cityName) => {
-    if (!cityName) return '';
-    
-    // Usuwamy cyfry z końca nazwy miasta
-    return cityName.replace(/\d+$/, '');
-  }
-
   const formatAddress = (address) => {
     if (!address) return '';
     
-    // Czyścimy nazwę miasta w adresie
-    const cleanedCity = cleanCityName(address.city || '');
+    // Jeśli jest city, upewnij się, że nie ma cyfr na końcu
+    const cityWithoutNumbers = address.city ? address.city.replace(/0+$/, '') : '';
     
-    return `${cleanedCity}, ${address.postalCode}, ${address.street || ''}`;
+    return `${cityWithoutNumbers}, ${address.postalCode}, ${address.street || ''}`;
   }
 
   const formatDate = (dateString) => {
@@ -49,24 +41,28 @@ export default function SpedycjaList({
     return format(new Date(dateString), 'dd.MM.yyyy HH:mm', { locale: pl });
   }
   
+  // Uproszczona funkcja - zwraca nazwę miasta bez zer na końcu
   const getLoadingCity = (zamowienie) => {
-    let cityName = '';
+    let city = '';
     
     if (zamowienie.location === 'Producent' && zamowienie.producerAddress) {
-      cityName = zamowienie.producerAddress.city || '';
+      city = zamowienie.producerAddress.city || '';
     } else if (zamowienie.location === 'Magazyn Białystok') {
-      cityName = 'Białystok';
+      city = 'Białystok';
     } else if (zamowienie.location === 'Magazyn Zielonka') {
-      cityName = 'Zielonka';
+      city = 'Zielonka';
     }
     
-    return cleanCityName(cityName);
+    // Usuwamy tylko zera z końca
+    return city.replace(/0+$/, '');
   }
   
+  // Uproszczona funkcja - zwraca nazwę miasta bez zer na końcu
   const getDeliveryCity = (zamowienie) => {
     if (!zamowienie.delivery?.city) return '';
     
-    return cleanCityName(zamowienie.delivery.city);
+    // Usuwamy tylko zera z końca
+    return zamowienie.delivery.city.replace(/0+$/, '');
   }
 
   // Funkcja do generowania linku do Google Maps
@@ -78,8 +74,8 @@ export default function SpedycjaList({
     // Ustal miejsce załadunku
     if (transport.location === 'Producent' && transport.producerAddress) {
       const addr = transport.producerAddress;
-      const cleanCity = cleanCityName(addr.city || '');
-      origin = `${cleanCity},${addr.postalCode},${addr.street || ''}`;
+      const cityWithoutNumbers = addr.city ? addr.city.replace(/0+$/, '') : '';
+      origin = `${cityWithoutNumbers},${addr.postalCode},${addr.street || ''}`;
     } else if (transport.location === 'Magazyn Białystok') {
       origin = 'Białystok';
     } else if (transport.location === 'Magazyn Zielonka') {
@@ -89,8 +85,8 @@ export default function SpedycjaList({
     // Ustal miejsce dostawy
     if (transport.delivery) {
       const addr = transport.delivery;
-      const cleanCity = cleanCityName(addr.city || '');
-      destination = `${cleanCity},${addr.postalCode},${addr.street || ''}`;
+      const cityWithoutNumbers = addr.city ? addr.city.replace(/0+$/, '') : '';
+      destination = `${cityWithoutNumbers},${addr.postalCode},${addr.street || ''}`;
     }
     
     // Jeśli brakuje któregoś z punktów, zwróć pusty string
@@ -143,10 +139,6 @@ export default function SpedycjaList({
           const daysSinceCreated = getDaysSinceCreated(zamowienie.createdAt);
           const isOld = daysSinceCreated && daysSinceCreated > 7;
           
-          // Pobierz oczyszczone nazwy miast
-          const loadingCity = getLoadingCity(zamowienie);
-          const deliveryCity = getDeliveryCity(zamowienie);
-          
           return (
             <div key={zamowienie.id} className={`p-4 ${isOld ? 'bg-red-50' : ''}`}>
               <div 
@@ -156,7 +148,7 @@ export default function SpedycjaList({
                 <div className="flex-1">
                   <div className="flex items-center">
                     <h3 className="font-medium text-lg">
-                      {loadingCity} → {deliveryCity}
+                      {getLoadingCity(zamowienie)} → {getDeliveryCity(zamowienie)}
                     </h3>
                     {isOld && (
                       <span className="ml-2 text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded-full">
