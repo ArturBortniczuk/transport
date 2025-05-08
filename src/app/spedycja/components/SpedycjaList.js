@@ -310,6 +310,25 @@ export default function SpedycjaList({
                         <Truck size={18} className="mr-2" />
                         Szczegóły realizacji
                       </h4>
+                      
+                      {/* Informacja o zmianie daty dostawy */}
+                      {zamowienie.response.dateChanged && (
+                        <div className="mb-4 bg-yellow-50 p-3 rounded-md border border-yellow-200">
+                          <p className="text-sm font-medium text-yellow-800 mb-1 flex items-center">
+                            <Calendar size={16} className="mr-2" />
+                            Zmiana daty dostawy!
+                          </p>
+                          <div className="grid grid-cols-2 gap-2">
+                            <p className="text-sm">
+                              <span className="font-medium">Pierwotna data:</span> {formatDate(zamowienie.response.originalDeliveryDate)}
+                            </p>
+                            <p className="text-sm">
+                              <span className="font-medium">Nowa data:</span> {formatDate(zamowienie.response.newDeliveryDate)}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                      
                       {zamowienie.response.completedManually ? (
                         <div className="bg-blue-50 text-blue-800 p-3 rounded-md border border-blue-100 flex items-center">
                           <Clipboard size={18} className="mr-2" />
