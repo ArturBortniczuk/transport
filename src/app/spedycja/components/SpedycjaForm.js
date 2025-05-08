@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import { Calendar } from 'lucide-react'
 
 export default function SpedycjaForm({ onSubmit, onCancel, initialData, isResponse }) {
   const [selectedLocation, setSelectedLocation] = useState(initialData?.location || '')
@@ -13,6 +14,11 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
   })
   const [distance, setDistance] = useState(0)
   const [isCalculatingDistance, setIsCalculatingDistance] = useState(false)
+  
+  // Nowe stany dla daty dostawy
+  const [originalDeliveryDate, setOriginalDeliveryDate] = useState('')
+  const [newDeliveryDate, setNewDeliveryDate] = useState('')
+  const [changeDeliveryDate, setChangeDeliveryDate] = useState(false)
   
   // Stałe dla magazynów
   const MAGAZYNY = {
@@ -71,15 +77,23 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
     if (initialData && isResponse) {
       console.log('Dane zamówienia przekazane do formularza odpowiedzi:', initialData);
       console.log('Odległość w km:', initialData.distanceKm);
+      
+      // Ustawienie oryginalnej i nowej daty dostawy
+      if (initialData.deliveryDate) {
+        setOriginalDeliveryDate(initialData.deliveryDate);
+        setNewDeliveryDate(initialData.deliveryDate);
+      }
     }
   }, [initialData, isResponse]);
 
   // Klasy dla przycisków
   const buttonClasses = {
-    primary: "px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors",
+    primary: "px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors flex items-center gap-2",
     outline: "px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-100 transition-colors",
     selected: "px-4 py-2 bg-blue-500 text-white rounded-md",
-    unselected: "px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
+    unselected: "px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50",
+    toggle: "px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors",
+    toggleActive: "px-4 py-2 bg-blue-100 border border-blue-400 text-blue-700 rounded-md font-medium"
   }
   
   // Funkcja do geokodowania adresu
@@ -220,6 +234,13 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
     }
   };
   
+  // Formatowanie daty do wyświetlania
+  const formatDateForDisplay = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('pl-PL');
+  };
+  
   const handleSubmit = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
@@ -239,7 +260,8 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
         pricePerKm
       });
       
-      onSubmit(initialData.id, {
+      // Dodaj informację o zmianie daty dostawy
+      const responseData = {
         driverName: formData.get('driverName'),
         driverSurname: formData.get('driverSurname'),
         driverPhone: formData.get('driverPhone'),
@@ -248,7 +270,16 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
         distanceKm: Number(distanceKm),
         pricePerKm: Number(pricePerKm),
         adminNotes: formData.get('adminNotes')
-      });
+      };
+      
+      // Jeśli data dostawy została zmieniona, dodaj ją do odpowiedzi
+      if (changeDeliveryDate && newDeliveryDate !== originalDeliveryDate) {
+        responseData.newDeliveryDate = newDeliveryDate;
+        responseData.originalDeliveryDate = originalDeliveryDate;
+        responseData.dateChanged = true;
+      }
+      
+      onSubmit(initialData.id, responseData);
     } else {
       const mpk = isForOtherUser && selectedUser 
         ? (users.find(u => u.email === selectedUser)?.mpk || '')
@@ -331,6 +362,39 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
       {isResponse ? (
         // Formularz odpowiedzi
         <>
+          {/* Sekcja daty dostawy */}
+          <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 mb-6">
+            <div className="flex justify-between items-center">
+              <div className="flex items-center">
+                <Calendar size={20} className="mr-2 text-blue-600" />
+                <div>
+                  <span className="font-medium">Podana data dostawy:</span>
+                  <span className="ml-2">{formatDateForDisplay(originalDeliveryDate)}</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                className={changeDeliveryDate ? buttonClasses.toggleActive : buttonClasses.toggle}
+                onClick={() => setChangeDeliveryDate(!changeDeliveryDate)}
+              >
+                {changeDeliveryDate ? 'Anuluj zmianę daty' : 'Zmienić datę dostawy?'}
+              </button>
+            </div>
+            
+            {changeDeliveryDate && (
+              <div className="mt-3 pl-8">
+                <label className="block text-sm font-medium mb-1">Nowa data dostawy</label>
+                <input
+                  type="date"
+                  value={newDeliveryDate}
+                  onChange={(e) => setNewDeliveryDate(e.target.value)}
+                  className="w-full p-2 border rounded-md"
+                  required
+                />
+              </div>
+            )}
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-1">Imię kierowcy</label>
@@ -381,6 +445,16 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
                 type="number"
                 className="w-full p-2 border rounded-md"
                 required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Odległość</label>
+              <input
+                name="distanceKm"
+                type="number"
+                className="w-full p-2 border rounded-md bg-gray-100"
+                value={initialData.distanceKm || 0}
+                readOnly
               />
             </div>
           </div>
