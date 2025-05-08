@@ -626,14 +626,6 @@ export default function KalendarzPage() {
         packagingId: packaging.id // Dodajemy ID opakowania
       });
       
-      // Informacja dla użytkownika
-      alert(`Zaplanowano wstępnie odbiór opakowań od ${packaging.client_name}. Uzupełnij dane transportu i kliknij "Dodaj transport" aby potwierdzić.`);
-    } catch (error) {
-      console.error('Błąd podczas planowania odbioru opakowania:', error);
-      alert('Wystąpił błąd podczas planowania odbioru opakowania');
-    }
-  };
-      
       // Oznacz opakowanie jako zaplanowane w bazie danych
       const response = await fetch('/api/packagings', {
         method: 'PUT',
@@ -649,6 +641,9 @@ export default function KalendarzPage() {
       if (!response.ok) {
         throw new Error('Nie udało się zaktualizować statusu opakowania');
       }
+      
+      // Informacja dla użytkownika
+      alert(`Zaplanowano wstępnie odbiór opakowań od ${packaging.client_name}. Uzupełnij dane transportu i kliknij "Dodaj transport" aby potwierdzić.`);
       
     } catch (error) {
       console.error('Błąd podczas planowania odbioru opakowania:', error);
