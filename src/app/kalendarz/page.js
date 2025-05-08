@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { format, addMonths, startOfMonth, endOfMonth, eachDayOfInterval, addDays, startOfWeek, endOfWeek, parseISO } from 'date-fns'
 import { pl } from 'date-fns/locale'
+import { DragDropContext } from '@hello-pangea/dnd'
 import { getGoogleCoordinates } from '../services/geocoding-google'
 import { calculateDistance } from '../services/calculateDistance'
 import CalendarGrid from './components/CalendarGrid'
@@ -24,6 +25,7 @@ export default function KalendarzPage() {
   const [userPermissions, setUserPermissions] = useState({})
   const [userMpk, setUserMpk] = useState('')
   const [userEmail, setUserEmail] = useState('')
+  const [userName, setUserName] = useState('')
   const [connectingTransport, setConnectingTransport] = useState(null)
   const [showConnectModal, setShowConnectModal] = useState(false)
   const [nowyTransport, setNowyTransport] = useState({
@@ -55,6 +57,7 @@ export default function KalendarzPage() {
   const [error, setError] = useState(null)
   const [userId, setUserId] = useState(null)
   const [zamowienia, setZamowienia] = useState([])
+  const [defaultMagazyn, setDefaultMagazyn] = useState('bialystok')
   
   // Stany dla modalnego potwierdzenia
   const [confirmModal, setConfirmModal] = useState({
@@ -62,6 +65,111 @@ export default function KalendarzPage() {
     transport: null,
     newDate: null
   });
+
+  // Główna funkcja obsługująca przeciąganie dla całej aplikacji
+  const handleMainDragEnd = (result) => {
+    console.log('Main DragEnd Result:', result);
+    
+    // Jeśli upuszczono poza celem lub brak miejsca docelowego
+    if (!result.destination) {
+      return;
+    }
+    
+    const { source, destination, draggableId } = result;
+    
+    // Jeśli przeciągnięto opakowanie na datę w kalendarzu
+    if (source.droppableId === 'packagings-list' && 
+        destination.droppableId.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      console.log('Przeciągnięto opakowanie na datę:', destination.droppableId);
+      
+      // Znajdź opakowanie po ID
+      fetch('/api/packagings?status=pending')
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            const packaging = (data.packagings || []).find(p => p.id.toString() === draggableId);
+            if (packaging) {
+              handlePackagingDrop(packaging, destination.droppableId);
+            } else {
+              console.error('Nie znaleziono opakowania o ID:', draggableId);
+            }
+          } else {
+            console.error('Błąd pobierania opakowań:', data.error);
+          }
+        })
+        .catch(error => console.error('Błąd pobierania opakowania:', error));
+    } 
+    // Jeśli przeciągnięto transport między datami w kalendarzu
+    else if (destination.droppableId.match(/^\d{4}-\d{2}-\d{2}$/) && 
+             source.droppableId.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      console.log('Przeciągnięto transport między datami:', source.droppableId, '->', destination.droppableId);
+      
+      // Pobierz transport
+      const sourceDate = source.droppableId;
+      const sourceTransports = transporty[sourceDate] || [];
+      const transport = sourceTransports.find(t => t.id.toString() === draggableId);
+      
+      if (transport) {
+        // Sprawdź, czy transport jest częścią połączonej trasy
+        const isConnected = transporty[sourceDate].some(t => 
+          t.connected_transport_id === transport.id || 
+          transport.connected_transport_id === t.id
+        );
+        
+        if (isConnected) {
+          // Jeśli to połączony transport, najpierw zapytaj użytkownika, czy chce przenieść wszystkie
+          if (confirm("Ten transport jest częścią połączonej trasy. Czy chcesz przenieść wszystkie połączone transporty?")) {
+            // Znajdź wszystkie powiązane transporty
+            const connectedTransport = sourceTransports.find(t => 
+              t.connected_transport_id === transport.id || 
+              transport.connected_transport_id === t.id
+            );
+            
+            if (connectedTransport) {
+              // Przenieś główny transport
+              handleTransportMove(transport, destination.droppableId);
+              
+              // Przenieś połączony transport
+              setTimeout(() => {
+                handleTransportMove(connectedTransport, destination.droppableId);
+              }, 100);
+            } else {
+              // Jeśli nie znaleziono połączonego transportu, przenieś tylko ten
+              handleTransportMove(transport, destination.droppableId);
+            }
+          } else if (confirm("Czy chcesz rozłączyć transport przed przeniesieniem?")) {
+            // Rozłącz transport i przenieś tylko ten
+            fetch('/api/transports/disconnect', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                transportId: transport.id
+              })
+            }).then(response => response.json())
+              .then(data => {
+                if (data.success) {
+                  // Przeniesienie po rozłączeniu
+                  handleTransportMove(transport, destination.droppableId);
+                } else {
+                  alert("Nie udało się rozłączyć transportu: " + (data.error || "Nieznany błąd"));
+                }
+              })
+              .catch(error => {
+                console.error("Błąd podczas rozłączania transportu:", error);
+                alert("Wystąpił błąd podczas rozłączania transportu");
+              });
+          }
+        } else {
+          // Jeśli to pojedynczy transport, po prostu go przenieś
+          handleTransportMove(transport, destination.droppableId);
+        }
+      } else {
+        console.error('Nie znaleziono transportu o ID:', draggableId);
+      }
+    }
+  };
 
   const handleConnectTransport = (transport) => {
     setConnectingTransport(transport);
@@ -107,7 +215,7 @@ export default function KalendarzPage() {
       alert('Wystąpił błąd podczas łączenia transportów: ' + error.message);
     }
   };
-
+  
   // Znajdź funkcję fetchTransports i zmodyfikuj ją:
   const fetchTransports = async () => {
     try {
