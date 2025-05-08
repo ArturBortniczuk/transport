@@ -594,21 +594,31 @@ export default function KalendarzPage() {
     }
   }
 
-  // Funkcja do obsługi upuszczenia opakowania na datę
+
+  // Funkcja do obsługi upuszczenia opakowania na datę w komponencie page.js
   const handlePackagingDrop = async (packaging, dateKey) => {
-    // Pokaż potwierdzenie
-    if (!confirm(`Czy chcesz zaplanować odbiór opakowań od ${packaging.client_name} na dzień ${format(new Date(dateKey), 'd MMMM yyyy', { locale: pl })}?`)) {
+    // Sprawdź, czy dateKey jest poprawne
+    console.log("Upuszczono opakowanie na datę:", dateKey, "Opakowanie:", packaging);
+    
+    // Jeśli dateKey nie wygląda jak data, przerwij
+    if (!dateKey || !dateKey.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      console.error("Nieprawidłowy format daty:", dateKey);
       return;
     }
     
     try {
+      // Pokaż potwierdzenie
+      if (!confirm(`Czy chcesz zaplanować odbiór opakowań od ${packaging.client_name} na dzień ${format(new Date(dateKey), 'd MMMM yyyy', { locale: pl })}?`)) {
+        return;
+      }
+      
       // Otwórz formularz dodawania transportu z wypełnionymi danymi opakowania
       setSelectedDate(new Date(dateKey));
       
       // Przygotuj dane do formularza
       setNowyTransport({
         miasto: packaging.city,
-        kodPocztowy: packaging.postal_code,
+        kodPocztowy: packaging.postal_code || '',
         ulica: packaging.street || '',
         informacje: `Odbiór opakowań: ${packaging.description}`,
         status: 'aktywny',
@@ -626,24 +636,10 @@ export default function KalendarzPage() {
         packagingId: packaging.id // Dodajemy ID opakowania
       });
       
-      // Oznacz opakowanie jako zaplanowane w bazie danych
-      const response = await fetch('/api/packagings', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          id: packaging.id,
-          status: 'scheduled'
-        })
-      });
-      
-      if (!response.ok) {
-        throw new Error('Nie udało się zaktualizować statusu opakowania');
-      }
-      
+      // Wstrzymuj się z oznaczeniem opakowania jako zaplanowane, 
+      // dopóki użytkownik nie zatwierdzi faktycznego transportu
       // Informacja dla użytkownika
-      alert(`Zaplanowano wstępnie odbiór opakowań od ${packaging.client_name}. Uzupełnij dane transportu i kliknij "Dodaj transport" aby potwierdzić.`);
+      alert(`Zaplanowano wstępnie odbiór opakowań od ${packaging.client_name}. Teraz wybierz kierowcę i uzupełnij pozostałe dane transportu.`);
       
     } catch (error) {
       console.error('Błąd podczas planowania odbioru opakowania:', error);
