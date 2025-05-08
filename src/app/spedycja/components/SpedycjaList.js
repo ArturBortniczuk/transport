@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { format } from 'date-fns'
 import { pl } from 'date-fns/locale'
 import { generateCMR } from '@/lib/utils/generateCMR'
-import { Truck, Package, MapPin, Phone, FileText, Calendar, DollarSign, User, Clipboard, ArrowRight, ChevronDown, ChevronUp } from 'lucide-react'
+import { Truck, Package, MapPin, Phone, FileText, Calendar, DollarSign, User, Clipboard, ArrowRight, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react'
 
 export default function SpedycjaList({ 
   zamowienia, 
@@ -27,7 +27,13 @@ export default function SpedycjaList({
   }
 
   const formatDate = (dateString) => {
-    return format(new Date(dateString), 'dd.MM.yyyy', { locale: pl })
+    if (!dateString) return 'Brak daty';
+    try {
+      return format(new Date(dateString), 'dd.MM.yyyy', { locale: pl });
+    } catch (error) {
+      console.error("Błąd formatowania daty:", error, dateString);
+      return 'Nieprawidłowa data';
+    }
   }
   
   const getLoadingCity = (zamowienie) => {
@@ -101,12 +107,29 @@ export default function SpedycjaList({
     }
   }
 
+  // Funkcja sprawdzająca czy data dostawy została zmieniona
+  const isDeliveryDateChanged = (zamowienie) => {
+    return zamowienie.response && 
+           zamowienie.response.dateChanged === true && 
+           zamowienie.response.newDeliveryDate;
+  }
+
+  // Funkcja pobierająca aktualną datę dostawy (oryginalną lub zmienioną)
+  const getActualDeliveryDate = (zamowienie) => {
+    if (isDeliveryDateChanged(zamowienie)) {
+      return zamowienie.response.newDeliveryDate;
+    }
+    return zamowienie.deliveryDate;
+  }
+
   return (
     <div className="divide-y">
       {zamowienia
         .filter(z => showArchive ? z.status === 'completed' : z.status === 'new')
         .map((zamowienie) => {
           const statusInfo = getStatusLabel(zamowienie);
+          const dateChanged = isDeliveryDateChanged(zamowienie);
+          const displayDate = getActualDeliveryDate(zamowienie);
           
           return (
             <div key={zamowienie.id} className="p-4 hover:bg-gray-50 transition-colors">
@@ -128,7 +151,18 @@ export default function SpedycjaList({
                     </h3>
                     <p className="text-sm text-gray-500 flex items-center mt-1">
                       <Calendar size={14} className="mr-1" />
-                      Data dostawy: {formatDate(zamowienie.deliveryDate)}
+                      Data dostawy: 
+                      {dateChanged ? (
+                        <span className="ml-1 flex items-center">
+                          <span className="line-through text-gray-400">{formatDate(zamowienie.deliveryDate)}</span>
+                          <ArrowRight size={12} className="mx-1 text-yellow-500" />
+                          <span className="bg-yellow-50 px-1.5 py-0.5 rounded text-yellow-700 font-medium">
+                            {formatDate(displayDate)}
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="ml-1">{formatDate(displayDate)}</span>
+                      )}
                     </p>
                     <p className="text-sm text-gray-500 flex items-center mt-1">
                       <FileText size={14} className="mr-1" />
@@ -261,10 +295,36 @@ export default function SpedycjaList({
                         <Truck size={18} className="mr-2" />
                         Informacje o transporcie
                       </h4>
-                      <p className="text-sm mb-2 flex items-center">
-                        <Calendar size={14} className="mr-2 text-gray-500" />
-                        <span className="font-medium">Data dostawy:</span> {formatDate(zamowienie.deliveryDate)}
-                      </p>
+                      
+                      {/* Data dostawy z wyróżnieniem, jeśli zmieniona */}
+                      <div className="text-sm mb-2">
+                        <div className="flex items-center">
+                          <Calendar size={14} className="mr-2 text-gray-500" />
+                          <span className="font-medium">Data dostawy:</span>
+                        </div>
+                        
+                        {dateChanged ? (
+                          <div className="ml-7 mt-1 p-2 bg-yellow-50 rounded-md border border-yellow-200">
+                            <div className="flex items-center text-yellow-800">
+                              <AlertCircle size={14} className="mr-1" />
+                              <span className="font-medium">Uwaga: Data została zmieniona!</span>
+                            </div>
+                            <div className="mt-1 flex items-center">
+                              <span className="text-gray-500">Data pierwotna:</span>
+                              <span className="ml-1 line-through text-gray-500">{formatDate(zamowienie.deliveryDate)}</span>
+                            </div>
+                            <div className="mt-1 flex items-center">
+                              <span className="text-gray-800 font-medium">Data aktualna:</span>
+                              <span className="ml-1 font-medium text-green-700">{formatDate(zamowienie.response.newDeliveryDate)}</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="ml-7 mt-1">
+                            {formatDate(zamowienie.deliveryDate)}
+                          </div>
+                        )}
+                      </div>
+                      
                       <p className="text-sm mb-2 flex items-center">
                         <Calendar size={14} className="mr-2 text-gray-500" />
                         <span className="font-medium">Data dodania:</span> {formatDate(zamowienie.createdAt)}
@@ -310,24 +370,6 @@ export default function SpedycjaList({
                         <Truck size={18} className="mr-2" />
                         Szczegóły realizacji
                       </h4>
-                      
-                      {/* Informacja o zmianie daty dostawy */}
-                      {zamowienie.response.dateChanged && (
-                        <div className="mb-4 bg-yellow-50 p-3 rounded-md border border-yellow-200">
-                          <p className="text-sm font-medium text-yellow-800 mb-1 flex items-center">
-                            <Calendar size={16} className="mr-2" />
-                            Zmiana daty dostawy!
-                          </p>
-                          <div className="grid grid-cols-2 gap-2">
-                            <p className="text-sm">
-                              <span className="font-medium">Pierwotna data:</span> {formatDate(zamowienie.response.originalDeliveryDate)}
-                            </p>
-                            <p className="text-sm">
-                              <span className="font-medium">Nowa data:</span> {formatDate(zamowienie.response.newDeliveryDate)}
-                            </p>
-                          </div>
-                        </div>
-                      )}
                       
                       {zamowienie.response.completedManually ? (
                         <div className="bg-blue-50 text-blue-800 p-3 rounded-md border border-blue-100 flex items-center">
@@ -375,6 +417,18 @@ export default function SpedycjaList({
                               Informacje o realizacji
                             </h5>
                             <p className="text-sm mb-1.5"><span className="font-medium">Data odpowiedzi:</span> {formatDate(zamowienie.completedAt || zamowienie.createdAt)}</p>
+                            
+                            {zamowienie.response.dateChanged && (
+                              <div className="bg-yellow-50 p-2 rounded-md border border-yellow-100 mt-2 mb-1.5">
+                                <p className="text-sm font-medium text-yellow-800">Zmieniono datę dostawy:</p>
+                                <p className="text-xs flex justify-between mt-1">
+                                  <span>Z: <span className="line-through">{formatDate(zamowienie.response.originalDeliveryDate)}</span></span>
+                                  <span>→</span>
+                                  <span>Na: <span className="font-medium">{formatDate(zamowienie.response.newDeliveryDate)}</span></span>
+                                </p>
+                              </div>
+                            )}
+                            
                             {zamowienie.response.adminNotes && (
                               <p className="text-sm"><span className="font-medium">Uwagi:</span> {zamowienie.response.adminNotes}</p>
                             )}
