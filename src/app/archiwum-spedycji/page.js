@@ -581,11 +581,11 @@ export default function ArchiwumSpedycjiPage() {
                             <span className="ml-1">{transport.mpk}</span>
                           </p>
                           
-                          {transport.response && transport.response.deliveryPrice && transport.distanceKm > 0 && (
+                          {transport.response && transport.response.deliveryPrice && (
                             <p className="text-sm flex items-center">
                               <DollarSign size={14} className="mr-1 text-green-600" />
                               <span className="bg-green-50 px-2 py-0.5 rounded font-medium text-green-700">
-                                {(transport.response.deliveryPrice / transport.distanceKm).toFixed(2)} PLN/km
+                                {transport.response.deliveryPrice} PLN
                               </span>
                             </p>
                           )}
