@@ -133,6 +133,20 @@ const initializeDatabase = async () => {
         table.timestamp('updated_at').defaultTo(db.fn.now());
       });
     }
+
+    // Tabela ocen transportów
+    const transportRatingsExists = await db.schema.hasTable('transport_ratings');
+    if (!transportRatingsExists) {
+      await db.schema.createTable('transport_ratings', table => {
+        table.increments('id').primary();
+        table.integer('transport_id').notNullable().references('id').inTable('transports');
+        table.integer('rating').notNullable(); // Ocena 1-5
+        table.text('comment');
+        table.string('rater_email').notNullable(); // Email osoby wystawiającej ocenę
+        table.string('rater_name');
+        table.timestamp('created_at').defaultTo(db.fn.now());
+      });
+    }
     
     // Tabela budów
     const constructionsExists = await db.schema.hasTable('constructions');
