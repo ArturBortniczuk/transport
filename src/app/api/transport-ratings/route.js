@@ -36,6 +36,9 @@ export async function GET(request) {
       .orderBy('created_at', 'desc')
       .select('*');
     
+    // Informacja czy transport już został oceniony
+    const canBeRated = ratings.length === 0;
+    
     // Oblicz średnią ocenę
     const averageRating = ratings.length > 0 
       ? ratings.reduce((sum, rating) => sum + rating.rating, 0) / ratings.length
@@ -45,7 +48,8 @@ export async function GET(request) {
       success: true, 
       ratings,
       averageRating: parseFloat(averageRating.toFixed(1)),
-      count: ratings.length
+      count: ratings.length,
+      canBeRated // Dodajemy informację, czy transport może być oceniony
     });
   } catch (error) {
     console.error('Error fetching transport ratings:', error);
@@ -88,6 +92,19 @@ export async function POST(request) {
       }, { status: 400 });
     }
     
+    // Najpierw sprawdź, czy transport już został oceniony
+    const existingRatings = await db('transport_ratings')
+      .where('transport_id', ratingData.transportId)
+      .count('id as count')
+      .first();
+    
+    if (existingRatings && existingRatings.count > 0) {
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Ten transport został już oceniony i nie może być oceniony ponownie' 
+      }, { status: 400 });
+    }
+    
     // Pobierz dane użytkownika
     const user = await db('users')
       .where('email', userId)
@@ -111,30 +128,6 @@ export async function POST(request) {
         success: false, 
         error: 'Transport nie istnieje' 
       }, { status: 404 });
-    }
-    
-    // Sprawdź czy użytkownik już ocenił ten transport
-    const existingRating = await db('transport_ratings')
-      .where({
-        transport_id: ratingData.transportId,
-        rater_email: userId
-      })
-      .first();
-    
-    if (existingRating) {
-      // Aktualizuj istniejącą ocenę
-      await db('transport_ratings')
-        .where('id', existingRating.id)
-        .update({
-          rating: ratingData.rating,
-          comment: ratingData.comment || existingRating.comment,
-          created_at: db.fn.now()
-        });
-      
-      return NextResponse.json({ 
-        success: true, 
-        message: 'Ocena została zaktualizowana' 
-      });
     }
     
     // Dodaj nową ocenę
