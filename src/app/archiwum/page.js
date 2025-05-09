@@ -1,10 +1,13 @@
+// src/app/archiwum/page.js
 'use client'
 import { useState, useEffect } from 'react'
 import { format } from 'date-fns'
 import { pl } from 'date-fns/locale'
 import { KIEROWCY, RYNKI } from '../kalendarz/constants'
 import * as XLSX from 'xlsx'
-import { ChevronLeft, ChevronRight, FileText, Download } from 'lucide-react'
+import { ChevronLeft, ChevronRight, FileText, Download, Star } from 'lucide-react'
+import TransportRating from '@/components/TransportRating'
+import TransportRatingBadge from '@/components/TransportRatingBadge'
 
 export default function ArchiwumPage() {
   const [archiwum, setArchiwum] = useState([])
@@ -16,6 +19,8 @@ export default function ArchiwumPage() {
   const [exportFormat, setExportFormat] = useState('xlsx')
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage] = useState(10)
+  const [selectedTransport, setSelectedTransport] = useState(null)
+  const [showRatingModal, setShowRatingModal] = useState(false)
   
   // Filtry
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
@@ -23,6 +28,7 @@ export default function ArchiwumPage() {
   const [selectedWarehouse, setSelectedWarehouse] = useState('')
   const [selectedDriver, setSelectedDriver] = useState('')
   const [selectedRequester, setSelectedRequester] = useState('')
+  const [selectedRating, setSelectedRating] = useState('')
   
   // Lista użytkowników (handlowców) do filtrowania
   const [users, setUsers] = useState([])
@@ -44,6 +50,17 @@ export default function ArchiwumPage() {
     { value: '9', label: 'Październik' },
     { value: '10', label: 'Listopad' },
     { value: '11', label: 'Grudzień' }
+  ]
+
+  // Oceny do filtrowania
+  const ratingOptions = [
+    { value: '', label: 'Wszystkie oceny' },
+    { value: 'unrated', label: 'Bez oceny' },
+    { value: '5', label: '5 gwiazdek' },
+    { value: '4', label: '4+ gwiazdki' },
+    { value: '3', label: '3+ gwiazdki' },
+    { value: '2', label: '2+ gwiazdki' },
+    { value: '1', label: '1+ gwiazdka' }
   ]
 
   useEffect(() => {
@@ -186,6 +203,12 @@ export default function ArchiwumPage() {
     }
   }
 
+  // Funkcja do otwierania modalu ocen
+  const handleOpenRatingModal = (transport) => {
+    setSelectedTransport(transport)
+    setShowRatingModal(true)
+  }
+
   // Funkcja pomocnicza do znajdowania danych kierowcy
   const getDriverInfo = (driverId) => {
     const driver = KIEROWCY.find(k => k.id === parseInt(driverId))
@@ -304,7 +327,7 @@ export default function ArchiwumPage() {
           Archiwum Transportów
         </h1>
         <p className="text-gray-600">
-          Przeglądaj i filtruj zrealizowane transporty
+          Przeglądaj, filtruj i oceniaj zrealizowane transporty
         </p>
       </div>
 
@@ -471,11 +494,12 @@ export default function ArchiwumPage() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Osoba zlecająca
                 </th>
-                {isAdmin && (
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Akcje
-                  </th>
-                )}
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Ocena
+                </th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Akcje
+                </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -512,8 +536,18 @@ export default function ArchiwumPage() {
                     <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
                       {transport.requester_name || 'N/A'}
                     </td>
-                    {isAdmin && (
-                      <td className="px-4 py-4 whitespace-nowrap text-right text-sm">
+                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <TransportRatingBadge transportId={transport.id} />
+                    </td>
+                    <td className="px-4 py-4 whitespace-nowrap text-right text-sm">
+                      <button
+                        onClick={() => handleOpenRatingModal(transport)}
+                        className="px-3 py-1 mr-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
+                        title="Oceń transport"
+                      >
+                        Oceń
+                      </button>
+                      {isAdmin && (
                         <button
                           onClick={() => handleDeleteTransport(transport.id)}
                           className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1"
@@ -521,13 +555,13 @@ export default function ArchiwumPage() {
                         >
                           Usuń
                         </button>
-                      </td>
-                    )}
+                      )}
+                    </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={isAdmin ? 9 : 8} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={10} className="px-4 py-8 text-center text-gray-500">
                     <div className="flex flex-col items-center justify-center py-6">
                       <FileText size={48} className="text-gray-400 mb-2" />
                       <p className="text-gray-500">Brak transportów w wybranym okresie</p>
@@ -575,6 +609,19 @@ export default function ArchiwumPage() {
           )}
         </div>
       </div>
+
+      {/* Modal oceniania transportu */}
+      {showRatingModal && selectedTransport && (
+        <TransportRating
+          transportId={selectedTransport.id}
+          onClose={() => {
+            setShowRatingModal(false)
+            setSelectedTransport(null)
+            // Odświeżenie listy transportów po zamknięciu modalu ocen
+            fetchArchivedTransports();
+          }}
+        />
+      )}
     </div>
   )
 }
