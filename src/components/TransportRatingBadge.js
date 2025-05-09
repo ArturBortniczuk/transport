@@ -6,6 +6,7 @@ import { Star } from 'lucide-react'
 export default function TransportRatingBadge({ transportId }) {
   const [rating, setRating] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [canBeRated, setCanBeRated] = useState(false)
   
   useEffect(() => {
     const fetchRating = async () => {
@@ -19,6 +20,7 @@ export default function TransportRatingBadge({ transportId }) {
             average: data.averageRating,
             count: data.count
           })
+          setCanBeRated(data.canBeRated) // Ustawiamy stan na podstawie odpowiedzi API
         }
       } catch (error) {
         console.error('Błąd pobierania oceny:', error)
@@ -40,7 +42,10 @@ export default function TransportRatingBadge({ transportId }) {
   
   if (!rating || rating.count === 0) {
     return (
-      <span className="text-gray-400 text-sm">Brak ocen</span>
+      <span className="text-gray-400 text-sm flex items-center">
+        <Star size={14} className="mr-1 text-gray-300" />
+        Brak oceny
+      </span>
     )
   }
   
@@ -59,7 +64,6 @@ export default function TransportRatingBadge({ transportId }) {
         <span className="text-white font-medium mr-1">{rating.average.toFixed(1)}</span>
         <Star size={14} className="text-white fill-white" />
       </div>
-      <span className="text-gray-500 text-xs ml-2">({rating.count})</span>
     </div>
   )
 }
