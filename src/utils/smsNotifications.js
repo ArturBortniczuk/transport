@@ -8,7 +8,7 @@
  */
 export async function wyslijPowiadomienieOdbioruBebnow(transportData, packagingData) {
   // Domyślny numer telefonu
-  const NUMER_TELEFONU = '885851594';
+  const NUMER_TELEFONU = '732654982';
   
   // Określ magazyn
   const nazwaMagazynu = transportData.source_warehouse === 'bialystok' 
