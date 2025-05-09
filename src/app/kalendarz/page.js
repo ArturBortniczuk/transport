@@ -340,6 +340,7 @@ export default function KalendarzPage() {
     }))
   }
 
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     
@@ -348,7 +349,7 @@ export default function KalendarzPage() {
       osobaZlecajaca: nowyTransport.osobaZlecajaca,
       mpk: nowyTransport.mpk
     });
-
+  
     try {
       // Wybór magazynu
       const wybranyMagazyn = nowyTransport.magazyn || 'bialystok' // Domyślnie Białystok
@@ -430,8 +431,32 @@ export default function KalendarzPage() {
       const data = await response.json();
   
       if (data.success) {
-        // Jeśli transport dotyczy odbioru opakowania, zaktualizuj opakowanie
+        // Jeśli transport dotyczy odbioru opakowania (bębnów)
         if (nowyTransport.packagingId) {
+          // Pobierz dane opakowania
+          try {
+            const packagingResponse = await fetch(`/api/packagings/${nowyTransport.packagingId}`);
+            const packagingData = await packagingResponse.json();
+            
+            if (packagingResponse.ok && packagingData.success) {
+              // Wyślij powiadomienie SMS o odbiorze bębnów
+              const transportData = {
+                delivery_date: format(selectedDate, "yyyy-MM-dd'T'HH:mm:ss"),
+                source_warehouse: wybranyMagazyn,
+                client_name: nowyTransport.nazwaKlienta
+              };
+              
+              // Wywołaj funkcję do wysyłania SMS
+              await wyslijPowiadomienieOdbioruBebnow(transportData, packagingData.packaging);
+              
+              console.log('Wysłano powiadomienie SMS o odbiorze bębnów');
+            }
+          } catch (smsError) {
+            console.error('Błąd podczas wysyłania powiadomienia SMS:', smsError);
+            // Nie przerywaj dalszego przetwarzania w przypadku błędu SMS
+          }
+  
+          // Aktualizujemy opakowanie, aby usunąć referencję do transportu
           await fetch('/api/packagings', {
             method: 'PUT',
             headers: {
@@ -471,7 +496,6 @@ export default function KalendarzPage() {
       alert('Wystąpił błąd podczas dodawania transportu: ' + error.message)
     }
   }
-
   const handleZakonczTransport = async (dateKey, transportId) => {
     try {
       // Dodaj potwierdzenie przed oznaczenem jako zrealizowane
