@@ -11,7 +11,7 @@ import TransportForm from './components/TransportForm'
 import FilterPanel from './components/FilterPanel'
 import TransportsList from './components/TransportsList'
 import PackagingsList from './components/PackagingsList'
-import { wyslijPowiadomienieOdbioruBebnow } from '../utils/smsNotifications'
+import { wyslijPowiadomienieOdbioruBebnow } from '@/utils/smsNotifications'
 import { MAGAZYNY } from './constants'
 import { KIEROWCY } from './constants'
 
