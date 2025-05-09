@@ -434,12 +434,18 @@ export default function KalendarzPage() {
       if (data.success) {
         // Jeśli transport dotyczy odbioru opakowania (bębnów)
         if (nowyTransport.packagingId) {
+          console.log('Transport ma packagingId:', nowyTransport.packagingId);
+          
           // Pobierz dane opakowania
           try {
+            console.log('Próbuję pobrać dane opakowania...');
             const packagingResponse = await fetch(`/api/packagings/${nowyTransport.packagingId}`);
             const packagingData = await packagingResponse.json();
             
+            console.log('Odpowiedź API packagings:', packagingData);
+            
             if (packagingResponse.ok && packagingData.success) {
+              console.log('Pobrano dane opakowania pomyślnie');
               // Wyślij powiadomienie SMS o odbiorze bębnów
               const transportData = {
                 delivery_date: format(selectedDate, "yyyy-MM-dd'T'HH:mm:ss"),
@@ -447,10 +453,18 @@ export default function KalendarzPage() {
                 client_name: nowyTransport.nazwaKlienta
               };
               
-              // Wywołaj funkcję do wysyłania SMS
-              await wyslijPowiadomienieOdbioruBebnow(transportData, packagingData.packaging);
+              console.log('Przygotowane dane transportu do SMS:', transportData);
               
-              console.log('Wysłano powiadomienie SMS o odbiorze bębnów');
+              // Wywołaj funkcję do wysyłania SMS
+              try {
+                console.log('Próbuję wysłać SMS...');
+                const smsResult = await wyslijPowiadomienieOdbioruBebnow(transportData, packagingData.packaging);
+                console.log('Wynik wysłania SMS:', smsResult);
+              } catch (innerSmsError) {
+                console.error('Wewnętrzny błąd wysyłania SMS:', innerSmsError);
+              }
+            } else {
+              console.error('Nie udało się pobrać danych opakowania:', packagingData.error || 'Nieznany błąd');
             }
           } catch (smsError) {
             console.error('Błąd podczas wysyłania powiadomienia SMS:', smsError);
