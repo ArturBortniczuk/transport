@@ -1,11 +1,5 @@
-// src/utils/smsNotifications.js
+// Ulepszona funkcja w src/utils/smsNotifications.js
 
-/**
- * Wysyła powiadomienie SMS o odbiorze bębnów
- * @param {Object} transportData - Dane transportu
- * @param {Object} packagingData - Dane opakowania
- * @returns {Promise<Object>} - Wynik operacji wysyłania SMS
- */
 export async function wyslijPowiadomienieOdbioruBebnow(transportData, packagingData) {
   // Domyślny numer telefonu
   const NUMER_TELEFONU = '732654982';
@@ -43,25 +37,49 @@ export async function wyslijPowiadomienieOdbioruBebnow(transportData, packagingD
   const wiadomosc = `Cześć Edzia, ${nazwaMagazynu} odbierze bębny od klienta "${nazwaKlienta}" w dniu ${sformatowanaData}. Bębny to: ${informacjeOOpakowaniach}`;
   
   console.log('Wysyłam SMS:', wiadomosc);
+  console.log('Na numer:', NUMER_TELEFONU);
   
   // Wysyłanie SMS
   try {
+    console.log('Wykonuję zapytanie do API SMS...');
+    
+    const requestBody = {
+      phoneNumber: NUMER_TELEFONU,
+      message: wiadomosc
+    };
+    
+    console.log('Dane zapytania:', requestBody);
+    
     const response = await fetch('/api/sms', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        phoneNumber: NUMER_TELEFONU,
-        message: wiadomosc
-      })
+      body: JSON.stringify(requestBody)
     });
     
-    const wynik = await response.json();
-    console.log('Wynik wysłania SMS:', wynik);
-    return wynik;
+    console.log('Status odpowiedzi API SMS:', response.status);
+    
+    const responseText = await response.text();
+    console.log('Surowa odpowiedź API SMS:', responseText);
+    
+    let responseData;
+    try {
+      responseData = JSON.parse(responseText);
+    } catch (jsonError) {
+      console.error('Błąd parsowania odpowiedzi JSON:', jsonError);
+      return { success: false, error: 'Nieprawidłowa odpowiedź JSON', rawResponse: responseText };
+    }
+    
+    console.log('Sparsowana odpowiedź API SMS:', responseData);
+    
+    if (!response.ok) {
+      throw new Error(`Błąd API SMS: ${response.status} - ${responseData.error || 'Nieznany błąd'}`);
+    }
+    
+    return responseData;
   } catch (error) {
     console.error('Błąd wysyłania powiadomienia SMS:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: error.message || 'Nieznany błąd' };
   }
 }
