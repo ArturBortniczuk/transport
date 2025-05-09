@@ -5,6 +5,7 @@ import { pl } from 'date-fns/locale'
 import LocationSelector from './LocationSelector'
 import ConstructionSelector from './ConstructionSelector'
 import { ChevronRight } from 'lucide-react' // Ikona dla połączonych tras
+import { wyslijPowiadomienieOdbioruBebnow } from '../utils/smsNotifications';
 
 export default function TransportForm({
   selectedDate,
