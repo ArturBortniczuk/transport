@@ -16,6 +16,7 @@ export default function TransportRating({ transportId, onClose }) {
   const [submitSuccess, setSubmitSuccess] = useState(false)
   const [currentUserEmail, setCurrentUserEmail] = useState(null)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [canBeRated, setCanBeRated] = useState(true) // Stan informujący czy transport może być oceniony
 
   // Pobierz dane o bieżącym użytkowniku
   useEffect(() => {
@@ -48,6 +49,7 @@ export default function TransportRating({ transportId, onClose }) {
           setRatings(data.ratings)
           setAverageRating(data.averageRating)
           setCount(data.count)
+          setCanBeRated(data.canBeRated) // Ustawiamy, czy transport może być oceniony
           
           // Sprawdź czy użytkownik już ocenił ten transport
           if (currentUserEmail) {
@@ -102,6 +104,7 @@ export default function TransportRating({ transportId, onClose }) {
       
       if (data.success) {
         setSubmitSuccess(true)
+        setCanBeRated(false) // Po dodaniu oceny już nie można oceniać
         
         // Wyczyść błędy i ustaw timeout do ukrycia komunikatu sukcesu
         setTimeout(() => {
@@ -134,8 +137,24 @@ export default function TransportRating({ transportId, onClose }) {
       if (data.success) {
         // Odśwież listę ocen
         setSubmitSuccess(true)
+        setCanBeRated(true) // Po usunięciu oceny można znowu oceniać
+        
         setTimeout(() => {
           setSubmitSuccess(false)
+          // Odśwież oceny
+          const fetchRatings = async () => {
+            const response = await fetch(`/api/transport-ratings?transportId=${transportId}`)
+            const data = await response.json()
+            
+            if (data.success) {
+              setRatings(data.ratings)
+              setAverageRating(data.averageRating)
+              setCount(data.count)
+              setCanBeRated(data.canBeRated)
+            }
+          }
+          
+          fetchRatings()
         }, 1000)
       } else {
         alert(data.error || 'Nie udało się usunąć oceny')
@@ -236,48 +255,56 @@ export default function TransportRating({ transportId, onClose }) {
             
             {/* Formularz dodawania oceny */}
             <div className="bg-gray-50 p-4 rounded-md mb-6">
-              <h3 className="font-medium mb-3">Twoja ocena</h3>
-              <form onSubmit={handleSubmitRating}>
-                <div className="mb-3 flex justify-center">
-                  {renderStars(userRating, true)}
+              <h3 className="font-medium mb-3">Ocena transportu</h3>
+              
+              {!canBeRated ? (
+                <div className="bg-blue-50 text-blue-700 p-4 rounded-md">
+                  <p>Ten transport został już oceniony i nie może być oceniony ponownie.</p>
+                  <p className="text-sm mt-2">Tylko pierwsza osoba może ocenić transport.</p>
                 </div>
-                
-                <div className="mb-3">
-                  <label htmlFor="comment" className="block text-sm font-medium text-gray-700 mb-1">
-                    Komentarz (opcjonalnie)
-                  </label>
-                  <textarea
-                    id="comment"
-                    rows={3}
-                    value={comment}
-                    onChange={(e) => setComment(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Podziel się swoją opinią na temat tego transportu..."
-                  />
-                </div>
-                
-                {submitError && (
-                  <div className="bg-red-50 text-red-700 p-3 rounded-md mb-3 text-sm">
-                    {submitError}
+              ) : (
+                <form onSubmit={handleSubmitRating}>
+                  <div className="mb-3 flex justify-center">
+                    {renderStars(userRating, true)}
                   </div>
-                )}
-                
-                {submitSuccess && (
-                  <div className="bg-green-50 text-green-700 p-3 rounded-md mb-3 text-sm">
-                    Twoja ocena została zapisana!
+                  
+                  <div className="mb-3">
+                    <label htmlFor="comment" className="block text-sm font-medium text-gray-700 mb-1">
+                      Komentarz (opcjonalnie)
+                    </label>
+                    <textarea
+                      id="comment"
+                      rows={3}
+                      value={comment}
+                      onChange={(e) => setComment(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Podziel się swoją opinią na temat tego transportu..."
+                    />
                   </div>
-                )}
-                
-                <div className="flex justify-end">
-                  <button
-                    type="submit"
-                    disabled={submitting}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-                  >
-                    {submitting ? 'Zapisywanie...' : 'Zapisz ocenę'}
-                  </button>
-                </div>
-              </form>
+                  
+                  {submitError && (
+                    <div className="bg-red-50 text-red-700 p-3 rounded-md mb-3 text-sm">
+                      {submitError}
+                    </div>
+                  )}
+                  
+                  {submitSuccess && (
+                    <div className="bg-green-50 text-green-700 p-3 rounded-md mb-3 text-sm">
+                      Twoja ocena została zapisana!
+                    </div>
+                  )}
+                  
+                  <div className="flex justify-end">
+                    <button
+                      type="submit"
+                      disabled={submitting}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                    >
+                      {submitting ? 'Zapisywanie...' : 'Zapisz ocenę'}
+                    </button>
+                  </div>
+                </form>
+              )}
             </div>
             
             {/* Lista ocen */}
@@ -286,7 +313,8 @@ export default function TransportRating({ transportId, onClose }) {
               
               {ratings.length === 0 ? (
                 <div className="text-center text-gray-500 py-6">
-                  Brak ocen dla tego transportu. Bądź pierwszy i oceń!
+                  Brak ocen dla tego transportu. 
+                  {canBeRated && "Bądź pierwszy i oceń!"}
                 </div>
               ) : (
                 <div className="space-y-4">
