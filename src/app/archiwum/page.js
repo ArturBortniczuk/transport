@@ -63,6 +63,8 @@ export default function ArchiwumPage() {
 
   // Funkcja do sprawdzania, czy transport może być oceniony
   const checkRatingStatus = async (transportId) => {
+    if (!transportId) return;
+    
     try {
       const response = await fetch(`/api/transport-ratings?transportId=${transportId}`)
       const data = await response.json()
@@ -77,7 +79,7 @@ export default function ArchiwumPage() {
       console.error('Błąd sprawdzania statusu oceny:', error)
     }
   }
-
+  
   useEffect(() => {
     // Sprawdź czy użytkownik jest administratorem
     const checkAdmin = async () => {
@@ -109,11 +111,13 @@ export default function ArchiwumPage() {
     fetchArchivedTransports()
   }, [])
 
-  // Sprawdź status ocen transportów po załadowaniu listy
+  // Zmodyfikujmy również sposób sprawdzania statusu ocen:
   useEffect(() => {
-    if (currentItems.length > 0) {
+    if (currentItems && currentItems.length > 0) {
       currentItems.forEach(transport => {
-        checkRatingStatus(transport.id)
+        if (transport && transport.id) {
+          checkRatingStatus(transport.id)
+        }
       })
     }
   }, [currentItems])
