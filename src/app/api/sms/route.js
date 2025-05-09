@@ -1,4 +1,4 @@
-// src/app/api/sms/route.js - ulepszony
+// src/app/api/sms/route.js - z certyfikatem jako zmienną środowiskową
 import { NextResponse } from 'next/server';
 import axios from 'axios';
 import https from 'https';
@@ -36,8 +36,22 @@ export async function POST(request) {
       messageLength: message.length 
     });
     
+    // Pobranie certyfikatu i klucza ze zmiennych środowiskowych
+    const cert = process.env.SSL_CERT;
+    const key = process.env.SSL_KEY || process.env.SSL_CERT; // Używamy SSL_KEY jeśli zdefiniowano osobno, w przeciwnym razie używamy SSL_CERT
+    
+    if (!cert) {
+      console.error('API SMS - brak certyfikatu w zmiennych środowiskowych');
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Brak certyfikatu. Ustaw zmienną środowiskową SSL_CERT.' 
+      }, { status: 500 });
+    }
+    
+    console.log('API SMS - certyfikat znaleziony w zmiennych środowiskowych');
+    
     // Konfiguracja API MultiInfo
-    const url = `http://api2.multiinfo.plus.pl/sendsms.aspx?` +
+    const url = `https://api2.multiinfo.plus.pl/sendsms.aspx?` +
       `login=ArturBortniczuk&` +
       `password=ArtBor.2025&` +
       `serviceId=21370&` +
@@ -46,15 +60,30 @@ export async function POST(request) {
     
     console.log('API SMS - URL API:', url);
     
+    // Konfiguracja agenta HTTPS z certyfikatem
+    let httpsAgent;
+    try {
+      httpsAgent = new https.Agent({
+        cert: cert,
+        key: key,
+        rejectUnauthorized: false // Na produkcji można ustawić na true
+      });
+      console.log('API SMS - agent HTTPS utworzony pomyślnie');
+    } catch (certError) {
+      console.error('API SMS - błąd podczas tworzenia agenta HTTPS:', certError);
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Błąd konfiguracji certyfikatu: ' + certError.message 
+      }, { status: 500 });
+    }
+    
     // Użyj Axios do wykonania żądania
     try {
-      console.log('API SMS - wysyłanie żądania HTTP');
+      console.log('API SMS - wysyłanie żądania HTTPS z certyfikatem');
       
       const response = await axios.get(url, {
-        httpsAgent: new https.Agent({
-          rejectUnauthorized: false // Na produkcji powinno być true - tu wyłączamy dla testów
-        }),
-        timeout: 10000 // 10 sekund timeout
+        httpsAgent: httpsAgent,
+        timeout: 15000 // 15 sekund timeout
       });
       
       console.log('API SMS - otrzymano odpowiedź:', {
