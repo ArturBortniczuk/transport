@@ -2,7 +2,7 @@
 
 export async function wyslijPowiadomienieOdbioruBebnow(transportData, packagingData) {
   // Domyślny numer telefonu
-  const NUMER_TELEFONU = '732654982';
+  const NUMER_TELEFONU = '885851594';
   
   // Określ magazyn
   const nazwaMagazynu = transportData.source_warehouse === 'bialystok' 
@@ -19,17 +19,42 @@ export async function wyslijPowiadomienieOdbioruBebnow(transportData, packagingD
   // Wyciągnij numery opakowań z opisu pakowania (jeśli są dostępne)
   let informacjeOOpakowaniach = 'brak informacji o numerach';
   if (packagingData.description) {
+    // Dzielimy opis na linie
     const linie = packagingData.description.split('\n');
-    // Szukaj linii zawierającej numery opakowań
-    const liniaOpakowan = linie.find(linia => 
-      linia.toLowerCase().includes('opakowania:') || 
-      linia.toLowerCase().includes('bębny:') ||
-      linia.toLowerCase().includes('numery:')
-    );
     
-    if (liniaOpakowan) {
-      // Usuń nagłówek i zostaw tylko numery
-      informacjeOOpakowaniach = liniaOpakowan.replace(/opakowania:|bębny:|numery:/i, '').trim();
+    // Szukamy linii nagłówka "Opakowania:"
+    let indeksOpakowaniaStart = -1;
+    
+    for (let i = 0; i < linie.length; i++) {
+      const linia = linie[i].trim().toLowerCase();
+      if (linia === 'opakowania:' || linia.startsWith('opakowania:') || 
+          linia === 'bębny:' || linia.startsWith('bębny:') || 
+          linia === 'numery:' || linia.startsWith('numery:')) {
+        indeksOpakowaniaStart = i;
+        break;
+      }
+    }
+    
+    // Jeśli znaleźliśmy nagłówek, zbieramy wszystkie linie poniżej do następnego nagłówka
+    if (indeksOpakowaniaStart >= 0) {
+      const informacje = [];
+      
+      // Dodajemy wszystkie linie po nagłówku, aż do następnego nagłówka lub końca tekstu
+      for (let i = indeksOpakowaniaStart + 1; i < linie.length; i++) {
+        const linia = linie[i].trim();
+        
+        // Jeśli linia jest pusta lub to nowy nagłówek, przerywamy
+        if (linia === '' || linia.endsWith(':')) {
+          break;
+        }
+        
+        informacje.push(linia);
+      }
+      
+      // Jeśli znaleźliśmy jakieś informacje, łączymy je
+      if (informacje.length > 0) {
+        informacjeOOpakowaniach = informacje.join(', ');
+      }
     }
   }
   
