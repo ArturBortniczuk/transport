@@ -1,11 +1,11 @@
-// src/app/archiwum/page.js - zmodyfikowana wersja z lepszym układem
+// src/app/archiwum/page.js
 'use client'
 import { useState, useEffect } from 'react'
 import { format } from 'date-fns'
 import { pl } from 'date-fns/locale'
 import { KIEROWCY, RYNKI } from '../kalendarz/constants'
 import * as XLSX from 'xlsx'
-import { ChevronLeft, ChevronRight, FileText, Download, Star, ChevronDown, MapPin, Truck, Building, Phone, User, Calendar, Info, ExternalLink } from 'lucide-react'
+import { ChevronLeft, ChevronRight, FileText, Download, Star, ChevronDown, MapPin, Truck, Building, Phone, User, Calendar, Info } from 'lucide-react'
 import TransportRating from '@/components/TransportRating'
 import TransportRatingBadge from '@/components/TransportRatingBadge'
 
@@ -22,6 +22,7 @@ export default function ArchiwumPage() {
   const [selectedTransport, setSelectedTransport] = useState(null)
   const [showRatingModal, setShowRatingModal] = useState(false)
   const [expandedRows, setExpandedRows] = useState({})
+  const [ratableTransports, setRatableTransports] = useState({})
   
   // Filtry
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
@@ -60,6 +61,23 @@ export default function ArchiwumPage() {
     }))
   }
 
+  // Funkcja do sprawdzania, czy transport może być oceniony
+  const checkRatingStatus = async (transportId) => {
+    try {
+      const response = await fetch(`/api/transport-ratings?transportId=${transportId}`)
+      const data = await response.json()
+      
+      if (data.success) {
+        setRatableTransports(prev => ({
+          ...prev,
+          [transportId]: data.canBeRated
+        }))
+      }
+    } catch (error) {
+      console.error('Błąd sprawdzania statusu oceny:', error)
+    }
+  }
+
   useEffect(() => {
     // Sprawdź czy użytkownik jest administratorem
     const checkAdmin = async () => {
@@ -90,6 +108,15 @@ export default function ArchiwumPage() {
     fetchUsers()
     fetchArchivedTransports()
   }, [])
+
+  // Sprawdź status ocen transportów po załadowaniu listy
+  useEffect(() => {
+    if (currentItems.length > 0) {
+      currentItems.forEach(transport => {
+        checkRatingStatus(transport.id)
+      })
+    }
+  }, [currentItems])
 
   // Pobierz dane archiwum z API
   const fetchArchivedTransports = async () => {
@@ -328,7 +355,7 @@ export default function ArchiwumPage() {
         </p>
       </div>
 
-      {/* Filters Section - Zmodyfikowany layout */}
+      {/* Filters Section */}
       <div className="mb-8 bg-white rounded-lg shadow p-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
           {/* Rok */}
@@ -460,7 +487,7 @@ export default function ArchiwumPage() {
         </div>
       )}
 
-      {/* Nowy, bardziej responsywny interfejs */}
+      {/* Nowy, responsywny interfejs z kartami */}
       <div className="space-y-4">
         {currentItems.length > 0 ? (
           currentItems.map((transport) => (
@@ -493,16 +520,23 @@ export default function ArchiwumPage() {
                 
                 <div className="flex items-center space-x-3">
                   <TransportRatingBadge transportId={transport.id} />
+                  
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       handleOpenRatingModal(transport);
                     }}
-                    className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
-                    title="Oceń transport"
+                    disabled={!ratableTransports[transport.id]}
+                    className={`px-3 py-1 text-xs rounded transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 ${
+                      ratableTransports[transport.id]
+                        ? 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500'
+                        : 'bg-gray-300 text-gray-600 cursor-not-allowed'
+                    }`}
+                    title={ratableTransports[transport.id] ? "Oceń transport" : "Transport już został oceniony"}
                   >
-                    Oceń
+                    {ratableTransports[transport.id] ? "Oceń" : "Oceniony"}
                   </button>
+                  
                   <ChevronDown 
                     size={20} 
                     className={`text-gray-500 transition-transform ${expandedRows[transport.id] ? 'rotate-180' : ''}`} 
@@ -570,11 +604,16 @@ export default function ArchiwumPage() {
                         e.stopPropagation();
                         handleOpenRatingModal(transport);
                       }}
-                      className="px-4 py-2 mr-3 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 flex items-center"
-                      title="Oceń transport"
+                      disabled={!ratableTransports[transport.id]}
+                      className={`px-4 py-2 mr-3 rounded flex items-center transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 ${
+                        ratableTransports[transport.id]
+                          ? 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500'
+                          : 'bg-gray-300 text-gray-600 cursor-not-allowed'
+                      }`}
+                      title={ratableTransports[transport.id] ? "Oceń transport" : "Transport już został oceniony"}
                     >
                       <Star size={16} className="mr-2" />
-                      Oceń transport
+                      {ratableTransports[transport.id] ? "Oceń transport" : "Transport oceniony"}
                     </button>
                     
                     {isAdmin && (
@@ -648,8 +687,14 @@ export default function ArchiwumPage() {
           onClose={() => {
             setShowRatingModal(false)
             setSelectedTransport(null)
-            // Odświeżenie listy transportów po zamknięciu modalu ocen
+            // Odświeżenie listy transportów i statusów ocen po zamknięciu modalu
             fetchArchivedTransports();
+            // Odśwież status ocen dla wszystkich transportów
+            if (currentItems.length > 0) {
+              currentItems.forEach(transport => {
+                checkRatingStatus(transport.id)
+              })
+            }
           }}
         />
       )}
