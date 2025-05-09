@@ -4,39 +4,65 @@ import { useState, useEffect } from 'react'
 import { Star } from 'lucide-react'
 
 export default function TransportRatingBadge({ transportId }) {
+  // Definiujemy stany przed jakimkolwiek użyciem zmiennych
   const [rating, setRating] = useState(null)
   const [loading, setLoading] = useState(true)
   const [canBeRated, setCanBeRated] = useState(false)
+  const [error, setError] = useState(null)
   
   useEffect(() => {
+    // Upewniamy się, że komponent jest zamontowany przed rozpoczęciem działań
+    let isMounted = true;
+    
     const fetchRating = async () => {
+      if (!transportId) return;
+      
       try {
         setLoading(true)
         const response = await fetch(`/api/transport-ratings?transportId=${transportId}`)
         const data = await response.json()
         
-        if (data.success) {
-          setRating({
-            average: data.averageRating,
-            count: data.count
-          })
-          setCanBeRated(data.canBeRated) // Ustawiamy stan na podstawie odpowiedzi API
+        // Sprawdzamy, czy komponent jest nadal zamontowany przed aktualizacją stanów
+        if (isMounted) {
+          if (data.success) {
+            setRating({
+              average: data.averageRating,
+              count: data.count
+            })
+            setCanBeRated(data.canBeRated)
+          } else {
+            setError(data.error || 'Błąd podczas pobierania oceny')
+          }
         }
       } catch (error) {
         console.error('Błąd pobierania oceny:', error)
+        if (isMounted) {
+          setError('Wystąpił błąd podczas pobierania oceny')
+        }
       } finally {
-        setLoading(false)
+        if (isMounted) {
+          setLoading(false)
+        }
       }
     }
     
-    if (transportId) {
-      fetchRating()
+    fetchRating()
+    
+    // Funkcja czyszcząca, która zostanie wywołana przy odmontowaniu komponentu
+    return () => {
+      isMounted = false;
     }
   }, [transportId])
   
   if (loading) {
     return (
       <div className="w-10 h-5 bg-gray-100 rounded animate-pulse"></div>
+    )
+  }
+  
+  if (error) {
+    return (
+      <span className="text-gray-400 text-sm">Błąd</span>
     )
   }
   
