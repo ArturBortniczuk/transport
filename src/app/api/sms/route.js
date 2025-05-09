@@ -37,7 +37,7 @@ export async function POST(request) {
     });
     
     // Konfiguracja API MultiInfo
-    const url = `https://api2.multiinfo.plus.pl/sendsms.aspx?` +
+    const url = `http://api2.multiinfo.plus.pl/sendsms.aspx?` +
       `login=ArturBortniczuk&` +
       `password=ArtBor.2025&` +
       `serviceId=21370&` +
