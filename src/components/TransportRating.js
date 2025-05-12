@@ -253,7 +253,7 @@ export default function TransportRating({ transportId, onClose }) {
               </div>
             </div>
             
-            {/* Formularz dodawania oceny - pokaż tylko jeśli transport może być oceniony */}
+            {/* Formularz dodawania oceny - wyświetl tylko jeśli transport może być oceniony */}
             {canBeRated ? (
               <div className="bg-gray-50 p-4 rounded-md mb-6">
                 <h3 className="font-medium mb-3">Oceń transport</h3>
@@ -359,5 +359,5 @@ export default function TransportRating({ transportId, onClose }) {
         )}
       </div>
     </div>
-  );
+  )
 }
