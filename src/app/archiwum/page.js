@@ -505,7 +505,7 @@ export default function ArchiwumPage() {
                      transport.source_warehouse}
                   </div>
                   <div className="flex items-center mx-4 text-sm text-gray-600">
-                    <Route size={16} className="mr-1 text-green-600" />
+                    <Road size={16} className="mr-1 text-green-600" />
                     {transport.distance ? `${transport.distance} km` : 'N/A'}
                   </div>
                   <div className="font-medium text-gray-900 flex items-center">
@@ -573,7 +573,7 @@ export default function ArchiwumPage() {
                     <div>
                       <h3 className="text-sm font-medium text-gray-500 mb-1">Numer dokumentu</h3>
                       <p className="text-gray-900 font-medium">
-                        {transport.wz_number || 'Brak numeru'}
+                        {transport.numerWZ || 'Brak numeru'}
                       </p>
                     </div>
                     
