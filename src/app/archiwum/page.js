@@ -63,10 +63,14 @@ export default function ArchiwumPage() {
 
   // Funkcja aktualizująca informację o możliwości oceny transportu
   const handleCanBeRatedChange = (transportId, canBeRated) => {
-    setRatableTransports(prev => ({
-      ...prev,
-      [transportId]: canBeRated
-    }))
+    setRatableTransports(prev => {
+      // Jeśli wartość się nie zmieniła, nie aktualizuj stanu
+      if (prev[transportId] === canBeRated) return prev
+      return {
+        ...prev,
+        [transportId]: canBeRated
+      }
+    })
   }
 
   useEffect(() => {
@@ -125,6 +129,16 @@ export default function ArchiwumPage() {
     }
   }
 
+  const renderRatingBadge = (transportId) => {
+    return (
+      <TransportRatingBadge 
+        transportId={transportId} 
+        refreshTrigger={0} // Statyczna wartość, aby uniknąć ponownego renderowania
+        onCanBeRatedChange={(canBeRated) => handleCanBeRatedChange(transportId, canBeRated)}
+      />
+    )
+  }
+  
   // Funkcja filtrująca transporty
   const applyFilters = (transports, year, month, warehouse, driver, requester) => {
     if (!transports) return
@@ -500,15 +514,15 @@ export default function ArchiwumPage() {
                   </div>
                 </div>
                 
-                <div className="flex items-center space-x-3">
-                  <TransportRatingBadge 
-                    transportId={transport.id} 
-                    onCanBeRatedChange={(canBeRated) => handleCanBeRatedChange(transport.id, canBeRated)}
-                  />
-                  
-                  {/* Pokaż przycisk "Oceń" tylko jeśli transport może być oceniony */}
-                  {ratableTransports[transport.id] && (
+              {/* Dla przycisków w nagłówku karty transportu */}
+              <div className="flex items-center space-x-3">
+                {renderRatingBadge(transport.id)}
+                
+                {/* Pokaż przycisk "Oceń" tylko jeśli transport może być oceniony */}
+                {ratableTransports[transport.id] !== undefined && (
+                  ratableTransports[transport.id] ? (
                     <button
+                      key={`rate-button-${transport.id}`}
                       onClick={(e) => {
                         e.stopPropagation();
                         handleOpenRatingModal(transport);
@@ -518,11 +532,9 @@ export default function ArchiwumPage() {
                     >
                       Oceń
                     </button>
-                  )}
-                  
-                  {/* Pokaż przycisk "Zobacz oceny" jeśli transport nie może być oceniony */}
-                  {!ratableTransports[transport.id] && (
+                  ) : (
                     <button
+                      key={`view-button-${transport.id}`}
                       onClick={(e) => {
                         e.stopPropagation();
                         handleOpenRatingModal(transport);
@@ -532,13 +544,13 @@ export default function ArchiwumPage() {
                     >
                       Zobacz oceny
                     </button>
-                  )}
-                  
-                  <ChevronDown 
-                    size={20} 
-                    className={`text-gray-500 transition-transform ${expandedRows[transport.id] ? 'rotate-180' : ''}`} 
-                  />
-                </div>
+                  )
+                )}
+                
+                <ChevronDown 
+                  size={20} 
+                  className={`text-gray-500 transition-transform ${expandedRows[transport.id] ? 'rotate-180' : ''}`} 
+                />
               </div>
               
               {/* Szczegóły transportu - widoczne po rozwinięciu */}
