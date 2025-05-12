@@ -505,7 +505,7 @@ export default function ArchiwumPage() {
                      transport.source_warehouse}
                   </div>
                   <div className="flex items-center mx-4 text-sm text-gray-600">
-                    <compass size={16} className="mr-1 text-green-600" />
+                    <Compass size={16} className="mr-1 text-green-600" />
                     {transport.distance ? `${transport.distance} km` : 'N/A'}
                   </div>
                   <div className="font-medium text-gray-900 flex items-center">
