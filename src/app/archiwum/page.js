@@ -5,7 +5,7 @@ import { format } from 'date-fns'
 import { pl } from 'date-fns/locale'
 import { KIEROWCY, RYNKI } from '../kalendarz/constants'
 import * as XLSX from 'xlsx'
-import { ChevronLeft, ChevronRight, FileText, Download, Star, ChevronDown, MapPin, Truck, Building, Phone, User, Calendar, Info, ExternalLink } from 'lucide-react'
+import { ChevronLeft, ChevronRight, FileText, Download, Star, Compass, ChevronDown, MapPin, Truck, Building, Phone, User, Calendar, Info, ExternalLink } from 'lucide-react'
 import TransportRating from '@/components/TransportRating'
 import TransportRatingBadge from '@/components/TransportRatingBadge'
 
