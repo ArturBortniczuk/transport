@@ -499,7 +499,7 @@ export default function ArchiwumPage() {
                     {format(new Date(transport.delivery_date), 'dd.MM.yyyy', { locale: pl })}
                   </div>
                   <div className="text-gray-700 hidden md:flex items-center">
-                    <Building size={16} className="mr-2 text-blue-500" />
+                    <Building size={16}  className={`mr-2 ${transport.source_warehouse === 'bialystok' ? 'text-red-500' : 'text-blue-500'}`}  />
                     {transport.source_warehouse === 'bialystok' ? 'Magazyn Białystok' : 
                      transport.source_warehouse === 'zielonka' ? 'Magazyn Zielonka' : 
                      transport.source_warehouse}
