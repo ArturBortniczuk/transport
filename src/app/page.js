@@ -32,11 +32,11 @@ export default function Home() {
         this.baseY = y
         this.density = (Math.random() * 20) + 1
         this.distance = 0
-        this.radius = 1
+        this.radius = 3
         // Znaczące spowolnienie ruchu
         this.velocity = {
-          x: Math.random() * 0.15 - 0.075, // Znacznie wolniejszy ruch (4x wolniej)
-          y: Math.random() * 0.15 - 0.075  // Znacznie wolniejszy ruch (4x wolniej)
+          x: Math.random() * 0.15 - 0.1, // Znacznie wolniejszy ruch (4x wolniej)
+          y: Math.random() * 0.15 - 0.1  // Znacznie wolniejszy ruch (4x wolniej)
         }
         this.connected = []
         this.lastConnected = null
@@ -53,7 +53,7 @@ export default function Home() {
         if (this.y > canvas.height - 10 || this.y < 10) this.velocity.y *= -1
         
         // Mniejsza szansa na losowe zmiany w ruchu - mniej migotania
-        if (Math.random() < 0.005) { // 4x rzadsze zmiany kierunku
+        if (Math.random() < 0.01) { // 4x rzadsze zmiany kierunku
           this.velocity.x = Math.random() * 0.15 - 0.075
           this.velocity.y = Math.random() * 0.15 - 0.075
         }
