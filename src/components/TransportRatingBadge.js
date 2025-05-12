@@ -1,9 +1,11 @@
 // src/components/TransportRatingBadge.js
+// Dodajmy funkcję przekazującą informację zwrotną o możliwości oceny
+
 'use client'
 import { useState, useEffect } from 'react'
 import { Star } from 'lucide-react'
 
-export default function TransportRatingBadge({ transportId, refreshTrigger = 0 }) {
+export default function TransportRatingBadge({ transportId, refreshTrigger = 0, onCanBeRatedChange }) {
   const [rating, setRating] = useState(null)
   const [loading, setLoading] = useState(true)
   const [canBeRated, setCanBeRated] = useState(false)
@@ -24,9 +26,13 @@ export default function TransportRatingBadge({ transportId, refreshTrigger = 0 }
           })
           setCanBeRated(data.canBeRated)
           
-          // Przekaż informację o możliwości oceny na zewnątrz
+          // Wywołaj funkcję zwrotną z informacją, czy transport może być oceniony
+          if (onCanBeRatedChange) {
+            onCanBeRatedChange(data.canBeRated);
+          }
+          
+          // Zapisujemy w localStorage, aby inne komponenty mogły to odczytać
           if (typeof window !== 'undefined') {
-            // Zapisujemy w localStorage, aby inne komponenty mogły to odczytać
             localStorage.setItem(`transport-${transportId}-ratable`, data.canBeRated)
           }
         }
@@ -38,7 +44,7 @@ export default function TransportRatingBadge({ transportId, refreshTrigger = 0 }
     }
     
     fetchRating()
-  }, [transportId, refreshTrigger]) // Dodajemy refreshTrigger jako zależność
+  }, [transportId, refreshTrigger, onCanBeRatedChange])
   
   if (loading) {
     return (
