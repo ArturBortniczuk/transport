@@ -498,15 +498,15 @@ export default function ArchiwumPage() {
                     <Calendar size={16} className="mr-2" />
                     {format(new Date(transport.delivery_date), 'dd.MM.yyyy', { locale: pl })}
                   </div>
-                  <div className="font-medium text-gray-900 flex items-center">
-                    <MapPin size={16} className="mr-2 text-red-500" />
-                    {transport.destination_city}
-                  </div>
                   <div className="text-gray-700 hidden md:flex items-center">
                     <Building size={16} className="mr-2 text-blue-500" />
                     {transport.source_warehouse === 'bialystok' ? 'Magazyn Białystok' : 
                      transport.source_warehouse === 'zielonka' ? 'Magazyn Zielonka' : 
                      transport.source_warehouse}
+                  </div>
+                  <div className="font-medium text-gray-900 flex items-center">
+                    <MapPin size={16} className="mr-2 text-red-500" />
+                    {transport.destination_city}
                   </div>
                   <div className="text-gray-700 hidden lg:flex items-center">
                     <Truck size={16} className="mr-2 text-green-500" />
@@ -579,7 +579,7 @@ export default function ArchiwumPage() {
                     </div>
                     
                     <div>
-                      <h3 className="text-sm font-medium text-gray-500 mb-1">Firma</h3>
+                      <h3 className="text-sm font-medium text-gray-500 mb-1">Odbiorca</h3>
                       <p className="text-gray-900">{transport.client_name || 'N/A'}</p>
                       <p className="text-gray-700 text-sm">
                         MPK: {transport.mpk || 'N/A'}
