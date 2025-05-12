@@ -504,8 +504,12 @@ export default function ArchiwumPage() {
                      transport.source_warehouse === 'zielonka' ? 'Magazyn Zielonka' : 
                      transport.source_warehouse}
                   </div>
+                  <div className="flex items-center mx-4 text-sm text-gray-600">
+                    <Route size={16} className="mr-1 text-green-600" />
+                    {transport.distance ? `${transport.distance} km` : 'N/A'}
+                  </div>
                   <div className="font-medium text-gray-900 flex items-center">
-                    <MapPin size={16} className="mr-2 text-red-500" />
+                    <MapPin size={16} className="mr-2 text-orange-500" />
                     {transport.destination_city}
                   </div>
                   <div className="text-gray-700 hidden lg:flex items-center">
@@ -567,14 +571,9 @@ export default function ArchiwumPage() {
                     </div>
                     
                     <div>
-                      <h3 className="text-sm font-medium text-gray-500 mb-1">Magazyn</h3>
-                      <p className="text-gray-900">
-                        {transport.source_warehouse === 'bialystok' ? 'Białystok' : 
-                        transport.source_warehouse === 'zielonka' ? 'Zielonka' : 
-                        transport.source_warehouse}
-                      </p>
-                      <p className="text-gray-700 text-sm">
-                        Odległość: {transport.distance || 'N/A'} km
+                      <h3 className="text-sm font-medium text-gray-500 mb-1">Numer dokumentu</h3>
+                      <p className="text-gray-900 font-medium">
+                        {transport.wz_number || 'Brak numeru'}
                       </p>
                     </div>
                     
