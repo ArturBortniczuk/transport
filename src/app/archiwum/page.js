@@ -571,9 +571,9 @@ export default function ArchiwumPage() {
                     </div>
                     
                     <div>
-                      <h3 className="text-sm font-medium text-gray-500 mb-1">Numer dokumentu</h3>
+                      <h3 className="text-sm font-medium text-gray-500 mb-1">Numery dokumentów</h3>
                       <p className="text-gray-900 font-medium">
-                        {transport.numerWZ || 'Brak numeru'}
+                        {transport.wz_number || transport.numerWZ || 'Brak numeru'}
                       </p>
                     </div>
                     
