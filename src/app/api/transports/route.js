@@ -18,9 +18,6 @@ const validateSession = async (authToken) => {
   return session?.user_id;
 };
 
-// W pliku route_6.js (API transportów), dodajemy paginację
-// Zmodyfikujmy funkcję GET w pliku route_6.js
-
 export async function GET(request) {
   try {
     // Sprawdzamy uwierzytelnienie
@@ -228,6 +225,18 @@ export async function PUT(request) {
       }, { status: 403 });
     }
     
+    // ZMIANA: Najpierw pobierz istniejący transport
+    const existingTransport = await db('transports')
+      .where('id', id)
+      .first();
+    
+    if (!existingTransport) {
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Transport not found' 
+      }, { status: 404 });
+    }
+    
     // Przygotowanie danych do aktualizacji
     const updateData = { ...transportData };
     
@@ -240,6 +249,17 @@ export async function PUT(request) {
     
     if (status) {
       updateData.status = status;
+      
+      // Jeśli status zmienia się na completed, ale nie ma zmiany innych pól,
+      // zachowaj ważne pola z istniejącego transportu
+      if (status === 'completed' && Object.keys(transportData).length === 0) {
+        // Zachowaj pole numerWZ/wz_number
+        if (existingTransport.wz_number) {
+          updateData.wz_number = existingTransport.wz_number;
+        } else if (existingTransport.numerWZ) {
+          updateData.wz_number = existingTransport.numerWZ;
+        }
+      }
     }
     
     // Dodaj datę zakończenia jeśli status zmieniony na completed
