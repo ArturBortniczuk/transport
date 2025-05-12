@@ -63,7 +63,14 @@ export default function TransportRatingBadge({ transportId }) {
   
   return (
     <div className={`inline-flex items-center px-2 py-1 rounded-md ${getColor(ratingData.average)}`}>
-      <span className="text-white font-medium mr-1">{ratingData.average.toFixed(1)}</span>
+    {ratingData && typeof ratingData.average === 'number' ? (
+      <div className={`inline-flex items-center px-2 py-1 rounded-md ${getColor(ratingData.average)}`}>
+        <span className="text-white font-medium mr-1">{ratingData.average.toFixed(1)}</span>
+        <Star size={14} className="text-white fill-white" />
+      </div>
+    ) : (
+      <span className="text-gray-400 text-sm">Brak oceny</span>
+    )}
       <Star size={14} className="text-white fill-white" />
     </div>
   )
