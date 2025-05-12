@@ -1,13 +1,10 @@
-// src/app/archiwum/page.js
 'use client'
 import { useState, useEffect } from 'react'
 import { format } from 'date-fns'
 import { pl } from 'date-fns/locale'
 import { KIEROWCY, RYNKI } from '../kalendarz/constants'
 import * as XLSX from 'xlsx'
-import { ChevronLeft, ChevronRight, FileText, Download, Star, ChevronDown, MapPin, Truck, Building, Phone, User, Calendar, Info } from 'lucide-react'
-import TransportRating from '@/components/TransportRating'
-import TransportRatingBadge from '@/components/TransportRatingBadge'
+import { ChevronLeft, ChevronRight, FileText, Download } from 'lucide-react'
 
 export default function ArchiwumPage() {
   const [archiwum, setArchiwum] = useState([])
@@ -19,10 +16,6 @@ export default function ArchiwumPage() {
   const [exportFormat, setExportFormat] = useState('xlsx')
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage] = useState(10)
-  const [selectedTransport, setSelectedTransport] = useState(null)
-  const [showRatingModal, setShowRatingModal] = useState(false)
-  const [expandedRows, setExpandedRows] = useState({})
-  const [ratableTransports, setRatableTransports] = useState({})
   
   // Filtry
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
@@ -53,33 +46,6 @@ export default function ArchiwumPage() {
     { value: '11', label: 'Grudzień' }
   ]
 
-  // Funkcja do przełączania rozwinięcia wiersza
-  const toggleRowExpand = (id) => {
-    setExpandedRows(prev => ({
-      ...prev,
-      [id]: !prev[id]
-    }))
-  }
-
-  // Funkcja do sprawdzania, czy transport może być oceniony
-  const checkRatingStatus = async (transportId) => {
-    if (!transportId) return;
-    
-    try {
-      const response = await fetch(`/api/transport-ratings?transportId=${transportId}`)
-      const data = await response.json()
-      
-      if (data.success) {
-        setRatableTransports(prev => ({
-          ...prev,
-          [transportId]: data.canBeRated
-        }))
-      }
-    } catch (error) {
-      console.error('Błąd sprawdzania statusu oceny:', error)
-    }
-  }
-  
   useEffect(() => {
     // Sprawdź czy użytkownik jest administratorem
     const checkAdmin = async () => {
@@ -110,17 +76,6 @@ export default function ArchiwumPage() {
     fetchUsers()
     fetchArchivedTransports()
   }, [])
-
-  // Zmodyfikujmy również sposób sprawdzania statusu ocen:
-  useEffect(() => {
-    if (currentItems && currentItems.length > 0) {
-      currentItems.forEach(transport => {
-        if (transport && transport.id) {
-          checkRatingStatus(transport.id)
-        }
-      })
-    }
-  }, [currentItems])
 
   // Pobierz dane archiwum z API
   const fetchArchivedTransports = async () => {
@@ -229,12 +184,6 @@ export default function ArchiwumPage() {
       console.error('Błąd usuwania transportu:', error)
       setDeleteStatus({ type: 'error', message: 'Wystąpił błąd podczas usuwania transportu' })
     }
-  }
-
-  // Funkcja do otwierania modalu ocen
-  const handleOpenRatingModal = (transport) => {
-    setSelectedTransport(transport)
-    setShowRatingModal(true)
   }
 
   // Funkcja pomocnicza do znajdowania danych kierowcy
@@ -349,19 +298,19 @@ export default function ArchiwumPage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+    <div className="max-w-7xl mx-auto py-8">
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">
           Archiwum Transportów
         </h1>
         <p className="text-gray-600">
-          Przeglądaj, filtruj i oceniaj zrealizowane transporty
+          Przeglądaj i filtruj zrealizowane transporty
         </p>
       </div>
 
       {/* Filters Section */}
       <div className="mb-8 bg-white rounded-lg shadow p-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
           {/* Rok */}
           <div>
             <label htmlFor="yearSelect" className="block text-sm font-medium text-gray-700 mb-1">
@@ -453,30 +402,31 @@ export default function ArchiwumPage() {
             </select>
           </div>
           
-          {/* Format eksportu i przycisk */}
-          <div className="flex items-end">
-            <div className="w-2/3 mr-2">
-              <label htmlFor="exportFormat" className="block text-sm font-medium text-gray-700 mb-1">
-                Format
-              </label>
+          {/* Format eksportu */}
+          <div className="flex flex-col justify-end">
+            <label htmlFor="exportFormat" className="block text-sm font-medium text-gray-700 mb-1">
+              Format
+            </label>
+            <div className="flex space-x-2">
               <select
                 id="exportFormat"
                 value={exportFormat}
                 onChange={(e) => setExportFormat(e.target.value)}
-                className={selectStyles}
+                className={`${selectStyles} flex-grow`}
               >
                 <option value="xlsx">Excel (XLSX)</option>
                 <option value="csv">CSV</option>
               </select>
+              <button
+                onClick={exportData}
+                disabled={filteredArchiwum.length === 0}
+                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center"
+                title="Eksportuj dane"
+              >
+                <Download size={18} className="mr-1" />
+                Eksportuj
+              </button>
             </div>
-            <button
-              onClick={exportData}
-              disabled={filteredArchiwum.length === 0}
-              className="w-1/3 h-10 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
-              title="Eksportuj dane"
-            >
-              <Download size={18} />
-            </button>
           </div>
         </div>
       </div>
@@ -491,217 +441,140 @@ export default function ArchiwumPage() {
         </div>
       )}
 
-      {/* Nowy, responsywny interfejs z kartami */}
-      <div className="space-y-4">
-        {currentItems.length > 0 ? (
-          currentItems.map((transport) => (
-            <div key={transport.id} className="bg-white shadow rounded-lg overflow-hidden">
-              {/* Nagłówek karty transportu */}
-              <div 
-                className="flex items-center justify-between px-4 py-3 bg-gray-50 cursor-pointer"
-                onClick={() => toggleRowExpand(transport.id)}
-              >
-                <div className="flex items-center space-x-4">
-                  <div className="text-gray-700 flex items-center">
-                    <Calendar size={16} className="mr-2" />
-                    {format(new Date(transport.delivery_date), 'dd.MM.yyyy', { locale: pl })}
-                  </div>
-                  <div className="font-medium text-gray-900 flex items-center">
-                    <MapPin size={16} className="mr-2 text-red-500" />
-                    {transport.destination_city}
-                  </div>
-                  <div className="text-gray-700 hidden md:flex items-center">
-                    <Building size={16} className="mr-2 text-blue-500" />
-                    {transport.source_warehouse === 'bialystok' ? 'Magazyn Białystok' : 
-                     transport.source_warehouse === 'zielonka' ? 'Magazyn Zielonka' : 
-                     transport.source_warehouse}
-                  </div>
-                  <div className="text-gray-700 hidden lg:flex items-center">
-                    <Truck size={16} className="mr-2 text-green-500" />
-                    {getDriverInfo(transport.driver_id)}
-                  </div>
-                </div>
-                
-                <div className="flex items-center space-x-3">
-                  <TransportRatingBadge transportId={transport.id} />
-                  
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleOpenRatingModal(transport);
-                    }}
-                    disabled={!ratableTransports[transport.id]}
-                    className={`px-3 py-1 text-xs rounded transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 ${
-                      ratableTransports[transport.id]
-                        ? 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500'
-                        : 'bg-gray-300 text-gray-600 cursor-not-allowed'
-                    }`}
-                    title={ratableTransports[transport.id] ? "Oceń transport" : "Transport już został oceniony"}
-                  >
-                    {ratableTransports[transport.id] ? "Oceń" : "Oceniony"}
-                  </button>
-                  
-                  <ChevronDown 
-                    size={20} 
-                    className={`text-gray-500 transition-transform ${expandedRows[transport.id] ? 'rotate-180' : ''}`} 
-                  />
-                </div>
-              </div>
-              
-              {/* Szczegóły transportu - widoczne po rozwinięciu */}
-              {expandedRows[transport.id] && (
-                <div className="p-4 border-t">
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <div>
-                      <h3 className="text-sm font-medium text-gray-500 mb-1">Miejsce docelowe</h3>
-                      <p className="text-gray-900">{transport.destination_city}</p>
-                      <p className="text-gray-700 text-sm">
-                        {transport.postal_code}{transport.street && `, ${transport.street}`}
-                      </p>
-                    </div>
-                    
-                    <div>
-                      <h3 className="text-sm font-medium text-gray-500 mb-1">Magazyn</h3>
-                      <p className="text-gray-900">
-                        {transport.source_warehouse === 'bialystok' ? 'Białystok' : 
-                        transport.source_warehouse === 'zielonka' ? 'Zielonka' : 
-                        transport.source_warehouse}
-                      </p>
-                      <p className="text-gray-700 text-sm">
-                        Odległość: {transport.distance || 'N/A'} km
-                      </p>
-                    </div>
-                    
-                    <div>
-                      <h3 className="text-sm font-medium text-gray-500 mb-1">Firma</h3>
-                      <p className="text-gray-900">{transport.client_name || 'N/A'}</p>
-                      <p className="text-gray-700 text-sm">
-                        MPK: {transport.mpk || 'N/A'}
-                      </p>
-                    </div>
-                    
-                    <div>
-                      <h3 className="text-sm font-medium text-gray-500 mb-1">Kierowca</h3>
-                      <p className="text-gray-900">{getDriverInfo(transport.driver_id)}</p>
-                    </div>
-                    
-                    <div>
-                      <h3 className="text-sm font-medium text-gray-500 mb-1">Osoba zlecająca</h3>
-                      <p className="text-gray-900">{transport.requester_name || 'N/A'}</p>
-                    </div>
-                    
-                    <div>
-                      <h3 className="text-sm font-medium text-gray-500 mb-1">Data zakończenia</h3>
-                      <p className="text-gray-900">
-                        {transport.completed_at 
-                          ? format(new Date(transport.completed_at), 'dd.MM.yyyy HH:mm', { locale: pl })
-                          : 'N/A'
-                        }
-                      </p>
-                    </div>
-                  </div>
-                  
-                  {/* Przyciski akcji */}
-                  <div className="mt-4 flex justify-end">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleOpenRatingModal(transport);
-                      }}
-                      disabled={!ratableTransports[transport.id]}
-                      className={`px-4 py-2 mr-3 rounded flex items-center transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 ${
-                        ratableTransports[transport.id]
-                          ? 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500'
-                          : 'bg-gray-300 text-gray-600 cursor-not-allowed'
-                      }`}
-                      title={ratableTransports[transport.id] ? "Oceń transport" : "Transport już został oceniony"}
-                    >
-                      <Star size={16} className="mr-2" />
-                      {ratableTransports[transport.id] ? "Oceń transport" : "Transport oceniony"}
-                    </button>
-                    
+      {/* Table Section */}
+      <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-100">
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Data transportu
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Miejsce docelowe
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Magazyn
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Odległość
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Firma
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  MPK
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Kierowca
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Osoba zlecająca
+                </th>
+                {isAdmin && (
+                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Akcje
+                  </th>
+                )}
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {currentItems.length > 0 ? (
+                currentItems.map((transport) => (
+                  <tr key={transport.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      {format(new Date(transport.delivery_date), 'dd.MM.yyyy', { locale: pl })}
+                    </td>
+                    <td className="px-4 py-4 whitespace-nowrap text-sm">
+                      <div className="font-medium text-gray-900">{transport.destination_city}</div>
+                      <div className="text-gray-500">
+                        {transport.postal_code}
+                        {transport.street && `, ${transport.street}`}
+                      </div>
+                    </td>
+                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {transport.source_warehouse === 'bialystok' ? 'Białystok' : 
+                       transport.source_warehouse === 'zielonka' ? 'Zielonka' : 
+                       transport.source_warehouse}
+                    </td>
+                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {transport.distance || 'N/A'} km
+                    </td>
+                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {transport.client_name || 'N/A'}
+                    </td>
+                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {transport.mpk || 'N/A'}
+                    </td>
+                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {getDriverInfo(transport.driver_id)}
+                    </td>
+                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {transport.requester_name || 'N/A'}
+                    </td>
                     {isAdmin && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteTransport(transport.id);
-                        }}
-                        className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1"
-                        title="Usuń transport"
-                      >
-                        Usuń
-                      </button>
+                      <td className="px-4 py-4 whitespace-nowrap text-right text-sm">
+                        <button
+                          onClick={() => handleDeleteTransport(transport.id)}
+                          className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1"
+                          title="Usuń transport"
+                        >
+                          Usuń
+                        </button>
+                      </td>
                     )}
-                  </div>
-                </div>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={isAdmin ? 9 : 8} className="px-4 py-8 text-center text-gray-500">
+                    <div className="flex flex-col items-center justify-center py-6">
+                      <FileText size={48} className="text-gray-400 mb-2" />
+                      <p className="text-gray-500">Brak transportów w wybranym okresie</p>
+                    </div>
+                  </td>
+                </tr>
               )}
-            </div>
-          ))
-        ) : (
-          <div className="bg-white rounded-lg shadow overflow-hidden">
-            <div className="flex flex-col items-center justify-center py-10">
-              <FileText size={48} className="text-gray-400 mb-4" />
-              <p className="text-gray-500 text-lg">Brak transportów w wybranym okresie</p>
-              <p className="text-gray-400 mt-2">Spróbuj zmienić kryteria filtrowania</p>
-            </div>
-          </div>
-        )}
-      </div>
-        
-      {/* Pagination & Summary */}
-      <div className="mt-6 bg-white rounded-lg shadow px-4 py-4 flex flex-col sm:flex-row justify-between items-center">
-        <div className="text-sm text-gray-700 mb-4 sm:mb-0">
-          <span className="font-medium">Łącznie:</span> {filteredArchiwum.length} transportów
-          {filteredArchiwum.length > 0 && (
-            <span className="ml-2">
-              <span className="font-medium">Całkowita odległość:</span> {filteredArchiwum.reduce((sum, t) => sum + (t.distance || 0), 0).toLocaleString('pl-PL')} km
-            </span>
-          )}
+            </tbody>
+          </table>
         </div>
         
-        {totalPages > 1 && (
-          <div className="flex justify-center items-center space-x-2">
-            <button
-              onClick={() => paginate(Math.max(1, currentPage - 1))}
-              disabled={currentPage === 1}
-              className="p-2 rounded-full text-gray-600 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <ChevronLeft size={20} />
-            </button>
-            
-            <div className="text-sm text-gray-700">
-              Strona {currentPage} z {totalPages}
-            </div>
-            
-            <button
-              onClick={() => paginate(Math.min(totalPages, currentPage + 1))}
-              disabled={currentPage === totalPages}
-              className="p-2 rounded-full text-gray-600 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <ChevronRight size={20} />
-            </button>
+        {/* Pagination & Summary */}
+        <div className="border-t border-gray-200 px-4 py-4 bg-gray-50 flex flex-col sm:flex-row justify-between items-center">
+          <div className="text-sm text-gray-700 mb-4 sm:mb-0">
+            <span className="font-medium">Łącznie:</span> {filteredArchiwum.length} transportów
+            {filteredArchiwum.length > 0 && (
+              <span className="ml-2">
+                <span className="font-medium">Całkowita odległość:</span> {filteredArchiwum.reduce((sum, t) => sum + (t.distance || 0), 0).toLocaleString('pl-PL')} km
+              </span>
+            )}
           </div>
-        )}
+          
+          {totalPages > 1 && (
+            <div className="flex justify-center items-center space-x-2">
+              <button
+                onClick={() => paginate(Math.max(1, currentPage - 1))}
+                disabled={currentPage === 1}
+                className="p-2 rounded-full text-gray-600 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ChevronLeft size={20} />
+              </button>
+              
+              <div className="text-sm text-gray-700">
+                Strona {currentPage} z {totalPages}
+              </div>
+              
+              <button
+                onClick={() => paginate(Math.min(totalPages, currentPage + 1))}
+                disabled={currentPage === totalPages}
+                className="p-2 rounded-full text-gray-600 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ChevronRight size={20} />
+              </button>
+            </div>
+          )}
+        </div>
       </div>
-
-      {/* Modal oceniania transportu */}
-      {showRatingModal && selectedTransport && (
-        <TransportRating
-          transportId={selectedTransport.id}
-          onClose={() => {
-            setShowRatingModal(false)
-            setSelectedTransport(null)
-            // Odświeżenie listy transportów i statusów ocen po zamknięciu modalu
-            fetchArchivedTransports();
-            // Odśwież status ocen dla wszystkich transportów
-            if (currentItems.length > 0) {
-              currentItems.forEach(transport => {
-                checkRatingStatus(transport.id)
-              })
-            }
-          }}
-        />
-      )}
     </div>
   )
 }
