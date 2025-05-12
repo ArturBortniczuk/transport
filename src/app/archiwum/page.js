@@ -483,7 +483,7 @@ export default function ArchiwumPage() {
         </div>
       )}
 
-      {/* Lista transportów */}
+{/* Lista transportów */}
       <div className="space-y-4">
         {currentItems.length > 0 ? (
           currentItems.map((transport) => (
@@ -514,43 +514,44 @@ export default function ArchiwumPage() {
                   </div>
                 </div>
                 
-              {/* Dla przycisków w nagłówku karty transportu */}
-              <div className="flex items-center space-x-3">
-                {renderRatingBadge(transport.id)}
-                
-                {/* Pokaż przycisk "Oceń" tylko jeśli transport może być oceniony */}
-                {ratableTransports[transport.id] !== undefined && (
-                  ratableTransports[transport.id] ? (
-                    <button
-                      key={`rate-button-${transport.id}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleOpenRatingModal(transport);
-                      }}
-                      className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
-                      title="Oceń transport"
-                    >
-                      Oceń
-                    </button>
-                  ) : (
-                    <button
-                      key={`view-button-${transport.id}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleOpenRatingModal(transport);
-                      }}
-                      className="px-3 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-1"
-                      title="Zobacz oceny"
-                    >
-                      Zobacz oceny
-                    </button>
-                  )
-                )}
-                
-                <ChevronDown 
-                  size={20} 
-                  className={`text-gray-500 transition-transform ${expandedRows[transport.id] ? 'rotate-180' : ''}`} 
-                />
+                {/* Dla przycisków w nagłówku karty transportu */}
+                <div className="flex items-center space-x-3">
+                  {renderRatingBadge(transport.id)}
+                  
+                  {/* Pokaż przycisk "Oceń" tylko jeśli transport może być oceniony */}
+                  {ratableTransports[transport.id] !== undefined && (
+                    ratableTransports[transport.id] ? (
+                      <button
+                        key={`rate-button-${transport.id}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenRatingModal(transport);
+                        }}
+                        className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
+                        title="Oceń transport"
+                      >
+                        Oceń
+                      </button>
+                    ) : (
+                      <button
+                        key={`view-button-${transport.id}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenRatingModal(transport);
+                        }}
+                        className="px-3 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-1"
+                        title="Zobacz oceny"
+                      >
+                        Zobacz oceny
+                      </button>
+                    )
+                  )}
+                  
+                  <ChevronDown 
+                    size={20} 
+                    className={`text-gray-500 transition-transform ${expandedRows[transport.id] ? 'rotate-180' : ''}`} 
+                  />
+                </div>
               </div>
               
               {/* Szczegóły transportu - widoczne po rozwinięciu */}
@@ -608,31 +609,33 @@ export default function ArchiwumPage() {
                   
                   {/* Przyciski akcji */}
                   <div className="mt-4 flex justify-end">
-                    {/* Pokaż przycisk "Oceń transport" tylko jeśli transport może być oceniony */}
-                    {ratableTransports[transport.id] ? (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleOpenRatingModal(transport);
-                        }}
-                        className="px-4 py-2 mr-3 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 flex items-center"
-                        title="Oceń transport"
-                      >
-                        <Star size={16} className="mr-2" />
-                        Oceń transport
-                      </button>
-                    ) : (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleOpenRatingModal(transport);
-                        }}
-                        className="px-4 py-2 mr-3 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-1 flex items-center"
-                        title="Zobacz oceny"
-                      >
-                        <Star size={16} className="mr-2" />
-                        Zobacz oceny
-                      </button>
+                    {/* Pokaż odpowiedni przycisk w zależności od statusu oceny */}
+                    {ratableTransports[transport.id] !== undefined && (
+                      ratableTransports[transport.id] ? (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenRatingModal(transport);
+                          }}
+                          className="px-4 py-2 mr-3 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 flex items-center"
+                          title="Oceń transport"
+                        >
+                          <Star size={16} className="mr-2" />
+                          Oceń transport
+                        </button>
+                      ) : (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenRatingModal(transport);
+                          }}
+                          className="px-4 py-2 mr-3 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-1 flex items-center"
+                          title="Zobacz oceny"
+                        >
+                          <Star size={16} className="mr-2" />
+                          Zobacz oceny
+                        </button>
+                      )
                     )}
                     
                     {isAdmin && (
@@ -662,7 +665,7 @@ export default function ArchiwumPage() {
           </div>
         )}
       </div>
-        
+      
       {/* Pagination & Summary */}
       <div className="mt-6 bg-white rounded-lg shadow px-4 py-4 flex flex-col sm:flex-row justify-between items-center">
         <div className="text-sm text-gray-700 mb-4 sm:mb-0">
@@ -691,8 +694,7 @@ export default function ArchiwumPage() {
             <button
               onClick={() => paginate(Math.min(totalPages, currentPage + 1))}
               disabled={currentPage === totalPages}
-              className="p-2 rounded-full text-gray-600 hover:bg-gray-200 disabled:opacity-50
-              disabled:cursor-not-allowed"
+              className="p-2 rounded-full text-gray-600 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <ChevronRight size={20} />
             </button>
@@ -713,5 +715,5 @@ export default function ArchiwumPage() {
         />
       )}
     </div>
-  )
+  );
 }
