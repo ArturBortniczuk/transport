@@ -33,9 +33,10 @@ export default function Home() {
         this.density = (Math.random() * 20) + 1
         this.distance = 0
         this.radius = 1
+        // Znaczące spowolnienie ruchu
         this.velocity = {
-          x: Math.random() * 0.6 - 0.3,
-          y: Math.random() * 0.6 - 0.3
+          x: Math.random() * 0.15 - 0.075, // Znacznie wolniejszy ruch (4x wolniej)
+          y: Math.random() * 0.15 - 0.075  // Znacznie wolniejszy ruch (4x wolniej)
         }
         this.connected = []
         this.lastConnected = null
@@ -43,7 +44,7 @@ export default function Home() {
       }
       
       update() {
-        // Dodaje naturalny ruch
+        // Dodaje naturalny ruch, ale wolniejszy
         this.x += this.velocity.x
         this.y += this.velocity.y
         
@@ -51,15 +52,15 @@ export default function Home() {
         if (this.x > canvas.width - 10 || this.x < 10) this.velocity.x *= -1
         if (this.y > canvas.height - 10 || this.y < 10) this.velocity.y *= -1
         
-        // Losowe zmiany w ruchu
-        if (Math.random() < 0.02) {
-          this.velocity.x = Math.random() * 0.6 - 0.3
-          this.velocity.y = Math.random() * 0.6 - 0.3
+        // Mniejsza szansa na losowe zmiany w ruchu - mniej migotania
+        if (Math.random() < 0.005) { // 4x rzadsze zmiany kierunku
+          this.velocity.x = Math.random() * 0.15 - 0.075
+          this.velocity.y = Math.random() * 0.15 - 0.075
         }
       }
       
       draw() {
-        ctx.fillStyle = '#4F6BFF'
+        ctx.fillStyle = 'rgba(79, 107, 255, 0.6)' // Bardziej nieprzezroczyste punkty
         ctx.beginPath()
         ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2)
         ctx.closePath()
@@ -70,7 +71,8 @@ export default function Home() {
     let particlesArray = []
     
     const createParticles = () => {
-      const numberOfParticles = Math.floor(canvas.width * canvas.height / 15000)
+      // Mniej cząsteczek dla czystszego wyglądu
+      const numberOfParticles = Math.floor(canvas.width * canvas.height / 25000) // Mniej cząsteczek
       particlesArray = []
       
       for (let i = 0; i < numberOfParticles; i++) {
@@ -101,8 +103,8 @@ export default function Home() {
           })
           .slice(0, maxConnections)
         
-        // Losowa szansa na pominięcie niektórych połączeń (piorun nie jest zbyt regularny)
-        sortedParticles = sortedParticles.filter(() => Math.random() > 0.2)
+        // Większa szansa na pominięcie połączeń - mniej linii
+        sortedParticles = sortedParticles.filter(() => Math.random() > 0.3)
         
         for (let b = 0; b < sortedParticles.length; b++) {
           const particleB = sortedParticles[b]
@@ -112,16 +114,16 @@ export default function Home() {
           if (particleB.connected.length >= maxConnections) continue
           
           const distance = Math.hypot(particleA.x - particleB.x, particleA.y - particleB.y)
-          const maxDistance = canvas.width / 10  // Maksymalna długość łączenia
+          const maxDistance = canvas.width / 12  // Mniejszy zasięg łączenia
           
           if (distance < maxDistance) {
             // Rejestruj to połączenie
             particleA.connected.push(particleB)
             particleB.connected.push(particleA)
             
-            // Rysuj iskrę elektryczną (linię)
-            const opacity = 1 - (distance / maxDistance)
-            const strength = Math.random() * 0.5 + 0.5 // Losowa siła iskry
+            // Rysuj iskrę elektryczną (linię) z mniejszą intensywnością
+            const opacity = (1 - (distance / maxDistance)) * 0.4 // Niższa nieprzezroczystość
+            const strength = Math.random() * 0.3 + 0.2 // Niższa siła iskry
             
             // Główna linia
             ctx.beginPath()
@@ -130,13 +132,13 @@ export default function Home() {
             // Losowo zakrzywiona linia (zygzak) dla efektu elektrycznego
             let currentX = particleA.x
             let currentY = particleA.y
-            const segments = Math.floor(distance / 20) + 1
+            const segments = Math.floor(distance / 30) + 1 // Mniej segmentów
             
             for (let i = 1; i <= segments; i++) {
               const ratio = i / segments
-              // Zakrzywienie - odchylenie od prostej linii
-              const offsetX = (Math.random() - 0.5) * 10 * ratio
-              const offsetY = (Math.random() - 0.5) * 10 * ratio
+              // Zakrzywienie - odchylenie od prostej linii (mniejsze)
+              const offsetX = (Math.random() - 0.5) * 8 * ratio
+              const offsetY = (Math.random() - 0.5) * 8 * ratio
               
               currentX = particleA.x + (particleB.x - particleA.x) * ratio + offsetX
               currentY = particleA.y + (particleB.y - particleA.y) * ratio + offsetY
@@ -153,29 +155,29 @@ export default function Home() {
             )
             
             gradient.addColorStop(0, `rgba(79, 107, 255, ${opacity * strength})`)
-            gradient.addColorStop(0.5, `rgba(124, 189, 255, ${opacity * strength * 1.2})`)
+            gradient.addColorStop(0.5, `rgba(124, 189, 255, ${opacity * strength * 1.1})`)
             gradient.addColorStop(1, `rgba(79, 107, 255, ${opacity * strength})`)
             
             ctx.strokeStyle = gradient
-            ctx.lineWidth = 1.2 * strength
+            ctx.lineWidth = 0.8 * strength // Cieńsze linie
             ctx.stroke()
             
-            // Dodanie blasku w miejscach połączeń
-            const glowRadius = 2 + Math.random() * 3
-            ctx.beginPath()
-            ctx.arc(currentX, currentY, glowRadius, 0, Math.PI * 2)
-            ctx.fillStyle = `rgba(194, 217, 255, ${opacity * 0.8})`
-            ctx.fill()
+            // Subtelniejszy blask w miejscach połączeń (rzadziej i mniejszy)
+            if (Math.random() < 0.3) { // Tylko 30% połączeń ma blask
+              const glowRadius = 1 + Math.random() * 1.5 // Mniejsze blaski
+              ctx.beginPath()
+              ctx.arc(currentX, currentY, glowRadius, 0, Math.PI * 2)
+              ctx.fillStyle = `rgba(194, 217, 255, ${opacity * 0.6})`
+              ctx.fill()
+            }
           }
         }
       }
     }
     
     const animate = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height)
-      
-      // Dodaj efekt wyładowania elektrycznego
-      ctx.fillStyle = 'rgba(11, 30, 80, 0.05)'
+      // Stopniowe czyszczenie dla efektu "śladu"
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.15)' // Powoli zanikający ślad
       ctx.fillRect(0, 0, canvas.width, canvas.height)
       
       particlesArray.forEach(particle => {
@@ -185,9 +187,9 @@ export default function Home() {
       
       connect()
       
-      // Efekt poświaty
-      if (Math.random() < 0.05) {
-        ctx.fillStyle = 'rgba(124, 189, 255, 0.03)'
+      // Efekt poświaty - znacznie rzadziej i subtelniej
+      if (Math.random() < 0.01) { // 5x rzadziej
+        ctx.fillStyle = 'rgba(124, 189, 255, 0.01)' // Bardzo subtelny błysk
         ctx.fillRect(0, 0, canvas.width, canvas.height)
       }
       
@@ -277,7 +279,7 @@ export default function Home() {
       {/* Canvas dla efektu elektryczności */}
       <canvas 
         ref={canvasRef} 
-        className="fixed inset-0 -z-10 bg-gradient-to-br from-blue-900 via-blue-800 to-indigo-900"
+        className="fixed inset-0 -z-10 bg-white"
       />
       
       {/* Hero Section z animacją */}
@@ -288,15 +290,15 @@ export default function Home() {
         className="text-center py-16 px-4 sm:px-6 lg:px-8 mb-8 relative z-10"
       >
         <motion.div variants={itemVariants}>
-          <h1 className="text-4xl tracking-tight font-extrabold text-white sm:text-5xl md:text-6xl mb-4">
+          <h1 className="text-4xl tracking-tight font-extrabold text-gray-900 sm:text-5xl md:text-6xl mb-4">
             <span className="block">System Zarządzania</span>
-            <span className="block text-transparent bg-clip-text bg-gradient-to-r from-blue-300 to-cyan-300">Transportem</span>
+            <span className="block text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">Transportem</span>
           </h1>
         </motion.div>
         
         <motion.p 
           variants={itemVariants}
-          className="mt-3 max-w-md mx-auto text-base text-blue-100 sm:text-lg md:mt-5 md:text-xl md:max-w-3xl"
+          className="mt-3 max-w-md mx-auto text-base text-gray-600 sm:text-lg md:mt-5 md:text-xl md:max-w-3xl"
         >
           Kompleksowe rozwiązanie do zarządzania flotą, kierowcami i przesyłkami.
           Wszystko czego potrzebujesz w jednym miejscu.
@@ -308,11 +310,10 @@ export default function Home() {
         >
           <Link 
             href="/login"
-            className="group relative block"
+            className="inline-block w-full bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg shadow-lg hover:shadow-blue-400/30 transition-all duration-300"
           >
-            <span className="absolute inset-0 bg-gradient-to-r from-blue-400 to-cyan-400 rounded-lg shadow-lg transform transition-all duration-300 group-hover:scale-105 group-hover:shadow-blue-400/50"></span>
-            <span className="relative block text-white font-semibold py-4 px-8 text-center rounded-lg bg-gradient-to-r from-blue-500 to-cyan-500 transition-all duration-300">
-              Zaloguj się <span className="ml-1 group-hover:translate-x-1 transition-transform duration-200 inline-block">&rarr;</span>
+            <span className="block text-white font-semibold py-4 px-8 text-center">
+              Zaloguj się <span className="ml-1 transition-transform duration-200 inline-block group-hover:translate-x-1">&rarr;</span>
             </span>
           </Link>
         </motion.div>
@@ -336,24 +337,24 @@ export default function Home() {
               whileHover={{ y: -5, transition: { duration: 0.2 } }}
               className="relative rounded-xl overflow-hidden group"
             >
-              {/* Card content with electric glow effect */}
-              <div className="relative bg-blue-900/40 backdrop-blur-sm p-6 rounded-xl border border-blue-500/20 h-full transition-all duration-300 group-hover:shadow-xl group-hover:shadow-blue-500/10 group-hover:border-blue-400/30">
+              {/* Card content with subtle shadow */}
+              <div className="relative bg-white p-6 rounded-xl shadow-lg border border-gray-100 h-full transition-all duration-300 group-hover:shadow-xl">
                 {/* Animated icon background */}
-                <div className={`absolute opacity-20 group-hover:opacity-30 -inset-4 blur-xl bg-gradient-to-r ${feature.color} transition-opacity duration-300`}></div>
+                <div className={`absolute opacity-5 group-hover:opacity-10 -inset-4 blur-xl bg-gradient-to-r ${feature.color} transition-opacity duration-300`}></div>
                 
                 {/* Icon */}
-                <div className={`inline-flex p-3 rounded-lg bg-gradient-to-r ${feature.color} text-white mb-5 shadow-md shadow-blue-500/20`}>
+                <div className={`inline-flex p-3 rounded-lg bg-gradient-to-r ${feature.color} text-white mb-5 shadow-md`}>
                   {feature.icon}
                 </div>
                 
                 {/* Content */}
-                <h3 className="text-xl font-bold text-white mb-2">{feature.title}</h3>
-                <p className="text-blue-100/80 mb-4">{feature.description}</p>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">{feature.title}</h3>
+                <p className="text-gray-600 mb-4">{feature.description}</p>
                 
                 {/* Link button */}
                 <Link 
                   href={feature.path}
-                  className="inline-flex items-center text-cyan-300 font-medium hover:text-cyan-200 transition-colors group/btn"
+                  className="inline-flex items-center text-blue-600 font-medium hover:text-blue-800 transition-colors group/btn"
                 >
                   <span>Przejdź</span>
                   <span className="ml-1 group-hover/btn:translate-x-1 transition-transform duration-200">&rarr;</span>
