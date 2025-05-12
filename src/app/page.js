@@ -2,7 +2,7 @@
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Truck, Calendar, Map, Users, Settings, TrendingUp, Shield } from 'lucide-react'
+import { Calendar, Map, Users, Truck, Settings, TrendingUp } from 'lucide-react'
 
 export default function Home() {
   const [isVisible, setIsVisible] = useState(false)
@@ -102,12 +102,15 @@ export default function Home() {
   ]
 
   return (
-    <div className="min-h-[80vh] flex flex-col justify-center">
-      {/* Animowane tło z gradientem i "floating" efektem */}
-      <div className="absolute inset-0 overflow-hidden -z-10">
-        <div className="absolute opacity-20 w-[500px] h-[500px] rounded-full bg-blue-600 blur-3xl top-[-100px] right-[-100px] animate-pulse"></div>
-        <div className="absolute opacity-20 w-[600px] h-[600px] rounded-full bg-blue-400 blur-3xl bottom-[-200px] left-[-200px] animate-pulse" style={{ animationDelay: '1s' }}></div>
-        <div className="absolute opacity-10 w-[400px] h-[400px] rounded-full bg-indigo-500 blur-3xl top-[20%] left-[30%] animate-pulse" style={{ animationDelay: '2s' }}></div>
+    <div className="min-h-[90vh] flex flex-col justify-center relative">
+      {/* Pełnoekranowy gradient */}
+      <div className="fixed inset-0 -z-20 bg-gradient-to-br from-blue-50 via-white to-blue-100"></div>
+      
+      {/* Animowane rozmyte elementy tła */}
+      <div className="fixed inset-0 overflow-hidden -z-10">
+        <div className="absolute opacity-20 w-[800px] h-[800px] rounded-full bg-blue-600 blur-3xl top-[-200px] right-[-100px] animate-pulse"></div>
+        <div className="absolute opacity-20 w-[1000px] h-[1000px] rounded-full bg-blue-400 blur-3xl bottom-[-300px] left-[-200px] animate-pulse" style={{ animationDelay: '1s' }}></div>
+        <div className="absolute opacity-15 w-[600px] h-[600px] rounded-full bg-indigo-500 blur-3xl top-[30%] left-[40%] animate-pulse" style={{ animationDelay: '2s' }}></div>
       </div>
 
       {/* Hero Section z animacją */}
@@ -115,7 +118,7 @@ export default function Home() {
         initial="hidden"
         animate={isVisible ? "visible" : "hidden"}
         variants={containerVariants}
-        className="text-center py-16 px-4 sm:px-6 lg:px-8 mb-4 relative z-10"
+        className="text-center py-16 px-4 sm:px-6 lg:px-8 mb-8 relative z-10"
       >
         <motion.div variants={itemVariants}>
           <h1 className="text-4xl tracking-tight font-extrabold text-gray-900 sm:text-5xl md:text-6xl mb-4">
@@ -136,12 +139,13 @@ export default function Home() {
           variants={itemVariants}
           className="mt-8 max-w-md mx-auto"
         >
-          <Link href="/login" className="group relative">
-            <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg blur opacity-60 group-hover:opacity-100 transition duration-200"></div>
-            <button className="relative w-full px-8 py-4 bg-white rounded-lg leading-none flex items-center justify-center space-x-2 text-blue-600 font-medium group-hover:text-blue-700 transition-all duration-200">
-              <span>Zaloguj się</span>
-              <span className="group-hover:translate-x-1 transition-transform duration-200">&rarr;</span>
-            </button>
+          <Link 
+            href="/login"
+            className="inline-block w-full bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg shadow-lg hover:shadow-blue-400/30 transition-all duration-300"
+          >
+            <span className="block text-white font-semibold py-4 px-8 text-center">
+              Zaloguj się <span className="ml-1 transition-transform duration-200 inline-block group-hover:translate-x-1">&rarr;</span>
+            </span>
           </Link>
         </motion.div>
       </motion.section>
@@ -151,7 +155,7 @@ export default function Home() {
         initial="hidden"
         animate={isVisible ? "visible" : "hidden"}
         variants={fadeInVariants}
-        className="py-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10"
+        className="py-8 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10"
       >
         <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
           {features.map((feature, index) => (
@@ -164,11 +168,8 @@ export default function Home() {
               whileHover={{ y: -5, transition: { duration: 0.2 } }}
               className="relative p-6 rounded-xl overflow-hidden group"
             >
-              {/* Background gradient with hover effect */}
-              <div className="absolute inset-0 bg-gradient-to-br opacity-5 group-hover:opacity-10 transition-opacity duration-300"></div>
-              
               {/* Card content with backdrop blur effect */}
-              <div className="relative bg-white/90 backdrop-blur-sm p-6 rounded-xl shadow-lg border border-gray-100 h-full transition-all duration-300 group-hover:shadow-xl">
+              <div className="relative bg-white/70 backdrop-blur-sm p-6 rounded-xl shadow-lg border border-gray-100/30 h-full transition-all duration-300 group-hover:shadow-xl">
                 {/* Animated icon background */}
                 <div className={`absolute opacity-10 group-hover:opacity-20 -inset-4 blur-xl bg-gradient-to-r ${feature.color} transition-opacity duration-300`}></div>
                 
@@ -192,46 +193,6 @@ export default function Home() {
               </div>
             </motion.div>
           ))}
-        </div>
-      </motion.section>
-
-      {/* System benefits with blurred background */}
-      <motion.section
-        initial={{ opacity: 0, y: 40 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.8, duration: 0.6 }}
-        className="mt-12 relative z-10 overflow-hidden rounded-xl mx-4 sm:mx-6 lg:mx-8 max-w-7xl lg:mx-auto mb-8"
-      >
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-50 via-white to-indigo-50 opacity-70"></div>
-        <div className="absolute inset-0 bg-blue-600/5 backdrop-blur-[2px]"></div>
-        
-        <div className="relative p-8 md:p-10">
-          <div className="flex items-center justify-start mb-6">
-            <Shield className="h-6 w-6 text-blue-600 mr-2" />
-            <h2 className="text-2xl font-bold text-gray-900">Korzyści z systemu</h2>
-          </div>
-          
-          <ul className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {[
-              "Zwiększenie efektywności zarządzania transportem",
-              "Optymalizacja tras i redukcja kosztów paliwa",
-              "Automatyzacja procesów logistycznych",
-              "Bieżący monitoring statusu przesyłek",
-              "Lepsza komunikacja między działami",
-              "Generowanie raportów i analiz efektywności"
-            ].map((benefit, i) => (
-              <motion.li 
-                key={i}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 1 + (i * 0.1) }}
-                className="flex items-start"
-              >
-                <div className="flex-shrink-0 h-5 w-5 rounded-full bg-blue-500 opacity-80 mt-1 mr-2"></div>
-                <span className="text-gray-700">{benefit}</span>
-              </motion.li>
-            ))}
-          </ul>
         </div>
       </motion.section>
     </div>
