@@ -32,7 +32,7 @@ export default function Home() {
         this.baseY = y
         this.density = (Math.random() * 20) + 1
         this.distance = 0
-        this.radius = 3
+        this.radius = Math.log(this.density + 1) // im większa "gęstość", tym większy punkt
         // Znaczące spowolnienie ruchu
         this.velocity = {
           x: Math.random() * 0.15 - 0.1, // Znacznie wolniejszy ruch (4x wolniej)
@@ -122,8 +122,8 @@ export default function Home() {
             particleB.connected.push(particleA)
             
             // Rysuj iskrę elektryczną (linię) z mniejszą intensywnością
-            const opacity = (1 - (distance / maxDistance)) * 0.4 // Niższa nieprzezroczystość
-            const strength = Math.random() * 0.3 + 0.2 // Niższa siła iskry
+            const opacity = (1 - (distance / maxDistance)) * 0.6 // Niższa nieprzezroczystość
+            const strength = Math.random() * 0.4 + 0.3 // Niższa siła iskry
             
             // Główna linia
             ctx.beginPath()
@@ -132,13 +132,13 @@ export default function Home() {
             // Losowo zakrzywiona linia (zygzak) dla efektu elektrycznego
             let currentX = particleA.x
             let currentY = particleA.y
-            const segments = Math.floor(distance / 30) + 1 // Mniej segmentów
+            const segments = Math.floor(distance / 20) + 1 // Mniej segmentów
             
             for (let i = 1; i <= segments; i++) {
               const ratio = i / segments
               // Zakrzywienie - odchylenie od prostej linii (mniejsze)
-              const offsetX = (Math.random() - 0.5) * 8 * ratio
-              const offsetY = (Math.random() - 0.5) * 8 * ratio
+              const offsetX = (Math.random() - 0.5) * 12 * ratio
+              const offsetY = (Math.random() - 0.5) * 12 * ratio
               
               currentX = particleA.x + (particleB.x - particleA.x) * ratio + offsetX
               currentY = particleA.y + (particleB.y - particleA.y) * ratio + offsetY
@@ -159,7 +159,7 @@ export default function Home() {
             gradient.addColorStop(1, `rgba(79, 107, 255, ${opacity * strength})`)
             
             ctx.strokeStyle = gradient
-            ctx.lineWidth = 0.8 * strength // Cieńsze linie
+            ctx.lineWidth = 1 * strength // Cieńsze linie
             ctx.stroke()
             
             // Subtelniejszy blask w miejscach połączeń (rzadziej i mniejszy)
