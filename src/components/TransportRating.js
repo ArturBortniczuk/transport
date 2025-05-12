@@ -253,16 +253,10 @@ export default function TransportRating({ transportId, onClose }) {
               </div>
             </div>
             
-            {/* Formularz dodawania oceny */}
-            <div className="bg-gray-50 p-4 rounded-md mb-6">
-              <h3 className="font-medium mb-3">Ocena transportu</h3>
-              
-              {!canBeRated ? (
-                <div className="bg-blue-50 text-blue-700 p-4 rounded-md">
-                  <p>Ten transport został już oceniony i nie może być oceniony ponownie.</p>
-                  <p className="text-sm mt-2">Tylko pierwsza osoba może ocenić transport.</p>
-                </div>
-              ) : (
+            {/* Formularz dodawania oceny - pokaż tylko jeśli transport może być oceniony */}
+            {canBeRated ? (
+              <div className="bg-gray-50 p-4 rounded-md mb-6">
+                <h3 className="font-medium mb-3">Oceń transport</h3>
                 <form onSubmit={handleSubmitRating}>
                   <div className="mb-3 flex justify-center">
                     {renderStars(userRating, true)}
@@ -304,8 +298,13 @@ export default function TransportRating({ transportId, onClose }) {
                     </button>
                   </div>
                 </form>
-              )}
-            </div>
+              </div>
+            ) : (
+              <div className="bg-blue-50 text-blue-700 p-4 rounded-md mb-6">
+                <p>Ten transport został już oceniony i nie może być oceniony ponownie.</p>
+                <p className="text-sm mt-2">Tylko pierwsza osoba może ocenić transport.</p>
+              </div>
+            )}
             
             {/* Lista ocen */}
             <div>
@@ -314,7 +313,7 @@ export default function TransportRating({ transportId, onClose }) {
               {ratings.length === 0 ? (
                 <div className="text-center text-gray-500 py-6">
                   Brak ocen dla tego transportu. 
-                  {canBeRated && "Bądź pierwszy i oceń!"}
+                  {canBeRated && " Bądź pierwszy i oceń!"}
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -360,5 +359,5 @@ export default function TransportRating({ transportId, onClose }) {
         )}
       </div>
     </div>
-  )
+  );
 }
