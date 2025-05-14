@@ -132,7 +132,11 @@ export async function POST(request) {
                                transportData.is_cyclical === '1' || 
                                transportData.is_cyclical === true;
     }
-    
+
+    if (transportData.pojazdId) {
+      transportData.vehicle_id = transportData.pojazdId;
+      delete transportData.pojazdId; // Usuwamy pole, które nie istnieje w bazie
+    }
     // Upewnij się, że data jest we właściwym formacie
     if (transportData.delivery_date && typeof transportData.delivery_date === 'string') {
       // Pozostaw datę jako string - PostgreSQL radzi sobie z ISO formatem
