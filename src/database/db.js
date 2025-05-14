@@ -91,6 +91,7 @@ const initializeDatabase = async () => {
         table.float('longitude');
         table.float('distance');
         table.integer('driver_id');
+        table.integer('vehicle_id'); 
         table.string('status').defaultTo('active');
         table.string('wz_number');
         table.string('client_name');
@@ -271,11 +272,12 @@ const checkTransportsTable = async () => {
     `);
     const columnNames = columns.rows.map(col => col.column_name);
     
-    // Sprawdź czy kolumna completed_at istnieje
-    if (!columnNames.includes('completed_at')) {
+    // Sprawdź czy kolumna vehicle_id istnieje
+    if (!columnNames.includes('vehicle_id')) {
       await db.schema.table('transports', table => {
-        table.timestamp('completed_at');
+        table.integer('vehicle_id');
       });
+      console.log('Dodano kolumnę vehicle_id do tabeli transports');
     }
 
     // Sprawdź czy kolumna connected_transport_id istnieje
