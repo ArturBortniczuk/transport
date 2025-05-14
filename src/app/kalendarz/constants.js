@@ -1,11 +1,21 @@
+// Rozdzielone listy kierowców i pojazdów
 export const KIEROWCY = [
-    { id: 1, imie: "Dzianis Nestser", telefon: "885 560 083", tabliceRej: "BI 833JG" },
-    { id: 2, imie: "Wojciech Ostaszewski", telefon: "691 690 165", tabliceRej: "BI 25150" },
-    { id: 3, imie: "Wojciech Ostaszewski", telefon: "691 690 165", tabliceRej: "BI 23003" },
-    { id: 4, imie: "Krzysztof Sobolewski", telefon: "885 561 444", tabliceRej: "BI 61620" },
-    { id: 5, imie: "Krzysztof Bauer", telefon: "693 880 149", tabliceRej: "BI 609EM" },
-    { id: 6, imie: "Paweł Stradomski", telefon: "885 560 557", tabliceRej: "BI 517GL" }
-  ];
+    { id: 1, imie: "Dzianis Nestser", telefon: "885 560 083" },
+    { id: 2, imie: "Wojciech Ostaszewski", telefon: "691 690 165" },
+    { id: 3, imie: "Wojciech Ostaszewski", telefon: "691 690 165" },
+    { id: 4, imie: "Krzysztof Sobolewski", telefon: "885 561 444" },
+    { id: 5, imie: "Krzysztof Bauer", telefon: "693 880 149" },
+    { id: 6, imie: "Paweł Stradomski", telefon: "885 560 557" }
+];
+
+export const POJAZDY = [
+    { id: 1, tabliceRej: "BI 833JG", model: "MAN BIAŁYSTOK NOWY" },
+    { id: 2, tabliceRej: "BI 25150", model: "BLASZAK RENAULT MASTER BIAŁYSTOK" },
+    { id: 3, tabliceRej: "BI 23003", model: "FIRANKA RENAULT BIAŁYSTOK" },
+    { id: 4, tabliceRej: "BI 61620", model: "MAN BIAŁYSTOK STARY" },
+    { id: 5, tabliceRej: "BI 609EM", model: "MAN ZIELONKA" },
+    { id: 6, tabliceRej: "BI 517GL", model: "CITROEN ZIELONKA" }
+];
   
   export const RYNKI = [
     'Podlaski',
