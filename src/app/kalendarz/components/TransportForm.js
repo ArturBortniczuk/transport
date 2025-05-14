@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { KIEROWCY, RYNKI, POZIOMY_ZALADUNKU } from '../constants'
+import { KIEROWCY, POJAZDY, RYNKI, POZIOMY_ZALADUNKU } from '../constants'
 import { format } from 'date-fns'
 import { pl } from 'date-fns/locale'
 import LocationSelector from './LocationSelector'
@@ -502,13 +502,40 @@ export default function TransportForm({
                     <option value="">Wybierz kierowcę</option>
                     {KIEROWCY.map(kierowca => (
                       <option key={kierowca.id} value={kierowca.id}>
-                        {kierowca.imie} - {kierowca.tabliceRej}
+                        {kierowca.imie} - {kierowca.telefon}
                       </option>
                     ))}
                   </select>
                   {connectToExistingTransport && selectedSourceTransport && (
                     <p className="mt-1 text-xs text-blue-600">
                       Kierowca jest ustawiony automatycznie dla połączonych transportów
+                    </p>
+                  )}
+                </div>
+                
+                {/* Nowe pole wyboru pojazdu */}
+                <div>
+                  <label className={labelBaseClass}>
+                    Pojazd
+                  </label>
+                  <select
+                    name="pojazdId"
+                    value={nowyTransport.pojazdId}
+                    onChange={handleInputChange}
+                    className={inputBaseClass}
+                    required
+                    disabled={connectToExistingTransport && selectedSourceTransport}
+                  >
+                    <option value="">Wybierz pojazd</option>
+                    {POJAZDY.map(pojazd => (
+                      <option key={pojazd.id} value={pojazd.id}>
+                        {pojazd.tabliceRej} - {pojazd.model}
+                      </option>
+                    ))}
+                  </select>
+                  {connectToExistingTransport && selectedSourceTransport && (
+                    <p className="mt-1 text-xs text-blue-600">
+                      Pojazd jest ustawiony automatycznie dla połączonych transportów
                     </p>
                   )}
                 </div>
@@ -737,6 +764,7 @@ export default function TransportForm({
                     dataDostawy: '',
                     status: 'aktywny',
                     kierowcaId: '',
+                    pojazdId: '',
                     numerWZ: '',
                     nazwaKlienta: '',
                     osobaZlecajaca: '',
