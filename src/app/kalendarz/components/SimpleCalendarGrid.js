@@ -4,6 +4,7 @@ import { format, getDate } from 'date-fns'
 import { pl } from 'date-fns/locale'
 import { Droppable, Draggable } from '@hello-pangea/dnd'
 import { Link2, ChevronRight, CheckCircle } from 'lucide-react'
+import { KIEROWCY, POJAZDY } from '../constants'
 
 export default function SimpleCalendarGrid({ 
   daysInMonth, 
@@ -21,7 +22,16 @@ export default function SimpleCalendarGrid({
       onDateSelect(day)
     }
   }
+
+  const getDriverName = (driverId) => {
+    const driver = KIEROWCY.find(k => k.id === parseInt(driverId));
+    return driver ? driver.imie : 'Nieznany';
+  };
   
+  const getVehicleNumber = (vehicleId) => {
+    const vehicle = POJAZDY.find(v => v.id === parseInt(vehicleId));
+    return vehicle ? vehicle.tabliceRej : 'Nieznany';
+  };
   // Funkcja do określania koloru na podstawie magazynu źródłowego
   const getMagazynColor = (zrodlo) => {
     if (zrodlo === 'bialystok') {
@@ -151,6 +161,9 @@ export default function SimpleCalendarGrid({
                                   <Link2 className="h-3 w-3 mr-1 text-blue-600" />
                                 )}
                                 <span>{transport.miasto}</span>
+                                <span className="ml-auto text-xs opacity-75">
+                                  {getVehicleNumber(transport.pojazdId)}
+                                </span>
                               </div>
                               {isSource && !isCompleted && (
                                 <ChevronRight className="h-3 w-3 text-blue-600" />
