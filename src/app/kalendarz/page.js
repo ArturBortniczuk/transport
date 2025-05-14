@@ -255,6 +255,7 @@ export default function KalendarzPage() {
             zrodlo: transport.source_warehouse,
             dataDostawy: transport.delivery_date,
             kierowcaId: transport.driver_id,
+            pojazdId: transport.vehicle_id, // Dodane nowe pole
             status: transport.status,
             numerWZ: transport.wz_number,
             nazwaKlienta: transport.client_name,
@@ -413,6 +414,7 @@ export default function KalendarzPage() {
           longitude: coordinates.lng,
           distance: odleglosc,
           driver_id: nowyTransport.kierowcaId,
+          vehicle_id: nowyTransport.pojazdId, // Dodane nowe pole
           wz_number: nowyTransport.numerWZ,
           client_name: nowyTransport.nazwaKlienta,
           requester_name: nowyTransport.osobaZlecajaca,
