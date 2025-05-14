@@ -1,6 +1,6 @@
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
-import { KIEROWCY } from '../constants';
+import { KIEROWCY, POJAZDY } from '../constants';
 import { useState, useEffect } from 'react';
 import { Link2, ArrowRight, ArrowLeft, CheckCircle, Link } from 'lucide-react';
 
@@ -146,7 +146,17 @@ export default function TransportsList({
       alert('Wystąpił nieoczekiwany błąd podczas rozłączania transportu');
     }
   };
-
+  
+  const getDriverInfo = (driverId) => {
+    const driver = KIEROWCY.find(k => k.id === parseInt(driverId));
+    return driver ? driver.imie : 'Brak danych';
+  };
+  
+  const getVehicleInfo = (vehicleId) => {
+    const vehicle = POJAZDY.find(v => v.id === parseInt(vehicleId));
+    return vehicle ? vehicle.tabliceRej : 'Brak danych';
+  };
+  
   // Sprawdź, czy transport może być połączony (nie jest już połączony i jest aktywny)
   const canBeConnected = (transport) => {
     return !isConnectedTransport(transport) && transport.status === 'active' && canEdit;
@@ -285,7 +295,8 @@ export default function TransportsList({
                         <p><strong>MPK:</strong> {transport.mpk}</p>
                       )}
                       
-                      <p><strong>Kierowca:</strong> {kierowca?.imie} ({kierowca?.tabliceRej})</p>
+                      <p><strong>Kierowca:</strong> {getDriverInfo(transport.kierowcaId)}</p>
+                      <p><strong>Pojazd:</strong> {getVehicleInfo(transport.pojazdId)}</p>
                       <p><strong>Magazyn:</strong> {transport.zrodlo}</p>
                       <p><strong>Odległość:</strong> {transport.odleglosc} km</p>
                       <p><strong>Poziom załadunku:</strong> {transport.poziomZaladunku}</p>
