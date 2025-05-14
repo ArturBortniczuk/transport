@@ -1,11 +1,14 @@
-'use client'
-import { KIEROWCY, RYNKI } from '../constants'
+// src/app/kalendarz/components/FilterPanel.js
 
+import { KIEROWCY, POJAZDY, RYNKI } from '../constants';
+
+// W komponencie dodajemy nowe pole dla filtrowania według pojazdu
 export default function FilterPanel({ filtryAktywne, setFiltryAktywne }) {
   return (
     <div className="mb-6 bg-white p-4 rounded-lg shadow">
       <h3 className="text-lg font-medium text-gray-900 mb-4">Filtry</h3>
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4"> {/* Zwiększamy liczbę kolumn z 4 na 5 */}
+        {/* Istniejące filtry bez zmian */}
         <div>
           <label className="block text-sm font-medium text-gray-700">
             Magazyn
@@ -33,12 +36,32 @@ export default function FilterPanel({ filtryAktywne, setFiltryAktywne }) {
             <option value="">Wszyscy kierowcy</option>
             {KIEROWCY.map(kierowca => (
               <option key={kierowca.id} value={kierowca.id}>
-                {kierowca.imie} ({kierowca.tabliceRej})
+                {kierowca.imie}
               </option>
             ))}
           </select>
         </div>
 
+        {/* Nowy filtr pojazdu */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700">
+            Pojazd
+          </label>
+          <select
+            value={filtryAktywne.pojazd || ''}
+            onChange={(e) => setFiltryAktywne(prev => ({...prev, pojazd: e.target.value ? parseInt(e.target.value) : ''}))}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+          >
+            <option value="">Wszystkie pojazdy</option>
+            {POJAZDY.map(pojazd => (
+              <option key={pojazd.id} value={pojazd.id}>
+                {pojazd.tabliceRej} ({pojazd.model})
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Pozostałe filtry bez zmian */}
         <div>
           <label className="block text-sm font-medium text-gray-700">
             Rynek
@@ -57,7 +80,6 @@ export default function FilterPanel({ filtryAktywne, setFiltryAktywne }) {
           </select>
         </div>
         
-        {/* Dodajemy nowy przełącznik dla transportów zrealizowanych */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Status transportów
