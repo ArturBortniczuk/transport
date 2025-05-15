@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import { format } from 'date-fns'
 import { pl } from 'date-fns/locale'
 import AdminCheck from '@/components/AdminCheck'
-import { Package, Trash2, RefreshCw, AlertTriangle } from 'lucide-react'
+import { Package, Trash2, RefreshCw, AlertTriangle, Download, Clock } from 'lucide-react'
 
 export default function AdminPackagingsPage() {
   const [packagings, setPackagings] = useState([])
@@ -11,6 +11,9 @@ export default function AdminPackagingsPage() {
   const [error, setError] = useState(null)
   const [deleteStatus, setDeleteStatus] = useState(null)
   const [filterStatus, setFilterStatus] = useState('all') // all, pending, scheduled, completed
+  const [syncStatus, setSyncStatus] = useState(null)
+  const [lastSync, setLastSync] = useState(null)
+  const [isSyncing, setIsSyncing] = useState(false)
   
   // Pobierz opakowania
   const fetchPackagings = async () => {
@@ -45,9 +48,82 @@ export default function AdminPackagingsPage() {
     }
   }
   
-  // Pobierz opakowania przy montowaniu komponentu
+  // Funkcja do synchronizacji opakowań z Google MyMaps
+  const handleSyncPackagings = async () => {
+    if (!confirm('Czy na pewno chcesz zsynchronizować opakowania z Google MyMaps? Ta operacja może potrwać kilka minut.')) {
+      return
+    }
+    
+    try {
+      setSyncStatus({ type: 'loading', message: 'Trwa synchronizacja opakowań z Google MyMaps...' })
+      setIsSyncing(true)
+      
+      // Parametr mapId dla Twojej mapy z bębnami
+      const mapId = '1AGzpo_MVZHlLHc888XYPzRs_tSqVvXPQ'
+      
+      const response = await fetch('/api/packagings/sync-mymaps', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ mapId })
+      })
+      
+      const data = await response.json()
+      
+      if (data.success) {
+        setSyncStatus({ 
+          type: 'success', 
+          message: `Synchronizacja zakończona pomyślnie: zaimportowano ${data.imported} opakowań.` 
+        })
+        
+        // Odśwież listę opakowań
+        fetchPackagings()
+        
+        // Zapisz datę ostatniej synchronizacji
+        if (data.lastSync) {
+          setLastSync(data.lastSync)
+        }
+        
+        // Wyczyść status po 5 sekundach
+        setTimeout(() => {
+          setSyncStatus(null)
+        }, 5000)
+      } else {
+        setSyncStatus({ 
+          type: 'error', 
+          message: data.error || 'Nie udało się zsynchronizować opakowań' 
+        })
+      }
+    } catch (error) {
+      console.error('Błąd synchronizacji opakowań:', error)
+      setSyncStatus({ 
+        type: 'error', 
+        message: 'Wystąpił błąd podczas synchronizacji: ' + error.message 
+      })
+    } finally {
+      setIsSyncing(false)
+    }
+  }
+  
+  // Pobierz datę ostatniej synchronizacji
+  const fetchLastSync = async () => {
+    try {
+      const response = await fetch('/api/packagings/last-sync')
+      const data = await response.json()
+      
+      if (data.success && data.lastSync) {
+        setLastSync(data.lastSync)
+      }
+    } catch (error) {
+      console.error('Błąd pobierania informacji o synchronizacji:', error)
+    }
+  }
+  
+  // Pobierz opakowania i datę ostatniej synchronizacji przy montowaniu komponentu
   useEffect(() => {
     fetchPackagings()
+    fetchLastSync()
   }, [])
   
   // Funkcja do usuwania opakowania
@@ -112,15 +188,24 @@ export default function AdminPackagingsPage() {
   return (
     <AdminCheck>
       <div className="max-w-7xl mx-auto py-8">
-        <div className="mb-6">
+        <div className="mb-4">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
             Zarządzanie Opakowaniami
           </h1>
           <p className="text-gray-600">
             Administrowanie opakowaniami do odbioru
           </p>
+          
+          {/* Informacja o ostatniej synchronizacji */}
+          {lastSync && (
+            <div className="mt-2 text-sm text-gray-500 flex items-center">
+              <Clock size={14} className="mr-1" /> 
+              Ostatnia synchronizacja: {format(new Date(lastSync), 'dd.MM.yyyy HH:mm', { locale: pl })}
+            </div>
+          )}
         </div>
         
+        {/* Komunikaty statusu */}
         {deleteStatus && (
           <div className={`mb-4 p-4 rounded-lg ${
             deleteStatus.type === 'success' ? 'bg-green-100 text-green-800' : 
@@ -128,6 +213,19 @@ export default function AdminPackagingsPage() {
             'bg-blue-100 text-blue-800'
           }`}>
             {deleteStatus.message}
+          </div>
+        )}
+        
+        {syncStatus && (
+          <div className={`mb-4 p-4 rounded-lg ${
+            syncStatus.type === 'success' ? 'bg-green-100 text-green-800' : 
+            syncStatus.type === 'error' ? 'bg-red-100 text-red-800' :
+            'bg-blue-100 text-blue-800'
+          } flex items-center`}>
+            {syncStatus.type === 'loading' && (
+              <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-current mr-2"></div>
+            )}
+            {syncStatus.message}
           </div>
         )}
         
@@ -159,13 +257,25 @@ export default function AdminPackagingsPage() {
             Zrealizowane
           </button>
           
-          <button
-            className="ml-auto px-3 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center"
-            onClick={fetchPackagings}
-          >
-            <RefreshCw size={16} className="mr-2" />
-            Odśwież
-          </button>
+          <div className="ml-auto flex space-x-2">
+            <button
+              className="px-3 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center"
+              onClick={fetchPackagings}
+              disabled={isLoading}
+            >
+              <RefreshCw size={16} className={`mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+              Odśwież
+            </button>
+            
+            <button
+              className="px-3 py-1.5 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center"
+              onClick={handleSyncPackagings}
+              disabled={isSyncing}
+            >
+              <Download size={16} className="mr-2" />
+              {isSyncing ? 'Synchronizacja...' : 'Synchronizuj z MyMaps'}
+            </button>
+          </div>
         </div>
         
         {isLoading ? (
