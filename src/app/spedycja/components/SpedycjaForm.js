@@ -1,12 +1,10 @@
 'use client'
-import { useState, useEffect } from 'react'
-import { Calendar } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Calendar, Search, X } from 'lucide-react'
 
 export default function SpedycjaForm({ onSubmit, onCancel, initialData, isResponse, isEditing }) {
   const [selectedLocation, setSelectedLocation] = useState(initialData?.location || '')
-  const [userMpk, setUserMpk] = useState('')
   const [users, setUsers] = useState([])
-  const [isForOtherUser, setIsForOtherUser] = useState(false)
   const [selectedUser, setSelectedUser] = useState(null)
   const [currentUser, setCurrentUser] = useState({
     email: '',
@@ -14,6 +12,11 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
   })
   const [distance, setDistance] = useState(initialData?.distanceKm || 0)
   const [isCalculatingDistance, setIsCalculatingDistance] = useState(false)
+  
+  // Nowe stany dla autokompletacji
+  const [searchTerm, setSearchTerm] = useState('')
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false)
+  const dropdownRef = useRef(null)
   
   // Nowe stany dla daty dostawy
   const [originalDeliveryDate, setOriginalDeliveryDate] = useState('')
@@ -36,7 +39,7 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
     }
   };
 
-  // Pobierz listę użytkowników i dane bieżącego użytkownika na początku
+  // Pobierz listę użytkowników i dane bieżącego użytkownika
   useEffect(() => {
     // Pobierz dane bieżącego użytkownika
     const fetchCurrentUser = async () => {
@@ -50,7 +53,15 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
             name: data.user.name || '',
             mpk: data.user.mpk || ''
           });
-          setUserMpk(data.user.mpk || '');
+          
+          // Pre-select the current user
+          if (!isEditing && !initialData) {
+            setSelectedUser({
+              email: data.user.email,
+              name: data.user.name,
+              mpk: data.user.mpk || ''
+            });
+          }
         }
       } catch (error) {
         console.error('Błąd pobierania danych użytkownika:', error);
@@ -62,7 +73,15 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
       try {
         const response = await fetch('/api/users/list');
         const data = await response.json();
-        setUsers(data);
+        
+        // Map the data to a consistent format
+        const formattedUsers = data.map(user => ({
+          email: user.email,
+          name: user.name,
+          mpk: user.mpk || ''
+        }));
+        
+        setUsers(formattedUsers);
       } catch (error) {
         console.error('Błąd pobierania listy użytkowników:', error);
       }
@@ -70,6 +89,20 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
 
     fetchCurrentUser();
     fetchUsers();
+  }, [isEditing, initialData]);
+
+  // Click outside to close dropdown
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
   }, []);
 
   // Ustawianie początkowych danych formularza
@@ -86,13 +119,16 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
         }
       } else if (isEditing) {
         // Dla trybu edycji
-        if (initialData.responsibleEmail && initialData.responsibleEmail !== currentUser.email) {
-          setIsForOtherUser(true);
-          setSelectedUser(initialData.responsibleEmail);
+        if (initialData.responsibleEmail) {
+          const responsibleUser = users.find(u => u.email === initialData.responsibleEmail);
+          if (responsibleUser) {
+            setSelectedUser(responsibleUser);
+            setSearchTerm(responsibleUser.name);
+          }
         }
       }
     }
-  }, [initialData, isResponse, isEditing, currentUser.email]);
+  }, [initialData, isResponse, isEditing, users]);
 
   // Klasy dla przycisków
   const buttonClasses = {
@@ -249,6 +285,26 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
     return date.toLocaleDateString('pl-PL');
   };
   
+  // Handle user search
+  const handleSearchChange = (e) => {
+    setSearchTerm(e.target.value);
+    setIsDropdownOpen(true);
+  };
+  
+  // Filter users based on search term
+  const filteredUsers = users.filter(user => 
+    user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (user.mpk && user.mpk.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
+  
+  // Handle user selection from dropdown
+  const handleSelectUser = (user) => {
+    setSelectedUser(user);
+    setSearchTerm(user.name);
+    setIsDropdownOpen(false);
+  };
+  
   const handleSubmit = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
@@ -290,6 +346,11 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
       onSubmit(initialData.id, responseData);
     } else if (isEditing) {
       // Formularz edycji
+      if (!selectedUser) {
+        alert('Wybierz osobę odpowiedzialną za zlecenie');
+        return;
+      }
+      
       console.log('Edycja zamówienia, dane początkowe:', initialData);
       
       // Oblicz odległość, jeśli jeszcze nie obliczona
@@ -323,10 +384,11 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
         deliveryDate: formData.get('deliveryDate'),
         distanceKm: routeDistance,
         notes: formData.get('notes'),
-        // Pola, które mają zostać niezmienione
-        responsiblePerson: initialData.responsiblePerson,
-        responsibleEmail: initialData.responsibleEmail,
-        mpk: initialData.mpk,
+        // Aktualizacja informacji o osobie odpowiedzialnej
+        responsiblePerson: selectedUser.name,
+        responsibleEmail: selectedUser.email,
+        mpk: selectedUser.mpk || '',
+        // Zachowaj informacje o osobie tworzącej
         createdBy: initialData.createdBy,
         createdByEmail: initialData.createdByEmail
       };
@@ -335,17 +397,10 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
       onSubmit(initialData.id, editedData);
     } else {
       // Nowe zamówienie
-      const mpk = isForOtherUser && selectedUser 
-        ? (users.find(u => u.email === selectedUser)?.mpk || '')
-        : userMpk;
-        
-      const personResponsible = isForOtherUser && selectedUser
-        ? (users.find(u => u.email === selectedUser)?.name || '')
-        : currentUser.name;
-        
-      const responsibleEmail = isForOtherUser && selectedUser
-        ? selectedUser
-        : currentUser.email;
+      if (!selectedUser) {
+        alert('Wybierz osobę odpowiedzialną za zlecenie');
+        return;
+      }
       
       // Najpierw oblicz odległość, jeśli jeszcze nie obliczona
       let routeDistance = distance;
@@ -381,13 +436,13 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
         unloadingContact: formData.get('unloadingContact'),
         deliveryDate: formData.get('deliveryDate'),
         distanceKm: routeDistance, // Upewnij się, że odległość jest zapisywana
-        mpk: mpk,
+        mpk: selectedUser.mpk || '',
         notes: formData.get('notes'),
         // Dodajemy informacje o użytkowniku dodającym i odpowiedzialnym
         createdBy: currentUser.name,
         createdByEmail: currentUser.email,
-        responsiblePerson: personResponsible,
-        responsibleEmail: responsibleEmail
+        responsiblePerson: selectedUser.name,
+        responsibleEmail: selectedUser.email
       };
       
       console.log('Dane zamówienia do zapisania:', data);
@@ -696,78 +751,79 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
             </div>
           </div>
 
-          {!isEditing && (
-            <div>
-              <div className="flex justify-between items-center">
-                <label className="block text-sm font-medium mb-1">Numer MPK</label>
-                <button
-                  type="button"
-                  onClick={() => setIsForOtherUser(!isForOtherUser)}
-                  className="text-sm text-blue-600 hover:text-blue-800"
-                >
-                  {isForOtherUser ? 'Użyj mojego MPK' : 'To nie dla mnie'}
-                </button>
+          {/* Nowy komponent wyboru użytkownika z autouzupełnianiem */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium mb-1">
+              Osoba odpowiedzialna / numer MPK
+            </label>
+            <div className="relative" ref={dropdownRef}>
+              <div className="flex items-center relative">
+                <div className="relative flex-grow">
+                  <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={handleSearchChange}
+onClick={() => setIsDropdownOpen(true)}
+                    placeholder="Wyszukaj osobę odpowiedzialną..."
+                    className="w-full p-2 pl-10 border rounded-md"
+                    required
+                  />
+                  <div className="absolute left-3 top-2.5 text-gray-400">
+                    <Search size={18} />
+                  </div>
+                </div>
+                {searchTerm && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchTerm('');
+                      setSelectedUser(null);
+                    }}
+                    className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
+                  >
+                    <X size={18} />
+                  </button>
+                )}
               </div>
               
-              {isForOtherUser ? (
-                <div>
-                  <select
-                    className="w-full p-2 border rounded-md"
-                    value={selectedUser || ''}
-                    onChange={(e) => setSelectedUser(e.target.value)}
-                    required
-                  >
-                    <option value="">Wybierz osobę odpowiedzialną</option>
-                    {users.map(user => (
-                      <option key={user.email} value={user.email}>
-                        {user.name} {user.mpk ? `(MPK: ${user.mpk})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                  {selectedUser && (
-                    <div className="mt-2 p-2 bg-blue-50 rounded border border-blue-100">
-                      <div className="text-sm">
-                        <strong>Osoba odpowiedzialna:</strong> {users.find(u => u.email === selectedUser)?.name}
+              {isDropdownOpen && (
+                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                  {filteredUsers.length > 0 ? (
+                    filteredUsers.map((user, index) => (
+                      <div
+                        key={user.email}
+                        onClick={() => handleSelectUser(user)}
+                        className="p-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0"
+                      >
+                        <div className="font-medium">{user.name}</div>
+                        <div className="text-sm text-gray-600 flex justify-between">
+                          <span>{user.email}</span>
+                          {user.mpk && <span className="text-blue-600">MPK: {user.mpk}</span>}
+                        </div>
                       </div>
-                      <div className="text-sm">
-                        <strong>MPK:</strong> {users.find(u => u.email === selectedUser)?.mpk || 'Brak MPK'}
-                      </div>
-                    </div>
+                    ))
+                  ) : (
+                    <div className="p-2 text-gray-500">Brak wyników</div>
                   )}
-                </div>
-              ) : (
-                <div>
-                  <input
-                    name="mpk"
-                    type="text"
-                    value={userMpk}
-                    onChange={(e) => setUserMpk(e.target.value)}
-                    className="w-full p-2 border rounded-md"
-                    readOnly
-                  />
-                  <div className="mt-2 p-2 bg-blue-50 rounded border border-blue-100">
-                    <div className="text-sm">
-<strong>Osoba odpowiedzialna:</strong> {currentUser.name || 'Nie zalogowany'}
-                    </div>
-                  </div>
                 </div>
               )}
             </div>
-          )}
-
-          {isEditing && (
-            <div>
-              <label className="block text-sm font-medium mb-1">Numer MPK</label>
-              <div className="p-2 bg-gray-50 rounded-md border border-gray-200">
-                <div className="text-sm">
-                  <strong>MPK:</strong> {initialData?.mpk || 'Brak MPK'}
-                </div>
-                <div className="text-sm">
-                  <strong>Osoba odpowiedzialna:</strong> {initialData?.responsiblePerson || initialData?.createdBy || 'Nie określono'}
+            
+            {selectedUser && (
+              <div className="mt-2 p-2 bg-blue-50 rounded-md border border-blue-100">
+                <div className="flex justify-between">
+                  <div>
+                    <span className="font-medium">Wybrana osoba:</span> {selectedUser.name}
+                  </div>
+                  {selectedUser.mpk && (
+                    <div>
+                      <span className="font-medium">MPK:</span> {selectedUser.mpk}
+                    </div>
+                  )}
                 </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
           <div>
             <label className="block text-sm font-medium mb-1">Uwagi</label>
