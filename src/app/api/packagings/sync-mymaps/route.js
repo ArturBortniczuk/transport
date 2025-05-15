@@ -111,18 +111,46 @@ const parseKML = async (kmlText) => {
         let contact = '';
         let packagingInfo = '';
         
-        // Ekstrahuj tylko nazwę klienta z nazwy - bez kodu pocztowego czy adresu
-        if (name.includes('/')) {
-          // Format "NAZWA_KLIENTA/LOKALIZACJA"
-          clientName = name.split('/')[0].trim();
-        } else if (name.includes(' ') && /\d{2}-\d{3}/.test(name)) {
-          // Format "NAZWA_KLIENTA KOD_POCZTOWY"
-          const postalCodeMatch = name.match(/\d{2}-\d{3}/);
+        // Poprawa ekstrakcji nazwy klienta
+        // Najpierw spróbujmy wyodrębnić nazwę klienta z nazwy pineski
+        if (name && name.includes(' ')) {
+          // Sprawdź, czy nazwa zaczyna się od kodu pocztowego
+          const postalCodeMatch = name.match(/^\d{2}-\d{3}\s+/);
+          
           if (postalCodeMatch) {
-            const postalCodeIndex = name.indexOf(postalCodeMatch[0]);
-            clientName = name.substring(0, postalCodeIndex).trim();
+            // Format: "KOD_POCZTOWY NAZWA_KLIENTA"
+            clientName = name.substring(postalCodeMatch[0].length).trim();
+            postalCode = postalCodeMatch[0].trim();
           } else {
-            clientName = name;
+            // Sprawdź czy nazwa zawiera kod pocztowy w środku
+            const middlePostalMatch = name.match(/\s+\d{2}-\d{3}\s+/);
+            if (middlePostalMatch) {
+              // Format: "NAZWA_KLIENTA KOD_POCZTOWY MIASTO"
+              const postalIndex = name.indexOf(middlePostalMatch[0]);
+              clientName = name.substring(0, postalIndex).trim();
+              postalCode = middlePostalMatch[0].trim();
+              city = name.substring(postalIndex + middlePostalMatch[0].length).trim();
+            } else {
+              // Format: "NAZWA_KLIENTA Miasto" lub inny format bez kodu pocztowego
+              // Próbujemy wyodrębnić nazwę klienta z pierwszej części
+              const parts = name.split(' ');
+              // Zazwyczaj nazwa klienta to wszystkie słowa z wielkiej litery przed miastem
+              // Szukamy pierwszego słowa, które nie jest napisane wielkimi literami lub zaczyna się małą literą
+              let clientNameEndIndex = parts.length;
+              for (let i = 0; i < parts.length; i++) {
+                if (parts[i].length > 0 && parts[i][0] === parts[i][0].toLowerCase()) {
+                  clientNameEndIndex = i;
+                  break;
+                }
+              }
+              
+              if (clientNameEndIndex > 0) {
+                clientName = parts.slice(0, clientNameEndIndex).join(' ');
+                city = parts.slice(clientNameEndIndex).join(' ');
+              } else {
+                clientName = name;
+              }
+            }
           }
         } else {
           clientName = name;
@@ -145,24 +173,21 @@ const parseKML = async (kmlText) => {
           const trimmedLine = line.trim();
           if (!trimmedLine) continue;
           
+          // Wykrywanie sekcji
           if (trimmedLine.startsWith('Uwagi:')) {
             currentSection = 'Uwagi';
-            // Sprawdź czy w tej samej linii są jakieś dane
             const content = trimmedLine.replace('Uwagi:', '').trim();
             if (content) sections[currentSection].push(content);
           } else if (trimmedLine.startsWith('Adres:')) {
             currentSection = 'Adres';
-            // Sprawdź czy w tej samej linii są jakieś dane
             const content = trimmedLine.replace('Adres:', '').trim();
             if (content) sections[currentSection].push(content);
           } else if (trimmedLine.startsWith('Kontakt:')) {
             currentSection = 'Kontakt';
-            // Sprawdź czy w tej samej linii są jakieś dane
             const content = trimmedLine.replace('Kontakt:', '').trim();
             if (content) sections[currentSection].push(content);
           } else if (trimmedLine.startsWith('Opakowania:')) {
             currentSection = 'Opakowania';
-            // Sprawdź czy w tej samej linii są jakieś dane
             const content = trimmedLine.replace('Opakowania:', '').trim();
             if (content) sections[currentSection].push(content);
           } else if (currentSection) {
@@ -174,53 +199,80 @@ const parseKML = async (kmlText) => {
           }
         }
         
-        // Przetwarzamy adres
+        // Dodatkowa logika: Jeśli w adresie jest pierwszy wiersz z nazwą klienta, usuńmy ją z adresu
         if (sections['Adres'] && sections['Adres'].length > 0) {
-          // Typowo pierwsza linia zawiera miasto i kod pocztowy
-          const firstLine = sections['Adres'][0];
-          
-          // Próbujemy znaleźć kod pocztowy
-          const postalCodeMatch = firstLine.match(/\d{2}-\d{3}/);
-          if (postalCodeMatch) {
-            postalCode = postalCodeMatch[0];
-            
-            // Wyodrębnij miasto na podstawie kodu pocztowego
-            const parts = firstLine.split(postalCode);
-            if (parts.length > 1 && parts[1].trim()) {
-              city = parts[1].trim();
-            } else if (parts.length > 0 && parts[0].trim()) {
-              city = parts[0].trim();
+          // Sprawdź, czy pierwszy wiersz adresu zawiera nazwę klienta
+          const firstAdressLine = sections['Adres'][0];
+          if (firstAdressLine && !firstAdressLine.match(/\d{2}-\d{3}/) && 
+              firstAdressLine.toUpperCase() === firstAdressLine) {
+            // Prawdopodobnie to nazwa klienta, używamy jej jeśli wcześniej nie znaleźliśmy
+            if (!clientName) {
+              clientName = firstAdressLine;
             }
-          } else {
-            // Jeśli nie ma kodu pocztowego, spróbuj wyodrębnić miasto
-            city = firstLine;
-          }
-          
-          // Jeśli mamy drugą linię, to zwykle zawiera ulicę
-          if (sections['Adres'].length > 1) {
-            street = sections['Adres'][1];
+            // Usuwamy tę linię z adresu, aby nie powodowała zamieszania
+            sections['Adres'].shift();
           }
         }
         
-        // Jeśli nie udało się wyodrębnić miasta i kodu z sekcji adresu, spróbuj z nazwy
-        if (!city || !postalCode) {
-          const postalCodeMatch = name.match(/\d{2}-\d{3}/);
-          if (postalCodeMatch) {
-            postalCode = postalCodeMatch[0];
+        // Przetwarzamy adres
+        if (sections['Adres'] && sections['Adres'].length > 0) {
+          // Sprawdzamy czy w adresie jest kod pocztowy i miasto
+          let hasFoundPostalAndCity = false;
+          
+          for (let i = 0; i < sections['Adres'].length; i++) {
+            const addressLine = sections['Adres'][i];
             
-            // Jeśli kod pocztowy jest w nazwie, to często miasto też jest
-            const parts = name.split(postalCode);
-            if (parts.length > 1 && parts[1].trim()) {
-              // Miasto po kodzie pocztowym
-              city = parts[1].trim();
-            } else if (parts.length > 0) {
-              // Spróbuj wyciągnąć miasto przed kodem
-              const beforePostal = parts[0].trim();
-              const cityMatch = beforePostal.match(/\s([A-ZŻŹĆĄŚĘŁÓŃ][a-zżźćńółęąś]+)$/);
-              if (cityMatch) {
-                city = cityMatch[1];
+            // Próbujemy znaleźć kod pocztowy
+            const postalCodeMatch = addressLine.match(/\d{2}-\d{3}/);
+            if (postalCodeMatch) {
+              postalCode = postalCodeMatch[0];
+              
+              // Wyodrębnij miasto na podstawie kodu pocztowego
+              const parts = addressLine.split(postalCode);
+              if (parts.length > 1 && parts[1].trim()) {
+                city = parts[1].trim();
+              } else if (parts.length > 0 && parts[0].trim()) {
+                city = parts[0].trim();
+              }
+              
+              hasFoundPostalAndCity = true;
+              
+              // Jeśli to nie jest ostatnia linia adresu, następne linie to prawdopodobnie ulica
+              if (i < sections['Adres'].length - 1) {
+                street = sections['Adres'].slice(i + 1).join(', ');
+              }
+              
+              break;
+            }
+            
+            // Jeśli nie znaleźliśmy kodu pocztowego, a to pierwsza linia, to może to być ulica
+            if (i === 0 && !postalCodeMatch) {
+              street = addressLine;
+            }
+          }
+          
+          // Jeśli nie znaleźliśmy kodu pocztowego w adresie, sprawdźmy nazwę pineski
+          if (!hasFoundPostalAndCity && !postalCode) {
+            const postalCodeMatch = name.match(/\d{2}-\d{3}/);
+            if (postalCodeMatch) {
+              postalCode = postalCodeMatch[0];
+              
+              // Próbujemy znaleźć miasto w nazwie
+              const parts = name.split(postalCode);
+              if (parts.length > 1 && parts[1].trim()) {
+                city = parts[1].trim();
               }
             }
+          }
+        }
+        
+        // Jeśli wciąż nie mamy nazwy klienta, spróbujmy wyciągnąć ją z pierwszej linii opakowania
+        if (!clientName && sections['Opakowania'] && sections['Opakowania'].length > 0) {
+          // Czasami nazwa klienta jest ukryta w informacjach o opakowaniach
+          const packagingLine = sections['Opakowania'][0];
+          // Jeśli linia nie zawiera cyfr i specjalnych znaków to może to być nazwa klienta
+          if (!/\d/.test(packagingLine) && !/[\/\\]/.test(packagingLine)) {
+            clientName = packagingLine;
           }
         }
         
