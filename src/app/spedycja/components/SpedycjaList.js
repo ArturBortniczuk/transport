@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { format } from 'date-fns'
 import { pl } from 'date-fns/locale'
 import { generateCMR } from '@/lib/utils/generateCMR'
-import { Truck, Package, MapPin, Phone, FileText, Calendar, DollarSign, User, Clipboard, ArrowRight, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react'
+import { Truck, Package, MapPin, Phone, FileText, Calendar, DollarSign, User, Clipboard, ArrowRight, ChevronDown, ChevronUp, AlertCircle, Edit, Pencil } from 'lucide-react'
 
 export default function SpedycjaList({ 
   zamowienia, 
@@ -11,7 +11,9 @@ export default function SpedycjaList({
   onResponse, 
   onMarkAsCompleted, 
   onCreateOrder, 
-  canSendOrder
+  canSendOrder,
+  onEdit,  // Nowy prop
+  currentUserEmail  // Email zalogowanego użytkownika
 }) {
   const [expandedId, setExpandedId] = useState(null)
 
@@ -122,6 +124,18 @@ export default function SpedycjaList({
     return zamowienie.deliveryDate;
   }
 
+  // Sprawdza, czy bieżący użytkownik jest twórcą zamówienia
+  const isCreatedByCurrentUser = (zamowienie) => {
+    return zamowienie.createdByEmail === currentUserEmail;
+  }
+
+  // Sprawdza, czy zamówienie może być edytowane
+  const canBeEdited = (zamowienie) => {
+    // Tylko nowe zamówienia bez odpowiedzi mogą być edytowane
+    return zamowienie.status === 'new' && 
+           (!zamowienie.response || Object.keys(zamowienie.response).length === 0);
+  }
+
   return (
     <div className="divide-y">
       {zamowienia
@@ -130,6 +144,7 @@ export default function SpedycjaList({
           const statusInfo = getStatusLabel(zamowienie);
           const dateChanged = isDeliveryDateChanged(zamowienie);
           const displayDate = getActualDeliveryDate(zamowienie);
+          const canEdit = canBeEdited(zamowienie) && (isAdmin || isCreatedByCurrentUser(zamowienie));
           
           return (
             <div key={zamowienie.id} className="p-4 hover:bg-gray-50 transition-colors">
@@ -199,6 +214,22 @@ export default function SpedycjaList({
                     </button>
                   )}
                   
+                  {/* Przycisk edycji - widoczny dla twórcy lub admina */}
+                  {canEdit && (
+                    <button 
+                      type="button"
+                      className={buttonClasses.outline}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onEdit(zamowienie)
+                      }}
+                    >
+                      <Pencil size={16} />
+                      Edytuj
+                    </button>
+                  )}
+                  
+                  {/* Przyciski admina - odpowiadanie i oznaczanie jako zrealizowane */}
                   {isAdmin && zamowienie.status === 'new' && (
                     <>
                       <button 
@@ -363,6 +394,22 @@ export default function SpedycjaList({
                       )}
                     </div>
                   </div>
+
+                  {canEdit && (
+                    <div className="mt-4 flex justify-end">
+                      <button 
+                        type="button"
+                        className={buttonClasses.primary}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onEdit(zamowienie)
+                        }}
+                      >
+                        <Pencil size={16} />
+                        Edytuj zamówienie
+                      </button>
+                    </div>
+                  )}
 
                   {zamowienie.response && (
                     <div className="mt-4 bg-gray-50 p-5 rounded-lg border border-gray-200 shadow-sm">
