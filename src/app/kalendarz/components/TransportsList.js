@@ -32,9 +32,12 @@ export default function TransportsList({
     
     const pasujeMagazyn = !filtryAktywne.magazyn || transport.zrodlo === filtryAktywne.magazyn;
     const pasujeKierowca = !filtryAktywne.kierowca || parseInt(transport.kierowcaId) === filtryAktywne.kierowca;
+    const pasujePojazd = !filtryAktywne.pojazd || 
+                         parseInt(transport.pojazdId) === filtryAktywne.pojazd || 
+                         (!transport.pojazdId && parseInt(transport.kierowcaId) === filtryAktywne.pojazd);
     const pasujeRynek = !filtryAktywne.rynek || transport.rynek === filtryAktywne.rynek;
     
-    return pasujeMagazyn && pasujeKierowca && pasujeRynek;
+    return pasujeMagazyn && pasujeKierowca && pasujePojazd && pasujeRynek;
   });
   
   const [userPermissions, setUserPermissions] = useState({});
@@ -147,14 +150,28 @@ export default function TransportsList({
     }
   };
   
+  // Funkcja pomocnicza do znajdowania danych kierowcy
   const getDriverInfo = (driverId) => {
     const driver = KIEROWCY.find(k => k.id === parseInt(driverId));
     return driver ? driver.imie : 'Brak danych';
   };
   
-  const getVehicleInfo = (vehicleId) => {
-    const vehicle = POJAZDY.find(v => v.id === parseInt(vehicleId));
-    return vehicle ? vehicle.tabliceRej : 'Brak danych';
+  // Ulepszona funkcja z kompatybilnością wsteczną
+  const getVehicleInfo = (pojazdId, kierowcaId) => {
+    // Najpierw sprawdzamy, czy mamy pojazdId
+    if (pojazdId) {
+      const pojazd = POJAZDY.find(p => p.id === parseInt(pojazdId));
+      return pojazd ? pojazd.tabliceRej : 'Brak danych';
+    }
+    
+    // Jeśli nie mamy pojazdId, ale mamy kierowcaId, użyjmy starego mapowania
+    if (kierowcaId) {
+      // W starym systemie id kierowcy odpowiadało id pojazdu
+      const pojazd = POJAZDY.find(p => p.id === parseInt(kierowcaId));
+      return pojazd ? pojazd.tabliceRej : 'Brak danych';
+    }
+    
+    return 'Brak danych';
   };
   
   // Sprawdź, czy transport może być połączony (nie jest już połączony i jest aktywny)
@@ -296,7 +313,7 @@ export default function TransportsList({
                       )}
                       
                       <p><strong>Kierowca:</strong> {getDriverInfo(transport.kierowcaId)}</p>
-                      <p><strong>Pojazd:</strong> {getVehicleInfo(transport.pojazdId)}</p>
+                      <p><strong>Pojazd:</strong> {getVehicleInfo(transport.pojazdId, transport.kierowcaId)}</p>
                       <p><strong>Magazyn:</strong> {transport.zrodlo}</p>
                       <p><strong>Odległość:</strong> {transport.odleglosc} km</p>
                       <p><strong>Poziom załadunku:</strong> {transport.poziomZaladunku}</p>
