@@ -1,377 +1,236 @@
-import { format } from 'date-fns';
-import { pl } from 'date-fns/locale';
-import { KIEROWCY, POJAZDY } from '../constants';
-import { useState, useEffect } from 'react';
-import { Link2, ArrowRight, ArrowLeft, CheckCircle, Link } from 'lucide-react';
+// src/app/kalendarz/components/SimpleCalendarGrid.js
 
-export default function TransportsList({
-  selectedDate,
+import { useState } from 'react'
+import { format, getDate } from 'date-fns'
+import { pl } from 'date-fns/locale'
+import { Droppable, Draggable } from '@hello-pangea/dnd'
+import { Link2, ChevronRight, CheckCircle } from 'lucide-react'
+import { KIEROWCY, POJAZDY } from '../constants'
+
+export default function SimpleCalendarGrid({ 
+  daysInMonth, 
+  onDateSelect, 
+  currentMonth, 
   transporty,
-  userRole,
-  userEmail,
-  onZakonczTransport,
-  onEditTransport,
-  onPrzeniesDoPrzenoszenia,
-  onConnectTransport, // Nowy prop do obsługi łączenia transportów
-  filtryAktywne = {}
+  filtryAktywne // Dodajemy props z filtrami
 }) {
-  if (!selectedDate) return null;
-
-  const dateKey = format(selectedDate, 'yyyy-MM-dd');
-  const transportyNaDzien = transporty[dateKey] || [];
+  const [selected, setSelected] = useState(null)
+  const [hoverInfo, setHoverInfo] = useState(null)
   
-  // Filtrujemy według aktywnych filtrów, ale nie filtrujemy po statusie
-  const filtrowaneTransporty = transportyNaDzien.filter(transport => {
-    // Sprawdź czy transport jest zrealizowany
-    const isCompleted = transport.status === 'completed' || transport.status === 'zakończony';
-    
-    // Jeśli transport jest zrealizowany i nie chcemy pokazywać zrealizowanych, odfiltrowujemy
-    if (isCompleted && !filtryAktywne.pokazZrealizowane) {
-      return false;
+  const handleClick = (day) => {
+    setSelected(day)
+    if (onDateSelect) {
+      onDateSelect(day)
     }
+  }
+  
+  // Funkcja do określania koloru na podstawie magazynu źródłowego
+  const getMagazynColor = (zrodlo) => {
+    if (zrodlo === 'bialystok') {
+      return 'bg-red-100 text-red-800' 
+    } else if (zrodlo === 'zielonka') {
+      return 'bg-blue-100 text-blue-800'
+    }
+    return 'bg-gray-100 text-gray-800'
+  }
+
+  // Funkcja filtrująca transporty na podstawie aktywnych filtrów
+  const filtrujTransporty = (transportyNaDzien) => {
+    if (!transportyNaDzien || !Array.isArray(transportyNaDzien)) return [];
     
-    const pasujeMagazyn = !filtryAktywne.magazyn || transport.zrodlo === filtryAktywne.magazyn;
-    const pasujeKierowca = !filtryAktywne.kierowca || parseInt(transport.kierowcaId) === filtryAktywne.kierowca;
-    const pasujePojazd = !filtryAktywne.pojazd || 
+    return transportyNaDzien.filter(transport => {
+      // Sprawdź czy transport jest zrealizowany
+      const isCompleted = transport.status === 'completed' || transport.status === 'zakończony';
+      
+      // Jeśli transport jest zrealizowany i nie chcemy pokazywać zrealizowanych, odfiltrowujemy
+      if (isCompleted && !filtryAktywne.pokazZrealizowane) {
+        return false;
+      }
+      
+      // Filtry magazynu, kierowcy i rynku
+      const pasujeMagazyn = !filtryAktywne?.magazyn || transport.zrodlo === filtryAktywne.magazyn;
+      const pasujeKierowca = !filtryAktywne.kierowca || parseInt(transport.kierowcaId) === filtryAktywne.kierowca;
+      const pasujePojazd = !filtryAktywne.pojazd || 
                          parseInt(transport.pojazdId) === filtryAktywne.pojazd || 
                          (!transport.pojazdId && parseInt(transport.kierowcaId) === filtryAktywne.pojazd);
-    const pasujeRynek = !filtryAktywne.rynek || transport.rynek === filtryAktywne.rynek;
-    
-    return pasujeMagazyn && pasujeKierowca && pasujePojazd && pasujeRynek;
-  });
-  
-  const [userPermissions, setUserPermissions] = useState({});
-  const [isLoading, setIsLoading] = useState(true);
-  
-  // Pobierz uprawnienia z API zamiast localStorage
-  useEffect(() => {
-    async function fetchUserPermissions() {
-      try {
-        const response = await fetch('/api/user');
-        const data = await response.json();
-        
-        console.log('Dane użytkownika z API:', data);
-        if (data.isAuthenticated && data.user) {
-          setUserPermissions(data.user.permissions || {});
-          console.log('Pobrane uprawnienia:', data.user.permissions);
-        }
-      } catch (error) {
-        console.error('Błąd pobierania uprawnień użytkownika:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    }
-
-    fetchUserPermissions();
-  }, []);
-
-  const canEdit = userPermissions?.calendar?.edit === true || userRole === 'admin';
-  const canMarkAsCompleted = userPermissions?.transport?.markAsCompleted === true || userRole === 'admin';
-
-  // Funkcja pomocnicza do sprawdzania, czy użytkownik może edytować ten transport
-  const canEditTransport = (transport) => {
-    // Admin może zawsze edytować
-    if (userRole === 'admin') return true;
-    
-    // Sprawdź czy użytkownik ma rolę magazynu
-    const isMagazynRole = userRole === 'magazyn' || 
-                         userRole?.startsWith('magazyn_') ||
-                         userRole === 'magazyn_bialystok' ||
-                         userRole === 'magazyn_zielonka';
-    
-    // Sprawdzamy czy użytkownik ma odpowiednie uprawnienia
-    const hasPermission = userPermissions?.calendar?.edit === true;
-    
-    // Dla roli magazynu sprawdzamy, czy to jego magazyn
-    const isCorrectMagazyn = transport.zrodlo === 'bialystok' && 
-                           (userRole === 'magazyn_bialystok' || userRole === 'magazyn') ||
-                           transport.zrodlo === 'zielonka' && 
-                           (userRole === 'magazyn_zielonka' || userRole === 'magazyn');
-    
-    // Sprawdzamy czy transport został utworzony przez tego użytkownika
-    const isCreator = transport.emailZlecajacego === userEmail;
-    
-    return hasPermission && (isCreator || isCorrectMagazyn);
+      const pasujeRynek = !filtryAktywne?.rynek || transport.rynek === filtryAktywne.rynek;
+      
+      return pasujeMagazyn && pasujeKierowca && pasujePojazd && pasujeRynek;
+    });
   };
-  
-  console.log('Uprawnienia w TransportsList:', {
-    canEdit,
-    canMarkAsCompleted,
-    userPermissions
-  });
 
-  // Funkcja pomocnicza sprawdzająca czy transport jest połączony z innym
-  const isConnectedTransport = (transport) => {
+  // Funkcja pomocnicza sprawdzająca czy transport jest połączony
+  const isConnectedTransport = (transport, allTransports) => {
     // Transport może mieć swój własny connected_transport_id
     if (transport.connected_transport_id) return true;
     
     // Lub być źródłem dla innego transportu
-    return transportyNaDzien.some(t => t.connected_transport_id === transport.id);
+    return allTransports.some(t => t.connected_transport_id === transport.id);
   };
   
   // Funkcja pomocnicza znajdująca połączony transport
-  const findConnectedTransport = (transport) => {
+  const findConnectedTransport = (transport, allTransports) => {
     if (transport.connected_transport_id) {
-      return transportyNaDzien.find(t => t.id === transport.connected_transport_id);
+      return allTransports.find(t => t.id === transport.connected_transport_id);
     }
     
-    return transportyNaDzien.find(t => t.connected_transport_id === transport.id);
+    return allTransports.find(t => t.connected_transport_id === transport.id);
+  };
+  
+  // Funkcje pomocnicze do wyświetlania informacji o kierowcy i pojeździe
+  const getDriverName = (driverId) => {
+    const driver = KIEROWCY.find(k => k.id === parseInt(driverId));
+    return driver ? driver.imie : 'Nieznany';
   };
 
-  // Funkcja do rozłączania transportów
-  const handleDisconnectTransport = async (transportId) => {
-    if (!confirm('Czy na pewno chcesz rozłączyć ten transport od powiązanej trasy?')) {
-      return;
-    }
-    
-    try {
-      const response = await fetch('/api/transports/disconnect', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          transportId
-        })
-      });
-      
-      const data = await response.json();
-      
-      if (data.success) {
-        alert('Transport został pomyślnie rozłączony');
-        // Tutaj możemy dodać callback do odświeżenia listy transportów
-        window.location.reload(); // Prosta metoda odświeżenia, ale można zastąpić lepszym rozwiązaniem
-      } else {
-        alert('Błąd podczas rozłączania transportu: ' + (data.error || 'Nieznany błąd'));
-      }
-    } catch (error) {
-      console.error('Błąd podczas rozłączania transportu:', error);
-      alert('Wystąpił nieoczekiwany błąd podczas rozłączania transportu');
-    }
-  };
-  
-  // Funkcja pomocnicza do znajdowania danych kierowcy
-  const getDriverInfo = (driverId) => {
-    const driver = KIEROWCY.find(k => k.id === parseInt(driverId));
-    return driver ? driver.imie : 'Brak danych';
-  };
-  
   // Ulepszona funkcja z kompatybilnością wsteczną
-  const getVehicleInfo = (pojazdId, kierowcaId) => {
+  const getVehicleNumber = (pojazdId, kierowcaId) => {
     // Najpierw sprawdzamy, czy mamy pojazdId
     if (pojazdId) {
       const pojazd = POJAZDY.find(p => p.id === parseInt(pojazdId));
-      return pojazd ? pojazd.tabliceRej : 'Brak danych';
+      return pojazd ? pojazd.tabliceRej : 'Nieznany';
     }
     
     // Jeśli nie mamy pojazdId, ale mamy kierowcaId, użyjmy starego mapowania
     if (kierowcaId) {
       // W starym systemie id kierowcy odpowiadało id pojazdu
       const pojazd = POJAZDY.find(p => p.id === parseInt(kierowcaId));
-      return pojazd ? pojazd.tabliceRej : 'Brak danych';
+      return pojazd ? pojazd.tabliceRej : 'Nieznany';
     }
     
-    return 'Brak danych';
+    return 'Nieznany';
   };
   
-  // Sprawdź, czy transport może być połączony (nie jest już połączony i jest aktywny)
-  const canBeConnected = (transport) => {
-    return !isConnectedTransport(transport) && transport.status === 'active' && canEdit;
-  };
-
-  if (isLoading) {
-    return (
-      <div className="mt-8 bg-white rounded-xl shadow-lg p-6">
-        <div className="text-center text-gray-500">
-          Ładowanie uprawnień...
-        </div>
-      </div>
-    );
-  }
-
-  if (filtrowaneTransporty.length === 0) {
-    return (
-      <div className="mt-8 bg-white rounded-xl shadow-lg p-6">
-        <div className="text-center text-gray-500">
-          Brak transportów na ten dzień
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="mt-8 bg-white rounded-xl shadow-lg overflow-hidden">
-      <div className="bg-gradient-to-r from-blue-600 to-blue-800 px-6 py-4">
-        <h2 className="text-xl font-bold text-white">
-          Transporty na {format(selectedDate, 'd MMMM yyyy', { locale: pl })}
-        </h2>
-      </div>
-
-      <div className="p-6">     
-        <div className="space-y-4">
-          {filtrowaneTransporty.map(transport => {
-            const kierowca = KIEROWCY.find(k => k.id === parseInt(transport.kierowcaId));
-            
-            // Sprawdź, czy transport jest połączony
-            const isConnected = isConnectedTransport(transport);
-            const isSource = transportyNaDzien.some(t => t.connected_transport_id === transport.id);
-            const isTarget = transport.connected_transport_id !== null;
-            
-            // Sprawdź czy transport jest zrealizowany
-            const isCompleted = transport.status === 'completed' || transport.status === 'zakończony';
-            
-            // Znajdź połączony transport, jeśli istnieje
-            const connectedTransport = isConnected ? findConnectedTransport(transport) : null;
-            
-            return (
-              <div 
-                key={transport.id} 
-                className={`
-                  border rounded-lg p-4 hover:shadow-md transition-all duration-200
-                  ${isConnected ? 'border-l-4 border-blue-500' : ''}
-                  ${isCompleted ? 'opacity-50 bg-gray-50' : ''}
-                `}
-              >
-                <div className="flex justify-between items-start">
-                  <div className="space-y-2">
-                    <h3 className="font-medium text-lg flex items-center">
-                      {isCompleted ? (
-                        <CheckCircle className="h-4 w-4 mr-2 text-green-600" />
-                      ) : isConnected && (
-                        <Link2 className="h-4 w-4 mr-2 text-blue-600" />
-                      )}
-                      {transport.miasto} ({transport.kodPocztowy})
-                      
-                      {isConnected && !isCompleted && (
-                        <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded-full">
-                          {isSource ? 'Źródło trasy' : 'Cel trasy'}
-                        </span>
-                      )}
-                      
-                      {isCompleted && (
-                        <span className="ml-2 px-2 py-0.5 bg-green-100 text-green-800 text-xs rounded-full">
-                          Zrealizowany
-                        </span>
-                      )}
-                    </h3>
-                    
-                    {transport.ulica && (
-                      <p className="text-gray-600">{transport.ulica}</p>
-                    )}
-                    
-                    {/* Wyświetlanie informacji o połączonej trasie */}
-                    {isConnected && connectedTransport && !isCompleted && (
-                      <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                        <p className="text-sm font-medium text-blue-800 mb-2">
-                          Transport połączony z:
-                        </p>
-                        <div className="flex items-center">
-                          {isTarget ? (
-                            <>
-                              <div className="flex items-center">
-                                <ArrowLeft className="h-4 w-4 text-blue-600 mr-2" />
-                                <div>
-                                  <div className="font-medium">{connectedTransport.miasto}</div>
-                                  <div className="text-xs text-gray-600">{connectedTransport.kodPocztowy}</div>
-                                </div>
-                              </div>
-                            </>
-                          ) : (
-                            <>
-                              <div className="flex items-center">
-                                <div>
-                                  <div className="font-medium">{connectedTransport.miasto}</div>
-                                  <div className="text-xs text-gray-600">{connectedTransport.kodPocztowy}</div>
-                                </div>
-                                <ArrowRight className="h-4 w-4 text-blue-600 mx-2" />
-                              </div>
-                            </>
-                          )}
-                        </div>
-                        
-                        {/* Przycisk do rozłączania transportów */}
-                        {canEdit && (
-                          <button
-                            onClick={() => handleDisconnectTransport(transport.id)}
-                            className="mt-2 px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                          >
-                            Rozłącz transporty
-                          </button>
-                        )}
-                      </div>
-                    )}
-                    
-                    <div className="text-sm text-gray-500 space-y-1 mt-3">
-                      <p><strong>Klient:</strong> {transport.nazwaKlienta}</p>
-                      
-                      {transport.osobaZlecajaca && (
-                        <p><strong>Osoba zlecająca:</strong> {transport.osobaZlecajaca}</p>
-                      )}
-                      
-                      {transport.mpk && (
-                        <p><strong>MPK:</strong> {transport.mpk}</p>
-                      )}
-                      
-                      <p><strong>Kierowca:</strong> {getDriverInfo(transport.kierowcaId)}</p>
-                      <p><strong>Pojazd:</strong> {getVehicleInfo(transport.pojazdId, transport.kierowcaId)}</p>
-                      <p><strong>Magazyn:</strong> {transport.zrodlo}</p>
-                      <p><strong>Odległość:</strong> {transport.odleglosc} km</p>
-                      <p><strong>Poziom załadunku:</strong> {transport.poziomZaladunku}</p>
-                      <p><strong>WZ:</strong> {transport.numerWZ}</p>
-                      {transport.rynek && (
-                        <p><strong>Rynek:</strong> {transport.rynek}</p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Przyciski akcji tylko dla aktywnych transportów */}
-                  {!isCompleted && (
-                    <div className="flex flex-col space-y-2">
-                      {canMarkAsCompleted && (
-                        <button
-                          onClick={() => {
-                            console.log('Kliknięto Zrealizuj dla transportu ID:', transport.id);
-                            onZakonczTransport(dateKey, transport.id);
-                          }}
-                          className="px-4 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
-                        >
-                          Zrealizuj
-                        </button>
-                      )}
-                      
-                      {canEditTransport(transport) && (
-                        <>
-                          <button
-                            onClick={() => onEditTransport(transport)}
-                            className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                          >
-                            Edytuj
-                          </button>
-                          <button
-                            onClick={() => onPrzeniesDoPrzenoszenia(transport)}
-                            className="px-4 py-2 text-sm bg-yellow-600 text-white rounded hover:bg-yellow-700 transition-colors"
-                          >
-                            Przenieś
-                          </button>
-                          {/* Nowy przycisk do łączenia transportów */}
-                          {canBeConnected(transport) && onConnectTransport && (
-                            <button
-                              onClick={() => onConnectTransport(transport)}
-                              className="px-4 py-2 text-sm bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors"
-                            >
-                              Połącz
-                            </button>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+    <div className="grid grid-cols-7 gap-2">
+      {['Pon', 'Wt', 'Śr', 'Czw', 'Pt', 'Sob', 'Ndz'].map((day) => (
+        <div key={day} className="text-center font-semibold p-2">
+          {day}
         </div>
-      </div>
+      ))}
+
+      {daysInMonth.map((day) => {
+        const dateKey = format(day, 'yyyy-MM-dd')
+        const isCurrentMonth = format(day, 'M') === format(currentMonth, 'M')
+        
+        // Pobierz transporty dla danego dnia i filtruj je
+        const transportyNaDzien = transporty[dateKey] || []
+        const filtrowaneTransporty = filtrujTransporty(transportyNaDzien)
+        
+        return (
+          <div
+            key={dateKey}
+            onClick={() => handleClick(day)}
+            className={`
+              p-4 border rounded-lg cursor-pointer
+              ${selected && format(selected, 'yyyy-MM-dd') === dateKey ? 'ring-2 ring-blue-500' : ''}
+              ${!isCurrentMonth ? 'opacity-50 bg-gray-50' : 'hover:bg-gray-100'}
+              min-h-[100px]
+            `}
+          >
+            <div className={`font-medium ${!isCurrentMonth ? 'text-gray-400' : ''}`}>
+              {getDate(day)}
+            </div>
+            
+            {/* Obszar, na który można upuścić transport */}
+            <Droppable droppableId={dateKey}>
+              {(provided, snapshot) => (
+                <div
+                  ref={provided.innerRef}
+                  {...provided.droppableProps}
+                  className={`mt-2 space-y-1 min-h-[20px] ${snapshot.isDraggingOver ? 'bg-blue-50 rounded p-1' : ''}`}
+                >
+                  {/* Wyświetlanie transportów z obsługą przeciągania */}
+                  {filtrowaneTransporty.map((transport, index) => {
+                    // Sprawdź, czy transport jest połączony z innym
+                    const isConnected = isConnectedTransport(transport, transportyNaDzien);
+                    const isSource = transportyNaDzien.some(t => t.connected_transport_id === transport.id);
+                    const isTarget = transport.connected_transport_id !== null;
+                    
+                    // Sprawdź czy transport jest zrealizowany
+                    const isCompleted = transport.status === 'completed' || transport.status === 'zakończony';
+                    
+                    return (
+                      <Draggable 
+                        key={transport.id} 
+                        draggableId={transport.id.toString()} 
+                        index={index}
+                        isDragDisabled={isCompleted} // Wyłączamy możliwość przeciągania dla zrealizowanych
+                      >
+                        {(provided, snapshot) => (
+                          <div
+                            ref={provided.innerRef}
+                            {...provided.draggableProps}
+                            {...provided.dragHandleProps}
+                            className={`relative ${snapshot.isDragging ? 'opacity-50' : ''}`}
+                            onMouseEnter={() => setHoverInfo(transport.id)}
+                            onMouseLeave={() => setHoverInfo(null)}
+                          >
+                            <div className={`
+                              text-xs px-2 py-1 rounded flex items-center justify-between
+                              ${getMagazynColor(transport.zrodlo)}
+                              ${isConnected ? 'border-l-4 border-blue-500' : ''}
+                              ${isCompleted ? 'opacity-50' : ''}
+                            `}>
+                              <div className="flex items-center">
+                                {isCompleted && (
+                                  <CheckCircle className="h-3 w-3 mr-1 text-green-600" />
+                                )}
+                                {isConnected && !isCompleted && (
+                                  <Link2 className="h-3 w-3 mr-1 text-blue-600" />
+                                )}
+                                <span>{transport.miasto}</span>
+                              </div>
+                              <span className="ml-1 text-xs opacity-75">
+                                {getVehicleNumber(transport.pojazdId, transport.kierowcaId)}
+                              </span>
+                              {isSource && !isCompleted && (
+                                <ChevronRight className="h-3 w-3 text-blue-600" />
+                              )}
+                            </div>
+                            
+                            {/* Tooltip (dymek) z dodatkowymi informacjami */}
+                            {hoverInfo === transport.id && !snapshot.isDragging && (
+                              <div className="absolute z-10 left-0 mt-1 w-48 bg-white rounded-md shadow-lg p-3 text-xs border border-gray-200">
+                                <p className="font-semibold">{transport.nazwaKlienta || 'Brak nazwy klienta'}</p>
+                                <p className="text-gray-600">{transport.osobaZlecajaca || 'Brak osoby odpowiedzialnej'}</p>
+                                {transport.mpk && <p className="text-gray-600">MPK: {transport.mpk}</p>}
+                                <div className="mt-1 pt-1 border-t border-gray-100">
+                                  <p className="text-gray-500">{transport.ulica || ''}</p>
+                                  <p className="text-gray-500">{transport.kodPocztowy} {transport.miasto}</p>
+                                </div>
+                                <div className="mt-1 pt-1 border-t border-gray-100">
+                                  <p className="text-gray-600">Kierowca: {getDriverName(transport.kierowcaId)}</p>
+                                  <p className="text-gray-600">Pojazd: {getVehicleNumber(transport.pojazdId, transport.kierowcaId)}</p>
+                                </div>
+                                {isCompleted && (
+                                  <div className="mt-1 pt-1 border-t border-gray-100 text-green-600">
+                                    <p className="font-medium">Transport zrealizowany</p>
+                                  </div>
+                                )}
+                                {isConnected && (
+                                  <div className="mt-1 pt-1 border-t border-gray-100 text-blue-600">
+                                    <p className="font-medium">Transport połączony</p>
+                                    {isSource ? 
+                                      <p className="text-xs">Jest źródłem dla innego transportu</p> :
+                                      <p className="text-xs">Połączony z innym transportem</p>
+                                    }
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </Draggable>
+                    );
+                  })}
+                  {provided.placeholder}
+                </div>
+              )}
+            </Droppable>
+          </div>
+        )
+      })}
     </div>
-  );
+  )
 }
