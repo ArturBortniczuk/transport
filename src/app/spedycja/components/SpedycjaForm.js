@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react'
 import { Calendar } from 'lucide-react'
 
-export default function SpedycjaForm({ onSubmit, onCancel, initialData, isResponse }) {
+export default function SpedycjaForm({ onSubmit, onCancel, initialData, isResponse, isEditing }) {
   const [selectedLocation, setSelectedLocation] = useState(initialData?.location || '')
   const [userMpk, setUserMpk] = useState('')
   const [users, setUsers] = useState([])
@@ -12,7 +12,7 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
     email: '',
     name: ''
   })
-  const [distance, setDistance] = useState(0)
+  const [distance, setDistance] = useState(initialData?.distanceKm || 0)
   const [isCalculatingDistance, setIsCalculatingDistance] = useState(false)
   
   // Nowe stany dla daty dostawy
@@ -72,19 +72,27 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
     fetchUsers();
   }, []);
 
-  // Dodajmy debugowanie dla formularza odpowiedzi
+  // Ustawianie początkowych danych formularza
   useEffect(() => {
-    if (initialData && isResponse) {
-      console.log('Dane zamówienia przekazane do formularza odpowiedzi:', initialData);
-      console.log('Odległość w km:', initialData.distanceKm);
+    if (initialData) {
+      setSelectedLocation(initialData.location || '');
+      setDistance(initialData.distanceKm || 0);
       
-      // Ustawienie oryginalnej i nowej daty dostawy
-      if (initialData.deliveryDate) {
-        setOriginalDeliveryDate(initialData.deliveryDate);
-        setNewDeliveryDate(initialData.deliveryDate);
+      if (isResponse) {
+        // Dla formularza odpowiedzi
+        if (initialData.deliveryDate) {
+          setOriginalDeliveryDate(initialData.deliveryDate);
+          setNewDeliveryDate(initialData.deliveryDate);
+        }
+      } else if (isEditing) {
+        // Dla trybu edycji
+        if (initialData.responsibleEmail && initialData.responsibleEmail !== currentUser.email) {
+          setIsForOtherUser(true);
+          setSelectedUser(initialData.responsibleEmail);
+        }
       }
     }
-  }, [initialData, isResponse]);
+  }, [initialData, isResponse, isEditing, currentUser.email]);
 
   // Klasy dla przycisków
   const buttonClasses = {
@@ -280,7 +288,53 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
       }
       
       onSubmit(initialData.id, responseData);
+    } else if (isEditing) {
+      // Formularz edycji
+      console.log('Edycja zamówienia, dane początkowe:', initialData);
+      
+      // Oblicz odległość, jeśli jeszcze nie obliczona
+      let routeDistance = distance;
+      if (routeDistance === 0) {
+        try {
+          routeDistance = await calculateRouteDistance(selectedLocation, 'destination');
+          console.log('Obliczona odległość:', routeDistance);
+        } catch (error) {
+          console.error('Błąd obliczania odległości:', error);
+        }
+      }
+      
+      const editedData = {
+        location: selectedLocation,
+        documents: formData.get('documents'),
+        producerAddress: selectedLocation === 'Producent' ? {
+          city: formData.get('producerCity'),
+          postalCode: formData.get('producerPostalCode'),
+          street: formData.get('producerStreet'),
+          pinLocation: formData.get('producerPinLocation')
+        } : null,
+        delivery: {
+          city: formData.get('deliveryCity'),
+          postalCode: formData.get('deliveryPostalCode'),
+          street: formData.get('deliveryStreet'),
+          pinLocation: formData.get('deliveryPinLocation')
+        },
+        loadingContact: formData.get('loadingContact'),
+        unloadingContact: formData.get('unloadingContact'),
+        deliveryDate: formData.get('deliveryDate'),
+        distanceKm: routeDistance,
+        notes: formData.get('notes'),
+        // Pola, które mają zostać niezmienione
+        responsiblePerson: initialData.responsiblePerson,
+        responsibleEmail: initialData.responsibleEmail,
+        mpk: initialData.mpk,
+        createdBy: initialData.createdBy,
+        createdByEmail: initialData.createdByEmail
+      };
+      
+      console.log('Dane edycji do zapisania:', editedData);
+      onSubmit(initialData.id, editedData);
     } else {
+      // Nowe zamówienie
       const mpk = isForOtherUser && selectedUser 
         ? (users.find(u => u.email === selectedUser)?.mpk || '')
         : userMpk;
@@ -348,7 +402,9 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
     <form onSubmit={handleSubmit} className="p-6 space-y-6">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-xl font-semibold">
-          {isResponse ? 'Odpowiedź na zamówienie spedycji' : 'Nowe zamówienie spedycji'}
+          {isResponse ? 'Odpowiedź na zamówienie spedycji' : 
+           isEditing ? 'Edycja zamówienia spedycji' : 
+           'Nowe zamówienie spedycji'}
         </h2>
         <button
           type="button"
@@ -507,6 +563,7 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
                     name="producerCity"
                     type="text"
                     className="w-full p-2 border rounded-md"
+                    defaultValue={initialData?.producerAddress?.city || ''}
                     required
                   />
                 </div>
@@ -516,6 +573,7 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
                     name="producerPostalCode"
                     type="text"
                     className="w-full p-2 border rounded-md"
+                    defaultValue={initialData?.producerAddress?.postalCode || ''}
                     required
                   />
                 </div>
@@ -526,6 +584,7 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
                   name="producerStreet"
                   type="text"
                   className="w-full p-2 border rounded-md"
+                  defaultValue={initialData?.producerAddress?.street || ''}
                   required
                 />
               </div>
@@ -537,6 +596,7 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
                   name="producerPinLocation"
                   type="text"
                   className="w-full p-2 border rounded-md"
+                  defaultValue={initialData?.producerAddress?.pinLocation || ''}
                   placeholder="Link do pineski na mapie"
                 />
               </div>
@@ -549,6 +609,7 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
               name="documents"
               type="text"
               className="w-full p-2 border rounded-md"
+              defaultValue={initialData?.documents || ''}
               required
             />
           </div>
@@ -562,6 +623,7 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
                   name="deliveryCity"
                   type="text"
                   className="w-full p-2 border rounded-md"
+                  defaultValue={initialData?.delivery?.city || ''}
                   required
                 />
               </div>
@@ -571,6 +633,7 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
                   name="deliveryPostalCode"
                   type="text"
                   className="w-full p-2 border rounded-md"
+                  defaultValue={initialData?.delivery?.postalCode || ''}
                   required
                 />
               </div>
@@ -581,6 +644,7 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
                 name="deliveryStreet"
                 type="text"
                 className="w-full p-2 border rounded-md"
+                defaultValue={initialData?.delivery?.street || ''}
                 required
               />
             </div>
@@ -592,6 +656,7 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
                 name="deliveryPinLocation"
                 type="text"
                 className="w-full p-2 border rounded-md"
+                defaultValue={initialData?.delivery?.pinLocation || ''}
                 placeholder="Link do pineski na mapie"
               />
             </div>
@@ -603,6 +668,7 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
               name="deliveryDate"
               type="date"
               className="w-full p-2 border rounded-md"
+              defaultValue={initialData?.deliveryDate || ''}
               required
             />
           </div>
@@ -614,6 +680,7 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
                 name="loadingContact"
                 type="tel"
                 className="w-full p-2 border rounded-md"
+                defaultValue={initialData?.loadingContact || ''}
                 required
               />
             </div>
@@ -623,67 +690,84 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
                 name="unloadingContact"
                 type="tel"
                 className="w-full p-2 border rounded-md"
+                defaultValue={initialData?.unloadingContact || ''}
                 required
               />
             </div>
           </div>
 
-          <div>
-            <div className="flex justify-between items-center">
-              <label className="block text-sm font-medium mb-1">Numer MPK</label>
-              <button
-                type="button"
-                onClick={() => setIsForOtherUser(!isForOtherUser)}
-                className="text-sm text-blue-600 hover:text-blue-800"
-              >
-                {isForOtherUser ? 'Użyj mojego MPK' : 'To nie dla mnie'}
-              </button>
-            </div>
-            
-            {isForOtherUser ? (
-              <div>
-                <select
-                  className="w-full p-2 border rounded-md"
-                  value={selectedUser || ''}
-                  onChange={(e) => setSelectedUser(e.target.value)}
-                  required
+          {!isEditing && (
+            <div>
+              <div className="flex justify-between items-center">
+                <label className="block text-sm font-medium mb-1">Numer MPK</label>
+                <button
+                  type="button"
+                  onClick={() => setIsForOtherUser(!isForOtherUser)}
+                  className="text-sm text-blue-600 hover:text-blue-800"
                 >
-                  <option value="">Wybierz osobę odpowiedzialną</option>
-                  {users.map(user => (
-                    <option key={user.email} value={user.email}>
-                      {user.name} {user.mpk ? `(MPK: ${user.mpk})` : ''}
-                    </option>
-                  ))}
-                </select>
-                {selectedUser && (
+                  {isForOtherUser ? 'Użyj mojego MPK' : 'To nie dla mnie'}
+                </button>
+              </div>
+              
+              {isForOtherUser ? (
+                <div>
+                  <select
+                    className="w-full p-2 border rounded-md"
+                    value={selectedUser || ''}
+                    onChange={(e) => setSelectedUser(e.target.value)}
+                    required
+                  >
+                    <option value="">Wybierz osobę odpowiedzialną</option>
+                    {users.map(user => (
+                      <option key={user.email} value={user.email}>
+                        {user.name} {user.mpk ? `(MPK: ${user.mpk})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  {selectedUser && (
+                    <div className="mt-2 p-2 bg-blue-50 rounded border border-blue-100">
+                      <div className="text-sm">
+                        <strong>Osoba odpowiedzialna:</strong> {users.find(u => u.email === selectedUser)?.name}
+                      </div>
+                      <div className="text-sm">
+                        <strong>MPK:</strong> {users.find(u => u.email === selectedUser)?.mpk || 'Brak MPK'}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div>
+                  <input
+                    name="mpk"
+                    type="text"
+                    value={userMpk}
+                    onChange={(e) => setUserMpk(e.target.value)}
+                    className="w-full p-2 border rounded-md"
+                    readOnly
+                  />
                   <div className="mt-2 p-2 bg-blue-50 rounded border border-blue-100">
                     <div className="text-sm">
-                      <strong>Osoba odpowiedzialna:</strong> {users.find(u => u.email === selectedUser)?.name}
+<strong>Osoba odpowiedzialna:</strong> {currentUser.name || 'Nie zalogowany'}
                     </div>
-                    <div className="text-sm">
-                      <strong>MPK:</strong> {users.find(u => u.email === selectedUser)?.mpk || 'Brak MPK'}
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div>
-                <input
-                  name="mpk"
-                  type="text"
-                  value={userMpk}
-                  onChange={(e) => setUserMpk(e.target.value)}
-                  className="w-full p-2 border rounded-md"
-                  readOnly
-                />
-                <div className="mt-2 p-2 bg-blue-50 rounded border border-blue-100">
-                  <div className="text-sm">
-                    <strong>Osoba odpowiedzialna:</strong> {currentUser.name || 'Nie zalogowany'}
                   </div>
                 </div>
+              )}
+            </div>
+          )}
+
+          {isEditing && (
+            <div>
+              <label className="block text-sm font-medium mb-1">Numer MPK</label>
+              <div className="p-2 bg-gray-50 rounded-md border border-gray-200">
+                <div className="text-sm">
+                  <strong>MPK:</strong> {initialData?.mpk || 'Brak MPK'}
+                </div>
+                <div className="text-sm">
+                  <strong>Osoba odpowiedzialna:</strong> {initialData?.responsiblePerson || initialData?.createdBy || 'Nie określono'}
+                </div>
               </div>
-            )}
-          </div>
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium mb-1">Uwagi</label>
@@ -691,6 +775,7 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
               name="notes"
               className="w-full p-2 border rounded-md"
               rows={3}
+              defaultValue={initialData?.notes || ''}
               placeholder="Dodatkowe informacje..."
             />
           </div>
@@ -719,7 +804,9 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
           type="submit"
           className={buttonClasses.primary}
         >
-          {isResponse ? 'Zapisz odpowiedź' : 'Dodaj zamówienie'}
+          {isResponse ? 'Zapisz odpowiedź' : 
+           isEditing ? 'Zapisz zmiany' : 
+           'Dodaj zamówienie'}
         </button>
       </div>
     </form>
