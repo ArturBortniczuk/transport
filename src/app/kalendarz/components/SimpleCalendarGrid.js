@@ -1,4 +1,5 @@
-'use client'
+// src/app/kalendarz/components/SimpleCalendarGrid.js
+
 import { useState } from 'react'
 import { format, getDate } from 'date-fns'
 import { pl } from 'date-fns/locale'
@@ -22,16 +23,7 @@ export default function SimpleCalendarGrid({
       onDateSelect(day)
     }
   }
-
-  const getDriverName = (driverId) => {
-    const driver = KIEROWCY.find(k => k.id === parseInt(driverId));
-    return driver ? driver.imie : 'Nieznany';
-  };
   
-  const getVehicleNumber = (vehicleId) => {
-    const vehicle = POJAZDY.find(v => v.id === parseInt(vehicleId));
-    return vehicle ? vehicle.tabliceRej : 'Nieznany';
-  };
   // Funkcja do określania koloru na podstawie magazynu źródłowego
   const getMagazynColor = (zrodlo) => {
     if (zrodlo === 'bialystok') {
@@ -58,9 +50,12 @@ export default function SimpleCalendarGrid({
       // Filtry magazynu, kierowcy i rynku
       const pasujeMagazyn = !filtryAktywne?.magazyn || transport.zrodlo === filtryAktywne.magazyn;
       const pasujeKierowca = !filtryAktywne.kierowca || parseInt(transport.kierowcaId) === filtryAktywne.kierowca;
+      const pasujePojazd = !filtryAktywne.pojazd || 
+                         parseInt(transport.pojazdId) === filtryAktywne.pojazd || 
+                         (!transport.pojazdId && parseInt(transport.kierowcaId) === filtryAktywne.pojazd);
       const pasujeRynek = !filtryAktywne?.rynek || transport.rynek === filtryAktywne.rynek;
       
-      return pasujeMagazyn && pasujeKierowca && pasujeRynek;
+      return pasujeMagazyn && pasujeKierowca && pasujePojazd && pasujeRynek;
     });
   };
 
@@ -80,6 +75,30 @@ export default function SimpleCalendarGrid({
     }
     
     return allTransports.find(t => t.connected_transport_id === transport.id);
+  };
+  
+  // Funkcje pomocnicze do wyświetlania informacji o kierowcy i pojeździe
+  const getDriverName = (driverId) => {
+    const driver = KIEROWCY.find(k => k.id === parseInt(driverId));
+    return driver ? driver.imie : 'Nieznany';
+  };
+
+  // Ulepszona funkcja z kompatybilnością wsteczną
+  const getVehicleNumber = (pojazdId, kierowcaId) => {
+    // Najpierw sprawdzamy, czy mamy pojazdId
+    if (pojazdId) {
+      const pojazd = POJAZDY.find(p => p.id === parseInt(pojazdId));
+      return pojazd ? pojazd.tabliceRej : 'Nieznany';
+    }
+    
+    // Jeśli nie mamy pojazdId, ale mamy kierowcaId, użyjmy starego mapowania
+    if (kierowcaId) {
+      // W starym systemie id kierowcy odpowiadało id pojazdu
+      const pojazd = POJAZDY.find(p => p.id === parseInt(kierowcaId));
+      return pojazd ? pojazd.tabliceRej : 'Nieznany';
+    }
+    
+    return 'Nieznany';
   };
   
   return (
@@ -161,10 +180,10 @@ export default function SimpleCalendarGrid({
                                   <Link2 className="h-3 w-3 mr-1 text-blue-600" />
                                 )}
                                 <span>{transport.miasto}</span>
-                                <span className="ml-auto text-xs opacity-75">
-                                  {getVehicleNumber(transport.pojazdId)}
-                                </span>
                               </div>
+                              <span className="ml-1 text-xs opacity-75">
+                                {getVehicleNumber(transport.pojazdId, transport.kierowcaId)}
+                              </span>
                               {isSource && !isCompleted && (
                                 <ChevronRight className="h-3 w-3 text-blue-600" />
                               )}
@@ -179,6 +198,10 @@ export default function SimpleCalendarGrid({
                                 <div className="mt-1 pt-1 border-t border-gray-100">
                                   <p className="text-gray-500">{transport.ulica || ''}</p>
                                   <p className="text-gray-500">{transport.kodPocztowy} {transport.miasto}</p>
+                                </div>
+                                <div className="mt-1 pt-1 border-t border-gray-100">
+                                  <p className="text-gray-600">Kierowca: {getDriverName(transport.kierowcaId)}</p>
+                                  <p className="text-gray-600">Pojazd: {getVehicleNumber(transport.pojazdId, transport.kierowcaId)}</p>
                                 </div>
                                 {isCompleted && (
                                   <div className="mt-1 pt-1 border-t border-gray-100 text-green-600">
