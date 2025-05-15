@@ -155,7 +155,7 @@ export default function SimpleCalendarGrid({
                         key={transport.id} 
                         draggableId={transport.id.toString()} 
                         index={index}
-                        isDragDisabled={isCompleted} // Wyłączamy możliwość przeciągania dla zrealizowanych
+                        isDragDisabled={isCompleted}
                       >
                         {(provided, snapshot) => (
                           <div
@@ -181,15 +181,13 @@ export default function SimpleCalendarGrid({
                                 )}
                                 <span>{transport.miasto}</span>
                               </div>
-                              <span className="ml-1 text-xs opacity-75">
-                                {getVehicleNumber(transport.pojazdId, transport.kierowcaId)}
-                              </span>
+                              {/* Usuwamy tablice rejestracyjne z głównego widoku */}
                               {isSource && !isCompleted && (
                                 <ChevronRight className="h-3 w-3 text-blue-600" />
                               )}
                             </div>
                             
-                            {/* Tooltip (dymek) z dodatkowymi informacjami */}
+                            {/* Tooltip (dymek) pozostaje bez zmian - z tablicami */}
                             {hoverInfo === transport.id && !snapshot.isDragging && (
                               <div className="absolute z-10 left-0 mt-1 w-48 bg-white rounded-md shadow-lg p-3 text-xs border border-gray-200">
                                 <p className="font-semibold">{transport.nazwaKlienta || 'Brak nazwy klienta'}</p>
