@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import SpedycjaForm from './components/SpedycjaForm'
 import SpedycjaList from './components/SpedycjaList'
 import Link from 'next/link'
-import { Clipboard, Archive } from 'lucide-react'
+import { Clipboard, Archive, Edit } from 'lucide-react'
 import TransportOrderForm from './components/TransportOrderForm'
 
 
@@ -18,6 +18,8 @@ export default function SpedycjaPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedOrderZamowienie, setSelectedOrderZamowienie] = useState(null);
+  const [currentUserEmail, setCurrentUserEmail] = useState('');
+  const [isEditing, setIsEditing] = useState(false);
 
   const buttonClasses = {
     primary: "px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors flex items-center gap-2",
@@ -28,19 +30,23 @@ export default function SpedycjaPage() {
     const role = localStorage.getItem('userRole');
     setUserRole(role);
     
-    // Sprawdź czy użytkownik jest administratorem
-    const checkAdmin = async () => {
+    // Sprawdź czy użytkownik jest administratorem i pobierz email
+    const fetchUserInfo = async () => {
       try {
-        const response = await fetch('/api/check-admin');
+        const response = await fetch('/api/user');
         const data = await response.json();
-        setIsAdmin(data.isAdmin);
+        
+        if (data.isAuthenticated && data.user) {
+          setIsAdmin(data.isAdmin);
+          setCurrentUserEmail(data.user.email);
+        }
       } catch (error) {
-        console.error('Błąd sprawdzania uprawnień administratora:', error);
+        console.error('Błąd sprawdzania uprawnień użytkownika:', error);
         setIsAdmin(false);
       }
     };
     
-    checkAdmin();
+    fetchUserInfo();
     fetchSpedycje();
   }, [showArchive]);
 
@@ -142,6 +148,47 @@ export default function SpedycjaPage() {
     }
   };
 
+  // Nowa funkcja do obsługi edycji zamówienia
+  const handleEdit = (zamowienie) => {
+    console.log('Edycja zamówienia:', zamowienie);
+    setSelectedZamowienie(zamowienie);
+    setIsEditing(true);
+    setShowForm(true);
+  };
+  
+  // Funkcja do zapisywania zmian po edycji
+  const handleSaveEdit = async (id, updatedData) => {
+    try {
+      console.log('Zapisywanie zmian zamówienia ID:', id, 'Dane:', updatedData);
+      
+      // Wywołaj API
+      const response = await fetch('/api/spedycje/edit', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          id,
+          ...updatedData
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        fetchSpedycje(); // Odświeżamy listę
+        setShowForm(false);
+        setIsEditing(false);
+        setSelectedZamowienie(null);
+      } else {
+        throw new Error(data.error || 'Błąd aktualizacji zamówienia');
+      }
+    } catch (error) {
+      console.error('Błąd edycji zamówienia:', error);
+      alert('Wystąpił błąd podczas zapisywania zmian: ' + error.message);
+    }
+  };
+
   const handleResponse = async (zamowienieId, response) => {
     try {
       console.log('Odpowiedź na zamówienie ID:', zamowienieId, 'Dane odpowiedzi:', response);
@@ -238,6 +285,7 @@ export default function SpedycjaPage() {
     if (zamowienie.distanceKm || (zamowienie.distance_km !== undefined && zamowienie.distance_km !== null)) {
       console.log('Zamówienie już ma dane o odległości:', zamowienie.distanceKm || zamowienie.distance_km);
       setSelectedZamowienie(zamowienie);
+      setIsEditing(false);
       setShowForm(true);
       return;
     }
@@ -265,6 +313,7 @@ export default function SpedycjaPage() {
       setSelectedZamowienie(zamowienie);
     }
     
+    setIsEditing(false);
     setShowForm(true);
   };
 
@@ -331,6 +380,7 @@ export default function SpedycjaPage() {
         if (data.isAuthenticated && data.user) {
           setUserRole(data.user.role);
           setIsAdmin(data.user.isAdmin);
+          setCurrentUserEmail(data.user.email);
           
           // Ustaw uprawnienia na podstawie danych z API
           const permissions = data.user.permissions || {};
@@ -405,6 +455,7 @@ export default function SpedycjaPage() {
               className={buttonClasses.primary}
               onClick={() => {
                 setSelectedZamowienie(null);
+                setIsEditing(false);
                 setShowForm(true);
               }}
             >
@@ -426,6 +477,8 @@ export default function SpedycjaPage() {
               onMarkAsCompleted={handleMarkAsCompleted}
               onCreateOrder={handleCreateOrder}
               canSendOrder={canSendOrder}
+              onEdit={handleEdit}
+              currentUserEmail={currentUserEmail}
             />
           ) : (
             <div className="p-12 text-center text-gray-500">
@@ -440,13 +493,19 @@ export default function SpedycjaPage() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
           <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <SpedycjaForm 
-              onSubmit={selectedZamowienie ? handleResponse : handleDodajZamowienie}
+              onSubmit={isEditing 
+                ? (id, data) => handleSaveEdit(selectedZamowienie.id, data)
+                : selectedZamowienie 
+                  ? handleResponse 
+                  : handleDodajZamowienie}
               onCancel={() => {
                 setShowForm(false);
                 setSelectedZamowienie(null);
+                setIsEditing(false);
               }}
               initialData={selectedZamowienie}
-              isResponse={!!selectedZamowienie}
+              isResponse={!!selectedZamowienie && !isEditing}
+              isEditing={isEditing}
             />
           </div>
         </div>
