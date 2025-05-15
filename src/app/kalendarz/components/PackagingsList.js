@@ -2,7 +2,7 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import { Droppable, Draggable } from '@hello-pangea/dnd'
-import { Package, RefreshCw } from 'lucide-react'
+import { Package, RefreshCw, MapPin, User, Phone, Calendar } from 'lucide-react'
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
 
@@ -12,6 +12,8 @@ export default function PackagingsList() {
   const [isLoading, setIsLoading] = useState(true)
   const [lastSync, setLastSync] = useState(null)
   const [hoverPackagingId, setHoverPackagingId] = useState(null)
+  const [activePackaging, setActivePackaging] = useState(null)
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
 
   // Pobierz opakowania
   const fetchPackagings = useCallback(async () => {
@@ -63,6 +65,52 @@ export default function PackagingsList() {
     fetchLastSync()
   }, [fetchPackagings, fetchLastSync])
 
+  // Otwórz modal ze szczegółami
+  const handleShowDetails = (packaging) => {
+    setActivePackaging(packaging)
+    setIsDetailModalOpen(true)
+  }
+
+  // Funkcja do wyświetlania pierwszych n znaków z możliwością rozwinięcia
+  const truncateText = (text, maxLength = 30) => {
+    if (!text) return '';
+    if (text.length <= maxLength) return text;
+    return `${text.substring(0, maxLength)}...`;
+  }
+
+  // Funkcja do wyodrębniania danych kontaktowych
+  const extractContactInfo = (description) => {
+    if (!description) return { contact: '', notes: '', packagingInfo: '' };
+    
+    const sections = {
+      contact: '',
+      notes: '',
+      packagingInfo: ''
+    };
+    
+    const lines = description.split('\n');
+    let currentSection = null;
+    
+    for (const line of lines) {
+      if (line.startsWith('Kontakt:')) {
+        currentSection = 'contact';
+        continue;
+      } else if (line.startsWith('Uwagi:')) {
+        currentSection = 'notes';
+        continue;
+      } else if (line.startsWith('Opakowania:')) {
+        currentSection = 'packagingInfo';
+        continue;
+      }
+      
+      if (currentSection && line.trim()) {
+        sections[currentSection] += sections[currentSection] ? `\n${line}` : line;
+      }
+    }
+    
+    return sections;
+  }
+
   return (
     <div className="mb-8 bg-white rounded-lg shadow-md overflow-hidden">
       <div 
@@ -113,64 +161,152 @@ export default function PackagingsList() {
                 <div 
                   ref={provided.innerRef}
                   {...provided.droppableProps}
-                  className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2"
+                  className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3"
                 >
-                  {packagings.map((packaging, index) => (
-                    <Draggable
-                      key={packaging.id}
-                      draggableId={packaging.id.toString()}
-                      index={index}
-                    >
-                      {(provided, snapshot) => (
-                        <div
-                          ref={provided.innerRef}
-                          {...provided.draggableProps}
-                          {...provided.dragHandleProps}
-                          className={`
-                            relative p-2 border rounded bg-blue-50 border-blue-200
-                            ${snapshot.isDragging ? 'shadow-lg bg-blue-100' : 'hover:bg-blue-100'}
-                            cursor-grab transition-all
-                          `}
-                          onMouseEnter={() => setHoverPackagingId(packaging.id)}
-                          onMouseLeave={() => setHoverPackagingId(null)}
-                        >
-                          <div className="text-sm font-medium text-blue-800 truncate">
-                            {packaging.city || 'Nieznane'}
-                          </div>
-                          
-                          {/* Pokazujemy więcej informacji tylko przy najechaniu */}
-                          {hoverPackagingId === packaging.id && (
-                            <div className="absolute z-10 left-0 top-full mt-1 p-3 bg-white rounded-md shadow-lg border border-gray-200 w-64">
-                              <h4 className="font-semibold mb-1">{packaging.client_name}</h4>
-                              
-                              <p className="text-xs text-gray-600 mb-2">
-                                {packaging.city}{packaging.postal_code ? `, ${packaging.postal_code}` : ''}
-                                {packaging.street ? `, ${packaging.street}` : ''}
-                              </p>
-                              
-                              <div className="text-xs text-gray-700 max-h-28 overflow-y-auto">
-                                {packaging.description?.split('\n').map((line, i) => 
-                                  line.trim() && <p key={i} className="mb-1">{line}</p>
-                                )}
+                  {packagings.map((packaging, index) => {
+                    const contactInfo = extractContactInfo(packaging.description);
+                    
+                    return (
+                      <Draggable
+                        key={packaging.id}
+                        draggableId={packaging.id.toString()}
+                        index={index}
+                      >
+                        {(provided, snapshot) => (
+                          <div
+                            ref={provided.innerRef}
+                            {...provided.draggableProps}
+                            {...provided.dragHandleProps}
+                            className={`
+                              relative p-3 border rounded
+                              ${snapshot.isDragging ? 'shadow-lg bg-blue-100 z-10' : 'hover:bg-blue-50 bg-white'}
+                              cursor-grab transition-all
+                            `}
+                            onClick={() => handleShowDetails(packaging)}
+                            onMouseEnter={() => setHoverPackagingId(packaging.id)}
+                            onMouseLeave={() => setHoverPackagingId(null)}
+                          >
+                            <div className="flex justify-between items-start mb-2">
+                              <div className="font-medium text-blue-800 truncate max-w-[80%]">
+                                {packaging.client_name || 'Klient nieznany'}
                               </div>
-                              
-                              <div className="mt-2 text-xs text-blue-600 flex items-center">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
-                                </svg>
-                                Przeciągnij na datę
+                              <div className="bg-blue-100 text-blue-800 text-xs rounded-full px-2 py-0.5 flex items-center">
+                                <MapPin size={10} className="mr-1" />
+                                {packaging.city || 'Nieznane'}
                               </div>
                             </div>
-                          )}
-                        </div>
-                      )}
-                    </Draggable>
-                  ))}
+                            
+                            <div className="text-xs text-gray-600">
+                              {packaging.postal_code && (
+                                <div className="mb-1">
+                                  {packaging.postal_code}{packaging.street ? `, ${packaging.street}` : ''}
+                                </div>
+                              )}
+                            </div>
+                            
+                            {contactInfo.packagingInfo && (
+                              <div className="mt-2 text-xs">
+                                <span className="font-medium text-gray-700">Opakowania: </span>
+                                {truncateText(contactInfo.packagingInfo, 60)}
+                              </div>
+                            )}
+                            
+                            <div className="mt-2 text-xs text-blue-600 flex items-center justify-end">
+                              <Package size={10} className="mr-1" />
+                              <span>Przeciągnij na datę</span>
+                            </div>
+                          </div>
+                        )}
+                      </Draggable>
+                    );
+                  })}
                   {provided.placeholder}
                 </div>
               )}
             </Droppable>
           )}
+        </div>
+      )}
+      
+      {/* Modal ze szczegółami opakowania */}
+      {isDetailModalOpen && activePackaging && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-xl max-w-xl w-full">
+            <div className="flex justify-between items-start mb-4">
+              <h3 className="text-xl font-semibold text-gray-900">
+                {activePackaging.client_name || 'Klient nieznany'}
+              </h3>
+              <button 
+                onClick={() => setIsDetailModalOpen(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                &times;
+              </button>
+            </div>
+            
+            <div className="mb-4">
+              <div className="flex items-center mb-2">
+                <MapPin size={16} className="text-blue-600 mr-2" />
+                <div>
+                  <span className="font-medium">Adres: </span>
+                  {activePackaging.city}{activePackaging.postal_code ? `, ${activePackaging.postal_code}` : ''}
+                  {activePackaging.street ? `, ${activePackaging.street}` : ''}
+                </div>
+              </div>
+              
+              {/* Wyświetlamy dane kontaktowe */}
+              {(() => {
+                const info = extractContactInfo(activePackaging.description);
+                
+                return (
+                  <>
+                    {info.contact && (
+                      <div className="flex items-start mb-2">
+                        <User size={16} className="text-blue-600 mr-2 mt-1" />
+                        <div>
+                          <div className="font-medium">Kontakt:</div>
+                          <div className="whitespace-pre-line">{info.contact}</div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {info.packagingInfo && (
+                      <div className="flex items-start mb-2">
+                        <Package size={16} className="text-blue-600 mr-2 mt-1" />
+                        <div>
+                          <div className="font-medium">Opakowania:</div>
+                          <div className="whitespace-pre-line">{info.packagingInfo}</div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {info.notes && (
+                      <div className="flex items-start mb-2">
+                        <Calendar size={16} className="text-blue-600 mr-2 mt-1" />
+                        <div>
+                          <div className="font-medium">Uwagi:</div>
+                          <div className="whitespace-pre-line">{info.notes}</div>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+            
+            <div className="bg-blue-50 rounded-md p-3 text-sm text-blue-700 mb-4">
+              Aby zaplanować odbiór, przeciągnij opakowanie na datę w kalendarzu
+            </div>
+            
+            <div className="text-right">
+              <button 
+                onClick={() => setIsDetailModalOpen(false)}
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              >
+                Zamknij
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
