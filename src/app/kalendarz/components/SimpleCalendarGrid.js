@@ -80,7 +80,7 @@ export default function SimpleCalendarGrid({
   // Funkcje pomocnicze do wyświetlania informacji o kierowcy i pojeździe
   const getDriverName = (driverId) => {
     const driver = KIEROWCY.find(k => k.id === parseInt(driverId));
-    return driver ? driver.imie : 'Nieznany';
+    return driver ? driver.imie : '';
   };
 
   // Ulepszona funkcja z kompatybilnością wsteczną
@@ -88,17 +88,17 @@ export default function SimpleCalendarGrid({
     // Najpierw sprawdzamy, czy mamy pojazdId
     if (pojazdId) {
       const pojazd = POJAZDY.find(p => p.id === parseInt(pojazdId));
-      return pojazd ? pojazd.tabliceRej : 'Nieznany';
+      return pojazd ? pojazd.tabliceRej : '';
     }
     
     // Jeśli nie mamy pojazdId, ale mamy kierowcaId, użyjmy starego mapowania
     if (kierowcaId) {
       // W starym systemie id kierowcy odpowiadało id pojazdu
       const pojazd = POJAZDY.find(p => p.id === parseInt(kierowcaId));
-      return pojazd ? pojazd.tabliceRej : 'Nieznany';
+      return pojazd ? pojazd.tabliceRej : '';
     }
     
-    return 'Nieznany';
+    return '';
   };
   
   return (
