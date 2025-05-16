@@ -413,9 +413,11 @@ export default function ArchiwumPage() {
         </p>
       </div>
 
-      {/* Filters Section - ulepszona responsywność */}
+      {/* Filters Section - przekształcona na 2 rzędy */}
       <div className="mb-8 bg-white rounded-lg shadow p-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4">
+        <h3 className="text-lg font-semibold mb-4">Filtry</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-4">
+          {/* Pierwszy rząd filtrów */}
           {/* Rok */}
           <div>
             <label htmlFor="yearSelect" className="block text-sm font-medium text-gray-700 mb-1">
@@ -481,12 +483,15 @@ export default function ArchiwumPage() {
               <option value="">Wszyscy kierowcy</option>
               {KIEROWCY.map(kierowca => (
                 <option key={kierowca.id} value={kierowca.id}>
-                  {kierowca.imie} ({kierowca.tabliceRej})
+                  {kierowca.imie}
                 </option>
               ))}
             </select>
           </div>
-          
+        </div>
+        
+        {/* Drugi rząd filtrów */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {/* Osoba zlecająca */}
           <div>
             <label htmlFor="requesterSelect" className="block text-sm font-medium text-gray-700 mb-1">
@@ -525,29 +530,32 @@ export default function ArchiwumPage() {
             </select>
           </div>
           
-          {/* Format eksportu i przycisk */}
+          {/* Format eksportu */}
+          <div>
+            <label htmlFor="exportFormat" className="block text-sm font-medium text-gray-700 mb-1">
+              Format eksportu
+            </label>
+            <select
+              id="exportFormat"
+              value={exportFormat}
+              onChange={(e) => setExportFormat(e.target.value)}
+              className={selectStyles}
+            >
+              <option value="xlsx">Excel (XLSX)</option>
+              <option value="csv">CSV</option>
+            </select>
+          </div>
+          
+          {/* Przycisk eksportu */}
           <div className="flex items-end">
-            <div className="w-2/3 mr-2">
-              <label htmlFor="exportFormat" className="block text-sm font-medium text-gray-700 mb-1">
-                Format
-              </label>
-              <select
-                id="exportFormat"
-                value={exportFormat}
-                onChange={(e) => setExportFormat(e.target.value)}
-                className={selectStyles}
-              >
-                <option value="xlsx">Excel (XLSX)</option>
-                <option value="csv">CSV</option>
-              </select>
-            </div>
             <button
               onClick={exportData}
               disabled={filteredArchiwum.length === 0}
-              className="w-1/3 h-10 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
+              className="w-full py-2 px-4 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
               title="Eksportuj dane"
             >
               <Download size={18} />
+              <span>Eksportuj</span>
             </button>
           </div>
         </div>
