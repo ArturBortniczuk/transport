@@ -120,22 +120,31 @@ export async function POST(request) {
       }, { status: 404 });
     }
     
-    // Dodaj nową ocenę - zmodyfikowana składnia insertu
-    const insertedIds = await db('transport_ratings').insert({
-      transport_id: ratingData.transportId,
-      is_positive: ratingData.isPositive,
-      comment: ratingData.comment || '',
-      rater_email: userId,
-      rater_name: user.name
-    }).returning('id');
+    // Konwersja oceny boolowskiej na numeryczną (dla kompatybilności)
+    const numericRating = ratingData.isPositive ? 5 : 1;
     
-    const id = insertedIds[0];
+    // Dodaj nową ocenę z wartościami dla obu kolumn
+    try {
+      await db('transport_ratings').insert({
+        transport_id: ratingData.transportId,
+        is_positive: ratingData.isPositive,
+        rating: numericRating, // Dodajemy wartość dla kolumny rating
+        comment: ratingData.comment || '',
+        rater_email: userId,
+        rater_name: user.name
+      });
     
-    return NextResponse.json({ 
-      success: true, 
-      id,
-      message: 'Ocena została dodana' 
-    });
+      return NextResponse.json({ 
+        success: true, 
+        message: 'Ocena została dodana' 
+      });
+    } catch (insertError) {
+      console.error('Błąd podczas wstawiania oceny:', insertError);
+      return NextResponse.json({ 
+        success: false, 
+        error: `Błąd podczas wstawiania oceny: ${insertError.message}` 
+      }, { status: 500 });
+    }
   } catch (error) {
     console.error('Error adding transport rating:', error);
     return NextResponse.json({ 
