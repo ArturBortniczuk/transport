@@ -1,7 +1,7 @@
 // src/components/TransportRatingBadge.js
 'use client'
 import { useState, useEffect, useRef } from 'react'
-import { Star } from 'lucide-react'
+import { ThumbsUp, ThumbsDown } from 'lucide-react'
 
 export default function TransportRatingBadge({ transportId, refreshTrigger = 0, onCanBeRatedChange }) {
   const [rating, setRating] = useState(null)
@@ -37,8 +37,7 @@ export default function TransportRatingBadge({ transportId, refreshTrigger = 0, 
         
         if (data.success) {
           setRating({
-            average: data.averageRating,
-            count: data.count
+            isPositive: data.isPositive
           })
           setCanBeRated(data.canBeRated)
           
@@ -88,29 +87,22 @@ export default function TransportRatingBadge({ transportId, refreshTrigger = 0, 
     )
   }
   
-  if (!rating || rating.count === 0) {
+  if (!rating) {
     return (
       <span className="text-gray-400 text-sm flex items-center">
-        <Star size={14} className="mr-1 text-gray-300" />
         Brak oceny
       </span>
     )
   }
   
-  // Określenie koloru na podstawie średniej oceny
-  const getColor = (avg) => {
-    if (avg >= 4.5) return 'bg-green-500'
-    if (avg >= 3.5) return 'bg-green-400'
-    if (avg >= 2.5) return 'bg-yellow-400'
-    if (avg >= 1.5) return 'bg-orange-400'
-    return 'bg-red-500'
-  }
-  
   return (
     <div className="flex items-center">
-      <div className={`flex items-center px-2 py-1 rounded-md ${getColor(rating.average)}`}>
-        <span className="text-white font-medium mr-1">{rating.average.toFixed(1)}</span>
-        <Star size={14} className="text-white fill-white" />
+      <div className={`flex items-center px-2 py-1 rounded-md ${rating.isPositive ? 'bg-green-500' : 'bg-red-500'}`}>
+        {rating.isPositive ? (
+          <ThumbsUp size={16} className="text-white" />
+        ) : (
+          <ThumbsDown size={16} className="text-white" />
+        )}
       </div>
     </div>
   )
