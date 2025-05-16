@@ -5,7 +5,7 @@ import { format } from 'date-fns'
 import { pl } from 'date-fns/locale'
 import { KIEROWCY, RYNKI } from '../kalendarz/constants'
 import * as XLSX from 'xlsx'
-import { ChevronLeft, ChevronRight, FileText, Download, Star, Compass, ChevronDown, MapPin, Truck, Building, Phone, User, Calendar, Info, ExternalLink } from 'lucide-react'
+import { ChevronLeft, ChevronRight, FileText, Download, ThumbsUp, ThumbsDown, Compass, ChevronDown, MapPin, Truck, Building, Phone, User, Calendar, Info, ExternalLink } from 'lucide-react'
 import TransportRating from '@/components/TransportRating'
 import TransportRatingBadge from '@/components/TransportRatingBadge'
 
@@ -23,6 +23,7 @@ export default function ArchiwumPage() {
   const [showRatingModal, setShowRatingModal] = useState(false)
   const [expandedRows, setExpandedRows] = useState({})
   const [ratableTransports, setRatableTransports] = useState({})
+  const [ratingValues, setRatingValues] = useState({})
   
   // Filtry
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
@@ -30,6 +31,7 @@ export default function ArchiwumPage() {
   const [selectedWarehouse, setSelectedWarehouse] = useState('')
   const [selectedDriver, setSelectedDriver] = useState('')
   const [selectedRequester, setSelectedRequester] = useState('')
+  const [selectedRating, setSelectedRating] = useState('all')
   
   // Lista użytkowników (handlowców) do filtrowania
   const [users, setUsers] = useState([])
@@ -61,8 +63,8 @@ export default function ArchiwumPage() {
     }))
   }
 
-  // Funkcja aktualizująca informację o możliwości oceny transportu
-  const handleCanBeRatedChange = (transportId, canBeRated) => {
+  // Funkcja aktualizująca informację o możliwości oceny transportu i jego ocenie
+  const handleCanBeRatedChange = (transportId, canBeRated, isPositive = null) => {
     setRatableTransports(prev => {
       // Jeśli wartość się nie zmieniła, nie aktualizuj stanu
       if (prev[transportId] === canBeRated) return prev
@@ -71,6 +73,14 @@ export default function ArchiwumPage() {
         [transportId]: canBeRated
       }
     })
+    
+    // Zapisujemy również wartość oceny jeśli jest dostępna
+    if (isPositive !== null) {
+      setRatingValues(prev => ({
+        ...prev,
+        [transportId]: { isPositive }
+      }))
+    }
   }
 
   useEffect(() => {
@@ -117,7 +127,7 @@ export default function ArchiwumPage() {
           new Date(b.delivery_date) - new Date(a.delivery_date)
         )
         setArchiwum(sortedTransports)
-        applyFilters(sortedTransports, selectedYear, selectedMonth, selectedWarehouse, selectedDriver, selectedRequester)
+        applyFilters(sortedTransports, selectedYear, selectedMonth, selectedWarehouse, selectedDriver, selectedRequester, selectedRating)
       } else {
         setError('Nie udało się pobrać archiwum transportów')
       }
@@ -134,13 +144,13 @@ export default function ArchiwumPage() {
       <TransportRatingBadge 
         transportId={transportId} 
         refreshTrigger={0} // Statyczna wartość, aby uniknąć ponownego renderowania
-        onCanBeRatedChange={(canBeRated) => handleCanBeRatedChange(transportId, canBeRated)}
+        onCanBeRatedChange={(canBeRated, isPositive) => handleCanBeRatedChange(transportId, canBeRated, isPositive)}
       />
     )
   }
   
   // Funkcja filtrująca transporty
-  const applyFilters = (transports, year, month, warehouse, driver, requester) => {
+  const applyFilters = (transports, year, month, warehouse, driver, requester, rating) => {
     if (!transports) return
     
     const filtered = transports.filter(transport => {
@@ -175,6 +185,20 @@ export default function ArchiwumPage() {
         return false
       }
       
+      // Filtr oceny
+      if (rating !== 'all') {
+        // Najpierw sprawdźmy, czy transport ma już ocenę w stanie lokalnym
+        const hasRating = ratableTransports[transport.id] !== undefined && !ratableTransports[transport.id];
+        
+        if (rating === 'positive' && (!hasRating || !ratingValues[transport.id]?.isPositive)) {
+          return false;
+        } else if (rating === 'negative' && (!hasRating || ratingValues[transport.id]?.isPositive)) {
+          return false;
+        } else if (rating === 'unrated' && hasRating) {
+          return false;
+        }
+      }
+      
       return true
     })
     
@@ -184,8 +208,8 @@ export default function ArchiwumPage() {
 
   // Obsługa zmiany filtrów
   useEffect(() => {
-    applyFilters(archiwum, selectedYear, selectedMonth, selectedWarehouse, selectedDriver, selectedRequester)
-  }, [selectedYear, selectedMonth, selectedWarehouse, selectedDriver, selectedRequester, archiwum])
+    applyFilters(archiwum, selectedYear, selectedMonth, selectedWarehouse, selectedDriver, selectedRequester, selectedRating)
+  }, [selectedYear, selectedMonth, selectedWarehouse, selectedDriver, selectedRequester, selectedRating, archiwum, ratableTransports, ratingValues])
 
   // Funkcja do usuwania transportu
   const handleDeleteTransport = async (id) => {
@@ -206,7 +230,7 @@ export default function ArchiwumPage() {
         // Usuń transport z lokalnego stanu
         const updatedArchiwum = archiwum.filter(transport => transport.id !== id)
         setArchiwum(updatedArchiwum)
-        applyFilters(updatedArchiwum, selectedYear, selectedMonth, selectedWarehouse, selectedDriver, selectedRequester)
+        applyFilters(updatedArchiwum, selectedYear, selectedMonth, selectedWarehouse, selectedDriver, selectedRequester, selectedRating)
         
         setDeleteStatus({ type: 'success', message: 'Transport został usunięty' })
         
@@ -261,7 +285,10 @@ export default function ArchiwumPage() {
         'Nr rejestracyjny': driver ? driver.tabliceRej : '',
         'Status': transport.status || '',
         'Data zakończenia': transport.completed_at ? format(new Date(transport.completed_at), 'dd.MM.yyyy HH:mm', { locale: pl }) : '',
-        'Osoba zlecająca': transport.requester_name || ''
+        'Osoba zlecająca': transport.requester_name || '',
+        'Ocena': ratingValues[transport.id] 
+          ? (ratingValues[transport.id].isPositive ? 'Pozytywna' : 'Negatywna') 
+          : 'Brak oceny'
       }
     })
     
@@ -351,9 +378,9 @@ export default function ArchiwumPage() {
         </p>
       </div>
 
-      {/* Filters Section */}
+      {/* Filters Section - ulepszona responsywność */}
       <div className="mb-8 bg-white rounded-lg shadow p-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-4">
           {/* Rok */}
           <div>
             <label htmlFor="yearSelect" className="block text-sm font-medium text-gray-700 mb-1">
@@ -445,6 +472,24 @@ export default function ArchiwumPage() {
             </select>
           </div>
           
+          {/* Nowy filtr: Ocena */}
+          <div>
+            <label htmlFor="ratingSelect" className="block text-sm font-medium text-gray-700 mb-1">
+              Ocena
+            </label>
+            <select
+              id="ratingSelect"
+              value={selectedRating}
+              onChange={(e) => setSelectedRating(e.target.value)}
+              className={selectStyles}
+            >
+              <option value="all">Wszystkie oceny</option>
+              <option value="positive">Pozytywne</option>
+              <option value="negative">Negatywne</option>
+              <option value="unrated">Nieocenione</option>
+            </select>
+          </div>
+          
           {/* Format eksportu i przycisk */}
           <div className="flex items-end">
             <div className="w-2/3 mr-2">
@@ -483,7 +528,7 @@ export default function ArchiwumPage() {
         </div>
       )}
 
-{/* Lista transportów */}
+      {/* Lista transportów */}
       <div className="space-y-4">
         {currentItems.length > 0 ? (
           currentItems.map((transport) => (
@@ -619,7 +664,7 @@ export default function ArchiwumPage() {
                           className="px-4 py-2 mr-3 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 flex items-center"
                           title="Oceń transport"
                         >
-                          <Star size={16} className="mr-2" />
+                          <ThumbsUp size={16} className="mr-2" />
                           Oceń transport
                         </button>
                       ) : (
@@ -631,7 +676,11 @@ export default function ArchiwumPage() {
                           className="px-4 py-2 mr-3 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-1 flex items-center"
                           title="Zobacz oceny"
                         >
-                          <Star size={16} className="mr-2" />
+                          {ratingValues[transport.id]?.isPositive ? (
+                            <ThumbsUp size={16} className="mr-2" />
+                            ) : (
+                            <ThumbsDown size={16} className="mr-2" />
+                          )}
                           Zobacz oceny
                         </button>
                       )
