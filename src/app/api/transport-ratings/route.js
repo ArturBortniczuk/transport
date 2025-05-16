@@ -120,14 +120,16 @@ export async function POST(request) {
       }, { status: 404 });
     }
     
-    // Dodaj nową ocenę
-    const [id] = await db('transport_ratings').insert({
+    // Dodaj nową ocenę - zmodyfikowana składnia insertu
+    const insertedIds = await db('transport_ratings').insert({
       transport_id: ratingData.transportId,
       is_positive: ratingData.isPositive,
       comment: ratingData.comment || '',
       rater_email: userId,
       rater_name: user.name
     }).returning('id');
+    
+    const id = insertedIds[0];
     
     return NextResponse.json({ 
       success: true, 
