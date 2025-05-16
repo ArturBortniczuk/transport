@@ -141,7 +141,7 @@ const initializeDatabase = async () => {
       await db.schema.createTable('transport_ratings', table => {
         table.increments('id').primary();
         table.integer('transport_id').notNullable().references('id').inTable('transports');
-        table.boolean('is_positive').notNullable(); // Zmieniono z rating na is_positive
+        table.boolean('is_positive').notNullable(); // Nowa kolumna zamiast rating
         table.text('comment');
         table.string('rater_email').notNullable();
         table.string('rater_name');
@@ -150,18 +150,22 @@ const initializeDatabase = async () => {
     } else {
       // Sprawdź, czy kolumna is_positive istnieje
       const hasIsPositive = await db.schema.hasColumn('transport_ratings', 'is_positive');
+      const hasRating = await db.schema.hasColumn('transport_ratings', 'rating');
+      
       if (!hasIsPositive) {
         // Dodaj nową kolumnę
         await db.schema.table('transport_ratings', table => {
-          table.boolean('is_positive');
+          table.boolean('is_positive').defaultTo(true);
         });
         
-        // Migracja danych - konwersja ocen 5-gwiazdkowych na łapki (oceny >= 3 to łapka w górę)
-        const ratings = await db('transport_ratings').select('id', 'rating');
-        for (const rating of ratings) {
-          await db('transport_ratings')
-            .where('id', rating.id)
-            .update({ is_positive: rating.rating >= 3 });
+        // Migracja danych tylko jeśli stara kolumna istnieje
+        if (hasRating) {
+          const ratings = await db('transport_ratings').select('id', 'rating');
+          for (const rating of ratings) {
+            await db('transport_ratings')
+              .where('id', rating.id)
+              .update({ is_positive: rating.rating >= 3 });
+          }
         }
       }
     }
