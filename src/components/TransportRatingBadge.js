@@ -1,4 +1,4 @@
-// src/components/TransportRatingBadge.js
+// src/components/TransportRatingBadge.js - zmodyfikowana wersja
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { ThumbsUp, ThumbsDown } from 'lucide-react'
@@ -36,9 +36,14 @@ export default function TransportRatingBadge({ transportId, refreshTrigger = 0, 
         if (!isMounted.current) return
         
         if (data.success) {
-          setRating({
-            isPositive: data.isPositive
-          })
+          if (data.ratings && data.ratings.length > 0) {
+            setRating({
+              isPositive: data.isPositive
+            })
+          } else {
+            setRating(null) // Brak oceny
+          }
+          
           setCanBeRated(data.canBeRated)
           
           // Oznacz, że dane zostały pobrane
