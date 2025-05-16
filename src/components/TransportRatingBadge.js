@@ -49,14 +49,17 @@ export default function TransportRatingBadge({ transportId, refreshTrigger = 0, 
           // Oznacz, że dane zostały pobrane
           dataFetched.current = true
           
-          // Przekaż informację o możliwości oceny na zewnątrz
+          // Przekaż informację o możliwości oceny i typie oceny na zewnątrz
           if (onCanBeRatedChange) {
-            onCanBeRatedChange(data.canBeRated)
+            onCanBeRatedChange(data.canBeRated, data.ratings && data.ratings.length > 0 ? data.isPositive : null)
           }
           
           // Zapisujemy w localStorage, aby inne komponenty mogły to odczytać
           if (typeof window !== 'undefined') {
             localStorage.setItem(`transport-${transportId}-ratable`, data.canBeRated)
+            if (data.ratings && data.ratings.length > 0) {
+              localStorage.setItem(`transport-${transportId}-rating`, data.isPositive ? 'positive' : 'negative')
+            }
           }
         }
       } catch (error) {
