@@ -14,7 +14,8 @@ export const POJAZDY = [
     { id: 3, tabliceRej: "BI 23003", model: "FIRANKA RENAULT BIAŁYSTOK" },
     { id: 4, tabliceRej: "BI 61620", model: "MAN BIAŁYSTOK STARY" },
     { id: 5, tabliceRej: "BI 609EM", model: "MAN ZIELONKA" },
-    { id: 6, tabliceRej: "BI 517GL", model: "CITROEN ZIELONKA" }
+    { id: 6, tabliceRej: "BI 517GL", model: "CITROEN ZIELONKA" },
+    { id: 7, tabliceRej: "BIA 69444", model: "FIRANKA ZIELONKA" }
 ];
   
   export const RYNKI = [
