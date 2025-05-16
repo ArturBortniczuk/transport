@@ -39,16 +39,13 @@ export async function GET(request) {
     // Informacja czy transport już został oceniony
     const canBeRated = ratings.length === 0;
     
-    // Oblicz średnią ocenę
-    const averageRating = ratings.length > 0 
-      ? ratings.reduce((sum, rating) => sum + rating.rating, 0) / ratings.length
-      : 0;
+    // Sprawdzamy czy ocena jest pozytywna (przy nowym systemie z łapkami zamiast gwiazdek)
+    const isPositive = ratings.length > 0 ? ratings[0].is_positive : null;
     
     return NextResponse.json({ 
       success: true, 
       ratings,
-      averageRating: parseFloat(averageRating.toFixed(1)),
-      count: ratings.length,
+      isPositive,
       canBeRated // Dodajemy informację, czy transport może być oceniony
     });
   } catch (error) {
@@ -78,17 +75,10 @@ export async function POST(request) {
     const ratingData = await request.json();
     
     // Walidacja danych
-    if (!ratingData.transportId || !ratingData.rating) {
+    if (!ratingData.transportId || ratingData.isPositive === undefined) {
       return NextResponse.json({ 
         success: false, 
         error: 'Brakujące dane: wymagane transport ID i ocena' 
-      }, { status: 400 });
-    }
-    
-    if (ratingData.rating < 1 || ratingData.rating > 5) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Ocena musi być liczbą od 1 do 5' 
       }, { status: 400 });
     }
     
@@ -133,7 +123,7 @@ export async function POST(request) {
     // Dodaj nową ocenę
     const [id] = await db('transport_ratings').insert({
       transport_id: ratingData.transportId,
-      rating: ratingData.rating,
+      is_positive: ratingData.isPositive,
       comment: ratingData.comment || '',
       rater_email: userId,
       rater_name: user.name
