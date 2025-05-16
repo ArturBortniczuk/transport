@@ -1,4 +1,4 @@
-// src/components/TransportRating.js
+// src/components/TransportRating.js - zmodyfikowana wersja
 'use client'
 import { useState, useEffect } from 'react'
 import { ThumbsUp, ThumbsDown, X } from 'lucide-react'
@@ -103,6 +103,18 @@ export default function TransportRating({ transportId, onClose }) {
         setSubmitSuccess(true)
         setCanBeRated(false) // Po dodaniu oceny już nie można oceniać
         
+        // Odśwież oceny, aby wyświetlić nową ocenę
+        const fetchUpdatedRatings = async () => {
+          const response = await fetch(`/api/transport-ratings?transportId=${transportId}`)
+          const data = await response.json()
+          
+          if (data.success) {
+            setRatings(data.ratings)
+          }
+        }
+        
+        fetchUpdatedRatings()
+        
         // Wyczyść błędy i ustaw timeout do ukrycia komunikatu sukcesu
         setTimeout(() => {
           setSubmitSuccess(false)
@@ -135,22 +147,10 @@ export default function TransportRating({ transportId, onClose }) {
         // Odśwież listę ocen
         setSubmitSuccess(true)
         setCanBeRated(true) // Po usunięciu oceny można znowu oceniać
+        setRatings([]) // Wyczyść listę ocen
         
         setTimeout(() => {
           setSubmitSuccess(false)
-          // Odśwież oceny
-          const fetchRatings = async () => {
-            const response = await fetch(`/api/transport-ratings?transportId=${transportId}`)
-            const data = await response.json()
-            
-            if (data.success) {
-              setRatings(data.ratings)
-              setIsPositive(data.isPositive)
-              setCanBeRated(data.canBeRated)
-            }
-          }
-          
-          fetchRatings()
         }, 1000)
       } else {
         alert(data.error || 'Nie udało się usunąć oceny')
@@ -297,13 +297,15 @@ export default function TransportRating({ transportId, onClose }) {
               </div>
             )}
             
-            {/* Lista ocen */}
+            {/* Lista ocen - zmieniony nagłówek */}
             <div>
-              <h3 className="font-medium mb-3">Wszystkie oceny</h3>
+              <h3 className="font-medium mb-3">
+                {ratings.length > 0 ? "Ocena" : "Brak oceny"}
+              </h3>
               
               {ratings.length === 0 ? (
                 <div className="text-center text-gray-500 py-6">
-                  Brak ocen dla tego transportu. 
+                  Transport nie został jeszcze oceniony.
                   {canBeRated && " Bądź pierwszy i oceń!"}
                 </div>
               ) : (
