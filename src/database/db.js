@@ -141,12 +141,29 @@ const initializeDatabase = async () => {
       await db.schema.createTable('transport_ratings', table => {
         table.increments('id').primary();
         table.integer('transport_id').notNullable().references('id').inTable('transports');
-        table.integer('rating').notNullable(); // Ocena 1-5
+        table.boolean('is_positive').notNullable(); // Zmieniono z rating na is_positive
         table.text('comment');
-        table.string('rater_email').notNullable(); // Email osoby wystawiającej ocenę
+        table.string('rater_email').notNullable();
         table.string('rater_name');
         table.timestamp('created_at').defaultTo(db.fn.now());
       });
+    } else {
+      // Sprawdź, czy kolumna is_positive istnieje
+      const hasIsPositive = await db.schema.hasColumn('transport_ratings', 'is_positive');
+      if (!hasIsPositive) {
+        // Dodaj nową kolumnę
+        await db.schema.table('transport_ratings', table => {
+          table.boolean('is_positive');
+        });
+        
+        // Migracja danych - konwersja ocen 5-gwiazdkowych na łapki (oceny >= 3 to łapka w górę)
+        const ratings = await db('transport_ratings').select('id', 'rating');
+        for (const rating of ratings) {
+          await db('transport_ratings')
+            .where('id', rating.id)
+            .update({ is_positive: rating.rating >= 3 });
+        }
+      }
     }
     
     // Tabela budów
