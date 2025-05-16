@@ -1,22 +1,20 @@
 // src/components/TransportRating.js
 'use client'
 import { useState, useEffect } from 'react'
-import { Star, StarHalf, X } from 'lucide-react'
+import { ThumbsUp, ThumbsDown, X } from 'lucide-react'
 
 export default function TransportRating({ transportId, onClose }) {
   const [ratings, setRatings] = useState([])
-  const [averageRating, setAverageRating] = useState(0)
-  const [count, setCount] = useState(0)
+  const [isPositive, setIsPositive] = useState(null) // null, true (łapka w górę), false (łapka w dół)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [userRating, setUserRating] = useState(0)
   const [comment, setComment] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState(null)
   const [submitSuccess, setSubmitSuccess] = useState(false)
   const [currentUserEmail, setCurrentUserEmail] = useState(null)
   const [isAdmin, setIsAdmin] = useState(false)
-  const [canBeRated, setCanBeRated] = useState(true) // Stan informujący czy transport może być oceniony
+  const [canBeRated, setCanBeRated] = useState(true)
 
   // Pobierz dane o bieżącym użytkowniku
   useEffect(() => {
@@ -47,15 +45,14 @@ export default function TransportRating({ transportId, onClose }) {
         
         if (data.success) {
           setRatings(data.ratings)
-          setAverageRating(data.averageRating)
-          setCount(data.count)
+          setIsPositive(data.isPositive)
           setCanBeRated(data.canBeRated) // Ustawiamy, czy transport może być oceniony
           
           // Sprawdź czy użytkownik już ocenił ten transport
           if (currentUserEmail) {
             const userRatingObj = data.ratings.find(r => r.rater_email === currentUserEmail)
             if (userRatingObj) {
-              setUserRating(userRatingObj.rating)
+              setIsPositive(userRatingObj.is_positive)
               setComment(userRatingObj.comment || '')
             }
           }
@@ -79,8 +76,8 @@ export default function TransportRating({ transportId, onClose }) {
   const handleSubmitRating = async (e) => {
     e.preventDefault()
     
-    if (userRating < 1) {
-      setSubmitError('Wybierz ocenę od 1 do 5')
+    if (isPositive === null) {
+      setSubmitError('Wybierz ocenę (łapka w górę lub w dół)')
       return
     }
     
@@ -95,7 +92,7 @@ export default function TransportRating({ transportId, onClose }) {
         },
         body: JSON.stringify({
           transportId,
-          rating: userRating,
+          isPositive,
           comment: comment.trim()
         })
       })
@@ -148,8 +145,7 @@ export default function TransportRating({ transportId, onClose }) {
             
             if (data.success) {
               setRatings(data.ratings)
-              setAverageRating(data.averageRating)
-              setCount(data.count)
+              setIsPositive(data.isPositive)
               setCanBeRated(data.canBeRated)
             }
           }
@@ -165,41 +161,42 @@ export default function TransportRating({ transportId, onClose }) {
     }
   }
 
-  // Renderowanie gwiazdek dla danej oceny
-  const renderStars = (rating, interactive = false) => {
-    const stars = []
-    
-    for (let i = 1; i <= 5; i++) {
-      if (interactive) {
-        // Interaktywne gwiazdki do wyboru oceny
-        stars.push(
+  // Renderowanie oceny (łapka w górę/dół)
+  const renderThumb = (positive, interactive = false) => {
+    if (interactive) {
+      // Interaktywne przyciski do wyboru oceny
+      return (
+        <div className="flex space-x-6">
           <button
-            key={i}
             type="button"
-            onClick={() => setUserRating(i)}
-            className={`text-2xl focus:outline-none transition-colors ${
-              i <= userRating ? 'text-yellow-400' : 'text-gray-300'
+            onClick={() => setIsPositive(true)}
+            className={`text-2xl p-3 rounded-full transition-colors ${
+              isPositive === true ? 'bg-green-100 text-green-600' : 'text-gray-400 hover:text-green-600'
             }`}
-            title={`${i} ${i === 1 ? 'gwiazdka' : i < 5 ? 'gwiazdki' : 'gwiazdek'}`}
+            title="Pozytywna ocena"
           >
-            ★
+            <ThumbsUp size={32} />
           </button>
-        )
-      } else {
-        // Statyczne gwiazdki do wyświetlania oceny
-        const filled = Math.min(Math.max(rating - (i - 1), 0), 1)
-        
-        if (filled >= 0.75) {
-          stars.push(<Star key={i} className="text-yellow-400 fill-yellow-400 w-4 h-4" />)
-        } else if (filled >= 0.25) {
-          stars.push(<StarHalf key={i} className="text-yellow-400 fill-yellow-400 w-4 h-4" />)
-        } else {
-          stars.push(<Star key={i} className="text-gray-300 w-4 h-4" />)
-        }
-      }
+          <button
+            type="button"
+            onClick={() => setIsPositive(false)}
+            className={`text-2xl p-3 rounded-full transition-colors ${
+              isPositive === false ? 'bg-red-100 text-red-600' : 'text-gray-400 hover:text-red-600'
+            }`}
+            title="Negatywna ocena"
+          >
+            <ThumbsDown size={32} />
+          </button>
+        </div>
+      )
+    } else {
+      // Statyczne wyświetlanie oceny
+      return positive ? (
+        <ThumbsUp className="text-green-600 w-6 h-6" />
+      ) : (
+        <ThumbsDown className="text-red-600 w-6 h-6" />
+      )
     }
-    
-    return <div className="flex space-x-1">{stars}</div>
   }
 
   if (loading) {
@@ -237,21 +234,15 @@ export default function TransportRating({ transportId, onClose }) {
         ) : (
           <>
             {/* Podsumowanie ocen */}
-            <div className="bg-blue-50 p-4 rounded-md mb-6">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center mb-2 sm:mb-0">
-                  <div className="text-3xl font-bold text-blue-800 mr-3">
-                    {averageRating.toFixed(1)}
-                  </div>
-                  <div className="flex items-center">
-                    {renderStars(averageRating)}
-                    <span className="ml-2 text-sm text-gray-500">
-                      ({count} {count === 1 ? 'ocena' : count < 5 ? 'oceny' : 'ocen'})
-                    </span>
+            {ratings.length > 0 && (
+              <div className="bg-blue-50 p-4 rounded-md mb-6 flex justify-center">
+                <div className="flex items-center justify-center">
+                  <div className={`p-4 rounded-full ${isPositive ? 'bg-green-100' : 'bg-red-100'}`}>
+                    {renderThumb(isPositive)}
                   </div>
                 </div>
               </div>
-            </div>
+            )}
             
             {/* Formularz dodawania oceny - wyświetl tylko jeśli transport może być oceniony */}
             {canBeRated ? (
@@ -259,7 +250,7 @@ export default function TransportRating({ transportId, onClose }) {
                 <h3 className="font-medium mb-3">Oceń transport</h3>
                 <form onSubmit={handleSubmitRating}>
                   <div className="mb-3 flex justify-center">
-                    {renderStars(userRating, true)}
+                    {renderThumb(isPositive, true)}
                   </div>
                   
                   <div className="mb-3">
@@ -291,7 +282,7 @@ export default function TransportRating({ transportId, onClose }) {
                   <div className="flex justify-end">
                     <button
                       type="submit"
-                      disabled={submitting}
+                      disabled={submitting || isPositive === null}
                       className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
                     >
                       {submitting ? 'Zapisywanie...' : 'Zapisz ocenę'}
@@ -320,18 +311,22 @@ export default function TransportRating({ transportId, onClose }) {
                   {ratings.map((rating) => (
                     <div key={rating.id} className="border rounded-md p-4">
                       <div className="flex justify-between items-start">
-                        <div>
-                          <div className="font-medium">{rating.rater_name}</div>
-                          <div className="text-sm text-gray-500">
-                            {new Date(rating.created_at).toLocaleDateString('pl-PL', {
-                              day: '2-digit',
-                              month: '2-digit',
-                              year: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit'
-                            })}
+                        <div className="flex items-start">
+                          <div className={`mr-3 p-1 rounded-full ${rating.is_positive ? 'bg-green-100' : 'bg-red-100'}`}>
+                            {renderThumb(rating.is_positive)}
                           </div>
-                          <div className="mt-1">{renderStars(rating.rating)}</div>
+                          <div>
+                            <div className="font-medium">{rating.rater_name}</div>
+                            <div className="text-sm text-gray-500">
+                              {new Date(rating.created_at).toLocaleDateString('pl-PL', {
+                                day: '2-digit',
+                                month: '2-digit',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </div>
+                          </div>
                         </div>
                         
                         {(currentUserEmail === rating.rater_email || isAdmin) && (
@@ -346,7 +341,7 @@ export default function TransportRating({ transportId, onClose }) {
                       </div>
                       
                       {rating.comment && (
-                        <div className="mt-2 text-gray-700 whitespace-pre-line">
+                        <div className="mt-2 text-gray-700 whitespace-pre-line ml-9">
                           {rating.comment}
                         </div>
                       )}
