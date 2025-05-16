@@ -55,6 +55,25 @@ export default function ArchiwumPage() {
     { value: '11', label: 'Grudzień' }
   ]
 
+  // Ładowanie zapisanych filtrów przy inicjalizacji
+  useEffect(() => {
+    const savedFilters = sessionStorage.getItem('archiveFilters');
+    if (savedFilters) {
+      try {
+        const filters = JSON.parse(savedFilters);
+        setSelectedYear(filters.selectedYear || new Date().getFullYear());
+        setSelectedMonth(filters.selectedMonth || 'all');
+        setSelectedWarehouse(filters.selectedWarehouse || '');
+        setSelectedDriver(filters.selectedDriver || '');
+        setSelectedRequester(filters.selectedRequester || '');
+        setSelectedRating(filters.selectedRating || 'all');
+        setCurrentPage(filters.currentPage || 1);
+      } catch (e) {
+        console.error("Błąd przy ładowaniu zapisanych filtrów:", e);
+      }
+    }
+  }, []);
+
   // Funkcja do przełączania rozwinięcia wiersza
   const toggleRowExpand = (id) => {
     setExpandedRows(prev => ({
@@ -185,17 +204,20 @@ export default function ArchiwumPage() {
         return false
       }
       
-      // Filtr oceny
+      // Filtr oceny - poprawiony
       if (rating !== 'all') {
-        // Najpierw sprawdźmy, czy transport ma już ocenę w stanie lokalnym
+        // Sprawdzamy ocenę transportu na podstawie ratableTransports i ratingValues
         const hasRating = ratableTransports[transport.id] !== undefined && !ratableTransports[transport.id];
         
-        if (rating === 'positive' && (!hasRating || !ratingValues[transport.id]?.isPositive)) {
-          return false;
-        } else if (rating === 'negative' && (!hasRating || ratingValues[transport.id]?.isPositive)) {
-          return false;
-        } else if (rating === 'unrated' && hasRating) {
-          return false;
+        if (rating === 'positive') {
+          // Tylko pozytywne oceny
+          return hasRating && ratingValues[transport.id]?.isPositive === true;
+        } else if (rating === 'negative') {
+          // Tylko negatywne oceny
+          return hasRating && ratingValues[transport.id]?.isPositive === false;
+        } else if (rating === 'unrated') {
+          // Tylko nieocenione transporty
+          return !hasRating || ratableTransports[transport.id];
         }
       }
       
@@ -203,7 +225,6 @@ export default function ArchiwumPage() {
     })
     
     setFilteredArchiwum(filtered)
-    setCurrentPage(1) // Reset to first page when filters change
   }
 
   // Obsługa zmiany filtrów
@@ -350,9 +371,23 @@ export default function ArchiwumPage() {
   const currentItems = filteredArchiwum.slice(indexOfFirstItem, indexOfLastItem)
   const totalPages = Math.ceil(filteredArchiwum.length / itemsPerPage)
 
-  // Zmiana strony
-  const paginate = (pageNumber) => setCurrentPage(pageNumber)
-  
+  // Ulepszona funkcja paginacji z zapisywaniem stanu
+  const paginate = (pageNumber) => {
+    // Zapisujemy aktualny stan filtrów do sessionStorage
+    const filterState = {
+      selectedYear,
+      selectedMonth,
+      selectedWarehouse,
+      selectedDriver,
+      selectedRequester,
+      selectedRating,
+      currentPage: pageNumber
+    };
+    sessionStorage.setItem('archiveFilters', JSON.stringify(filterState));
+    
+    setCurrentPage(pageNumber);
+  };
+
   const selectStyles = "block w-full py-2 pl-3 pr-10 text-base border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
 
   if (loading) {
@@ -380,7 +415,7 @@ export default function ArchiwumPage() {
 
       {/* Filters Section - ulepszona responsywność */}
       <div className="mb-8 bg-white rounded-lg shadow p-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4">
           {/* Rok */}
           <div>
             <label htmlFor="yearSelect" className="block text-sm font-medium text-gray-700 mb-1">
@@ -472,7 +507,7 @@ export default function ArchiwumPage() {
             </select>
           </div>
           
-          {/* Nowy filtr: Ocena */}
+          {/* Ocena */}
           <div>
             <label htmlFor="ratingSelect" className="block text-sm font-medium text-gray-700 mb-1">
               Ocena
@@ -730,19 +765,50 @@ export default function ArchiwumPage() {
             <button
               onClick={() => paginate(Math.max(1, currentPage - 1))}
               disabled={currentPage === 1}
-              className="p-2 rounded-full text-gray-600 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="p-2 rounded-md bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <ChevronLeft size={20} />
             </button>
             
-            <div className="text-sm text-gray-700">
-              Strona {currentPage} z {totalPages}
+            {/* Wyświetlanie numerów stron */}
+            <div className="flex space-x-1">
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                // Logika do wyświetlania stron wokół aktualnej strony
+                let pageNum;
+                if (totalPages <= 5) {
+                  // Jeśli mamy 5 lub mniej stron, wyświetl wszystkie
+                  pageNum = i + 1;
+                } else if (currentPage <= 3) {
+                  // Jeśli jesteśmy blisko początku
+                  pageNum = i + 1;
+                } else if (currentPage >= totalPages - 2) {
+                  // Jeśli jesteśmy blisko końca
+                  pageNum = totalPages - 4 + i;
+                } else {
+                  // W środku - wyświetl 2 strony przed i 2 po aktualnej
+                  pageNum = currentPage - 2 + i;
+                }
+                
+                return (
+                  <button
+                    key={pageNum}
+                    onClick={() => paginate(pageNum)}
+                    className={`w-8 h-8 flex items-center justify-center rounded-md ${
+                      currentPage === pageNum
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                );
+              })}
             </div>
             
             <button
               onClick={() => paginate(Math.min(totalPages, currentPage + 1))}
               disabled={currentPage === totalPages}
-              className="p-2 rounded-full text-gray-600 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="p-2 rounded-md bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <ChevronRight size={20} />
             </button>
