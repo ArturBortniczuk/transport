@@ -151,12 +151,6 @@ export default function Navigation() {
     privateLinks.push({ name: 'Panel Administratora', path: '/admin' });
   }
   
-  // Dodaj link do archiwum spedycji tylko dla pełnego administratora
-  if (isAdmin) {
-    console.log('Dodawanie linku do archiwum spedycji, isAdmin =', isAdmin);
-    privateLinks.push({ name: 'Archiwum Spedycji', path: '/archiwum-spedycji' });
-  }
-
   const navLinks = isLoggedIn ? privateLinks : publicLinks;
   const isActive = (path) => pathname === path;
 
