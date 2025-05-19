@@ -186,7 +186,7 @@ export default function AdminPackagingsPage() {
   }
   
   return (
-    <AdminCheck>
+    <AdminCheck moduleType="packagings">
       <div className="max-w-7xl mx-auto py-8">
         <div className="mb-4">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
