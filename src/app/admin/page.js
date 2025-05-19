@@ -321,6 +321,34 @@ export default function AdminPage() {
                 <div className="bg-gray-50 p-4 rounded-md">
                   <h4 className="font-medium mb-3">Uprawnienia</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                    {/* Uprawnienia do modułu Opakowań */}
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id={`admin-packagings-${user.email}`}
+                        checked={user.permissions?.admin?.packagings || false}
+                        onChange={() => handlePermissionChange(user.email, 'admin', 'packagings')}
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                        disabled={savingUserId === user.email}
+                      />
+                      <label htmlFor={`admin-packagings-${user.email}`} className="text-sm text-gray-700">
+                        Zarządzanie Opakowaniami
+                      </label>
+                    </div>        
+                    {/* Uprawnienia do modułu Budów */}
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id={`admin-constructions-${user.email}`}
+                        checked={user.permissions?.admin?.constructions || false}
+                        onChange={() => handlePermissionChange(user.email, 'admin', 'constructions')}
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                        disabled={savingUserId === user.email}
+                      />
+                      <label htmlFor={`admin-constructions-${user.email}`} className="text-sm text-gray-700">
+                        Zarządzanie Budowami
+                      </label>
+                    </div>
                     {/* Edycja Kalendarza */}
                     <div className="flex items-center space-x-2">
                       <input
