@@ -8,11 +8,15 @@ export default function Navigation() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
-  const [hasAdminAccess, setHasAdminAccess] = useState(false) // Nowy stan dla dostępu do panelu administratora
+  const [adminAccess, setAdminAccess] = useState({
+    isFullAdmin: false,
+    packagings: false,
+    constructions: false
+  })
   const [userRole, setUserRole] = useState(null)
   const [userName, setUserName] = useState('')
   const [showChangePassword, setShowChangePassword] = useState(false)
-  const [lastRefresh, setLastRefresh] = useState(Date.now()) // Dodajemy stan do wymuszenia odświeżenia
+  const [lastRefresh, setLastRefresh] = useState(Date.now())
   const pathname = usePathname()
   const router = useRouter()
 
@@ -57,13 +61,16 @@ export default function Navigation() {
         
         setIsAdmin(adminStatus);
 
-        // Sprawdź uprawnienia administracyjne (dostęp do panelu administratora)
+        // Sprawdź uprawnienia administracyjne
         const permissions = data.user.permissions || {};
-        const hasPartialAdminAccess = 
-          permissions.admin?.packagings === true || 
-          permissions.admin?.constructions === true;
+        const hasPackagingsAccess = permissions.admin?.packagings === true;
+        const hasConstructionsAccess = permissions.admin?.constructions === true;
         
-        setHasAdminAccess(adminStatus || hasPartialAdminAccess);
+        setAdminAccess({
+          isFullAdmin: adminStatus,
+          packagings: adminStatus || hasPackagingsAccess,
+          constructions: adminStatus || hasConstructionsAccess
+        });
         
         console.log('Stan po aktualizacji:', {
           isLoggedIn: true,
@@ -71,13 +78,21 @@ export default function Navigation() {
           originalRole: role,
           userName: data.user.name,
           isAdmin: adminStatus,
-          hasAdminAccess: adminStatus || hasPartialAdminAccess
+          adminAccess: {
+            isFullAdmin: adminStatus,
+            packagings: adminStatus || hasPackagingsAccess,
+            constructions: adminStatus || hasConstructionsAccess
+          }
         });
       } else {
         setUserRole(null);
         setUserName('');
         setIsAdmin(false);
-        setHasAdminAccess(false);
+        setAdminAccess({
+          isFullAdmin: false,
+          packagings: false,
+          constructions: false
+        });
         console.log('Użytkownik niezalogowany');
       }
     } catch (error) {
@@ -123,7 +138,11 @@ export default function Navigation() {
       setUserRole(null);
       setUserName('');
       setIsAdmin(false);
-      setHasAdminAccess(false);
+      setAdminAccess({
+        isFullAdmin: false,
+        packagings: false,
+        constructions: false
+      });
       
       // Emituj zdarzenie zmiany stanu uwierzytelnienia
       window.dispatchEvent(new Event('auth-state-changed'));
@@ -133,6 +152,32 @@ export default function Navigation() {
     } catch (error) {
       console.error('Błąd wylogowania:', error);
     }
+  };
+
+  // Obsługa kliknięcia na link do panelu administratora
+  const handleAdminClick = (e) => {
+    e.preventDefault();
+    
+    // Jeśli pełny administrator, przejdź do głównego panelu
+    if (adminAccess.isFullAdmin) {
+      router.push('/admin');
+      return;
+    }
+    
+    // Jeśli ma tylko uprawnienia do opakowań
+    if (adminAccess.packagings && !adminAccess.constructions) {
+      router.push('/admin/packagings');
+      return;
+    }
+    
+    // Jeśli ma tylko uprawnienia do budów
+    if (adminAccess.constructions && !adminAccess.packagings) {
+      router.push('/admin/constructions');
+      return;
+    }
+    
+    // Jeśli ma uprawnienia do obu, ale nie jest pełnym adminem, przejdź do panelu
+    router.push('/admin');
   };
 
   const publicLinks = [
@@ -145,17 +190,27 @@ export default function Navigation() {
     { name: 'Spedycja', path: '/spedycja' }
   ];
   
-  // Dodaj link do panelu admina dla administratora lub osób z częściowym dostępem
-  if (hasAdminAccess) {
-    console.log('Dodawanie linku do panelu administratora, hasAdminAccess =', hasAdminAccess);
-    privateLinks.push({ name: 'Panel Administratora', path: '/admin' });
+  // Dodaj link do panelu admina, jeśli ma jakiekolwiek uprawnienia administracyjne
+  if (adminAccess.isFullAdmin || adminAccess.packagings || adminAccess.constructions) {
+    console.log('Dodawanie linku do panelu administratora');
+    privateLinks.push({ 
+      name: 'Panel Administratora', 
+      path: '#', // Będziemy obsługiwać kliknięcie przez handleAdminClick
+      onClick: handleAdminClick
+    });
   }
   
+  // Dodaj link do archiwum spedycji tylko dla pełnego administratora
+  if (adminAccess.isFullAdmin) {
+    console.log('Dodawanie linku do archiwum spedycji');
+    privateLinks.push({ name: 'Archiwum Spedycji', path: '/archiwum-spedycji' });
+  }
+
   const navLinks = isLoggedIn ? privateLinks : publicLinks;
   const isActive = (path) => pathname === path;
 
   // Debug - wyświetlamy stan komponentu
-  console.log('Rendering Navigation z:', { isLoggedIn, userRole, isAdmin, hasAdminAccess, userName });
+  console.log('Rendering Navigation z:', { isLoggedIn, userRole, isAdmin, adminAccess, userName });
 
   return (
     <nav className="bg-gradient-to-r from-blue-900 to-blue-800 text-white shadow-lg">
@@ -173,17 +228,31 @@ export default function Navigation() {
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-8">
             {navLinks.map((link) => (
-              <Link
-                key={link.path}
-                href={link.path}
-                className={`${
-                  isActive(link.path)
-                    ? 'text-white border-b-2 border-white'
-                    : 'text-blue-100 hover:text-white'
-                } px-3 py-2 text-sm font-medium transition-custom`}
-              >
-                {link.name}
-              </Link>
+              link.onClick ? (
+                <button
+                  key={link.name}
+                  onClick={link.onClick}
+                  className={`${
+                    pathname.startsWith('/admin')
+                      ? 'text-white border-b-2 border-white'
+                      : 'text-blue-100 hover:text-white'
+                  } px-3 py-2 text-sm font-medium transition-custom`}
+                >
+                  {link.name}
+                </button>
+              ) : (
+                <Link
+                  key={link.path}
+                  href={link.path}
+                  className={`${
+                    isActive(link.path)
+                      ? 'text-white border-b-2 border-white'
+                      : 'text-blue-100 hover:text-white'
+                  } px-3 py-2 text-sm font-medium transition-custom`}
+                >
+                  {link.name}
+                </Link>
+              )
             ))}
             {!isLoggedIn ? (
               <Link
@@ -235,17 +304,31 @@ export default function Navigation() {
           <div className="md:hidden">
             <div className="px-2 pt-2 pb-3 space-y-1">
               {navLinks.map((link) => (
-                <Link
-                  key={link.path}
-                  href={link.path}
-                  className={`${
-                    isActive(link.path)
-                      ? 'bg-blue-700 text-white'
-                      : 'text-blue-100 hover:bg-blue-700 hover:text-white'
-                  } block px-3 py-2 rounded-md text-base font-medium transition-custom`}
-                >
-                  {link.name}
-                </Link>
+                link.onClick ? (
+                  <button
+                    key={link.name}
+                    onClick={link.onClick}
+                    className={`${
+                      pathname.startsWith('/admin')
+                        ? 'bg-blue-700 text-white'
+                        : 'text-blue-100 hover:bg-blue-700 hover:text-white'
+                    } block w-full text-left px-3 py-2 rounded-md text-base font-medium transition-custom`}
+                  >
+                    {link.name}
+                  </button>
+                ) : (
+                  <Link
+                    key={link.path}
+                    href={link.path}
+                    className={`${
+                      isActive(link.path)
+                        ? 'bg-blue-700 text-white'
+                        : 'text-blue-100 hover:bg-blue-700 hover:text-white'
+                    } block px-3 py-2 rounded-md text-base font-medium transition-custom`}
+                  >
+                    {link.name}
+                  </Link>
+                )
               ))}
               {!isLoggedIn ? (
                 <Link
