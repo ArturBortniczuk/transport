@@ -8,6 +8,7 @@ export default function Navigation() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [hasAdminAccess, setHasAdminAccess] = useState(false) // Nowy stan dla dostępu do panelu administratora
   const [userRole, setUserRole] = useState(null)
   const [userName, setUserName] = useState('')
   const [showChangePassword, setShowChangePassword] = useState(false)
@@ -55,18 +56,28 @@ export default function Navigation() {
           data.user.role === 'admin';
         
         setIsAdmin(adminStatus);
+
+        // Sprawdź uprawnienia administracyjne (dostęp do panelu administratora)
+        const permissions = data.user.permissions || {};
+        const hasPartialAdminAccess = 
+          permissions.admin?.packagings === true || 
+          permissions.admin?.constructions === true;
+        
+        setHasAdminAccess(adminStatus || hasPartialAdminAccess);
         
         console.log('Stan po aktualizacji:', {
           isLoggedIn: true,
           userRole: normalizedRole,
           originalRole: role,
           userName: data.user.name,
-          isAdmin: adminStatus
+          isAdmin: adminStatus,
+          hasAdminAccess: adminStatus || hasPartialAdminAccess
         });
       } else {
         setUserRole(null);
         setUserName('');
         setIsAdmin(false);
+        setHasAdminAccess(false);
         console.log('Użytkownik niezalogowany');
       }
     } catch (error) {
@@ -112,6 +123,7 @@ export default function Navigation() {
       setUserRole(null);
       setUserName('');
       setIsAdmin(false);
+      setHasAdminAccess(false);
       
       // Emituj zdarzenie zmiany stanu uwierzytelnienia
       window.dispatchEvent(new Event('auth-state-changed'));
@@ -133,10 +145,15 @@ export default function Navigation() {
     { name: 'Spedycja', path: '/spedycja' }
   ];
   
-  // Dodaj link do panelu admina tylko dla administratora
-  if (isAdmin) {
-    console.log('Dodawanie linku do panelu administratora, isAdmin =', isAdmin);
+  // Dodaj link do panelu admina dla administratora lub osób z częściowym dostępem
+  if (hasAdminAccess) {
+    console.log('Dodawanie linku do panelu administratora, hasAdminAccess =', hasAdminAccess);
     privateLinks.push({ name: 'Panel Administratora', path: '/admin' });
+  }
+  
+  // Dodaj link do archiwum spedycji tylko dla pełnego administratora
+  if (isAdmin) {
+    console.log('Dodawanie linku do archiwum spedycji, isAdmin =', isAdmin);
     privateLinks.push({ name: 'Archiwum Spedycji', path: '/archiwum-spedycji' });
   }
 
@@ -144,7 +161,7 @@ export default function Navigation() {
   const isActive = (path) => pathname === path;
 
   // Debug - wyświetlamy stan komponentu
-  console.log('Rendering Navigation z:', { isLoggedIn, userRole, isAdmin, userName });
+  console.log('Rendering Navigation z:', { isLoggedIn, userRole, isAdmin, hasAdminAccess, userName });
 
   return (
     <nav className="bg-gradient-to-r from-blue-900 to-blue-800 text-white shadow-lg">
