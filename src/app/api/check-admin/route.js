@@ -10,7 +10,7 @@ export async function GET(request) {
     const authToken = request.cookies.get('authToken')?.value;
     
     if (!authToken) {
-      return NextResponse.json({ isAdmin: false });
+      return NextResponse.json({ isAdmin: false, permissions: null });
     }
     
     // Pobierz ID użytkownika z sesji
@@ -21,13 +21,13 @@ export async function GET(request) {
       .first();
     
     if (!session) {
-      return NextResponse.json({ isAdmin: false });
+      return NextResponse.json({ isAdmin: false, permissions: null });
     }
     
-    // Sprawdź czy użytkownik jest adminem
+    // Sprawdź czy użytkownik jest adminem i pobierz jego uprawnienia
     const user = await db('users')
       .where('email', session.user_id)
-      .select('is_admin', 'email')
+      .select('is_admin', 'role', 'permissions', 'email')
       .first();
     
     // Obsłuż różne możliwe formaty wartości boolean
@@ -36,11 +36,33 @@ export async function GET(request) {
       user?.is_admin === 1 || 
       user?.is_admin === 't' || 
       user?.is_admin === 'TRUE' || 
-      user?.is_admin === 'true';
+      user?.is_admin === 'true' ||
+      user?.role === 'admin';
     
-    return NextResponse.json({ isAdmin: isAdminValue });
+    // Parsowanie uprawnień
+    let permissions = {};
+    try {
+      if (user?.permissions) {
+        permissions = JSON.parse(user.permissions);
+      }
+    } catch (error) {
+      console.error('Błąd parsowania uprawnień:', error);
+    }
+    
+    // Jeśli nie ma sekcji admin w uprawnieniach, dodaj ją
+    if (!permissions.admin) {
+      permissions.admin = {
+        packagings: false,
+        constructions: false
+      };
+    }
+    
+    return NextResponse.json({ 
+      isAdmin: isAdminValue,
+      permissions: permissions
+    });
   } catch (error) {
     console.error('Error checking admin status:', error);
-    return NextResponse.json({ isAdmin: false });
+    return NextResponse.json({ isAdmin: false, permissions: null });
   }
 }
