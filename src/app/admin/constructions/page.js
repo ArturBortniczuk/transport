@@ -132,7 +132,7 @@ export default function ConstructionsPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ id }) // Zmienione z query params na JSON w body
+        body: JSON.stringify({ id })
       });
       
       if (!response.ok) {
@@ -222,7 +222,7 @@ export default function ConstructionsPage() {
             </div>
           </div>
           
-          {/* Lista budów */}
+          {/* Lista budów - nowa wersja z poprawionym widokiem */}
           <div className="md:col-span-2">
             <div className="bg-white rounded-lg shadow overflow-hidden">
               <div className="p-6">
@@ -241,54 +241,37 @@ export default function ConstructionsPage() {
                     Brak zdefiniowanych budów. Dodaj pierwszą budowę za pomocą formularza.
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Nazwa budowy
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            MPK
-                          </th>
-                          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Akcje
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {constructions.map((construction) => (
-                          <tr key={construction.id} className="hover:bg-gray-50">
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="text-sm font-medium text-gray-900">
-                                {construction.name}
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="text-sm text-gray-500">
-                                {construction.mpk}
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-center">
-                              <div className="flex justify-center space-x-2">
-                                <button
-                                  onClick={() => handleEdit(construction)}
-                                  className="px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
-                                >
-                                  Edytuj
-                                </button>
-                                <button
-                                  onClick={() => handleDelete(construction.id)}
-                                  className="px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200"
-                                >
-                                  Usuń
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div className="divide-y divide-gray-200">
+                    {constructions.map((construction) => (
+                      <div key={construction.id} className="py-4">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <div className="font-bold text-gray-900">{construction.name}</div>
+                            <div className="mt-1 text-sm text-gray-500">MPK: {construction.mpk}</div>
+                          </div>
+                          <div className="flex space-x-1">
+                            <button
+                              onClick={() => handleEdit(construction)}
+                              className="p-2 text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
+                              title="Edytuj"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                            </button>
+                            <button
+                              onClick={() => handleDelete(construction.id)}
+                              className="p-2 text-red-600 hover:bg-red-50 rounded-full transition-colors"
+                              title="Usuń"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
