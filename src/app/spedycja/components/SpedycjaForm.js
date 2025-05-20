@@ -1012,16 +1012,15 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
             />
           </div>
           
-          {/* Opisz towar - nowa sekcja */}
+          {/* Towar - zmodyfikowany wygląd przycisku */}
           <div>
             <div className="flex justify-between items-center mb-2">
               <label className="block text-sm font-medium">Towar</label>
               <button
                 type="button"
-                className={showGoodsDescription ? buttonClasses.toggleActive : buttonClasses.toggle}
+                className={showGoodsDescription ? buttonClasses.selected : buttonClasses.unselected}
                 onClick={() => setShowGoodsDescription(!showGoodsDescription)}
               >
-                <Info size={16} className="mr-1" />
                 {showGoodsDescription ? 'Ukryj opis towaru' : 'Opisz towar'}
               </button>
             </div>
@@ -1054,8 +1053,24 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
             )}
           </div>
 
+          {/* Adres dostawy z dodanym polem nazwy klienta na początku */}
           <div className="space-y-4">
             <h3 className="text-lg font-medium">Adres dostawy</h3>
+            
+            {/* Nazwa klienta przeniesiona do sekcji adresu dostawy */}
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Nazwa firmy/klienta
+              </label>
+              <input
+                name="clientName"
+                type="text"
+                className="w-full p-2 border rounded-md"
+                defaultValue={initialData?.clientName || ''}
+                placeholder="Nazwa firmy lub odbiorcy"
+              />
+            </div>
+            
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium mb-1">Miasto</label>
