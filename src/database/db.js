@@ -94,7 +94,7 @@ const initializeDatabase = async () => {
         table.integer('vehicle_id'); 
         table.string('status').defaultTo('active');
         table.string('wz_number');
-        table.string('client_name');
+        table.string('client_name');  // Nowe pole dla nazwy klienta/firmy
         table.string('market');
         table.string('loading_level');
         table.text('notes');
@@ -104,6 +104,8 @@ const initializeDatabase = async () => {
         table.string('requester_name');
         table.string('requester_email');
         table.string('mpk');
+        table.text('goods_description');  // Nowe pole dla opisu towaru
+        table.text('responsible_constructions');  // Nowe pole dla odpowiedzialnych budów
       });
     }
 
@@ -179,6 +181,42 @@ const initializeDatabase = async () => {
         table.string('mpk').notNullable();
         table.timestamp('created_at').defaultTo(db.fn.now());
         table.timestamp('updated_at').defaultTo(db.fn.now());
+      });
+    }
+    
+    // Tabela spedycji
+    const spedycjeExists = await db.schema.hasTable('spedycje');
+    if (!spedycjeExists) {
+      await db.schema.createTable('spedycje', table => {
+        table.increments('id').primary();
+        table.string('status').defaultTo('new');
+        table.string('order_number');
+        table.string('created_by');
+        table.string('created_by_email');
+        table.string('responsible_person');
+        table.string('responsible_email');
+        table.string('mpk');
+        table.string('location');
+        table.text('location_data');
+        table.text('delivery_data');
+        table.string('loading_contact');
+        table.string('unloading_contact');
+        table.date('delivery_date');
+        table.string('documents');
+        table.text('notes');
+        table.text('response_data');
+        table.string('completed_by');
+        table.timestamp('created_at').defaultTo(db.fn.now());
+        table.timestamp('completed_at');
+        table.integer('distance_km');
+        table.boolean('order_sent').defaultTo(false);
+        table.timestamp('order_sent_at');
+        table.string('order_sent_by');
+        table.string('order_recipient');
+        table.text('order_data');
+        table.string('client_name');  // Nowe pole dla nazwy klienta/firmy
+        table.text('goods_description');  // Nowe pole dla opisu towaru
+        table.text('responsible_constructions');  // Nowe pole dla odpowiedzialnych budów
       });
     }
 
@@ -316,8 +354,98 @@ const checkTransportsTable = async () => {
       });
       console.log('Dodano kolumnę packaging_id do tabeli transports');
     }
+    
+    // Sprawdź czy nowe kolumny istnieją
+    if (!columnNames.includes('client_name')) {
+      await db.schema.table('transports', table => {
+        table.string('client_name');
+      });
+      console.log('Dodano kolumnę client_name do tabeli transports');
+    }
+    
+    if (!columnNames.includes('goods_description')) {
+      await db.schema.table('transports', table => {
+        table.text('goods_description');
+      });
+      console.log('Dodano kolumnę goods_description do tabeli transports');
+    }
+    
+    if (!columnNames.includes('responsible_constructions')) {
+      await db.schema.table('transports', table => {
+        table.text('responsible_constructions');
+      });
+      console.log('Dodano kolumnę responsible_constructions do tabeli transports');
+    }
   } catch (error) {
     console.error('Błąd sprawdzania tabeli transportów:', error);
+  }
+};
+
+// Funkcja sprawdzająca strukturę tabeli spedycji
+const checkSpedycjeTable = async () => {
+  if (isBuildPhase) {
+    return;
+  }
+  
+  try {
+    // Sprawdź czy tabela spedycje istnieje
+    const spedycjeExists = await db.schema.hasTable('spedycje');
+    if (!spedycjeExists) {
+      // Tabela zostanie utworzona w initializeDatabase
+      return;
+    }
+    
+    // PostgreSQL używa information_schema zamiast SHOW COLUMNS
+    const columns = await db.raw(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'spedycje'
+    `);
+    const columnNames = columns.rows.map(col => col.column_name);
+    
+    // Sprawdź czy kolumna distance_km istnieje
+    if (!columnNames.includes('distance_km')) {
+      await db.schema.table('spedycje', table => {
+        table.integer('distance_km');
+      });
+      console.log('Dodano kolumnę distance_km do tabeli spedycje');
+    }
+    
+    // Sprawdź czy kolumny związane z zamówieniem istnieją
+    if (!columnNames.includes('order_sent')) {
+      await db.schema.table('spedycje', table => {
+        table.boolean('order_sent').defaultTo(false);
+        table.timestamp('order_sent_at');
+        table.string('order_sent_by');
+        table.string('order_recipient');
+        table.text('order_data');
+      });
+      console.log('Dodano kolumny zamówienia do tabeli spedycje');
+    }
+    
+    // Sprawdź czy nowe kolumny istnieją
+    if (!columnNames.includes('client_name')) {
+      await db.schema.table('spedycje', table => {
+        table.string('client_name');
+      });
+      console.log('Dodano kolumnę client_name do tabeli spedycje');
+    }
+    
+    if (!columnNames.includes('goods_description')) {
+      await db.schema.table('spedycje', table => {
+        table.text('goods_description');
+      });
+      console.log('Dodano kolumnę goods_description do tabeli spedycje');
+    }
+    
+    if (!columnNames.includes('responsible_constructions')) {
+      await db.schema.table('spedycje', table => {
+        table.text('responsible_constructions');
+      });
+      console.log('Dodano kolumnę responsible_constructions do tabeli spedycje');
+    }
+  } catch (error) {
+    console.error('Błąd sprawdzania tabeli spedycje:', error);
   }
 };
 
@@ -329,6 +457,7 @@ if (!isBuildPhase) {
       await initializeUsersFromExcel();
       await showAllUsers();
       await checkTransportsTable();
+      await checkSpedycjeTable(); // Dodana nowa funkcja sprawdzająca
     } catch (error) {
       console.error('Błąd inicjalizacji:', error);
     }
