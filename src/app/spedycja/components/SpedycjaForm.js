@@ -988,18 +988,6 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
               </div>
             </div>
           )}
-          
-          {/* Nazwa klienta/producenta - nowe pole */}
-          <div>
-            <label className="block text-sm font-medium mb-1">Nazwa firmy/klienta</label>
-            <input
-              name="clientName"
-              type="text"
-              className="w-full p-2 border rounded-md"
-              defaultValue={initialData?.clientName || ''}
-              placeholder="Nazwa firmy lub odbiorcy"
-            />
-          </div>
 
           <div>
             <label className="block text-sm font-medium mb-1">Numery dokumentów</label>
