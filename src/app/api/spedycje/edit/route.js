@@ -83,8 +83,24 @@ export async function PUT(request) {
       delivery_date: data.deliveryDate,
       documents: data.documents,
       notes: data.notes,
-      distance_km: data.distanceKm || 0
+      distance_km: data.distanceKm || 0,
+      client_name: data.clientName || null, // Nowe pole
+      responsible_person: data.responsiblePerson || null,
+      responsible_email: data.responsibleEmail || null,
+      mpk: data.mpk || ''
     };
+    
+    // Dodanie obsługi opisu towaru
+    if (data.goodsDescription) {
+      dataToUpdate.goods_description = JSON.stringify(data.goodsDescription);
+    }
+    
+    // Dodanie obsługi budów
+    if (data.responsibleConstructions && data.responsibleConstructions.length > 0) {
+      dataToUpdate.responsible_constructions = JSON.stringify(data.responsibleConstructions);
+    } else {
+      dataToUpdate.responsible_constructions = null;
+    }
     
     // Aktualizujemy rekord w bazie
     await db('spedycje')
