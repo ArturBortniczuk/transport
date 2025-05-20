@@ -1,3 +1,4 @@
+// src/app/api/constructions/route.js
 export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
@@ -18,14 +19,33 @@ const validateSession = async (authToken) => {
   return session?.user_id;
 };
 
-// Funkcja sprawdzająca, czy użytkownik jest administratorem
-const isAdmin = async (userId) => {
+// Funkcja sprawdzająca, czy użytkownik ma uprawnienia do zarządzania budowami
+const hasConstructionsAccess = async (userId) => {
+  if (!userId) return false;
+  
   const user = await db('users')
     .where('email', userId)
-    .select('is_admin')
+    .select('is_admin', 'permissions')
     .first();
   
-  return user?.is_admin === true || user?.is_admin === 1;
+  // Sprawdź czy jest adminem
+  const isAdmin = user?.is_admin === true || user?.is_admin === 1 || 
+                  user?.is_admin === 't' || user?.is_admin === 'TRUE' || 
+                  user?.is_admin === 'true';
+  
+  if (isAdmin) return true;
+  
+  // Sprawdź uprawnienia
+  let permissions = {};
+  try {
+    if (user?.permissions) {
+      permissions = JSON.parse(user.permissions);
+    }
+  } catch (error) {
+    console.error('Błąd parsowania uprawnień:', error);
+  }
+  
+  return permissions?.admin?.constructions === true;
 };
 
 // Pobieranie listy budów
@@ -69,12 +89,12 @@ export async function PUT(request) {
       }, { status: 401 });
     }
     
-    // Sprawdź, czy użytkownik jest administratorem
-    const admin = await isAdmin(userId);
+    // Sprawdź, czy użytkownik ma uprawnienia
+    const hasAccess = await hasConstructionsAccess(userId);
     
-    if (!admin) {
+    if (!hasAccess) {
       return NextResponse.json({ 
-        error: 'Brak uprawnień administratora'
+        error: 'Brak uprawnień do zarządzania budowami'
       }, { status: 403 });
     }
     
@@ -111,12 +131,12 @@ export async function POST(request) {
       }, { status: 401 });
     }
     
-    // Sprawdź, czy użytkownik jest administratorem
-    const admin = await isAdmin(userId);
+    // Sprawdź, czy użytkownik ma uprawnienia
+    const hasAccess = await hasConstructionsAccess(userId);
     
-    if (!admin) {
+    if (!hasAccess) {
       return NextResponse.json({ 
-        error: 'Brak uprawnień administratora'
+        error: 'Brak uprawnień do zarządzania budowami'
       }, { status: 403 });
     }
     
@@ -150,7 +170,7 @@ export async function POST(request) {
   }
 }
 
-// Usuwanie budowy
+// Usuwanie budowy - zmieniona metoda, aby przyjmowała id w treści żądania
 export async function DELETE(request) {
   try {
     // Sprawdź autoryzację
@@ -163,17 +183,17 @@ export async function DELETE(request) {
       }, { status: 401 });
     }
     
-    // Sprawdź, czy użytkownik jest administratorem
-    const admin = await isAdmin(userId);
+    // Sprawdź, czy użytkownik ma uprawnienia
+    const hasAccess = await hasConstructionsAccess(userId);
     
-    if (!admin) {
+    if (!hasAccess) {
       return NextResponse.json({ 
-        error: 'Brak uprawnień administratora'
+        error: 'Brak uprawnień do zarządzania budowami'
       }, { status: 403 });
     }
     
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
+    // Pobierz id z treści żądania zamiast z URL
+    const { id } = await request.json();
     
     if (!id) {
       return NextResponse.json({ 
