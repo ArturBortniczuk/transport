@@ -59,10 +59,13 @@ export async function GET(request) {
         table.timestamp('created_at').defaultTo(db.fn.now());
         table.timestamp('completed_at');
         table.integer('distance_km'); // Dodana kolumna do przechowywania odległości
+        table.string('client_name'); // Dodana kolumna na nazwę klienta/odbiorcy
+        table.text('goods_description'); // Dodana kolumna na opis towaru
+        table.text('responsible_constructions'); // Dodana kolumna na odpowiedzialne budowy
       });
     }
     
-    // Sprawdź czy kolumna order_number istnieje, jeśli nie - dodaj ją
+    // Sprawdzanie i dodawanie nowych kolumn, jeśli nie istnieją
     const hasOrderNumberColumn = await db.schema.hasColumn('spedycje', 'order_number');
     if (!hasOrderNumberColumn) {
       await db.schema.table('spedycje', table => {
@@ -70,7 +73,6 @@ export async function GET(request) {
       });
     }
     
-    // Sprawdź czy kolumna distance_km istnieje, jeśli nie - dodaj ją
     const hasDistanceColumn = await db.schema.hasColumn('spedycje', 'distance_km');
     if (!hasDistanceColumn) {
       await db.schema.table('spedycje', table => {
@@ -86,6 +88,28 @@ export async function GET(request) {
         table.string('order_sent_by');
         table.string('order_recipient');
         table.text('order_data');
+      });
+    }
+    
+    // Sprawdź nowe kolumny (dodane)
+    const hasClientNameColumn = await db.schema.hasColumn('spedycje', 'client_name');
+    if (!hasClientNameColumn) {
+      await db.schema.table('spedycje', table => {
+        table.string('client_name');
+      });
+    }
+    
+    const hasGoodsDescriptionColumn = await db.schema.hasColumn('spedycje', 'goods_description');
+    if (!hasGoodsDescriptionColumn) {
+      await db.schema.table('spedycje', table => {
+        table.text('goods_description');
+      });
+    }
+    
+    const hasResponsibleConstructionsColumn = await db.schema.hasColumn('spedycje', 'responsible_constructions');
+    if (!hasResponsibleConstructionsColumn) {
+      await db.schema.table('spedycje', table => {
+        table.text('responsible_constructions');
       });
     }
     
@@ -106,6 +130,7 @@ export async function GET(request) {
     // Przetwarzamy dane przed wysłaniem (parsowanie JSONa)
     const processedData = spedycje.map(item => {
       try {
+        // Parsowanie danych JSON
         if (item.location_data) {
           item.location_data = JSON.parse(item.location_data);
         }
@@ -114,6 +139,12 @@ export async function GET(request) {
         }
         if (item.response_data) {
           item.response_data = JSON.parse(item.response_data);
+        }
+        if (item.goods_description) {
+          item.goods_description = JSON.parse(item.goods_description);
+        }
+        if (item.responsible_constructions) {
+          item.responsible_constructions = JSON.parse(item.responsible_constructions);
         }
       } catch (e) {
         console.error('Error parsing JSON data in spedycje:', e);
@@ -142,7 +173,10 @@ export async function GET(request) {
         completedBy: item.completed_by,
         createdAt: item.created_at,
         completedAt: item.completed_at,
-        distanceKm: item.distance_km
+        distanceKm: item.distance_km,
+        clientName: item.client_name,
+        goodsDescription: item.goods_description,
+        responsibleConstructions: item.responsible_constructions
       };
     });
     
@@ -228,6 +262,17 @@ export async function POST(request) {
     // Sformatuj numer zamówienia
     const formattedOrderNumber = `${orderNumber.toString().padStart(4, '0')}/${month}/${year}`;
     
+    // Przygotowanie danych do zapisania - przetwarzanie nowych pól
+    let goodsDescriptionJson = null;
+    if (spedycjaData.goodsDescription) {
+      goodsDescriptionJson = JSON.stringify(spedycjaData.goodsDescription);
+    }
+    
+    let responsibleConstructionsJson = null;
+    if (spedycjaData.responsibleConstructions && spedycjaData.responsibleConstructions.length > 0) {
+      responsibleConstructionsJson = JSON.stringify(spedycjaData.responsibleConstructions);
+    }
+    
     // Przygotowujemy dane do zapisania
     const dataToSave = {
       status: 'new',
@@ -245,13 +290,16 @@ export async function POST(request) {
       delivery_date: spedycjaData.deliveryDate,
       documents: spedycjaData.documents,
       notes: spedycjaData.notes,
-      distance_km: spedycjaData.distanceKm || 0, // Upewnij się, że to pole jest poprawnie zapisywane
+      distance_km: spedycjaData.distanceKm || 0,
+      client_name: spedycjaData.clientName || '', // Nowe pole
+      goods_description: goodsDescriptionJson, // Nowe pole
+      responsible_constructions: responsibleConstructionsJson, // Nowe pole
       created_at: db.fn.now()
     };
     
     console.log('Dane do zapisania w bazie:', dataToSave);
     
-    // Sprawdź czy tabela istnieje, jeśli nie - utwórz ją
+    // Sprawdź czy tabela istnieje, jeśli nie - utwórz ją z nowymi kolumnami
     const tableExists = await db.schema.hasTable('spedycje');
     if (!tableExists) {
       await db.schema.createTable('spedycje', table => {
@@ -275,24 +323,33 @@ export async function POST(request) {
         table.string('completed_by');
         table.timestamp('created_at').defaultTo(db.fn.now());
         table.timestamp('completed_at');
-        table.integer('distance_km'); // Dodana kolumna do przechowywania odległości
-      });
-    }
-    
-    // Sprawdź czy kolumna order_number istnieje, jeśli nie - dodaj ją
-    const hasOrderNumberColumn = await db.schema.hasColumn('spedycje', 'order_number');
-    if (!hasOrderNumberColumn) {
-      await db.schema.table('spedycje', table => {
-        table.string('order_number');
-      });
-    }
-    
-    // Sprawdź czy kolumna distance_km istnieje, jeśli nie - dodaj ją
-    const hasDistanceColumn = await db.schema.hasColumn('spedycje', 'distance_km');
-    if (!hasDistanceColumn) {
-      await db.schema.table('spedycje', table => {
         table.integer('distance_km');
+        table.string('client_name'); // Nowe pole
+        table.text('goods_description'); // Nowe pole
+        table.text('responsible_constructions'); // Nowe pole
       });
+    } else {
+      // Sprawdź czy nowe kolumny istnieją, jeśli nie - dodaj je
+      const hasClientNameColumn = await db.schema.hasColumn('spedycje', 'client_name');
+      if (!hasClientNameColumn) {
+        await db.schema.table('spedycje', table => {
+          table.string('client_name');
+        });
+      }
+      
+      const hasGoodsDescriptionColumn = await db.schema.hasColumn('spedycje', 'goods_description');
+      if (!hasGoodsDescriptionColumn) {
+        await db.schema.table('spedycje', table => {
+          table.text('goods_description');
+        });
+      }
+      
+      const hasResponsibleConstructionsColumn = await db.schema.hasColumn('spedycje', 'responsible_constructions');
+      if (!hasResponsibleConstructionsColumn) {
+        await db.schema.table('spedycje', table => {
+          table.text('responsible_constructions');
+        });
+      }
     }
     
     // Zapisujemy do bazy danych
