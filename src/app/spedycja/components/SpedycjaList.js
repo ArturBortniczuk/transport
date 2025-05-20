@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { format } from 'date-fns'
 import { pl } from 'date-fns/locale'
 import { generateCMR } from '@/lib/utils/generateCMR'
-import { Truck, Package, MapPin, Phone, FileText, Calendar, DollarSign, User, Clipboard, ArrowRight, ChevronDown, ChevronUp, AlertCircle, Edit, Pencil } from 'lucide-react'
+import { Truck, Package, MapPin, Phone, FileText, Calendar, DollarSign, User, Clipboard, ArrowRight, ChevronDown, ChevronUp, AlertCircle, Edit, Pencil, Building, ShoppingBag, Weight } from 'lucide-react'
 
 export default function SpedycjaList({ 
   zamowienia, 
@@ -12,8 +12,8 @@ export default function SpedycjaList({
   onMarkAsCompleted, 
   onCreateOrder, 
   canSendOrder,
-  onEdit,  // Nowy prop
-  currentUserEmail  // Email zalogowanego użytkownika
+  onEdit,
+  currentUserEmail
 }) {
   const [expandedId, setExpandedId] = useState(null)
 
@@ -39,7 +39,7 @@ export default function SpedycjaList({
   }
   
   const getLoadingCity = (zamowienie) => {
-    if (zamowienie.location === 'Producent' && zamowienie.producerAddress) {
+    if (zamowienie.location === 'Odbiory własne' && zamowienie.producerAddress) {
       return zamowienie.producerAddress.city || '';
     } else if (zamowienie.location === 'Magazyn Białystok') {
       return 'Białystok';
@@ -60,7 +60,7 @@ export default function SpedycjaList({
     let destination = '';
     
     // Ustal miejsce załadunku
-    if (transport.location === 'Producent' && transport.producerAddress) {
+    if (transport.location === 'Odbiory własne' && transport.producerAddress) {
       const addr = transport.producerAddress;
       origin = `${addr.city},${addr.postalCode},${addr.street || ''}`;
     } else if (transport.location === 'Magazyn Białystok') {
@@ -135,6 +135,92 @@ export default function SpedycjaList({
     return zamowienie.status === 'new' && 
            (!zamowienie.response || Object.keys(zamowienie.response).length === 0);
   }
+  
+  // Renderuje info o powiązanych transportach
+  const renderConnectedTransports = (transport) => {
+    if (!transport.response || !transport.response.connectedTransports || 
+        !transport.response.connectedTransports.length) return null;
+    
+    const connectedTransports = transport.response.connectedTransports;
+    
+    return (
+      <div className="mt-4 p-3 bg-indigo-50 border border-indigo-100 rounded-md">
+        <h4 className="font-medium text-indigo-700 mb-2 flex items-center">
+          <Truck size={16} className="mr-2" />
+          Powiązane transporty ({connectedTransports.length})
+        </h4>
+        <div className="space-y-2">
+          {connectedTransports.map((ct, index) => (
+            <div key={ct.id} className="flex justify-between items-center text-sm border-b border-indigo-100 pb-2 last:border-0">
+              <div className="flex-1">
+                <div className="font-medium">
+                  {index+1}. {ct.orderNumber || ct.id} {ct.route && `(${ct.route})`}
+                </div>
+                <div className="text-xs text-indigo-700">
+                  {ct.type === 'loading' ? 'Załadunek' : 'Rozładunek'} • 
+                  <span className="ml-1">MPK: {ct.mpk}</span> •
+                  <span className="ml-1">{ct.responsiblePerson || 'Brak'}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+          
+          {transport.response.costPerTransport && (
+            <div className="text-sm text-indigo-800 mt-2 pt-2 border-t border-indigo-100">
+              <span className="font-medium">Koszt per transport:</span> 
+              <span className="ml-1">{transport.response.costPerTransport} PLN</span>
+              <span className="text-xs text-gray-500 ml-2">
+                (całkowity koszt: {transport.response.deliveryPrice} PLN)
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+  
+  // Renderuje info o odpowiedzialnych budowach
+  const renderResponsibleConstructions = (transport) => {
+    if (!transport.responsibleConstructions || !transport.responsibleConstructions.length) return null;
+    
+    return (
+      <div className="mt-2">
+        <div className="font-medium text-sm">Budowy:</div>
+        <div className="flex flex-wrap gap-2 mt-1">
+          {transport.responsibleConstructions.map(construction => (
+            <div key={construction.id} className="bg-green-50 text-green-700 px-2 py-1 rounded-md text-xs flex items-center">
+              <Building size={12} className="mr-1" />
+              {construction.name}
+              <span className="ml-1 text-green-600">({construction.mpk})</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+  
+  // Renderuje info o towarze
+  const renderGoodsInfo = (transport) => {
+    if (!transport.goodsDescription) return null;
+    
+    return (
+      <div className="mt-3 bg-blue-50 p-2 rounded-md border border-blue-100">
+        <div className="flex items-center text-blue-700 font-medium">
+          <ShoppingBag size={14} className="mr-1" />
+          Towar
+        </div>
+        {transport.goodsDescription.description && (
+          <p className="text-sm mt-1">{transport.goodsDescription.description}</p>
+        )}
+        {transport.goodsDescription.weight && (
+          <p className="text-sm flex items-center mt-1">
+            <Weight size={12} className="mr-1" />
+            Waga: {transport.goodsDescription.weight}
+          </p>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="divide-y">
@@ -163,6 +249,11 @@ export default function SpedycjaList({
                       {getLoadingCity(zamowienie)} 
                       <ArrowRight size={16} className="mx-1 text-gray-500" /> 
                       {getDeliveryCity(zamowienie)}
+                      {zamowienie.clientName && (
+                        <span className="ml-2 text-sm text-gray-600">
+                          ({zamowienie.clientName})
+                        </span>
+                      )}
                     </h3>
                     <p className="text-sm text-gray-500 flex items-center mt-1">
                       <Calendar size={14} className="mr-1" />
@@ -184,6 +275,17 @@ export default function SpedycjaList({
                       {zamowienie.orderNumber && <span className="font-medium mr-2">{zamowienie.orderNumber}</span>}
                       MPK: {zamowienie.mpk}
                     </p>
+                    
+                    {/* Wyświetl informację o budowach */}
+                    {zamowienie.responsibleConstructions && zamowienie.responsibleConstructions.length > 0 && (
+                      <div className="flex items-center mt-1">
+                        <Building size={14} className="mr-1 text-green-600" />
+                        <span className="text-sm text-green-600">
+                          Budowa: {zamowienie.responsibleConstructions[0].name}
+                          {zamowienie.responsibleConstructions.length > 1 && ` +${zamowienie.responsibleConstructions.length - 1}`}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center space-x-2">
@@ -275,6 +377,17 @@ export default function SpedycjaList({
                       <p className="text-sm mb-2"><span className="font-medium">Osoba dodająca:</span> {zamowienie.createdBy || zamowienie.requestedBy}</p>
                       <p className="text-sm mb-2"><span className="font-medium">Osoba odpowiedzialna:</span> {zamowienie.responsiblePerson || zamowienie.createdBy || zamowienie.requestedBy}</p>
                       <p className="text-sm mb-2"><span className="font-medium">Dokumenty:</span> {zamowienie.documents}</p>
+                      
+                      {/* Dodana informacja o nazwie klienta/odbiorcy */}
+                      {zamowienie.clientName && (
+                        <p className="text-sm mb-2"><span className="font-medium">Nazwa klienta/odbiorcy:</span> {zamowienie.clientName}</p>
+                      )}
+                      
+                      {/* Informacje o budowach */}
+                      {renderResponsibleConstructions(zamowienie)}
+                      
+                      {/* Informacja o towarze */}
+                      {renderGoodsInfo(zamowienie)}
                     </div>
 
                     {/* Sekcja 2: Szczegóły załadunku/dostawy */}
@@ -283,7 +396,7 @@ export default function SpedycjaList({
                         <MapPin size={18} className="mr-2" />
                         Szczegóły załadunku
                       </h4>
-                      {zamowienie.location === 'Producent' ? (
+                      {zamowienie.location === 'Odbiory własne' ? (
                         <p className="mb-2">{formatAddress(zamowienie.producerAddress)}</p>
                       ) : (
                         <p className="mb-2">{zamowienie.location}</p>
@@ -417,6 +530,9 @@ export default function SpedycjaList({
                         <Truck size={18} className="mr-2" />
                         Szczegóły realizacji
                       </h4>
+                      
+                      {/* Renderuj informacje o powiązanych transportach */}
+                      {renderConnectedTransports(zamowienie)}
                       
                       {zamowienie.response.completedManually ? (
                         <div className="bg-blue-50 text-blue-800 p-3 rounded-md border border-blue-100 flex items-center">
