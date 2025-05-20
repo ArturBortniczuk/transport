@@ -1,3 +1,4 @@
+// src/app/admin/constructions/page.js
 'use client'
 import { useState, useEffect } from 'react'
 import AdminCheck from '@/components/AdminCheck'
@@ -41,9 +42,9 @@ export default function ConstructionsPage() {
     }));
   };
 
-  // Zmodyfikuj funkcję handleSubmit
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError(null);
     
     try {
       if (editMode) {
@@ -61,8 +62,19 @@ export default function ConstructionsPage() {
         });
         
         if (!response.ok) {
-          throw new Error('Problem z aktualizacją danych');
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Problem z aktualizacją danych');
         }
+        
+        // Aktualizuj lokalny stan
+        setConstructions(constructions.map(construction => 
+          construction.id === editingId 
+            ? { ...construction, name: newConstruction.name, mpk: newConstruction.mpk }
+            : construction
+        ));
+        
+        // Wyczyść formularz
+        resetForm();
       } else {
         // Dodanie nowej budowy
         const response = await fetch('/api/constructions', {
@@ -77,7 +89,8 @@ export default function ConstructionsPage() {
         });
         
         if (!response.ok) {
-          throw new Error('Problem z zapisem danych');
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Problem z zapisem danych');
         }
         
         const data = await response.json();
@@ -85,41 +98,56 @@ export default function ConstructionsPage() {
         // Dodaj nową budowę do lokalnego stanu
         setConstructions([
           ...constructions,
-          { ...newConstruction, id: data.id }
+          { id: data.id, name: newConstruction.name, mpk: newConstruction.mpk }
         ]);
+        
+        // Wyczyść formularz
+        resetForm();
       }
-      
-      resetForm();
-      fetchConstructions(); // Odśwież listę
-      
     } catch (err) {
       setError('Wystąpił błąd podczas zapisywania: ' + err.message);
       console.error('Error saving construction:', err);
     }
   };
   
-  // Zmodyfikuj funkcję handleDelete
+  const handleEdit = (construction) => {
+    setEditMode(true);
+    setEditingId(construction.id);
+    setNewConstruction({
+      name: construction.name,
+      mpk: construction.mpk
+    });
+  };
+  
   const handleDelete = async (id) => {
     if (!confirm('Czy na pewno chcesz usunąć tę budowę?')) {
       return;
     }
     
+    setError(null);
+    
     try {
-      const response = await fetch(`/api/constructions?id=${id}`, {
-        method: 'DELETE'
+      const response = await fetch(`/api/constructions`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ id }) // Zmienione z query params na JSON w body
       });
       
       if (!response.ok) {
-        throw new Error('Problem z usunięciem danych');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Problem z usunięciem danych');
       }
       
+      // Aktualizuj lokalny stan
       setConstructions(constructions.filter(c => c.id !== id));
-      
     } catch (err) {
       setError('Wystąpił błąd podczas usuwania: ' + err.message);
       console.error('Error deleting construction:', err);
     }
   };
+
   const resetForm = () => {
     setNewConstruction({ name: '', mpk: '' });
     setEditMode(false);
@@ -189,12 +217,6 @@ export default function ConstructionsPage() {
                       </button>
                     )}
                   </div>
-                  
-                  {error && (
-                    <div className="mt-4 p-3 bg-red-50 text-red-700 rounded-md">
-                      {error}
-                    </div>
-                  )}
                 </form>
               </div>
             </div>
@@ -205,6 +227,12 @@ export default function ConstructionsPage() {
             <div className="bg-white rounded-lg shadow overflow-hidden">
               <div className="p-6">
                 <h2 className="text-xl font-semibold mb-4">Lista budów</h2>
+                
+                {error && (
+                  <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-md">
+                    {error}
+                  </div>
+                )}
                 
                 {loading ? (
                   <div className="text-center py-4">Ładowanie...</div>
