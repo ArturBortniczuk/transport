@@ -230,13 +230,13 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
       let originLat, originLng, destLat, destLng;
       
       // Ustal współrzędne punktu początkowego
-      if (fromLocation === 'Producent') {
+      if (fromLocation === 'Odbiory własne') {
         const producerCity = document.querySelector('input[name="producerCity"]').value;
         const producerPostalCode = document.querySelector('input[name="producerPostalCode"]').value;
         const producerStreet = document.querySelector('input[name="producerStreet"]').value;
         
         if (!producerCity || !producerPostalCode) {
-          alert('Wprowadź dane adresowe producenta');
+          alert('Wprowadź dane adresowe odbioru własnego');
           setIsCalculatingDistance(false);
           return 0;
         }
@@ -367,7 +367,7 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
       const editedData = {
         location: selectedLocation,
         documents: formData.get('documents'),
-        producerAddress: selectedLocation === 'Producent' ? {
+        producerAddress: selectedLocation === 'Odbiory własne' ? {
           city: formData.get('producerCity'),
           postalCode: formData.get('producerPostalCode'),
           street: formData.get('producerStreet'),
@@ -420,7 +420,7 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
       const data = {
         location: selectedLocation,
         documents: formData.get('documents'),
-        producerAddress: selectedLocation === 'Producent' ? {
+        producerAddress: selectedLocation === 'Odbiory własne' ? {
           city: formData.get('producerCity'),
           postalCode: formData.get('producerPostalCode'),
           street: formData.get('producerStreet'),
@@ -600,17 +600,17 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
               </button>
               <button
                 type="button"
-                className={selectedLocation === 'Producent' ? buttonClasses.selected : buttonClasses.unselected}
-                onClick={() => setSelectedLocation('Producent')}
+                className={selectedLocation === 'Odbiory własne' ? buttonClasses.selected : buttonClasses.unselected}
+                onClick={() => setSelectedLocation('Odbiory własne')}
               >
-                Producent
+                Odbiory własne
               </button>
             </div>
           </div>
 
-          {selectedLocation === 'Producent' && (
+          {selectedLocation === 'Odbiory własne' && (
             <div className="space-y-4">
-              <h3 className="text-lg font-medium">Adres producenta</h3>
+              <h3 className="text-lg font-medium">Adres odbioru własnego</h3>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium mb-1">Miasto</label>
