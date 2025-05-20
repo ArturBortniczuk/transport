@@ -1,6 +1,6 @@
 # Ustaw ścieżki źródłową i docelową
-$source = "C:\Users\Dell\Desktop\transport\my-project\src"
-$destination = "C:\Users\Dell\Desktop\transport\my-project\samepliki"
+$source = "C:\Users\Dell\Desktop\git nowy\transport\src"
+$destination = "C:\Users\Dell\Desktop\git nowy\transport\samepliki"
 
 # Sprawdź, czy folder docelowy istnieje, jeśli nie - utwórz go
 if (-not (Test-Path $destination)) {
@@ -9,23 +9,30 @@ if (-not (Test-Path $destination)) {
 
 # Przeszukaj rekurencyjnie wszystkie pliki w folderze źródłowym
 Get-ChildItem -Path $source -Recurse -File | ForEach-Object {
-    # Pobierz oryginalną nazwę, bazę i rozszerzenie pliku
-    $originalName = $_.Name
-    $baseName = $_.BaseName
-    $extension = $_.Extension
-
-    # Ustal domyślną ścieżkę docelową
-    $destinationFile = Join-Path $destination $originalName
-
+    # Utwórz nazwę pliku ze ścieżką względną
+    $relativePath = $_.FullName.Substring($source.Length + 1)
+    $safeFileName = $relativePath -replace '[\\:]', '_'
+    
+    # Ustal ścieżkę docelową
+    $destinationFile = Join-Path $destination $safeFileName
+    
     # Jeśli plik o tej samej nazwie już istnieje, dodaj licznik
     if (Test-Path $destinationFile) {
         $counter = 1
         do {
-            $newName = "$baseName" + "_" + $counter + "$extension"
-            $destinationFile = Join-Path $destination $newName
+            $destinationFile = Join-Path $destination "$safeFileName`_$counter"
             $counter++
         } while (Test-Path $destinationFile)
     }
+    
     # Skopiuj plik do folderu docelowego
+    # Upewnij się, że folder docelowy istnieje
+    $destinationDir = Split-Path $destinationFile
+    if (-not (Test-Path $destinationDir)) {
+        New-Item -ItemType Directory -Path $destinationDir | Out-Null
+    }
+    
     Copy-Item $_.FullName -Destination $destinationFile
 }
+
+Write-Host "Kopiowanie plików zakończone."
