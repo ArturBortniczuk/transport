@@ -43,12 +43,24 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
       lat: 53.1325, 
       lng: 23.1688, 
       nazwa: 'Magazyn Białystok',
+      adres: {
+        firma: 'Grupa Eltron Sp. z o.o.',
+        ulica: 'ul. Wysockiego 69B',
+        kod: '15-169',
+        miasto: 'Białystok'
+      },
       kolor: '#0000FF'
     },
     zielonka: { 
       lat: 52.3125, 
       lng: 21.1390, 
       nazwa: 'Magazyn Zielonka',
+      adres: {
+        firma: 'Grupa Eltron Sp. z o.o.',
+        ulica: 'ul. Krótka 2',
+        kod: '05-220',
+        miasto: 'Zielonka'
+      },
       kolor: '#FF0000'
     }
   };
@@ -915,6 +927,19 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
           {selectedLocation === 'Odbiory własne' && (
             <div className="space-y-4">
               <h3 className="text-lg font-medium">Adres punktu odbioru</h3>
+              
+              {/* Nazwa firmy w punkcie odbioru - nowe pole */}
+              <div>
+                <label className="block text-sm font-medium mb-1">Nazwa firmy (punkt odbioru)</label>
+                <input
+                  name="sourceClientName"
+                  type="text"
+                  className="w-full p-2 border rounded-md"
+                  defaultValue={initialData?.sourceClientName || ''}
+                  placeholder="Nazwa firmy lub osoby w punkcie odbioru"
+                />
+              </div>
+              
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium mb-1">Miasto</label>
@@ -937,6 +962,7 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
                   />
                 </div>
               </div>
+              
               <div>
                 <label className="block text-sm font-medium mb-1">Ulica i numer</label>
                 <input
@@ -947,6 +973,7 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
                   required
                 />
               </div>
+              
               <div>
                 <label className="block text-sm font-medium mb-1">
                   Lokalizacja na mapie (opcjonalnie)
