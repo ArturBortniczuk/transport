@@ -98,17 +98,35 @@ function addPageContent(doc, transport, safeAddText) {
     baseline: 'top'
   }
 
+  // Definiujemy dane adresowe magazynów
+  const magazynData = {
+    'Magazyn Białystok': {
+      nazwa: 'Magazyn Białystok',
+      adres: 'Grupa Eltron Sp. z o.o.\nul. Wysockiego 69B\n15-169 Białystok'
+    },
+    'Magazyn Zielonka': {
+      nazwa: 'Magazyn Zielonka',
+      adres: 'Grupa Eltron Sp. z o.o.\nul. Krótka 2\n05-220 Zielonka'
+    }
+  };
+
   // 1. Nadawca (pole 1)
-  const sender = transport.location === 'Producent' && transport.producerAddress
-    ? [
-        transport.producerAddress.city,
-        transport.producerAddress.postalCode,
-        transport.producerAddress.street,
-        `Tel: ${transport.loadingContact}`
-      ].join('\n')
-    : `${transport.location}\nTel: ${transport.loadingContact}`
+  let sender;
+  if (transport.location === 'Producent' && transport.producerAddress) {
+    sender = [
+      transport.producerAddress.city,
+      transport.producerAddress.postalCode,
+      transport.producerAddress.street,
+      `Tel: ${transport.loadingContact}`
+    ].join('\n');
+  } else if (magazynData[transport.location]) {
+    // Użyj pełnego adresu magazynu
+    sender = `${magazynData[transport.location].adres}\nTel: ${transport.loadingContact}`;
+  } else {
+    sender = `${transport.location}\nTel: ${transport.loadingContact}`;
+  }
   
-  safeAddText(sender, 20, 32, textOptions)
+  safeAddText(sender, 20, 32, textOptions);
 
   // 2. Odbiorca (pole 2)
   const recipient = [
@@ -116,23 +134,35 @@ function addPageContent(doc, transport, safeAddText) {
     transport.delivery.postalCode,
     transport.delivery.street,
     `Tel: ${transport.unloadingContact}`
-  ].join('\n')
+  ].join('\n');
   
-  safeAddText(recipient, 20, 55, textOptions)
+  safeAddText(recipient, 20, 55, textOptions);
 
   // 3. Miejsce dostawy (pole 3)
   const deliveryAddress = [
     transport.delivery.city,
     transport.delivery.postalCode,
     transport.delivery.street
-  ].join('\n')
-  safeAddText(deliveryAddress, 20, 79, textOptions)
+  ].join('\n');
+  safeAddText(deliveryAddress, 20, 79, textOptions);
 
-  // 4. Data i miejsce załadunku (pole 4)
-  safeAddText(`${transport.location} ${transport.deliveryDate}`, 20, 104, textOptions)
+  // 4. Data i miejsce załadunku (pole 4) - usuwamy godzinę z daty
+  // Formatujemy datę aby usunąć godzinę
+  let deliveryDate = '';
+  if (transport.deliveryDate) {
+    const date = new Date(transport.deliveryDate);
+    deliveryDate = date.toISOString().split('T')[0]; // Format YYYY-MM-DD
+  }
+  
+  let locationText = transport.location;
+  if (magazynData[transport.location]) {
+    locationText = transport.location; // Zostawiamy tylko nazwę magazynu w tym polu
+  }
+  
+  safeAddText(`${locationText} ${deliveryDate}`, 20, 104, textOptions);
 
   // 5. Załączone dokumenty (pole 5)
-  safeAddText(transport.documents, 20, 120, textOptions)
+  safeAddText(transport.documents, 20, 120, textOptions);
 
   // Dane przewoźnika (pole 16)
   if (transport.response) {
@@ -140,12 +170,33 @@ function addPageContent(doc, transport, safeAddText) {
       `${transport.response.driverName} ${transport.response.driverSurname}`,
       `Telefon: ${transport.response.driverPhone}`,
       `Nr pojazdu: ${transport.response.vehicleNumber}`,
-    ].join('\n')
+    ].join('\n');
     
-    safeAddText(carrierInfo, 110, 55, textOptions)
+    safeAddText(carrierInfo, 110, 55, textOptions);
   }
 
-  // MPK (pole 13)
-  safeAddText(`MPK: ${transport.mpk}`, 110, 197, textOptions)
+  // 9. Rodzaj towaru (Nature of the goods)
+  let goodsDescription = '';
+  
+  // Sprawdzamy różne możliwe źródła opisu towaru
+  if (transport.response && transport.response.goodsDescription) {
+    goodsDescription = transport.response.goodsDescription;
+  } else if (transport.goodsDescription && transport.goodsDescription.description) {
+    goodsDescription = transport.goodsDescription.description;
+  }
+  
+  safeAddText(goodsDescription, 20, 495, textOptions);
 
+  // 11. Waga brutto
+  let weight = '';
+  if (transport.response && transport.response.weight) {
+    weight = transport.response.weight;
+  } else if (transport.goodsDescription && transport.goodsDescription.weight) {
+    weight = transport.goodsDescription.weight;
+  }
+  
+  safeAddText(weight, 560, 495, textOptions);
+
+  // MPK (pole 13)
+  safeAddText(`MPK: ${transport.mpk}`, 110, 197, textOptions);
 }
