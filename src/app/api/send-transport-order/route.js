@@ -260,9 +260,9 @@ function generateTransportOrderHTML({ spedycja, producerAddress, delivery, respo
     if (spedycja.location === 'Producent' && producerAddress) {
       return formatAddress(producerAddress);
     } else if (spedycja.location === 'Magazyn Białystok') {
-      return 'Magazyn Białystok';
+      return 'Grupa Eltron Sp z o.o, ul. Wysockiego 69B, 15-169 Białystok';
     } else if (spedycja.location === 'Magazyn Zielonka') {
-      return 'Magazyn Zielonka';
+      return 'Grupa Eltron Sp z o.o, ul. Krótka 2, 05-220 Zielonka';
     }
     return spedycja.location || 'Brak danych';
   };
@@ -440,6 +440,21 @@ function generateTransportOrderHTML({ spedycja, producerAddress, delivery, respo
           margin-bottom: 20px;
           font-weight: bold;
         }
+        .important-info {
+          background-color: #f9f9f9;
+          padding: 12px;
+          border-radius: 5px;
+          border-left: 4px solid #1a71b5;
+        }
+        .important-warning {
+          background-color: #fff2f2;
+          border-left: 4px solid #e74c3c;
+          margin: 20px 0;
+          padding: 15px;
+          border-radius: 5px;
+          font-weight: bold;
+          color: #c0392b;
+        }
       </style>
     </head>
     <body>
@@ -450,6 +465,11 @@ function generateTransportOrderHTML({ spedycja, producerAddress, delivery, respo
       
       <div class="important-note">
         Proszę o dopisanie na fakturze zamieszczonego poniżej numeru MPK oraz numeru zlecenia: ${spedycja.order_number || spedycja.id}.
+      </div>
+      
+      <div class="important-warning">
+        <strong>UWAGA!</strong> Na fakturze musi być podany numer zlecenia: ${spedycja.order_number || spedycja.id}. 
+        Faktury bez numeru zlecenia nie będą opłacane.
       </div>
       
       <div class="section">
@@ -548,6 +568,17 @@ function generateTransportOrderHTML({ spedycja, producerAddress, delivery, respo
         <h2>Uwagi</h2>
         <p>${spedycja.notes || 'Brak uwag'}</p>
         ${responseData.adminNotes ? `<p><strong>Uwagi przewoźnika:</strong> ${responseData.adminNotes}</p>` : ''}
+      </div>
+      
+      <div class="section">
+        <h2>Adres do wysyłki faktur i dokumentów</h2>
+        <p class="important-info">
+          Grupa Eltron Sp. z o.o.<br>
+          ul. Główna 7<br>
+          18-100 Łapy<br>
+          tel. 85 715 27 05<br>
+          www.grupaeltron.pl
+        </p>
       </div>
       
       <div class="footer">
