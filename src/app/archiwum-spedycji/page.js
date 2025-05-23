@@ -3,7 +3,7 @@ import React, { useState, useEffect, Fragment } from 'react'
 import { format } from 'date-fns'
 import { pl } from 'date-fns/locale'
 import * as XLSX from 'xlsx'
-import { ChevronLeft, ChevronRight, FileText, Download, Search, Truck, Package, MapPin, Phone, Calendar, DollarSign, User, Clipboard, ArrowRight, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react'
+import { ChevronLeft, ChevronRight, FileText, Download, Search, Truck, Package, MapPin, Phone, Calendar, DollarSign, User, Clipboard, ArrowRight, ChevronDown, ChevronUp, AlertCircle, Building, ShoppingBag, Weight, Mail, Hash, Clock, CheckCircle } from 'lucide-react'
 
 export default function ArchiwumSpedycjiPage() {
   const [archiwum, setArchiwum] = useState([])
@@ -123,19 +123,29 @@ export default function ArchiwumSpedycjiPage() {
 
   // Funkcja pomocnicza do określania miasta załadunku
   const getLoadingCity = (transport) => {
-    if (transport.location === 'Producent' && transport.producerAddress) {
-      return transport.producerAddress.city || '';
+    if (transport.location === 'Odbiory własne' && transport.producerAddress) {
+      return transport.producerAddress.city || 'Odbiory własne';
     } else if (transport.location === 'Magazyn Białystok') {
       return 'Białystok';
     } else if (transport.location === 'Magazyn Zielonka') {
       return 'Zielonka';
     }
-    return '';
+    return transport.location || 'Nie podano';
   }
   
   // Funkcja pomocnicza do określania miasta dostawy
   const getDeliveryCity = (transport) => {
-    return transport.delivery?.city || '';
+    return transport.delivery?.city || 'Nie podano';
+  }
+
+  // Funkcja pomocnicza do formatowania adresu
+  const formatAddress = (address) => {
+    if (!address) return 'Brak danych';
+    const parts = [];
+    if (address.city) parts.push(address.city);
+    if (address.postalCode) parts.push(address.postalCode);
+    if (address.street) parts.push(address.street);
+    return parts.join(', ') || 'Brak danych';
   }
 
   // Funkcja filtrująca transporty
@@ -251,6 +261,7 @@ export default function ArchiwumSpedycjiPage() {
         'Trasa': `${getLoadingCity(transport)} → ${getDeliveryCity(transport)}`,
         'MPK': transport.mpk || '',
         'Dokumenty': transport.documents || '',
+        'Nazwa klienta': transport.clientName || '',
         'Osoba dodająca': transport.createdBy || '',
         'Osoba odpowiedzialna': transport.responsiblePerson || transport.createdBy || '',
         'Przewoźnik': (transport.response?.driverName || '') + ' ' + (transport.response?.driverSurname || ''),
@@ -258,7 +269,13 @@ export default function ArchiwumSpedycjiPage() {
         'Telefon': transport.response?.driverPhone || '',
         'Cena (PLN)': price,
         'Odległość (km)': distanceKm,
-        'Cena za km (PLN/km)': pricePerKm
+        'Cena za km (PLN/km)': pricePerKm,
+        'Kontakt załadunek': transport.loadingContact || '',
+        'Kontakt rozładunek': transport.unloadingContact || '',
+        'Opis towaru': transport.goodsDescription?.description || '',
+        'Waga towaru': transport.goodsDescription?.weight || '',
+        'Uwagi': transport.notes || '',
+        'Uwagi przewoźnika': transport.response?.adminNotes || ''
       }
     })
     
@@ -282,7 +299,7 @@ export default function ArchiwumSpedycjiPage() {
     let destination = '';
     
     // Ustal miejsce załadunku
-    if (transport.location === 'Producent' && transport.producerAddress) {
+    if (transport.location === 'Odbiory własne' && transport.producerAddress) {
       const addr = transport.producerAddress;
       origin = `${addr.city},${addr.postalCode},${addr.street || ''}`;
     } else if (transport.location === 'Magazyn Białystok') {
@@ -357,6 +374,17 @@ export default function ArchiwumSpedycjiPage() {
     }
   }
 
+  // Formatowanie daty z godziną
+  const formatDateTime = (dateString) => {
+    if (!dateString) return 'Brak daty';
+    try {
+      return format(new Date(dateString), 'dd.MM.yyyy HH:mm', { locale: pl });
+    } catch (error) {
+      console.error("Błąd formatowania daty:", error, dateString);
+      return 'Nieprawidłowa data';
+    }
+  }
+
   // Funkcja sprawdzająca czy data dostawy została zmieniona
   const isDeliveryDateChanged = (transport) => {
     return transport.response && 
@@ -371,6 +399,101 @@ export default function ArchiwumSpedycjiPage() {
     }
     return transport.deliveryDate;
   }
+
+  // Renderuje info o odpowiedzialnych budowach
+  const renderResponsibleConstructions = (transport) => {
+    if (!transport.responsibleConstructions || !transport.responsibleConstructions.length) return null;
+    
+    return (
+      <div className="mt-3">
+        <div className="font-medium text-sm text-green-700 mb-2 flex items-center">
+          <Building size={14} className="mr-1" />
+          Odpowiedzialne budowy:
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {transport.responsibleConstructions.map(construction => (
+            <div key={construction.id} className="bg-green-50 text-green-700 px-2 py-1 rounded-md text-xs flex items-center border border-green-200">
+              <Building size={12} className="mr-1" />
+              {construction.name}
+              <span className="ml-1 text-green-600 font-medium">({construction.mpk})</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+  
+  // Renderuje info o towarze
+  const renderGoodsInfo = (transport) => {
+    if (!transport.goodsDescription) return null;
+    
+    return (
+      <div className="mt-3 bg-blue-50 p-3 rounded-md border border-blue-200">
+        <div className="flex items-center text-blue-700 font-medium mb-2">
+          <ShoppingBag size={16} className="mr-2" />
+          Informacje o towarze
+        </div>
+        {transport.goodsDescription.description && (
+          <div className="text-sm mb-2">
+            <span className="font-medium">Opis:</span> {transport.goodsDescription.description}
+          </div>
+        )}
+        {transport.goodsDescription.weight && (
+          <div className="text-sm flex items-center">
+            <Weight size={12} className="mr-1" />
+            <span className="font-medium">Waga:</span> {transport.goodsDescription.weight}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Renderuje info o powiązanych transportach
+  const renderConnectedTransports = (transport) => {
+    if (!transport.response || !transport.response.connectedTransports || 
+        !transport.response.connectedTransports.length) return null;
+    
+    const connectedTransports = transport.response.connectedTransports;
+    
+    return (
+      <div className="mt-4 p-4 bg-indigo-50 border border-indigo-200 rounded-md">
+        <h4 className="font-medium text-indigo-700 mb-3 flex items-center">
+          <Truck size={16} className="mr-2" />
+          Powiązane transporty ({connectedTransports.length})
+        </h4>
+        <div className="space-y-3">
+          {connectedTransports.map((ct, index) => (
+            <div key={ct.id} className="flex justify-between items-center text-sm bg-white p-2 rounded border border-indigo-100">
+              <div className="flex-1">
+                <div className="font-medium">
+                  {index+1}. {ct.orderNumber || ct.id} {ct.route && `(${ct.route})`}
+                </div>
+                <div className="text-xs text-indigo-700 flex items-center mt-1">
+                  <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                    ct.type === 'loading' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'
+                  }`}>
+                    {ct.type === 'loading' ? 'Załadunek' : 'Rozładunek'}
+                  </span>
+                  <span className="ml-2">MPK: {ct.mpk}</span>
+                  <span className="ml-2">{ct.responsiblePerson || 'Brak'}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+          
+          {transport.response.costPerTransport && (
+            <div className="text-sm text-indigo-800 mt-3 pt-3 border-t border-indigo-200 bg-white p-2 rounded">
+              <span className="font-medium">Koszt per transport:</span> 
+              <span className="ml-1 font-bold">{transport.response.costPerTransport} PLN</span>
+              <span className="text-xs text-gray-500 ml-2">
+                (całkowity koszt: {transport.response.deliveryPrice} PLN)
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
 
   // Paginacja
   const indexOfLastItem = currentPage * itemsPerPage
@@ -389,7 +512,7 @@ export default function ArchiwumSpedycjiPage() {
     return { 
       label: 'Zakończone', 
       className: 'bg-green-100 text-green-800 border border-green-300',
-      icon: <Clipboard size={16} className="mr-1" />
+      icon: <CheckCircle size={16} className="mr-1" />
     };
   }
 
@@ -412,7 +535,7 @@ export default function ArchiwumSpedycjiPage() {
           Archiwum Spedycji
         </h1>
         <p className="text-gray-600">
-          Przeglądaj i filtruj zrealizowane zlecenia spedycyjne
+          Przeglądaj i filtruj zrealizowane zlecenia spedycyjne z pełnymi informacjami
         </p>
       </div>
 
@@ -553,55 +676,115 @@ export default function ArchiwumSpedycjiPage() {
                     onClick={() => setExpandedRowId(expandedRowId === transport.id ? null : transport.id)}
                     className="flex justify-between items-start cursor-pointer"
                   >
-                    <div className="flex items-start">
+                    <div className="flex items-start flex-1">
                       <div className="mr-3 mt-1">
-                        <div className="h-8 w-8 bg-green-100 rounded-full flex items-center justify-center text-green-700">
-                          <Truck size={18} />
+                        <div className="h-10 w-10 bg-green-100 rounded-full flex items-center justify-center text-green-700">
+                          <Truck size={20} />
                         </div>
                       </div>
-                      <div>
-                        <h3 className="font-medium flex items-center">
+                      <div className="flex-1">
+                        <h3 className="font-medium flex items-center text-lg mb-2">
                           {getLoadingCity(transport)} 
-                          <ArrowRight size={16} className="mx-1 text-gray-500" /> 
+                          <ArrowRight size={18} className="mx-2 text-gray-500" /> 
                           {getDeliveryCity(transport)}
+                          {transport.clientName && (
+                            <span className="ml-3 text-sm bg-blue-50 text-blue-700 px-2 py-1 rounded">
+                              {transport.clientName}
+                            </span>
+                          )}
                         </h3>
-                        <div className="flex flex-wrap items-center gap-3 mt-1">
-                          <p className="text-sm text-gray-600 flex items-center">
-                            <Calendar size={14} className="mr-1" />
-                            {formatDate(displayDate)}
-                          </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                          <div className="text-sm text-gray-600 flex items-center">
+                            <Calendar size={14} className="mr-1 text-blue-500" />
+                            <span className="font-medium">Data dostawy:</span>
+                            <span className="ml-1">{formatDate(displayDate)}</span>
+                          </div>
                           
-                          <p className="text-sm text-gray-600 flex items-center">
-                            <FileText size={14} className="mr-1" />
-                            {transport.orderNumber || '-'}
-                          </p>
+                          <div className="text-sm text-gray-600 flex items-center">
+                            <Hash size={14} className="mr-1 text-green-500" />
+                            <span className="font-medium">Nr:</span>
+                            <span className="ml-1 font-mono">{transport.orderNumber || '-'}</span>
+                          </div>
                           
-                          <p className="text-sm text-gray-600 flex items-center">
+                          <div className="text-sm text-gray-600 flex items-center">
+                            <FileText size={14} className="mr-1 text-purple-500" />
                             <span className="font-medium">MPK:</span>
-                            <span className="ml-1">{transport.mpk}</span>
-                          </p>
+                            <span className="ml-1 font-mono">{transport.mpk}</span>
+                          </div>
                           
+                          <div className="text-sm text-gray-600 flex items-center">
+                            <User size={14} className="mr-1 text-orange-500" />
+                            <span className="font-medium">Odpow.:</span>
+                            <span className="ml-1">{transport.responsiblePerson || transport.createdBy || 'Brak'}</span>
+                          </div>
+                        </div>
+                        
+                        {/* Druga linia z dodatkowymi informacjami */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-2">
                           {transport.response && transport.response.deliveryPrice && (
-                            <p className="text-sm flex items-center">
+                            <div className="text-sm flex items-center">
                               <DollarSign size={14} className="mr-1 text-green-600" />
                               <span className="bg-green-50 px-2 py-0.5 rounded font-medium text-green-700">
                                 {transport.response.deliveryPrice} PLN
                               </span>
-                            </p>
+                            </div>
                           )}
                           
-                          <p className="text-sm text-gray-600 flex items-center">
-                            <User size={14} className="mr-1" />
-                            <span className="font-medium">Dla:</span>
-                            <span className="ml-1">{transport.responsiblePerson || transport.createdBy || 'Brak'}</span>
-                          </p>
+                          {(transport.distanceKm || transport.response?.distanceKm) && (
+                            <div className="text-sm flex items-center">
+                              <MapPin size={14} className="mr-1 text-blue-600" />
+                              <span className="bg-blue-50 px-2 py-0.5 rounded font-medium text-blue-700">
+                                {transport.distanceKm || transport.response?.distanceKm || 0} km
+                              </span>
+                            </div>
+                          )}
+                          
+                          <div className="text-sm text-gray-600 flex items-center">
+                            <Clock size={14} className="mr-1 text-gray-500" />
+                            <span className="font-medium">Utworzono:</span>
+                            <span className="ml-1">{formatDate(transport.createdAt)}</span>
+                          </div>
+                          
+                          <div className="text-sm text-gray-600 flex items-center">
+                            <CheckCircle size={14} className="mr-1 text-green-500" />
+                            <span className="font-medium">Zakończono:</span>
+                            <span className="ml-1">{formatDate(transport.completedAt)}</span>
+                          </div>
                         </div>
+                        
+                        {/* Wyświetl informacje o budowach */}
+                        {transport.responsibleConstructions && transport.responsibleConstructions.length > 0 && (
+                          <div className="mt-2">
+                            {renderResponsibleConstructions(transport)}
+                          </div>
+                        )}
+                        
+                        {/* Wyświetl informacje o towarze w skrócie */}
+                        {transport.goodsDescription && (transport.goodsDescription.description || transport.goodsDescription.weight) && (
+                          <div className="mt-2 flex items-center text-sm text-blue-600">
+                            <ShoppingBag size={14} className="mr-1" />
+                            <span className="font-medium">Towar:</span>
+                            {transport.goodsDescription.description && (
+                              <span className="ml-1">{transport.goodsDescription.description.substring(0, 50)}{transport.goodsDescription.description.length > 50 ? '...' : ''}</span>
+                            )}
+                            {transport.goodsDescription.weight && (
+                              <span className="ml-2 bg-blue-50 px-2 py-0.5 rounded text-xs">
+                                {transport.goodsDescription.weight}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center space-x-2 ml-4">
+                      <span className={`px-3 py-1 rounded-full text-sm flex items-center ${statusInfo.className}`}>
+                        {statusInfo.icon}
+                        {statusInfo.label}
+                      </span>
+                      
                       {expandedRowId === transport.id ? (
                         <button 
-                          className="p-1 rounded-full hover:bg-gray-200"
+                          className="p-2 rounded-full hover:bg-gray-200 transition-colors"
                           onClick={(e) => {
                             e.stopPropagation()
                             setExpandedRowId(null)
@@ -611,7 +794,7 @@ export default function ArchiwumSpedycjiPage() {
                         </button>
                       ) : (
                         <button 
-                          className="p-1 rounded-full hover:bg-gray-200"
+                          className="p-2 rounded-full hover:bg-gray-200 transition-colors"
                           onClick={(e) => {
                             e.stopPropagation()
                             setExpandedRowId(transport.id)
@@ -638,48 +821,176 @@ export default function ArchiwumSpedycjiPage() {
 
                   {expandedRowId === transport.id && (
                     <div className="mt-6 pl-4 border-l-4 border-green-200 animate-fadeIn">
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4">
-                        {/* Sekcja 1: Dane zamówienia i zamawiającego */}
-                        <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-                          <h4 className="font-medium mb-3 pb-2 border-b flex items-center text-blue-700">
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+                        {/* Sekcja 1: Podstawowe dane zamówienia */}
+                        <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-lg shadow-sm border border-blue-200">
+                          <h4 className="font-medium mb-3 pb-2 border-b border-blue-300 flex items-center text-blue-700">
                             <FileText size={18} className="mr-2" />
                             Dane zamówienia
                           </h4>
-                          <p className="text-sm mb-2"><span className="font-medium">Numer zamówienia:</span> {transport.orderNumber || '-'}</p>
-                          <p className="text-sm mb-2"><span className="font-medium">MPK:</span> {transport.mpk}</p>
-                          <p className="text-sm mb-2"><span className="font-medium">Osoba dodająca:</span> {transport.createdBy || transport.requestedBy}</p>
-                          <p className="text-sm mb-2"><span className="font-medium">Osoba odpowiedzialna:</span> {transport.responsiblePerson || transport.createdBy || transport.requestedBy}</p>
-                          <p className="text-sm mb-2"><span className="font-medium">Dokumenty:</span> {transport.documents}</p>
+                          <div className="space-y-2 text-sm">
+                            <div><span className="font-medium">Numer zamówienia:</span> <span className="font-mono">{transport.orderNumber || '-'}</span></div>
+                            <div><span className="font-medium">MPK:</span> <span className="font-mono">{transport.mpk}</span></div>
+                            <div><span className="font-medium">Dokumenty:</span> <span>{transport.documents}</span></div>
+                            {transport.clientName && (
+                              <div><span className="font-medium">Nazwa klienta:</span> <span>{transport.clientName}</span></div>
+                            )}
+                            <div><span className="font-medium">Status:</span> 
+                              <span className="ml-1 bg-green-100 text-green-700 px-2 py-0.5 rounded text-xs">
+                                Zakończone
+                              </span>
+                            </div>
+                          </div>
                         </div>
 
-                        {/* Sekcja 2: Szczegóły załadunku/dostawy */}
-                        <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-                          <h4 className="font-medium mb-3 pb-2 border-b flex items-center text-green-700">
+                        {/* Sekcja 2: Osoby i odpowiedzialność */}
+                        <div className="bg-gradient-to-br from-green-50 to-green-100 p-4 rounded-lg shadow-sm border border-green-200">
+                          <h4 className="font-medium mb-3 pb-2 border-b border-green-300 flex items-center text-green-700">
+                            <User size={18} className="mr-2" />
+                            Osoby odpowiedzialne
+                          </h4>
+                          <div className="space-y-2 text-sm">
+                            <div><span className="font-medium">Dodane przez:</span> <span>{transport.createdBy || 'Nie podano'}</span></div>
+                            {transport.createdByEmail && (
+                              <div className="flex items-center">
+                                <Mail size={12} className="mr-1 text-gray-500" />
+                                <span className="text-xs text-gray-600">{transport.createdByEmail}</span>
+                              </div>
+                            )}
+                            <div><span className="font-medium">Odpowiedzialny:</span> <span>{transport.responsiblePerson || transport.createdBy || 'Nie podano'}</span></div>
+                            {transport.responsibleEmail && transport.responsibleEmail !== transport.createdByEmail && (
+                              <div className="flex items-center">
+                                <Mail size={12} className="mr-1 text-gray-500" />
+                                <span className="text-xs text-gray-600">{transport.responsibleEmail}</span>
+                              </div>
+                            )}
+                          </div>
+                          
+                          {/* Informacje o budowach */}
+                          {transport.responsibleConstructions && transport.responsibleConstructions.length > 0 && (
+                            <div className="mt-3 pt-3 border-t border-green-300">
+                              {renderResponsibleConstructions(transport)}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Sekcja 3: Daty i terminy */}
+                        <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-4 rounded-lg shadow-sm border border-purple-200">
+                          <h4 className="font-medium mb-3 pb-2 border-b border-purple-300 flex items-center text-purple-700">
+                            <Calendar size={18} className="mr-2" />
+                            Daty i terminy
+                          </h4>
+                          <div className="space-y-2 text-sm">
+                            <div><span className="font-medium">Data utworzenia:</span> <span>{formatDateTime(transport.createdAt)}</span></div>
+                            <div>
+                              <span className="font-medium">Data dostawy:</span>
+                              {dateChanged ? (
+                                <div className="mt-1">
+                                  <div className="text-xs text-gray-500 line-through">{formatDate(transport.deliveryDate)}</div>
+                                  <div className="bg-yellow-50 px-2 py-1 rounded text-yellow-700 flex items-center">
+                                    <AlertCircle size={12} className="mr-1" />
+                                    {formatDate(transport.response.newDeliveryDate)}
+                                  </div>
+                                </div>
+                              ) : (
+                                <span className="ml-1">{formatDate(transport.deliveryDate)}</span>
+                              )}
+                            </div>
+                            <div><span className="font-medium">Data zakończenia:</span> <span>{formatDateTime(transport.completedAt)}</span></div>
+                          </div>
+                        </div>
+
+                        {/* Sekcja 4: Informacje finansowe */}
+                        <div className="bg-gradient-to-br from-orange-50 to-orange-100 p-4 rounded-lg shadow-sm border border-orange-200">
+                          <h4 className="font-medium mb-3 pb-2 border-b border-orange-300 flex items-center text-orange-700">
+                            <DollarSign size={18} className="mr-2" />
+                            Informacje finansowe
+                          </h4>
+                          <div className="space-y-2 text-sm">
+                            <div><span className="font-medium">Odległość:</span> 
+                              <span className="ml-1 bg-blue-50 px-2 py-0.5 rounded font-medium text-blue-700">
+                                {transport.distanceKm || transport.response?.distanceKm || 0} km
+                              </span>
+                            </div>
+                            {transport.response && transport.response.deliveryPrice && (
+                              <>
+                                <div><span className="font-medium">Cena transportu:</span> 
+                                  <span className="ml-1 bg-green-50 px-2 py-0.5 rounded font-medium text-green-700">
+                                    {transport.response.deliveryPrice} PLN
+                                  </span>
+                                </div>
+                                <div><span className="font-medium">Cena za km:</span> 
+                                  <span className="ml-1 bg-green-50 px-2 py-0.5 rounded font-medium text-green-700">
+                                    {calculatePricePerKm(transport.response.deliveryPrice, transport.distanceKm || transport.response?.distanceKm)} PLN/km
+                                  </span>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Sekcja szczegółów załadunku i dostawy */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                        {/* Szczegóły załadunku */}
+                        <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                          <h4 className="font-medium mb-3 pb-2 border-b flex items-center text-blue-700">
                             <MapPin size={18} className="mr-2" />
                             Szczegóły załadunku
                           </h4>
-                          {transport.location === 'Producent' ? (
-                            <p className="mb-2">{formatAddress(transport.producerAddress)}</p>
-                          ) : (
-                            <p className="mb-2">{transport.location}</p>
-                          )}
-                          <p className="text-sm text-gray-600 mb-3 flex items-center">
-                            <Phone size={14} className="mr-1" />
-                            Kontakt: {transport.loadingContact}
-                          </p>
-                          
-                          <h4 className="font-medium mt-5 mb-3 pb-2 border-b flex items-center text-orange-700">
+                          <div className="space-y-2 text-sm">
+                            <div><span className="font-medium">Lokalizacja:</span> <span>{transport.location}</span></div>
+                            {transport.location === 'Odbiory własne' && transport.producerAddress ? (
+                              <>
+                                <div><span className="font-medium">Adres:</span> <span>{formatAddress(transport.producerAddress)}</span></div>
+                                {transport.producerAddress.pinLocation && (
+                                  <div><span className="font-medium">Pineska mapy:</span> 
+                                    <a href={transport.producerAddress.pinLocation} target="_blank" rel="noopener noreferrer" className="ml-1 text-blue-500 hover:underline">
+                                      Zobacz lokalizację
+                                    </a>
+                                  </div>
+                                )}
+                              </>
+                            ) : (
+                              <div><span className="font-medium">Adres:</span> <span>{transport.location}</span></div>
+                            )}
+                            <div className="flex items-center">
+                              <Phone size={14} className="mr-1 text-green-500" />
+                              <span className="font-medium">Kontakt:</span> 
+                              <a href={`tel:${transport.loadingContact}`} className="ml-1 text-blue-500 hover:underline">
+                                {transport.loadingContact}
+                              </a>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Szczegóły dostawy */}
+                        <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                          <h4 className="font-medium mb-3 pb-2 border-b flex items-center text-green-700">
                             <MapPin size={18} className="mr-2" />
                             Szczegóły dostawy
                           </h4>
-                          <p className="mb-2">{formatAddress(transport.delivery)}</p>
-                          <p className="text-sm text-gray-600 mb-3 flex items-center">
-                            <Phone size={14} className="mr-1" />
-                            Kontakt: {transport.unloadingContact}
-                          </p>
-                   {/* Link do Google Maps */}
+                          <div className="space-y-2 text-sm">
+                            <div><span className="font-medium">Adres:</span> <span>{formatAddress(transport.delivery)}</span></div>
+                            {transport.delivery?.pinLocation && (
+                              <div><span className="font-medium">Pineska mapy:</span> 
+                                <a href={transport.delivery.pinLocation} target="_blank" rel="noopener noreferrer" className="ml-1 text-blue-500 hover:underline">
+                                  Zobacz lokalizację
+                                </a>
+                              </div>
+                            )}
+                            <div className="flex items-center">
+                              <Phone size={14} className="mr-1 text-green-500" />
+                              <span className="font-medium">Kontakt:</span> 
+                              <a href={`tel:${transport.unloadingContact}`} className="ml-1 text-blue-500 hover:underline">
+                                {transport.unloadingContact}
+                              </a>
+                            </div>
+                          </div>
+                          
+                          {/* Link do Google Maps */}
                           {generateGoogleMapsLink(transport) && (
-                            <div className="mt-4">
+                            <div className="mt-3">
                               <a 
                                 href={generateGoogleMapsLink(transport)} 
                                 target="_blank" 
@@ -693,170 +1004,124 @@ export default function ArchiwumSpedycjiPage() {
                             </div>
                           )}
                         </div>
-
-                        {/* Sekcja 3: Informacje o transporcie */}
-                        <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-                          <h4 className="font-medium mb-3 pb-2 border-b flex items-center text-purple-700">
-                            <Truck size={18} className="mr-2" />
-                            Informacje o transporcie
-                          </h4>
-                          
-                          {/* Data dostawy z wyróżnieniem, jeśli zmieniona */}
-                          <div className="text-sm mb-2">
-                            <div className="flex items-center">
-                              <Calendar size={14} className="mr-2 text-gray-500" />
-                              <span className="font-medium">Data dostawy:</span>
-                            </div>
-                            
-                            {dateChanged ? (
-                              <div className="ml-7 mt-1 p-2 bg-yellow-50 rounded-md border border-yellow-200">
-                                <div className="flex items-center text-yellow-800">
-                                  <AlertCircle size={14} className="mr-1" />
-                                  <span className="font-medium">Uwaga: Data została zmieniona!</span>
-                                </div>
-                                <div className="mt-1 flex items-center">
-                                  <span className="text-gray-500">Data pierwotna:</span>
-                                  <span className="ml-1 line-through text-gray-500">{formatDate(transport.deliveryDate)}</span>
-                                </div>
-                                <div className="mt-1 flex items-center">
-                                  <span className="text-gray-800 font-medium">Data aktualna:</span>
-                                  <span className="ml-1 font-medium text-green-700">{formatDate(transport.response.newDeliveryDate)}</span>
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="ml-7 mt-1">
-                                {formatDate(transport.deliveryDate)}
-                              </div>
-                            )}
-                          </div>
-                          
-                          <p className="text-sm mb-2 flex items-center">
-                            <Calendar size={14} className="mr-2 text-gray-500" />
-                            <span className="font-medium">Data dodania:</span> {formatDate(transport.createdAt)}
-                          </p>
-                          
-                          <p className="text-sm mb-2 flex items-center">
-                            <Calendar size={14} className="mr-2 text-gray-500" />
-                            <span className="font-medium">Data realizacji:</span> {formatDate(transport.completedAt || transport.createdAt)}
-                          </p>
-                          
-                          <p className="text-sm mb-2 flex items-center">
-                            <MapPin size={14} className="mr-2 text-gray-500" />
-                            <span className="font-medium">Odległość:</span> 
-                            <span className="bg-blue-50 px-2 py-0.5 rounded ml-1 font-medium">
-                              {transport.distanceKm || '0'} km
-                            </span>
-                          </p>
-                          
-                          {transport.response && transport.response.deliveryPrice && (
-                            <>
-                              <p className="text-sm mb-2 flex items-center">
-                                <DollarSign size={14} className="mr-2 text-gray-500" />
-                                <span className="font-medium">Cena transportu:</span> 
-                                <span className="bg-green-50 px-2 py-0.5 rounded ml-1 font-medium">
-                                  {transport.response.deliveryPrice} PLN
-                                </span>
-                              </p>
-                              <p className="text-sm mb-2 flex items-center">
-                                <DollarSign size={14} className="mr-2 text-gray-500" />
-                                <span className="font-medium">Cena za km:</span> 
-                                <span className="bg-green-50 px-2 py-0.5 rounded ml-1 font-medium">
-                                  {(transport.response.deliveryPrice / (transport.distanceKm || 1)).toFixed(2)} PLN/km
-                                </span>
-                              </p>
-                            </>
-                          )}
-                          
-                          {transport.notes && (
-                            <div className="mt-3 bg-gray-50 p-2 rounded-md">
-                              <p className="text-sm"><span className="font-medium">Uwagi:</span> {transport.notes}</p>
-                            </div>
-                          )}
-                        </div>
                       </div>
 
+                      {/* Informacje o towarze */}
+                      {transport.goodsDescription && (
+                        <div className="mb-6">
+                          {renderGoodsInfo(transport)}
+                        </div>
+                      )}
+
+                      {/* Uwagi */}
+                      {transport.notes && (
+                        <div className="mb-6 bg-gray-50 p-4 rounded-lg border border-gray-200">
+                          <h4 className="font-medium mb-2 text-gray-700 flex items-center">
+                            <FileText size={16} className="mr-2" />
+                            Uwagi do zlecenia
+                          </h4>
+                          <p className="text-sm text-gray-600">{transport.notes}</p>
+                        </div>
+                      )}
+
+                      {/* Szczegóły realizacji */}
                       {transport.response && (
-                        <div className="mt-4 bg-gray-50 p-5 rounded-lg border border-gray-200 shadow-sm">
-                          <h4 className="font-medium mb-3 pb-2 border-b border-gray-200 flex items-center text-gray-800">
+                        <div className="bg-gray-50 p-5 rounded-lg border border-gray-200 shadow-sm">
+                          <h4 className="font-medium mb-4 pb-2 border-b border-gray-300 flex items-center text-gray-800">
                             <Truck size={18} className="mr-2" />
-                            Szczegóły realizacji
+                            Szczegóły realizacji transportu
                           </h4>
                           
+                          {/* Renderuj informacje o powiązanych transportach */}
+                          {renderConnectedTransports(transport)}
+                          
                           {transport.response.completedManually ? (
-                            <div className="bg-blue-50 text-blue-800 p-3 rounded-md border border-blue-100 flex items-center">
+                            <div className="bg-blue-50 text-blue-800 p-4 rounded-md border border-blue-200 flex items-center">
                               <Clipboard size={18} className="mr-2" />
-                              Zamówienie zostało ręcznie oznaczone jako zrealizowane.
+                              <div>
+                                <div className="font-medium">Zakończone ręcznie przez administratora</div>
+                                <div className="text-sm mt-1">
+                                  Zakończone przez: {transport.response.completedBy} | 
+                                  Data: {formatDateTime(transport.response.completedAt)}
+                                </div>
+                              </div>
                             </div>
                           ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                               {/* Informacje o przewoźniku */}
-                              <div className="bg-white p-3 rounded-md shadow-sm border border-gray-100">
-                                <h5 className="text-sm font-medium mb-2 pb-1 border-b flex items-center text-blue-600">
+                              <div className="bg-white p-4 rounded-md shadow-sm border border-gray-200">
+                                <h5 className="text-sm font-medium mb-3 pb-1 border-b flex items-center text-blue-600">
                                   <User size={14} className="mr-1" />
                                   Dane przewoźnika
                                 </h5>
-                                <p className="text-sm mb-1.5"><span className="font-medium">Kierowca:</span> {transport.response.driverName} {transport.response.driverSurname}</p>
-                                <p className="text-sm mb-1.5"><span className="font-medium">Telefon:</span> {transport.response.driverPhone}</p>
-                                <p className="text-sm mb-1.5"><span className="font-medium">Numery auta:</span> {transport.response.vehicleNumber}</p>
+                                <div className="space-y-2 text-sm">
+                                  <div><span className="font-medium">Kierowca:</span> <span>{transport.response.driverName} {transport.response.driverSurname}</span></div>
+                                  <div className="flex items-center">
+                                    <Phone size={12} className="mr-1 text-green-500" />
+                                    <span className="font-medium">Telefon:</span> 
+                                    <a href={`tel:${transport.response.driverPhone}`} className="ml-1 text-blue-500 hover:underline">
+                                      {transport.response.driverPhone}
+                                    </a>
+                                  </div>
+                                  <div><span className="font-medium">Numer auta:</span> <span className="font-mono">{transport.response.vehicleNumber}</span></div>
+                                </div>
                               </div>
                               
                               {/* Informacje o kosztach */}
-                              <div className="bg-white p-3 rounded-md shadow-sm border border-gray-100">
-                                <h5 className="text-sm font-medium mb-2 pb-1 border-b flex items-center text-green-600">
+                              <div className="bg-white p-4 rounded-md shadow-sm border border-gray-200">
+                                <h5 className="text-sm font-medium mb-3 pb-1 border-b flex items-center text-green-600">
                                   <DollarSign size={14} className="mr-1" />
                                   Dane finansowe
                                 </h5>
-                                <p className="text-sm mb-1.5"><span className="font-medium">Cena:</span> 
-                                  <span className="bg-green-50 px-2 py-0.5 rounded ml-1">
-                                    {transport.response.deliveryPrice} PLN
-                                  </span>
-                                </p>
-                                <p className="text-sm mb-1.5"><span className="font-medium">Odległość:</span> {transport.distanceKm || 'N/A'} km</p>
-                                {transport.distanceKm > 0 && transport.response.deliveryPrice > 0 && (
-                                  <p className="text-sm mb-1.5"><span className="font-medium">Koszt za km:</span> 
-                                    <span className="bg-green-50 px-2 py-0.5 rounded ml-1">
-                                      {(transport.response.deliveryPrice / transport.distanceKm).toFixed(2)} PLN/km
+                                <div className="space-y-2 text-sm">
+                                  <div><span className="font-medium">Cena:</span> 
+                                    <span className="ml-1 bg-green-50 px-2 py-0.5 rounded font-medium text-green-700">
+                                      {transport.response.deliveryPrice} PLN
                                     </span>
-                                  </p>
-                                )}
+                                  </div>
+                                  <div><span className="font-medium">Odległość:</span> <span>{transport.distanceKm || transport.response?.distanceKm || 'N/A'} km</span></div>
+                                  {(transport.distanceKm || transport.response?.distanceKm) > 0 && transport.response.deliveryPrice > 0 && (
+                                    <div><span className="font-medium">Koszt za km:</span> 
+                                      <span className="ml-1 bg-green-50 px-2 py-0.5 rounded font-medium text-green-700">
+                                        {calculatePricePerKm(transport.response.deliveryPrice, transport.distanceKm || transport.response?.distanceKm)} PLN/km
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                               
                               {/* Informacje o realizacji */}
-                              <div className="bg-white p-3 rounded-md shadow-sm border border-gray-100">
-                                <h5 className="text-sm font-medium mb-2 pb-1 border-b flex items-center text-purple-600">
+                              <div className="bg-white p-4 rounded-md shadow-sm border border-gray-200">
+                                <h5 className="text-sm font-medium mb-3 pb-1 border-b flex items-center text-purple-600">
                                   <Calendar size={14} className="mr-1" />
                                   Informacje o realizacji
                                 </h5>
-                                <p className="text-sm mb-1.5"><span className="font-medium">Data odpowiedzi:</span> {formatDate(transport.completedAt || transport.createdAt)}</p>
-                                
-                                {transport.response.dateChanged && (
-                                  <div className="bg-yellow-50 p-2 rounded-md border border-yellow-100 mt-2 mb-1.5">
-                                    <p className="text-sm font-medium text-yellow-800">Zmieniono datę dostawy:</p>
-                                    <p className="text-xs flex justify-between mt-1">
-                                      <span>Z: <span className="line-through">{formatDate(transport.response.originalDeliveryDate)}</span></span>
-                                      <span>→</span>
-                                      <span>Na: <span className="font-medium">{formatDate(transport.response.newDeliveryDate)}</span></span>
-                                    </p>
-                                  </div>
-                                )}
-                                
-                                {transport.response.adminNotes && (
-                                  <p className="text-sm"><span className="font-medium">Uwagi:</span> {transport.response.adminNotes}</p>
-                                )}
+                                <div className="space-y-2 text-sm">
+                                  <div><span className="font-medium">Data odpowiedzi:</span> <span>{formatDateTime(transport.completedAt || transport.createdAt)}</span></div>
+                                  
+                                  {transport.response.dateChanged && (
+                                    <div className="bg-yellow-50 p-2 rounded-md border border-yellow-200">
+                                      <div className="font-medium text-yellow-800 text-xs flex items-center">
+                                        <AlertCircle size={12} className="mr-1" />
+                                        Zmieniono datę dostawy
+                                      </div>
+                                      <div className="text-xs mt-1">
+                                        <div>Z: <span className="line-through">{formatDate(transport.response.originalDeliveryDate)}</span></div>
+                                        <div>Na: <span className="font-medium">{formatDate(transport.response.newDeliveryDate)}</span></div>
+                                      </div>
+                                    </div>
+                                  )}
+                                  
+                                  {transport.response.adminNotes && (
+                                    <div className="bg-gray-50 p-2 rounded border">
+                                      <div className="font-medium text-xs text-gray-700">Uwagi przewoźnika:</div>
+                                      <div className="text-xs mt-1">{transport.response.adminNotes}</div>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           )}
-                          
-                          <div className="mt-5 flex space-x-3">
-                            <button 
-                              type="button"
-                              className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors flex items-center gap-2"
-                              onClick={() => generateCMR(transport)}
-                            >
-                              <FileText size={16} />
-                              Generuj CMR
-                            </button>
-                          </div>
                         </div>
                       )}
                     </div>
@@ -917,10 +1182,4 @@ export default function ArchiwumSpedycjiPage() {
       </div>
     </div>
   )
-}
-
-// Funkcja pomocnicza do formatowania adresu
-function formatAddress(address) {
-  if (!address) return '';
-  return `${address.city || ''}, ${address.postalCode || ''}, ${address.street || ''}`;
 }
