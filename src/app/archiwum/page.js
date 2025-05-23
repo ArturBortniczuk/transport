@@ -17,6 +17,7 @@ export default function ArchiwumPage() {
   const [error, setError] = useState(null)
   const [deleteStatus, setDeleteStatus] = useState(null)
   const [exportFormat, setExportFormat] = useState('xlsx')
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage] = useState(10)
   const [selectedTransport, setSelectedTransport] = useState(null)
@@ -64,6 +65,7 @@ export default function ArchiwumPage() {
       try {
         const filters = JSON.parse(savedFilters);
         setSelectedYear(filters.selectedYear || new Date().getFullYear());
+        setShowAdvancedFilters(filters.showAdvancedFilters || false);
         setSelectedMonth(filters.selectedMonth || 'all');
         setSelectedWarehouse(filters.selectedWarehouse || '');
         setSelectedDriver(filters.selectedDriver || '');
@@ -412,6 +414,7 @@ export default function ArchiwumPage() {
       selectedYear,
       selectedMonth,
       selectedWarehouse,
+      showAdvancedFilters,
       selectedDriver,
       selectedRequester,
       selectedRating,
