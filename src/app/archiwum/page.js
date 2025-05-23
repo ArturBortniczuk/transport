@@ -223,33 +223,28 @@ export default function ArchiwumPage() {
       
       // Filtr oceny - poprawiony
       if (rating !== 'all') {
-        // Sprawdzamy ocenę transportu na podstawie ratableTransports i ratingValues
         const hasRating = ratableTransports[transport.id] !== undefined && !ratableTransports[transport.id];
         
         if (rating === 'positive') {
-          // Tylko pozytywne oceny
           return hasRating && ratingValues[transport.id]?.isPositive === true;
         } else if (rating === 'negative') {
-          // Tylko negatywne oceny
           return hasRating && ratingValues[transport.id]?.isPositive === false;
         } else if (rating === 'unrated') {
-          // Tylko nieocenione transporty
           return !hasRating || ratableTransports[transport.id];
         }
       }
       
-      // Filtr budowy
-      if (construction && transport.responsible_constructions) {
-        try {
-          const constructions = JSON.parse(transport.responsible_constructions)
-          const hasConstruction = constructions.some(c => c.id.toString() === construction)
-          if (!hasConstruction) {
-            return false
-          }
-        } catch (e) {
-          // Jeśli responsible_constructions nie jest JSON, sprawdź czy zawiera nazwę budowy
-          if (!transport.responsible_constructions.includes(construction)) {
-            return false
+      // POPRAWIONY Filtr budowy - sprawdzamy client_name i mpk
+      if (construction) {
+        const selectedConstruction = constructions.find(c => c.id.toString() === construction);
+        if (selectedConstruction) {
+          // Sprawdź czy nazwa budowy jest w client_name lub czy MPK się zgadza
+          const matchesClientName = transport.client_name && 
+            transport.client_name.toLowerCase().includes(selectedConstruction.name.toLowerCase());
+          const matchesMpk = transport.mpk && transport.mpk === selectedConstruction.mpk;
+          
+          if (!matchesClientName && !matchesMpk) {
+            return false;
           }
         }
       }
@@ -310,7 +305,13 @@ export default function ArchiwumPage() {
   // Funkcja pomocnicza do znajdowania danych kierowcy
   const getDriverInfo = (driverId) => {
     const driver = KIEROWCY.find(k => k.id === parseInt(driverId))
-    return driver ? `${driver.imie} (${driver.tabliceRej})` : 'Brak danych'
+    if (!driver) return 'Brak danych'
+    
+    // Znajdź pojazd przypisany do kierowcy (używając tego samego ID)
+    const vehicle = POJAZDY.find(p => p.id === parseInt(driverId))
+    const vehicleInfo = vehicle ? vehicle.tabliceRej : 'Brak pojazdu'
+    
+    return `${driver.imie} (${vehicleInfo})`
   }
 
   // Funkcja eksportująca dane do pliku
@@ -447,11 +448,12 @@ export default function ArchiwumPage() {
         </p>
       </div>
 
-      {/* Filters Section - przekształcona na 2 rzędy */}
+      {/* Filters Section - nowy design */}
       <div className="mb-8 bg-white rounded-lg shadow p-6">
         <h3 className="text-lg font-semibold mb-4">Filtry</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-4">
-          {/* Pierwszy rząd filtrów */}
+        
+        {/* Podstawowe filtry - zawsze widoczne */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-4">
           {/* Rok */}
           <div>
             <label htmlFor="yearSelect" className="block text-sm font-medium text-gray-700 mb-1">
@@ -502,130 +504,137 @@ export default function ArchiwumPage() {
               <option value="zielonka">Magazyn Zielonka</option>
             </select>
           </div>
-          
-          {/* Kierowca */}
-          <div>
-            <label htmlFor="driverSelect" className="block text-sm font-medium text-gray-700 mb-1">
-              Kierowca
-            </label>
-            <select
-              id="driverSelect"
-              value={selectedDriver}
-              onChange={(e) => setSelectedDriver(e.target.value)}
-              className={selectStyles}
-            >
-              <option value="">Wszyscy kierowcy</option>
-              {KIEROWCY.map(kierowca => (
-                <option key={kierowca.id} value={kierowca.id}>
-                  {kierowca.imie}
-                </option>
-              ))}
-            </select>
-          </div>
         </div>
-        
-        {/* Drugi rząd filtrów */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {/* Osoba zlecająca */}
-          <div>
-            <label htmlFor="requesterSelect" className="block text-sm font-medium text-gray-700 mb-1">
-              Osoba zlecająca
-            </label>
-            <select
-              id="requesterSelect"
-              value={selectedRequester}
-              onChange={(e) => setSelectedRequester(e.target.value)}
-              className={selectStyles}
-            >
-              <option value="">Wszyscy zlecający</option>
-              {users.map(user => (
-                <option key={user.email} value={user.email}>
-                  {user.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          
-          {/* Ocena */}
-          <div>
-            <label htmlFor="ratingSelect" className="block text-sm font-medium text-gray-700 mb-1">
-              Ocena
-            </label>
-            <select
-              id="ratingSelect"
-              value={selectedRating}
-              onChange={(e) => setSelectedRating(e.target.value)}
-              className={selectStyles}
-            >
-              <option value="all">Wszystkie oceny</option>
-              <option value="positive">Pozytywne</option>
-              <option value="negative">Negatywne</option>
-              <option value="unrated">Nieocenione</option>
-            </select>
-          </div>
-          
-          {/* Budowa */}
-          <div>
-            <label htmlFor="constructionSelect" className="block text-sm font-medium text-gray-700 mb-1">
-              Budowa
-            </label>
-            <select
-              id="constructionSelect"
-              value={selectedConstruction}
-              onChange={(e) => setSelectedConstruction(e.target.value)}
-              className={selectStyles}
-            >
-              <option value="">Wszystkie budowy</option>
-              {constructions.map(construction => (
-                <option key={construction.id} value={construction.id}>
-                  {construction.name} ({construction.mpk})
-                </option>
-              ))}
-            </select>
-          </div>
-          
-          {/* Format eksportu */}
-          <div>
-            <label htmlFor="exportFormat" className="block text-sm font-medium text-gray-700 mb-1">
-              Format eksportu
-            </label>
-            <select
-              id="exportFormat"
-              value={exportFormat}
-              onChange={(e) => setExportFormat(e.target.value)}
-              className={selectStyles}
-            >
-              <option value="xlsx">Excel (XLSX)</option>
-              <option value="csv">CSV</option>
-            </select>
-          </div>
+      
+        {/* Przycisk rozwijania filtrów zaawansowanych */}
+        <div className="mb-4">
+          <button
+            onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+            className="flex items-center text-blue-600 hover:text-blue-700 font-medium"
+          >
+            <span>Filtry zaawansowane</span>
+            <ChevronDown 
+              size={16} 
+              className={`ml-1 transition-transform ${showAdvancedFilters ? 'rotate-180' : ''}`} 
+            />
+          </button>
         </div>
-        
-        {/* Trzeci rząd - przycisk eksportu */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mt-4">
-          <div className="flex items-end">
-            <button
-              onClick={exportData}
-              disabled={filteredArchiwum.length === 0}
-              className="w-full py-2 px-4 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
-              title="Eksportuj dane"
-            >
-              <Download size={18} />
-              <span>Eksportuj</span>
-            </button>
+      
+        {/* Filtry zaawansowane - pokazywane po rozwinięciu */}
+        {showAdvancedFilters && (
+          <div className="space-y-4 border-t pt-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {/* Kierowca */}
+              <div>
+                <label htmlFor="driverSelect" className="block text-sm font-medium text-gray-700 mb-1">
+                  Kierowca
+                </label>
+                <select
+                  id="driverSelect"
+                  value={selectedDriver}
+                  onChange={(e) => setSelectedDriver(e.target.value)}
+                  className={selectStyles}
+                >
+                  <option value="">Wszyscy kierowcy</option>
+                  {KIEROWCY.map(kierowca => (
+                    <option key={kierowca.id} value={kierowca.id}>
+                      {kierowca.imie}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
+              {/* Osoba zlecająca */}
+              <div>
+                <label htmlFor="requesterSelect" className="block text-sm font-medium text-gray-700 mb-1">
+                  Osoba zlecająca
+                </label>
+                <select
+                  id="requesterSelect"
+                  value={selectedRequester}
+                  onChange={(e) => setSelectedRequester(e.target.value)}
+                  className={selectStyles}
+                >
+                  <option value="">Wszyscy zlecający</option>
+                  {users.map(user => (
+                    <option key={user.email} value={user.email}>
+                      {user.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
+              {/* Budowa */}
+              <div>
+                <label htmlFor="constructionSelect" className="block text-sm font-medium text-gray-700 mb-1">
+                  Budowa
+                </label>
+                <select
+                  id="constructionSelect"
+                  value={selectedConstruction}
+                  onChange={(e) => setSelectedConstruction(e.target.value)}
+                  className={selectStyles}
+                >
+                  <option value="">Wszystkie budowy</option>
+                  {constructions.map(construction => (
+                    <option key={construction.id} value={construction.id}>
+                      {construction.name} ({construction.mpk})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
+              {/* Ocena */}
+              <div>
+                <label htmlFor="ratingSelect" className="block text-sm font-medium text-gray-700 mb-1">
+                  Ocena
+                </label>
+                <select
+                  id="ratingSelect"
+                  value={selectedRating}
+                  onChange={(e) => setSelectedRating(e.target.value)}
+                  className={selectStyles}
+                >
+                  <option value="all">Wszystkie oceny</option>
+                  <option value="positive">Pozytywne</option>
+                  <option value="negative">Negatywne</option>
+                  <option value="unrated">Nieocenione</option>
+                </select>
+              </div>
+            </div>
+            
+            {/* Sekcja eksportu */}
+            <div className="flex flex-col sm:flex-row gap-4 items-end border-t pt-4">
+              <div className="flex-1">
+                <label htmlFor="exportFormat" className="block text-sm font-medium text-gray-700 mb-1">
+                  Format eksportu
+                </label>
+                <select
+                  id="exportFormat"
+                  value={exportFormat}
+                  onChange={(e) => setExportFormat(e.target.value)}
+                  className={selectStyles}
+                >
+                  <option value="xlsx">Excel (XLSX)</option>
+                  <option value="csv">CSV</option>
+                </select>
+              </div>
+              
+              <div>
+                <button
+                  onClick={exportData}
+                  disabled={filteredArchiwum.length === 0}
+                  className="w-full sm:w-auto py-2 px-6 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+                  title="Eksportuj dane"
+                >
+                  <Download size={18} />
+                  <span>Eksportuj</span>
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
+        )}
       </div>
-
-      {deleteStatus && (
-        <div className={`mb-4 p-4 rounded-lg ${
-          deleteStatus.type === 'success' ? 'bg-green-100 text-green-800' : 
-          deleteStatus.type === 'error' ? 'bg-red-100 text-red-800' :
-          'bg-blue-100 text-blue-800'
-        }`}>
-          {deleteStatus.message}
-        </div>
-      )}
 
       {/* Lista transportów */}
       <div className="space-y-4">
