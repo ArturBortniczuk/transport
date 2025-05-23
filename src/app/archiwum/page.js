@@ -32,9 +32,11 @@ export default function ArchiwumPage() {
   const [selectedDriver, setSelectedDriver] = useState('')
   const [selectedRequester, setSelectedRequester] = useState('')
   const [selectedRating, setSelectedRating] = useState('all')
+  const [selectedConstruction, setSelectedConstruction] = useState('')
   
   // Lista użytkowników (handlowców) do filtrowania
   const [users, setUsers] = useState([])
+  const [constructions, setConstructions] = useState([])
   
   // Lista dostępnych lat i miesięcy
   const currentYear = new Date().getFullYear()
@@ -67,6 +69,7 @@ export default function ArchiwumPage() {
         setSelectedDriver(filters.selectedDriver || '');
         setSelectedRequester(filters.selectedRequester || '');
         setSelectedRating(filters.selectedRating || 'all');
+        setSelectedConstruction(filters.selectedConstruction || '');
         setCurrentPage(filters.currentPage || 1);
       } catch (e) {
         console.error("Błąd przy ładowaniu zapisanych filtrów:", e);
@@ -128,8 +131,22 @@ export default function ArchiwumPage() {
       }
     }
 
+    // Pobierz listę budów do filtrowania
+    const fetchConstructions = async () => {
+      try {
+        const response = await fetch('/api/constructions')
+        if (response.ok) {
+          const data = await response.json()
+          setConstructions(data.constructions || [])
+        }
+      } catch (error) {
+        console.error('Błąd pobierania budów:', error)
+      }
+    }
+
     checkAdmin()
     fetchUsers()
+    fetchConstructions()
     fetchArchivedTransports()
   }, [])
 
@@ -146,7 +163,7 @@ export default function ArchiwumPage() {
           new Date(b.delivery_date) - new Date(a.delivery_date)
         )
         setArchiwum(sortedTransports)
-        applyFilters(sortedTransports, selectedYear, selectedMonth, selectedWarehouse, selectedDriver, selectedRequester, selectedRating)
+        applyFilters(sortedTransports, selectedYear, selectedMonth, selectedWarehouse, selectedDriver, selectedRequester, selectedRating, selectedConstruction)
       } else {
         setError('Nie udało się pobrać archiwum transportów')
       }
@@ -169,7 +186,7 @@ export default function ArchiwumPage() {
   }
   
   // Funkcja filtrująca transporty
-  const applyFilters = (transports, year, month, warehouse, driver, requester, rating) => {
+  const applyFilters = (transports, year, month, warehouse, driver, requester, rating, construction) => {
     if (!transports) return
     
     const filtered = transports.filter(transport => {
@@ -221,6 +238,22 @@ export default function ArchiwumPage() {
         }
       }
       
+      // Filtr budowy
+      if (construction && transport.responsible_constructions) {
+        try {
+          const constructions = JSON.parse(transport.responsible_constructions)
+          const hasConstruction = constructions.some(c => c.id.toString() === construction)
+          if (!hasConstruction) {
+            return false
+          }
+        } catch (e) {
+          // Jeśli responsible_constructions nie jest JSON, sprawdź czy zawiera nazwę budowy
+          if (!transport.responsible_constructions.includes(construction)) {
+            return false
+          }
+        }
+      }
+      
       return true
     })
     
@@ -229,8 +262,8 @@ export default function ArchiwumPage() {
 
   // Obsługa zmiany filtrów
   useEffect(() => {
-    applyFilters(archiwum, selectedYear, selectedMonth, selectedWarehouse, selectedDriver, selectedRequester, selectedRating)
-  }, [selectedYear, selectedMonth, selectedWarehouse, selectedDriver, selectedRequester, selectedRating, archiwum, ratableTransports, ratingValues])
+    applyFilters(archiwum, selectedYear, selectedMonth, selectedWarehouse, selectedDriver, selectedRequester, selectedRating, selectedConstruction)
+  }, [selectedYear, selectedMonth, selectedWarehouse, selectedDriver, selectedRequester, selectedRating, selectedConstruction, archiwum, ratableTransports, ratingValues])
 
   // Funkcja do usuwania transportu
   const handleDeleteTransport = async (id) => {
@@ -251,7 +284,7 @@ export default function ArchiwumPage() {
         // Usuń transport z lokalnego stanu
         const updatedArchiwum = archiwum.filter(transport => transport.id !== id)
         setArchiwum(updatedArchiwum)
-        applyFilters(updatedArchiwum, selectedYear, selectedMonth, selectedWarehouse, selectedDriver, selectedRequester, selectedRating)
+        applyFilters(updatedArchiwum, selectedYear, selectedMonth, selectedWarehouse, selectedDriver, selectedRequester, selectedRating, selectedConstruction)
         
         setDeleteStatus({ type: 'success', message: 'Transport został usunięty' })
         
@@ -381,6 +414,7 @@ export default function ArchiwumPage() {
       selectedDriver,
       selectedRequester,
       selectedRating,
+      selectedConstruction,
       currentPage: pageNumber
     };
     sessionStorage.setItem('archiveFilters', JSON.stringify(filterState));
@@ -530,6 +564,26 @@ export default function ArchiwumPage() {
             </select>
           </div>
           
+          {/* Budowa */}
+          <div>
+            <label htmlFor="constructionSelect" className="block text-sm font-medium text-gray-700 mb-1">
+              Budowa
+            </label>
+            <select
+              id="constructionSelect"
+              value={selectedConstruction}
+              onChange={(e) => setSelectedConstruction(e.target.value)}
+              className={selectStyles}
+            >
+              <option value="">Wszystkie budowy</option>
+              {constructions.map(construction => (
+                <option key={construction.id} value={construction.id}>
+                  {construction.name} ({construction.mpk})
+                </option>
+              ))}
+            </select>
+          </div>
+          
           {/* Format eksportu */}
           <div>
             <label htmlFor="exportFormat" className="block text-sm font-medium text-gray-700 mb-1">
@@ -545,8 +599,10 @@ export default function ArchiwumPage() {
               <option value="csv">CSV</option>
             </select>
           </div>
-          
-          {/* Przycisk eksportu */}
+        </div>
+        
+        {/* Trzeci rząd - przycisk eksportu */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mt-4">
           <div className="flex items-end">
             <button
               onClick={exportData}
