@@ -148,6 +148,18 @@ export default function ArchiwumSpedycjiPage() {
     return parts.join(', ') || 'Brak danych';
   }
 
+  // Funkcja pomocnicza do pełnego adresu załadunku
+  const getFullLoadingAddress = (transport) => {
+    if (transport.location === 'Odbiory własne' && transport.producerAddress) {
+      return formatAddress(transport.producerAddress);
+    } else if (transport.location === 'Magazyn Białystok') {
+      return 'Grupa Eltron Sp. z o.o., ul. Wysockiego 69B, 15-169 Białystok';
+    } else if (transport.location === 'Magazyn Zielonka') {
+      return 'Grupa Eltron Sp. z o.o., ul. Krótka 2, 05-220 Zielonka';
+    }
+    return transport.location || 'Nie podano';
+  }
+
   // Funkcja filtrująca transporty
   const applyFilters = (transports, year, month, mpkValue, orderNumberValue) => {
     if (!transports || transports.length === 0) {
@@ -374,14 +386,17 @@ export default function ArchiwumSpedycjiPage() {
     }
   }
 
-  // Formatowanie daty z godziną
-  const formatDateTime = (dateString) => {
+  // Formatowanie daty z godziną w dwóch liniach
+  const formatDateTimeMultiline = (dateString) => {
     if (!dateString) return 'Brak daty';
     try {
-      return format(new Date(dateString), 'dd.MM.yyyy HH:mm', { locale: pl });
+      const date = new Date(dateString);
+      const dateOnly = format(date, 'dd.MM.yyyy', { locale: pl });
+      const timeOnly = format(date, 'HH:mm', { locale: pl });
+      return { date: dateOnly, time: timeOnly };
     } catch (error) {
       console.error("Błąd formatowania daty:", error, dateString);
-      return 'Nieprawidłowa data';
+      return { date: 'Nieprawidłowa', time: 'data' };
     }
   }
 
@@ -703,13 +718,13 @@ export default function ArchiwumSpedycjiPage() {
                           <div className="text-sm text-gray-600 flex items-center">
                             <Hash size={14} className="mr-1 text-green-500" />
                             <span className="font-medium">Nr:</span>
-                            <span className="ml-1 font-mono">{transport.orderNumber || '-'}</span>
+                            <span className="ml-1">{transport.orderNumber || '-'}</span>
                           </div>
                           
                           <div className="text-sm text-gray-600 flex items-center">
                             <FileText size={14} className="mr-1 text-purple-500" />
                             <span className="font-medium">MPK:</span>
-                            <span className="ml-1 font-mono">{transport.mpk}</span>
+                            <span className="ml-1">{transport.mpk}</span>
                           </div>
                           
                           <div className="text-sm text-gray-600 flex items-center">
@@ -720,7 +735,7 @@ export default function ArchiwumSpedycjiPage() {
                         </div>
                         
                         {/* Druga linia z dodatkowymi informacjami */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-2">
                           {transport.response && transport.response.deliveryPrice && (
                             <div className="text-sm flex items-center">
                               <DollarSign size={14} className="mr-1 text-green-600" />
@@ -739,39 +754,19 @@ export default function ArchiwumSpedycjiPage() {
                             </div>
                           )}
                           
-                          <div className="text-sm text-gray-600 flex items-center">
-                            <Clock size={14} className="mr-1 text-gray-500" />
-                            <span className="font-medium">Utworzono:</span>
-                            <span className="ml-1">{formatDate(transport.createdAt)}</span>
-                          </div>
-                          
-                          <div className="text-sm text-gray-600 flex items-center">
-                            <CheckCircle size={14} className="mr-1 text-green-500" />
-                            <span className="font-medium">Zakończono:</span>
-                            <span className="ml-1">{formatDate(transport.completedAt)}</span>
-                          </div>
+                          {transport.response && transport.response.driverName && (
+                            <div className="text-sm text-gray-600 flex items-center">
+                              <Truck size={14} className="mr-1 text-purple-500" />
+                              <span className="font-medium">Przewoźnik:</span>
+                              <span className="ml-1">{transport.response.driverName} {transport.response.driverSurname}</span>
+                            </div>
+                          )}
                         </div>
                         
                         {/* Wyświetl informacje o budowach */}
                         {transport.responsibleConstructions && transport.responsibleConstructions.length > 0 && (
                           <div className="mt-2">
                             {renderResponsibleConstructions(transport)}
-                          </div>
-                        )}
-                        
-                        {/* Wyświetl informacje o towarze w skrócie */}
-                        {transport.goodsDescription && (transport.goodsDescription.description || transport.goodsDescription.weight) && (
-                          <div className="mt-2 flex items-center text-sm text-blue-600">
-                            <ShoppingBag size={14} className="mr-1" />
-                            <span className="font-medium">Towar:</span>
-                            {transport.goodsDescription.description && (
-                              <span className="ml-1">{transport.goodsDescription.description.substring(0, 50)}{transport.goodsDescription.description.length > 50 ? '...' : ''}</span>
-                            )}
-                            {transport.goodsDescription.weight && (
-                              <span className="ml-2 bg-blue-50 px-2 py-0.5 rounded text-xs">
-                                {transport.goodsDescription.weight}
-                              </span>
-                            )}
                           </div>
                         )}
                       </div>
@@ -829,8 +824,8 @@ export default function ArchiwumSpedycjiPage() {
                             Dane zamówienia
                           </h4>
                           <div className="space-y-2 text-sm">
-                            <div><span className="font-medium">Numer zamówienia:</span> <span className="font-mono">{transport.orderNumber || '-'}</span></div>
-                            <div><span className="font-medium">MPK:</span> <span className="font-mono">{transport.mpk}</span></div>
+                            <div><span className="font-medium">Numer zamówienia:</span> <span>{transport.orderNumber || '-'}</span></div>
+                            <div><span className="font-medium">MPK:</span> <span>{transport.mpk}</span></div>
                             <div><span className="font-medium">Dokumenty:</span> <span>{transport.documents}</span></div>
                             {transport.clientName && (
                               <div><span className="font-medium">Nazwa klienta:</span> <span>{transport.clientName}</span></div>
@@ -881,7 +876,6 @@ export default function ArchiwumSpedycjiPage() {
                             Daty i terminy
                           </h4>
                           <div className="space-y-2 text-sm">
-                            <div><span className="font-medium">Data utworzenia:</span> <span>{formatDateTime(transport.createdAt)}</span></div>
                             <div>
                               <span className="font-medium">Data dostawy:</span>
                               {dateChanged ? (
@@ -896,7 +890,18 @@ export default function ArchiwumSpedycjiPage() {
                                 <span className="ml-1">{formatDate(transport.deliveryDate)}</span>
                               )}
                             </div>
-                            <div><span className="font-medium">Data zakończenia:</span> <span>{formatDateTime(transport.completedAt)}</span></div>
+                            <div>
+                              <span className="font-medium">Data zakończenia:</span>
+                              {(() => {
+                                const completedDateTime = formatDateTimeMultiline(transport.completedAt);
+                                return (
+                                  <div className="ml-1">
+                                    <div>{completedDateTime.date}</div>
+                                    <div className="text-xs text-gray-500">{completedDateTime.time}</div>
+                                  </div>
+                                );
+                              })()}
+                            </div>
                           </div>
                         </div>
 
@@ -940,19 +945,16 @@ export default function ArchiwumSpedycjiPage() {
                           </h4>
                           <div className="space-y-2 text-sm">
                             <div><span className="font-medium">Lokalizacja:</span> <span>{transport.location}</span></div>
-                            {transport.location === 'Odbiory własne' && transport.producerAddress ? (
-                              <>
-                                <div><span className="font-medium">Adres:</span> <span>{formatAddress(transport.producerAddress)}</span></div>
-                                {transport.producerAddress.pinLocation && (
-                                  <div><span className="font-medium">Pineska mapy:</span> 
-                                    <a href={transport.producerAddress.pinLocation} target="_blank" rel="noopener noreferrer" className="ml-1 text-blue-500 hover:underline">
-                                      Zobacz lokalizację
-                                    </a>
-                                  </div>
-                                )}
-                              </>
-                            ) : (
-                              <div><span className="font-medium">Adres:</span> <span>{transport.location}</span></div>
+                            {transport.clientName && transport.location === 'Odbiory własne' && (
+                              <div><span className="font-medium">Nazwa firmy:</span> <span>{transport.clientName}</span></div>
+                            )}
+                            <div><span className="font-medium">Adres:</span> <span>{getFullLoadingAddress(transport)}</span></div>
+                            {transport.location === 'Odbiory własne' && transport.producerAddress?.pinLocation && (
+                              <div><span className="font-medium">Pineska mapy:</span> 
+                                <a href={transport.producerAddress.pinLocation} target="_blank" rel="noopener noreferrer" className="ml-1 text-blue-500 hover:underline">
+                                  Zobacz lokalizację
+                                </a>
+                              </div>
                             )}
                             <div className="flex items-center">
                               <Phone size={14} className="mr-1 text-green-500" />
@@ -971,6 +973,9 @@ export default function ArchiwumSpedycjiPage() {
                             Szczegóły dostawy
                           </h4>
                           <div className="space-y-2 text-sm">
+                            {transport.clientName && (
+                              <div><span className="font-medium">Nazwa firmy:</span> <span>{transport.clientName}</span></div>
+                            )}
                             <div><span className="font-medium">Adres:</span> <span>{formatAddress(transport.delivery)}</span></div>
                             {transport.delivery?.pinLocation && (
                               <div><span className="font-medium">Pineska mapy:</span> 
@@ -987,24 +992,24 @@ export default function ArchiwumSpedycjiPage() {
                               </a>
                             </div>
                           </div>
-                          
-                          {/* Link do Google Maps */}
-                          {generateGoogleMapsLink(transport) && (
-                            <div className="mt-3">
-                              <a 
-                                href={generateGoogleMapsLink(transport)} 
-                                target="_blank" 
-                                rel="noopener noreferrer" 
-                                className="bg-blue-50 hover:bg-blue-100 text-blue-700 px-3 py-2 rounded-md flex items-center w-fit transition-colors"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <MapPin size={16} className="mr-2" />
-                                Zobacz trasę na Google Maps
-                              </a>
-                            </div>
-                          )}
                         </div>
                       </div>
+
+                      {/* Link do Google Maps - poza sekcją adresu */}
+                      {generateGoogleMapsLink(transport) && (
+                        <div className="mb-6 flex justify-center">
+                          <a 
+                            href={generateGoogleMapsLink(transport)} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="bg-blue-50 hover:bg-blue-100 text-blue-700 px-4 py-2 rounded-md flex items-center transition-colors"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <MapPin size={16} className="mr-2" />
+                            Zobacz trasę na Google Maps
+                          </a>
+                        </div>
+                      )}
 
                       {/* Informacje o towarze */}
                       {transport.goodsDescription && (
@@ -1037,12 +1042,13 @@ export default function ArchiwumSpedycjiPage() {
                           
                           {transport.response.completedManually ? (
                             <div className="bg-blue-50 text-blue-800 p-4 rounded-md border border-blue-200 flex items-center">
-                              <Clipboard size={18} className="mr-2" />
+                              <User size={18} className="mr-2" />
                               <div>
-                                <div className="font-medium">Zakończone ręcznie przez administratora</div>
+                                <div className="font-medium">
+                                  Zakończone przez: {transport.response.completedBy}
+                                </div>
                                 <div className="text-sm mt-1">
-                                  Zakończone przez: {transport.response.completedBy} | 
-                                  Data: {formatDateTime(transport.response.completedAt)}
+                                  Data zakończenia: {formatDate(transport.response.completedAt)}
                                 </div>
                               </div>
                             </div>
@@ -1063,7 +1069,7 @@ export default function ArchiwumSpedycjiPage() {
                                       {transport.response.driverPhone}
                                     </a>
                                   </div>
-                                  <div><span className="font-medium">Numer auta:</span> <span className="font-mono">{transport.response.vehicleNumber}</span></div>
+                                  <div><span className="font-medium">Numer auta:</span> <span>{transport.response.vehicleNumber}</span></div>
                                 </div>
                               </div>
                               
@@ -1090,14 +1096,24 @@ export default function ArchiwumSpedycjiPage() {
                                 </div>
                               </div>
                               
-                              {/* Informacje o realizacji */}
+                              {/* Informacje o realizacji i zleceniu transportowym */}
                               <div className="bg-white p-4 rounded-md shadow-sm border border-gray-200">
                                 <h5 className="text-sm font-medium mb-3 pb-1 border-b flex items-center text-purple-600">
-                                  <Calendar size={14} className="mr-1" />
-                                  Informacje o realizacji
+                                  <Mail size={14} className="mr-1" />
+                                  Zlecenie transportowe
                                 </h5>
                                 <div className="space-y-2 text-sm">
-                                  <div><span className="font-medium">Data odpowiedzi:</span> <span>{formatDateTime(transport.completedAt || transport.createdAt)}</span></div>
+                                  {transport.order_sent && (
+                                    <>
+                                      <div><span className="font-medium">Wysłane:</span> 
+                                        <span className="ml-1 bg-green-100 text-green-700 px-2 py-0.5 rounded text-xs">
+                                          Tak
+                                        </span>
+                                      </div>
+                                      <div><span className="font-medium">Odbiorca:</span> <span className="text-xs">{transport.order_recipient}</span></div>
+                                      <div><span className="font-medium">Data wysłania:</span> <span>{formatDate(transport.order_sent_at)}</span></div>
+                                    </>
+                                  )}
                                   
                                   {transport.response.dateChanged && (
                                     <div className="bg-yellow-50 p-2 rounded-md border border-yellow-200">
