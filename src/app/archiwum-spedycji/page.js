@@ -386,17 +386,14 @@ export default function ArchiwumSpedycjiPage() {
     }
   }
 
-  // Formatowanie daty z godziną w dwóch liniach
-  const formatDateTimeMultiline = (dateString) => {
+  // Formatowanie daty i czasu w jednej linii
+  const formatDateTime = (dateString) => {
     if (!dateString) return 'Brak daty';
     try {
-      const date = new Date(dateString);
-      const dateOnly = format(date, 'dd.MM.yyyy', { locale: pl });
-      const timeOnly = format(date, 'HH:mm', { locale: pl });
-      return { date: dateOnly, time: timeOnly };
+      return format(new Date(dateString), 'dd.MM.yyyy HH:mm', { locale: pl });
     } catch (error) {
       console.error("Błąd formatowania daty:", error, dateString);
-      return { date: 'Nieprawidłowa', time: 'data' };
+      return 'Nieprawidłowa data';
     }
   }
 
@@ -734,31 +731,21 @@ export default function ArchiwumSpedycjiPage() {
                           </div>
                         </div>
                         
-                        {/* Druga linia z dodatkowymi informacjami */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-2">
+                        {/* Druga linia z dodatkowymi informacjami (usunięto informacje o przewoźniku) */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-3 mt-2">
                           {transport.response && transport.response.deliveryPrice && (
                             <div className="text-sm flex items-center">
                               <DollarSign size={14} className="mr-1 text-green-600" />
-                              <span className="bg-green-50 px-2 py-0.5 rounded font-medium text-green-700">
-                                {transport.response.deliveryPrice} PLN
-                              </span>
+                              <span className="font-medium">Cena:</span>
+                              <span className="ml-1">{transport.response.deliveryPrice} PLN</span>
                             </div>
                           )}
                           
                           {(transport.distanceKm || transport.response?.distanceKm) && (
                             <div className="text-sm flex items-center">
                               <MapPin size={14} className="mr-1 text-blue-600" />
-                              <span className="bg-blue-50 px-2 py-0.5 rounded font-medium text-blue-700">
-                                {transport.distanceKm || transport.response?.distanceKm || 0} km
-                              </span>
-                            </div>
-                          )}
-                          
-                          {transport.response && transport.response.driverName && (
-                            <div className="text-sm text-gray-600 flex items-center">
-                              <Truck size={14} className="mr-1 text-purple-500" />
-                              <span className="font-medium">Przewoźnik:</span>
-                              <span className="ml-1">{transport.response.driverName} {transport.response.driverSurname}</span>
+                              <span className="font-medium">Odległość:</span>
+                              <span className="ml-1">{transport.distanceKm || transport.response?.distanceKm || 0} km</span>
                             </div>
                           )}
                         </div>
@@ -817,7 +804,7 @@ export default function ArchiwumSpedycjiPage() {
                   {expandedRowId === transport.id && (
                     <div className="mt-6 pl-4 border-l-4 border-green-200 animate-fadeIn">
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-                        {/* Sekcja 1: Podstawowe dane zamówienia */}
+                        {/* Sekcja 1: Podstawowe dane zamówienia (usunięto nazwę klienta) */}
                         <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-lg shadow-sm border border-blue-200">
                           <h4 className="font-medium mb-3 pb-2 border-b border-blue-300 flex items-center text-blue-700">
                             <FileText size={18} className="mr-2" />
@@ -827,9 +814,6 @@ export default function ArchiwumSpedycjiPage() {
                             <div><span className="font-medium">Numer zamówienia:</span> <span>{transport.orderNumber || '-'}</span></div>
                             <div><span className="font-medium">MPK:</span> <span>{transport.mpk}</span></div>
                             <div><span className="font-medium">Dokumenty:</span> <span>{transport.documents}</span></div>
-                            {transport.clientName && (
-                              <div><span className="font-medium">Nazwa klienta:</span> <span>{transport.clientName}</span></div>
-                            )}
                             <div><span className="font-medium">Status:</span> 
                               <span className="ml-1 bg-green-100 text-green-700 px-2 py-0.5 rounded text-xs">
                                 Zakończone
@@ -869,7 +853,7 @@ export default function ArchiwumSpedycjiPage() {
                           )}
                         </div>
 
-                        {/* Sekcja 3: Daty i terminy */}
+                        {/* Sekcja 3: Daty i terminy (zmieniono formatowanie daty zakończenia) */}
                         <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-4 rounded-lg shadow-sm border border-purple-200">
                           <h4 className="font-medium mb-3 pb-2 border-b border-purple-300 flex items-center text-purple-700">
                             <Calendar size={18} className="mr-2" />
@@ -892,20 +876,12 @@ export default function ArchiwumSpedycjiPage() {
                             </div>
                             <div>
                               <span className="font-medium">Data zakończenia:</span>
-                              {(() => {
-                                const completedDateTime = formatDateTimeMultiline(transport.completedAt);
-                                return (
-                                  <div className="ml-1">
-                                    <div>{completedDateTime.date}</div>
-                                    <div className="text-xs text-gray-500">{completedDateTime.time}</div>
-                                  </div>
-                                );
-                              })()}
+                              <span className="ml-1">{formatDateTime(transport.completedAt)}</span>
                             </div>
                           </div>
                         </div>
 
-                        {/* Sekcja 4: Informacje finansowe */}
+                        {/* Sekcja 4: Informacje finansowe (usunięto kolorowe tła) */}
                         <div className="bg-gradient-to-br from-orange-50 to-orange-100 p-4 rounded-lg shadow-sm border border-orange-200">
                           <h4 className="font-medium mb-3 pb-2 border-b border-orange-300 flex items-center text-orange-700">
                             <DollarSign size={18} className="mr-2" />
@@ -913,19 +889,19 @@ export default function ArchiwumSpedycjiPage() {
                           </h4>
                           <div className="space-y-2 text-sm">
                             <div><span className="font-medium">Odległość:</span> 
-                              <span className="ml-1 bg-blue-50 px-2 py-0.5 rounded font-medium text-blue-700">
+                              <span className="ml-1 font-medium">
                                 {transport.distanceKm || transport.response?.distanceKm || 0} km
                               </span>
                             </div>
                             {transport.response && transport.response.deliveryPrice && (
                               <>
                                 <div><span className="font-medium">Cena transportu:</span> 
-                                  <span className="ml-1 bg-green-50 px-2 py-0.5 rounded font-medium text-green-700">
+                                  <span className="ml-1 font-medium">
                                     {transport.response.deliveryPrice} PLN
                                   </span>
                                 </div>
                                 <div><span className="font-medium">Cena za km:</span> 
-                                  <span className="ml-1 bg-green-50 px-2 py-0.5 rounded font-medium text-green-700">
+                                  <span className="ml-1 font-medium">
                                     {calculatePricePerKm(transport.response.deliveryPrice, transport.distanceKm || transport.response?.distanceKm)} PLN/km
                                   </span>
                                 </div>
@@ -946,7 +922,8 @@ export default function ArchiwumSpedycjiPage() {
                           <div className="space-y-2 text-sm">
                             <div><span className="font-medium">Lokalizacja:</span> <span>{transport.location}</span></div>
                             {transport.clientName && transport.location === 'Odbiory własne' && (
-                              <div><span className="font-medium">Nazwa firmy:</span> <span>{transport.clientName}</span></div>
+                              <div><span className="font-medium">Nazwa firmy:</span> <span>{transport.clientName}</span>
+                              </div>
                             )}
                             <div><span className="font-medium">Adres:</span> <span>{getFullLoadingAddress(transport)}</span></div>
                             {transport.location === 'Odbiory własne' && transport.producerAddress?.pinLocation && (
@@ -995,7 +972,7 @@ export default function ArchiwumSpedycjiPage() {
                         </div>
                       </div>
 
-                      {/* Link do Google Maps - poza sekcją adresu */}
+                      {/* Link do Google Maps */}
                       {generateGoogleMapsLink(transport) && (
                         <div className="mb-6 flex justify-center">
                           <a 
@@ -1054,14 +1031,15 @@ export default function ArchiwumSpedycjiPage() {
                             </div>
                           ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                              {/* Informacje o przewoźniku */}
+                              {/* Informacje o przewoźniku - NOWA SEKCJA */}
                               <div className="bg-white p-4 rounded-md shadow-sm border border-gray-200">
                                 <h5 className="text-sm font-medium mb-3 pb-1 border-b flex items-center text-blue-600">
-                                  <User size={14} className="mr-1" />
+                                  <Truck size={14} className="mr-1" />
                                   Dane przewoźnika
                                 </h5>
                                 <div className="space-y-2 text-sm">
                                   <div><span className="font-medium">Kierowca:</span> <span>{transport.response.driverName} {transport.response.driverSurname}</span></div>
+                                  <div><span className="font-medium">Numer auta:</span> <span>{transport.response.vehicleNumber}</span></div>
                                   <div className="flex items-center">
                                     <Phone size={12} className="mr-1 text-green-500" />
                                     <span className="font-medium">Telefon:</span> 
@@ -1069,7 +1047,6 @@ export default function ArchiwumSpedycjiPage() {
                                       {transport.response.driverPhone}
                                     </a>
                                   </div>
-                                  <div><span className="font-medium">Numer auta:</span> <span>{transport.response.vehicleNumber}</span></div>
                                 </div>
                               </div>
                               
@@ -1081,14 +1058,14 @@ export default function ArchiwumSpedycjiPage() {
                                 </h5>
                                 <div className="space-y-2 text-sm">
                                   <div><span className="font-medium">Cena:</span> 
-                                    <span className="ml-1 bg-green-50 px-2 py-0.5 rounded font-medium text-green-700">
+                                    <span className="ml-1 font-medium">
                                       {transport.response.deliveryPrice} PLN
                                     </span>
                                   </div>
                                   <div><span className="font-medium">Odległość:</span> <span>{transport.distanceKm || transport.response?.distanceKm || 'N/A'} km</span></div>
                                   {(transport.distanceKm || transport.response?.distanceKm) > 0 && transport.response.deliveryPrice > 0 && (
                                     <div><span className="font-medium">Koszt za km:</span> 
-                                      <span className="ml-1 bg-green-50 px-2 py-0.5 rounded font-medium text-green-700">
+                                      <span className="ml-1 font-medium">
                                         {calculatePricePerKm(transport.response.deliveryPrice, transport.distanceKm || transport.response?.distanceKm)} PLN/km
                                       </span>
                                     </div>
