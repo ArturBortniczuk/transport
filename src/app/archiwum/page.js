@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { format } from 'date-fns'
 import { pl } from 'date-fns/locale'
-import { KIEROWCY, RYNKI } from '../kalendarz/constants'
+import { KIEROWCY, RYNKI, POJAZDY } from '../kalendarz/constants'
 import * as XLSX from 'xlsx'
 import { ChevronLeft, ChevronRight, FileText, Download, ThumbsUp, ThumbsDown, Compass, ChevronDown, MapPin, Truck, Building, Phone, User, Calendar, Info, ExternalLink } from 'lucide-react'
 import TransportRating from '@/components/TransportRating'
