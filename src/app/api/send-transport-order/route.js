@@ -577,7 +577,8 @@ function generateTransportOrderHTML({ spedycja, producerAddress, delivery, respo
           ul. Główna 7<br>
           18-100 Łapy<br>
           tel. 85 715 27 05<br>
-          www.grupaeltron.pl
+          NIP: 9662112843<br>
+          ksiegowosc@grupaeltron.pl
         </p>
       </div>
       
