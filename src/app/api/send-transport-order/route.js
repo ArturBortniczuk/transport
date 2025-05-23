@@ -257,7 +257,7 @@ function generateTransportOrderHTML({ spedycja, producerAddress, delivery, respo
   };
   
   const getLoadingLocation = () => {
-    if (spedycja.location === 'Producent' && producerAddress) {
+    if (spedycja.location === 'Odbiory własne' && producerAddress) {
       return formatAddress(producerAddress);
     } else if (spedycja.location === 'Magazyn Białystok') {
       return 'Grupa Eltron Sp z o.o, ul. Wysockiego 69B, 15-169 Białystok';
@@ -300,7 +300,7 @@ function generateTransportOrderHTML({ spedycja, producerAddress, delivery, respo
         
         let address = 'Brak danych';
         
-        if (place.location === 'Producent' && place.producerAddress) {
+        if (place.location === 'Odbiory własne' && place.producerAddress) {
           address = formatAddress(place.producerAddress);
         } else if (place.location === 'Magazyn Białystok') {
           address = 'Magazyn Białystok';
