@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import SpedycjaForm from './components/SpedycjaForm'
 import SpedycjaList from './components/SpedycjaList'
 import Link from 'next/link'
-import { Clipboard, Archive, Edit } from 'lucide-react'
+import { Clipboard, Archive, Edit, CheckCircle, AlertCircle } from 'lucide-react'
 import TransportOrderForm from './components/TransportOrderForm'
 
 
@@ -20,10 +20,21 @@ export default function SpedycjaPage() {
   const [selectedOrderZamowienie, setSelectedOrderZamowienie] = useState(null);
   const [currentUserEmail, setCurrentUserEmail] = useState('');
   const [isEditing, setIsEditing] = useState(false);
+  
+  // NOWY STAN: Komunikaty o operacjach
+  const [operationMessage, setOperationMessage] = useState(null);
 
   const buttonClasses = {
     primary: "px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors flex items-center gap-2",
     outline: "px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-100 transition-colors flex items-center gap-2"
+  };
+
+  // NOWA FUNKCJA: Wyświetlanie komunikatu operacji
+  const showOperationMessage = (message, type = 'success') => {
+    setOperationMessage({ message, type });
+    setTimeout(() => {
+      setOperationMessage(null);
+    }, 5000); // Ukryj po 5 sekundach
   };
 
   useEffect(() => {
@@ -121,6 +132,7 @@ export default function SpedycjaPage() {
           // Odświeżamy listę po dodaniu
           fetchSpedycje();
           setShowForm(false);
+          showOperationMessage('Zamówienie spedycji zostało pomyślnie dodane', 'success');
           return;
         }
       } catch (apiError) {
@@ -142,9 +154,10 @@ export default function SpedycjaPage() {
       
       fetchSpedycje();
       setShowForm(false);
+      showOperationMessage('Zamówienie spedycji zostało dodane (lokalnie)', 'success');
     } catch (error) {
       console.error('Błąd dodawania zlecenia:', error);
-      alert('Wystąpił błąd podczas dodawania zlecenia');
+      showOperationMessage('Wystąpił błąd podczas dodawania zlecenia', 'error');
     }
   };
 
@@ -180,15 +193,17 @@ export default function SpedycjaPage() {
         setShowForm(false);
         setIsEditing(false);
         setSelectedZamowienie(null);
+        showOperationMessage('Zamówienie zostało pomyślnie zaktualizowane', 'success');
       } else {
         throw new Error(data.error || 'Błąd aktualizacji zamówienia');
       }
     } catch (error) {
       console.error('Błąd edycji zamówienia:', error);
-      alert('Wystąpił błąd podczas zapisywania zmian: ' + error.message);
+      showOperationMessage('Wystąpił błąd podczas zapisywania zmian: ' + error.message, 'error');
     }
   };
 
+  // ZMODYFIKOWANA FUNKCJA handleResponse
   const handleResponse = async (zamowienieId, response) => {
     try {
       console.log('Odpowiedź na zamówienie ID:', zamowienieId, 'Dane odpowiedzi:', response);
@@ -211,6 +226,13 @@ export default function SpedycjaPage() {
         if (data.success) {
           setShowForm(false);
           fetchSpedycje();
+          
+          // Pokaż komunikat z informacją o automatycznych odpowiedziach
+          if (data.message && data.message.includes('połączonych transportów')) {
+            showOperationMessage(data.message, 'success');
+          } else {
+            showOperationMessage('Odpowiedź została pomyślnie zapisana', 'success');
+          }
           return;
         }
       } catch (apiError) {
@@ -225,9 +247,7 @@ export default function SpedycjaPage() {
           if (zam.id === zamowienieId) {
             return { 
               ...zam, 
-              // status: 'completed', // Usuwamy lub komentujemy tę linię
               response,
-              // completedAt: new Date().toISOString() // Usuwamy lub komentujemy tę linię
             };
           }
           return zam;
@@ -235,12 +255,13 @@ export default function SpedycjaPage() {
         
         localStorage.setItem('zamowieniaSpedycja', JSON.stringify(updatedZamowienia));
         fetchSpedycje();
+        showOperationMessage('Odpowiedź została zapisana (lokalnie)', 'success');
       }
       
       setShowForm(false);
     } catch (error) {
       console.error('Błąd odpowiedzi na zlecenie:', error);
-      alert('Wystąpił błąd podczas zapisywania odpowiedzi');
+      showOperationMessage('Wystąpił błąd podczas zapisywania odpowiedzi', 'error');
     }
   };
 
@@ -265,7 +286,7 @@ export default function SpedycjaPage() {
       const data = await response.json()
       
       if (data.success) {
-        alert('Zlecenie transportowe zostało wysłane!')
+        showOperationMessage('Zlecenie transportowe zostało wysłane!', 'success');
         setSelectedOrderZamowienie(null)
         fetchSpedycje() // Odśwież listę po wysłaniu
       } else {
@@ -273,6 +294,7 @@ export default function SpedycjaPage() {
       }
     } catch (error) {
       console.error('Błąd wysyłania zlecenia transportowego:', error)
+      showOperationMessage('Wystąpił błąd podczas wysyłania zlecenia: ' + error.message, 'error');
       throw error
     }
   }
@@ -333,6 +355,7 @@ export default function SpedycjaPage() {
         
         if (data.success) {
           fetchSpedycje(); // Odśwież listę
+          showOperationMessage('Zlecenie zostało oznaczone jako zrealizowane', 'success');
           return;
         }
       } catch (apiError) {
@@ -363,10 +386,11 @@ export default function SpedycjaPage() {
         
         localStorage.setItem('zamowieniaSpedycja', JSON.stringify(updatedZamowienia));
         fetchSpedycje();
+        showOperationMessage('Zlecenie zostało oznaczone jako zrealizowane (lokalnie)', 'success');
       }
     } catch (error) {
       console.error('Błąd oznaczania jako zrealizowane:', error);
-      alert('Wystąpił błąd podczas oznaczania zlecenia jako zrealizowane');
+      showOperationMessage('Wystąpił błąd podczas oznaczania zlecenia jako zrealizowane', 'error');
     }
   };
 
@@ -430,6 +454,22 @@ export default function SpedycjaPage() {
 
   return (
     <div className="max-w-6xl mx-auto">
+      {/* NOWY KOMPONENT: Komunikaty o operacjach */}
+      {operationMessage && (
+        <div className={`mb-4 p-4 rounded-lg flex items-center ${
+          operationMessage.type === 'success' 
+            ? 'bg-green-50 text-green-700 border border-green-200' 
+            : 'bg-red-50 text-red-700 border border-red-200'
+        }`}>
+          {operationMessage.type === 'success' ? (
+            <CheckCircle size={20} className="mr-2" />
+          ) : (
+            <AlertCircle size={20} className="mr-2" />
+          )}
+          {operationMessage.message}
+        </div>
+      )}
+
       <div className="mb-8 flex justify-between items-center">
         <h1 className="text-3xl font-bold text-gray-900">
           Zamówienia spedycji
