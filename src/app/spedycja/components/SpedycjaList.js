@@ -167,7 +167,7 @@ export default function SpedycjaList({
           
           {transport.response.costPerTransport && (
             <div className="text-sm text-indigo-800 mt-2 pt-2 border-t border-indigo-100">
-              <span className="font-medium">Koszt per transport:</span> 
+              <span className="font-medium">Koszt na transport:</span> 
               <span className="ml-1">{transport.response.costPerTransport} PLN</span>
               <span className="text-xs text-gray-500 ml-2">
                 (całkowity koszt: {transport.response.deliveryPrice} PLN)
