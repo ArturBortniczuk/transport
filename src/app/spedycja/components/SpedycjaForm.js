@@ -1,3 +1,4 @@
+// src/app/spedycja/components/SpedycjaForm.js
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { Calendar, Search, X, Info, Truck, PlusCircle } from 'lucide-react'
@@ -8,7 +9,8 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
   const [constructions, setConstructions] = useState([])
   const [selectedUser, setSelectedUser] = useState(null)
   const [selectedConstructions, setSelectedConstructions] = useState([])
-  const [deliveryPrice, setDeliveryPrice] = useState(initialData?.response?.deliveryPrice || 0)
+  const [totalPrice, setTotalPrice] = useState(initialData?.response?.deliveryPrice || 0) // Zmiana nazwy
+  const [pricePerTransport, setPricePerTransport] = useState(0) // Nowa zmienna
   const [currentUser, setCurrentUser] = useState({
     email: '',
     name: ''
@@ -65,6 +67,19 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
       kolor: '#FF0000'
     }
   };
+
+  // Funkcja do automatycznego obliczania ceny na transport
+  const calculatePricePerTransport = (total, transportsCount) => {
+    if (transportsCount === 0) return total;
+    return Math.round((total / transportsCount) * 100) / 100;
+  };
+
+  // Effect do automatycznego przeliczania ceny na transport
+  useEffect(() => {
+    const transportsCount = connectedTransports.length + 1; // +1 dla bieżącego transportu
+    const calculatedPrice = calculatePricePerTransport(totalPrice, transportsCount);
+    setPricePerTransport(calculatedPrice);
+  }, [totalPrice, connectedTransports]);
 
   // Pobierz listę użytkowników, budów i dane bieżącego użytkownika
   useEffect(() => {
@@ -184,6 +199,11 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
       setSelectedLocation(initialData.location || '');
       setDistance(initialData.distanceKm || 0);
       
+      // Ustaw cenę całkowitą
+      if (initialData.response?.deliveryPrice) {
+        setTotalPrice(initialData.response.deliveryPrice);
+      }
+      
       // Ustaw opis towaru, jeśli istnieje
       if (initialData.goodsDescription) {
         setGoodsDescription({
@@ -194,8 +214,8 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
       }
       
       // Ustaw połączone transporty, jeśli istnieją
-      if (initialData.connectedTransports && initialData.connectedTransports.length > 0) {
-        setConnectedTransports(initialData.connectedTransports);
+      if (initialData.response?.connectedTransports && initialData.response.connectedTransports.length > 0) {
+        setConnectedTransports(initialData.response.connectedTransports);
         setShowTransportsSection(true);
       }
       
@@ -443,17 +463,6 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
     );
   };
   
-  // Obliczanie podziału kosztów między transporty
-  const calculateCostDistribution = (totalPrice) => {
-    if (!connectedTransports.length) return totalPrice;
-    
-    // Podziel koszt na wszystkie transporty + bieżący transport
-    const transportsCount = connectedTransports.length + 1;
-    const costPerTransport = Math.round((totalPrice / transportsCount) * 100) / 100; // zaokrąglenie do 2 miejsc po przecinku
-    
-    return costPerTransport;
-  };
-  
   // Filter users and constructions based on search term
   const filteredItems = [...users, ...constructions].filter(item => 
     item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -500,11 +509,13 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
       const distanceKm = initialData.distanceKm || 0;
       console.log('Odległość używana do obliczeń:', distanceKm);
                      
-      const deliveryPrice = Number(formData.get('deliveryPrice'));
-      const pricePerKm = distanceKm > 0 ? (deliveryPrice / distanceKm).toFixed(2) : 0;
+      // ZMIANA: Używamy całkowitej ceny zamiast ceny na transport
+      const totalDeliveryPrice = Number(totalPrice);
+      const pricePerKm = distanceKm > 0 ? (totalDeliveryPrice / distanceKm).toFixed(2) : 0;
       
       console.log('Obliczenia:', {
-        deliveryPrice,
+        totalDeliveryPrice,
+        pricePerTransport,
         distanceKm,
         pricePerKm
       });
@@ -515,7 +526,7 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
         driverSurname: formData.get('driverSurname'),
         driverPhone: formData.get('driverPhone'),
         vehicleNumber: formData.get('vehicleNumber'),
-        deliveryPrice: deliveryPrice,
+        deliveryPrice: totalDeliveryPrice, // Całkowita cena
         distanceKm: Number(distanceKm),
         pricePerKm: Number(pricePerKm),
         adminNotes: formData.get('adminNotes')
@@ -533,8 +544,7 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
         responseData.connectedTransports = connectedTransports;
         
         // Oblicz podział kosztów
-        const costPerTransport = calculateCostDistribution(deliveryPrice);
-        responseData.costPerTransport = costPerTransport;
+        responseData.costPerTransport = pricePerTransport;
       }
       
       onSubmit(initialData.id, responseData);
@@ -755,14 +765,32 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
 
           <div className="grid grid-cols-2 gap-4">
             <div>
+              <label className="block text-sm font-medium mb-1">
+                Cena całkowita transportu
+                {connectedTransports.length > 0 && (
+                  <span className="text-sm text-gray-600"> (do podziału na {connectedTransports.length + 1} miejsc)</span>
+                )}
+              </label>
               <input
-                name="deliveryPrice"
+                name="totalPrice"
                 type="number"
                 className="w-full p-2 border rounded-md"
-                value={deliveryPrice}
-                onChange={(e) => setDeliveryPrice(Number(e.target.value))}
+                value={totalPrice}
+                onChange={(e) => setTotalPrice(Number(e.target.value))}
                 required
               />
+              
+              {/* Wyświetl cenę na transport, jeśli są połączone transporty */}
+              {connectedTransports.length > 0 && (
+                <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded-md">
+                  <p className="text-sm font-medium text-yellow-800">
+                    Cena na transport: {pricePerTransport} PLN
+                  </p>
+                  <p className="text-xs text-yellow-700">
+                    (Podzielona na {connectedTransports.length + 1} miejsc)
+                  </p>
+                </div>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">Odległość</label>
@@ -876,7 +904,7 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
                           Koszt transportu zostanie podzielony między {connectedTransports.length + 1} transporty:
                         </p>
                         <p className="text-sm mt-1">
-                          Koszt na transport: ~{calculateCostDistribution(deliveryPrice || 0)} PLN/transport
+                          Koszt na transport: ~{pricePerTransport} PLN/transport
                         </p>
                       </div>
                     )}
@@ -899,6 +927,7 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
         </>
       ) : (
         <>
+          {/* Reszta formularza (dla nowych zamówień i edycji) pozostaje bez zmian */}
           <div>
             <label className="block text-sm font-medium mb-1">Miejsce załadunku</label>
             <div className="grid grid-cols-3 gap-2">
