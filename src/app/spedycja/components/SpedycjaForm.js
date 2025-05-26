@@ -874,7 +874,7 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
                           Koszt transportu zostanie podzielony między {connectedTransports.length + 1} transporty:
                         </p>
                         <p className="text-sm mt-1">
-                          Koszt na transport: ~{calculateCostDistribution(formData.get('deliveryPrice') || 0)} PLN/transport
+                          Koszt na transport: będzie obliczony po wprowadzeniu ceny
                         </p>
                       </div>
                     )}
