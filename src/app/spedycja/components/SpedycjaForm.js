@@ -8,6 +8,7 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
   const [constructions, setConstructions] = useState([])
   const [selectedUser, setSelectedUser] = useState(null)
   const [selectedConstructions, setSelectedConstructions] = useState([])
+  const [deliveryPrice, setDeliveryPrice] = useState(initialData?.response?.deliveryPrice || 0)
   const [currentUser, setCurrentUser] = useState({
     email: '',
     name: ''
@@ -754,11 +755,12 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium mb-1">Cena transportu</label>
               <input
                 name="deliveryPrice"
                 type="number"
                 className="w-full p-2 border rounded-md"
+                value={deliveryPrice}
+                onChange={(e) => setDeliveryPrice(Number(e.target.value))}
                 required
               />
             </div>
@@ -874,7 +876,7 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
                           Koszt transportu zostanie podzielony między {connectedTransports.length + 1} transporty:
                         </p>
                         <p className="text-sm mt-1">
-                          Koszt na transport: będzie obliczony po wprowadzeniu ceny
+                          Koszt na transport: ~{calculateCostDistribution(formData.get('deliveryPrice') || 0)} PLN/transport
                         </p>
                       </div>
                     )}
