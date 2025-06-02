@@ -3,7 +3,8 @@ import React, { useState, useEffect, Fragment } from 'react'
 import { format } from 'date-fns'
 import { pl } from 'date-fns/locale'
 import * as XLSX from 'xlsx'
-import { ChevronLeft, ChevronRight, FileText, Download, Search, Truck, Package, MapPin, Phone, Calendar, DollarSign, User, Clipboard, ArrowRight, ChevronDown, ChevronUp, AlertCircle, Building, ShoppingBag, Weight, Mail, Hash, Clock, CheckCircle } from 'lucide-react'
+import { generateCMR } from '@/lib/utils/generateCMR'
+import { ChevronLeft, ChevronRight, FileText, Download, Search, Truck, Package, MapPin, Phone, Calendar, DollarSign, User, Clipboard, ArrowRight, ChevronDown, ChevronUp, AlertCircle, Building, ShoppingBag, Weight, Mail, Hash, Clock, CheckCircle, Printer } from 'lucide-react'
 
 export default function ArchiwumSpedycjiPage() {
   const [archiwum, setArchiwum] = useState([])
@@ -158,6 +159,22 @@ export default function ArchiwumSpedycjiPage() {
       return 'Grupa Eltron Sp. z o.o., ul. Krótka 2, 05-220 Zielonka';
     }
     return transport.location || 'Nie podano';
+  }
+
+  // NOWA FUNKCJA: Sprawdza czy transport ma dane przewoźnika
+  const hasDriverInfo = (transport) => {
+    return transport.response && 
+           transport.response.driverName && 
+           transport.response.driverSurname && 
+           transport.response.vehicleNumber;
+  }
+
+  // NOWA FUNKCJA: Formatuje dane przewoźnika dla widoku skróconego
+  const getDriverSummary = (transport) => {
+    if (!hasDriverInfo(transport)) return 'Brak danych';
+    
+    const { driverName, driverSurname, vehicleNumber } = transport.response;
+    return `${driverName} ${driverSurname} (${vehicleNumber})`;
   }
 
   // Funkcja filtrująca transporty
@@ -731,8 +748,16 @@ export default function ArchiwumSpedycjiPage() {
                           </div>
                         </div>
                         
-                        {/* Druga linia z dodatkowymi informacjami (usunięto informacje o przewoźniku) */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-3 mt-2">
+                        {/* NOWA LINIA: Informacje o przewoźniku dodane do skróconego widoku */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-2">
+                          {hasDriverInfo(transport) && (
+                            <div className="text-sm flex items-center">
+                              <Truck size={14} className="mr-1 text-blue-600" />
+                              <span className="font-medium">Kierowca:</span>
+                              <span className="ml-1">{getDriverSummary(transport)}</span>
+                            </div>
+                          )}
+                          
                           {transport.response && transport.response.deliveryPrice && (
                             <div className="text-sm flex items-center">
                               <DollarSign size={14} className="mr-1 text-green-600" />
@@ -763,6 +788,22 @@ export default function ArchiwumSpedycjiPage() {
                         {statusInfo.icon}
                         {statusInfo.label}
                       </span>
+                      
+                      {/* NOWY PRZYCISK: CMR w widoku skróconym */}
+                      {transport.response && !transport.response.completedManually && (
+                        <button 
+                          type="button"
+                          className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors flex items-center gap-1"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            generateCMR(transport);
+                          }}
+                          title="Generuj CMR"
+                        >
+                          <Printer size={14} />
+                          CMR
+                        </button>
+                      )}
                       
                       {expandedRowId === transport.id ? (
                         <button 
@@ -804,7 +845,7 @@ export default function ArchiwumSpedycjiPage() {
                   {expandedRowId === transport.id && (
                     <div className="mt-6 pl-4 border-l-4 border-green-200 animate-fadeIn">
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-                        {/* Sekcja 1: Podstawowe dane zamówienia (usunięto nazwę klienta) */}
+                        {/* Sekcja 1: Podstawowe dane zamówienia */}
                         <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-lg shadow-sm border border-blue-200">
                           <h4 className="font-medium mb-3 pb-2 border-b border-blue-300 flex items-center text-blue-700">
                             <FileText size={18} className="mr-2" />
@@ -853,9 +894,36 @@ export default function ArchiwumSpedycjiPage() {
                           )}
                         </div>
 
-                        {/* Sekcja 3: Daty i terminy (zmieniono formatowanie daty zakończenia) */}
+                        {/* NOWA SEKCJA 3: Informacje o przewoźniku (przeniesiona z finansowych) */}
                         <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-4 rounded-lg shadow-sm border border-purple-200">
                           <h4 className="font-medium mb-3 pb-2 border-b border-purple-300 flex items-center text-purple-700">
+                            <Truck size={18} className="mr-2" />
+                            Dane przewoźnika
+                          </h4>
+                          {hasDriverInfo(transport) ? (
+                            <div className="space-y-2 text-sm">
+                              <div><span className="font-medium">Kierowca:</span> <span>{transport.response.driverName} {transport.response.driverSurname}</span></div>
+                              <div><span className="font-medium">Numer auta:</span> <span>{transport.response.vehicleNumber}</span></div>
+                              {transport.response.driverPhone && (
+                                <div className="flex items-center">
+                                  <Phone size={12} className="mr-1 text-green-500" />
+                                  <span className="font-medium">Telefon:</span>
+                                  <a href={`tel:${transport.response.driverPhone}`} className="ml-1 text-blue-600 hover:underline">
+                                    {transport.response.driverPhone}
+                                  </a>
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="text-sm text-gray-500 italic">
+                              Brak danych o przewoźniku
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Sekcja 4: Daty i terminy */}
+                        <div className="bg-gradient-to-br from-orange-50 to-orange-100 p-4 rounded-lg shadow-sm border border-orange-200">
+                          <h4 className="font-medium mb-3 pb-2 border-b border-orange-300 flex items-center text-orange-700">
                             <Calendar size={18} className="mr-2" />
                             Daty i terminy
                           </h4>
@@ -880,34 +948,34 @@ export default function ArchiwumSpedycjiPage() {
                             </div>
                           </div>
                         </div>
+                      </div>
 
-                        {/* Sekcja 4: Informacje finansowe (usunięto kolorowe tła) */}
-                        <div className="bg-gradient-to-br from-orange-50 to-orange-100 p-4 rounded-lg shadow-sm border border-orange-200">
-                          <h4 className="font-medium mb-3 pb-2 border-b border-orange-300 flex items-center text-orange-700">
-                            <DollarSign size={18} className="mr-2" />
-                            Informacje finansowe
-                          </h4>
-                          <div className="space-y-2 text-sm">
-                            <div><span className="font-medium">Odległość:</span> 
-                              <span className="ml-1 font-medium">
-                                {transport.distanceKm || transport.response?.distanceKm || 0} km
-                              </span>
-                            </div>
-                            {transport.response && transport.response.deliveryPrice && (
-                              <>
-                                <div><span className="font-medium">Cena transportu:</span> 
-                                  <span className="ml-1 font-medium">
-                                    {transport.response.deliveryPrice} PLN
-                                  </span>
-                                </div>
-                                <div><span className="font-medium">Cena za km:</span> 
-                                  <span className="ml-1 font-medium">
-                                    {calculatePricePerKm(transport.response.deliveryPrice, transport.distanceKm || transport.response?.distanceKm)} PLN/km
-                                  </span>
-                                </div>
-                              </>
-                            )}
+                      {/* Sekcja finansowa przeniesiona tutaj */}
+                      <div className="mb-6 bg-gradient-to-br from-green-50 to-green-100 p-4 rounded-lg shadow-sm border border-green-200">
+                        <h4 className="font-medium mb-3 pb-2 border-b border-green-300 flex items-center text-green-700">
+                          <DollarSign size={18} className="mr-2" />
+                          Informacje finansowe
+                        </h4>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                          <div><span className="font-medium">Odległość:</span> 
+                            <span className="ml-1 font-medium">
+                              {transport.distanceKm || transport.response?.distanceKm || 0} km
+                            </span>
                           </div>
+                          {transport.response && transport.response.deliveryPrice && (
+                            <>
+                              <div><span className="font-medium">Cena transportu:</span> 
+                                <span className="ml-1 font-medium">
+                                  {transport.response.deliveryPrice} PLN
+                                </span>
+                              </div>
+                              <div><span className="font-medium">Cena za km:</span> 
+                                <span className="ml-1 font-medium">
+                                  {calculatePricePerKm(transport.response.deliveryPrice, transport.distanceKm || transport.response?.distanceKm)} PLN/km
+                                </span>
+                              </div>
+                            </>
+                          )}
                         </div>
                       </div>
 
@@ -1031,7 +1099,7 @@ export default function ArchiwumSpedycjiPage() {
                             </div>
                           ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                              {/* Informacje o przewoźniku - NOWA SEKCJA */}
+                              {/* Informacje o przewoźniku */}
                               <div className="bg-white p-4 rounded-md shadow-sm border border-gray-200">
                                 <h5 className="text-sm font-medium mb-3 pb-1 border-b flex items-center text-blue-600">
                                   <Truck size={14} className="mr-1" />
@@ -1115,6 +1183,20 @@ export default function ArchiwumSpedycjiPage() {
                               </div>
                             </div>
                           )}
+                          
+                          {/* NOWA SEKCJA: Przyciski akcji w rozszerzonym widoku */}
+                          <div className="mt-5 flex space-x-3">
+                            {transport.response && !transport.response.completedManually && (
+                              <button 
+                                type="button"
+                                className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors flex items-center gap-2"
+                                onClick={() => generateCMR(transport)}
+                              >
+                                <FileText size={16} />
+                                Generuj CMR
+                              </button>
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>
