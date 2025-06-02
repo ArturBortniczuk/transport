@@ -644,45 +644,55 @@ export default function ArchiwumSpedycjiPage() {
                         </h3>
                       </div>
 
-                      {/* Informacje w dwóch rzędach */}
+                      {/* Informacje w dwóch rzędach z ramkami */}
                       <div className="space-y-3">
                         {/* Pierwszy rząd */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
-                          <div className="flex items-center text-gray-600">
-                            <Hash size={16} className="mr-2 text-blue-500" />
-                            <span className="font-medium">Nr zamówienia:</span>
-                            <span className="ml-2 font-semibold">{transport.orderNumber || '-'}</span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-center">
+                            <Hash size={16} className="mr-2 text-blue-600" />
+                            <div>
+                              <span className="text-xs font-medium text-blue-700 block">Nr zamówienia</span>
+                              <span className="font-semibold text-gray-900">{transport.orderNumber || '-'}</span>
+                            </div>
                           </div>
                           
-                          <div className="flex items-center text-gray-600">
-                            <FileText size={16} className="mr-2 text-purple-500" />
-                            <span className="font-medium">MPK:</span>
-                            <span className="ml-2 font-semibold">{transport.mpk}</span>
+                          <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 flex items-center">
+                            <FileText size={16} className="mr-2 text-purple-600" />
+                            <div>
+                              <span className="text-xs font-medium text-purple-700 block">MPK</span>
+                              <span className="font-semibold text-gray-900">{transport.mpk}</span>
+                            </div>
                           </div>
                           
-                          <div className="flex items-center text-gray-600">
-                            <User size={16} className="mr-2 text-orange-500" />
-                            <span className="font-medium">Odpowiedzialny:</span>
-                            <span className="ml-2 font-semibold">{transport.responsiblePerson || transport.createdBy || 'Brak'}</span>
+                          <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 flex items-center">
+                            <User size={16} className="mr-2 text-orange-600" />
+                            <div>
+                              <span className="text-xs font-medium text-orange-700 block">Odpowiedzialny</span>
+                              <span className="font-semibold text-gray-900 text-sm">{transport.responsiblePerson || transport.createdBy || 'Brak'}</span>
+                            </div>
                           </div>
                         </div>
                         
                         {/* Drugi rząd */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-                          <div className="flex items-center text-gray-600">
-                            <DollarSign size={16} className="mr-2 text-green-500" />
-                            <span className="font-medium">Cena transportu:</span>
-                            <span className="ml-2 font-semibold">
-                              {transport.response?.deliveryPrice ? `${transport.response.deliveryPrice} PLN` : 'Brak danych'}
-                            </span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-center">
+                            <DollarSign size={16} className="mr-2 text-green-600" />
+                            <div>
+                              <span className="text-xs font-medium text-green-700 block">Cena transportu</span>
+                              <span className="font-semibold text-gray-900">
+                                {transport.response?.deliveryPrice ? `${transport.response.deliveryPrice} PLN` : 'Brak danych'}
+                              </span>
+                            </div>
                           </div>
                           
-                          <div className="flex items-center text-gray-600">
-                            <MapPin size={16} className="mr-2 text-blue-500" />
-                            <span className="font-medium">Odległość:</span>
-                            <span className="ml-2 font-semibold">
-                              {transport.distanceKm || transport.response?.distanceKm || 0} km
-                            </span>
+                          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-center">
+                            <MapPin size={16} className="mr-2 text-blue-600" />
+                            <div>
+                              <span className="text-xs font-medium text-blue-700 block">Odległość</span>
+                              <span className="font-semibold text-gray-900">
+                                {transport.distanceKm || transport.response?.distanceKm || 0} km
+                              </span>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -696,20 +706,6 @@ export default function ArchiwumSpedycjiPage() {
                     </div>
                     
                     <div className="flex items-center space-x-3 ml-6">
-                      {/* Przycisk CMR - dostępny dla wszystkich */}
-                      <button 
-                        type="button"
-                        className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 font-medium"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          generateCMR(transport);
-                        }}
-                        title="Generuj list przewozowy CMR"
-                      >
-                        <FileText size={16} />
-                        Generuj CMR
-                      </button>
-                      
                       {/* Przycisk rozwinięcia */}
                       <button 
                         className="p-2 rounded-full hover:bg-gray-200 transition-colors"
