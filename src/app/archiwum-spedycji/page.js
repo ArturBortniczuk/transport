@@ -695,6 +695,35 @@ export default function ArchiwumSpedycjiPage() {
                             </div>
                           </div>
                         </div>
+                        
+                        {/* Trzeci rząd - Informacje o towarze */}
+                        {(transport.goodsDescription?.description || transport.goodsDescription?.weight) && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {transport.goodsDescription?.description && (
+                              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-center">
+                                <ShoppingBag size={16} className="mr-2 text-amber-600" />
+                                <div className="flex-1 min-w-0">
+                                  <span className="text-xs font-medium text-amber-700 block">Rodzaj towaru</span>
+                                  <span className="font-semibold text-gray-900 text-sm truncate block">
+                                    {transport.goodsDescription.description}
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+                            
+                            {transport.goodsDescription?.weight && (
+                              <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 flex items-center">
+                                <Weight size={16} className="mr-2 text-indigo-600" />
+                                <div>
+                                  <span className="text-xs font-medium text-indigo-700 block">Waga towaru</span>
+                                  <span className="font-semibold text-gray-900">
+                                    {transport.goodsDescription.weight}
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                       
                       {/* Wyświetl informacje o budowach jeśli istnieją */}
