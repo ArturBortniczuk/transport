@@ -626,16 +626,26 @@ export default function ArchiwumSpedycjiPage() {
                   >
                     <div className="flex-1">
                       {/* Główny nagłówek z miejscami załadunku i rozładunku */}
-                      <div className="mb-4">
+                      <div className="mb-3">
                         <h3 className="text-2xl font-bold text-gray-900 flex items-center mb-2">
                           <span className="flex items-center">
-                            {getLoadingCity(transport).toUpperCase()}
-                            <span className="ml-3 text-lg font-medium text-gray-600">({getLoadingCompanyName(transport)})</span>
+                            <span className="text-lg font-medium text-gray-600">
+                              {getLoadingCompanyName(transport)}
+                            </span>
+                            <span className="ml-2 text-base text-gray-500 lowercase">
+                              ({getLoadingCity(transport)})
+                            </span>
                           </span>
+                      
                           <ArrowRight size={24} className="mx-4 text-gray-500" /> 
+                      
                           <span className="flex items-center">
-                            {getDeliveryCity(transport).toUpperCase()}
-                            <span className="ml-3 text-lg font-medium text-gray-600">({getUnloadingCompanyName(transport)})</span>
+                            <span className="text-lg font-medium text-gray-600">
+                              {getUnloadingCompanyName(transport)}
+                            </span>
+                            <span className="ml-2 text-base text-gray-500 lowercase">
+                              ({getDeliveryCity(transport)})
+                            </span>
                           </span>
                         </h3>
                       </div>
