@@ -628,53 +628,58 @@ export default function ArchiwumSpedycjiPage() {
                       {/* Główny nagłówek z miejscami załadunku i rozładunku */}
                       <div className="mb-4">
                         <h3 className="text-2xl font-bold text-gray-900 flex items-center mb-2">
-                          {getLoadingCity(transport).toUpperCase()} 
-                          <ArrowRight size={24} className="mx-3 text-gray-500" /> 
-                          {getDeliveryCity(transport).toUpperCase()}
+                          <span className="flex items-center">
+                            {getLoadingCity(transport).toUpperCase()}
+                            <span className="ml-3 text-lg font-medium text-gray-600">({getLoadingCompanyName(transport)})</span>
+                          </span>
+                          <ArrowRight size={24} className="mx-4 text-gray-500" /> 
+                          <span className="flex items-center">
+                            {getDeliveryCity(transport).toUpperCase()}
+                            <span className="ml-3 text-lg font-medium text-gray-600">({getUnloadingCompanyName(transport)})</span>
+                          </span>
                         </h3>
-                        
-                        {/* Nazwy firm */}
-                        <div className="text-lg text-gray-700 flex items-center">
-                          <span className="font-medium">{getLoadingCompanyName(transport)}</span>
-                          <ArrowRight size={18} className="mx-2 text-gray-400" />
-                          <span className="font-medium">{getUnloadingCompanyName(transport)}</span>
-                        </div>
                       </div>
 
-                      {/* Informacje w jednej linii */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 text-sm">
-                        <div className="flex items-center text-gray-600">
-                          <Hash size={16} className="mr-2 text-blue-500" />
-                          <span className="font-medium">Nr zamówienia:</span>
-                          <span className="ml-1 font-semibold">{transport.orderNumber || '-'}</span>
+                      {/* Informacje w dwóch rzędach */}
+                      <div className="space-y-3">
+                        {/* Pierwszy rząd */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
+                          <div className="flex items-center text-gray-600">
+                            <Hash size={16} className="mr-2 text-blue-500" />
+                            <span className="font-medium">Nr zamówienia:</span>
+                            <span className="ml-2 font-semibold">{transport.orderNumber || '-'}</span>
+                          </div>
+                          
+                          <div className="flex items-center text-gray-600">
+                            <FileText size={16} className="mr-2 text-purple-500" />
+                            <span className="font-medium">MPK:</span>
+                            <span className="ml-2 font-semibold">{transport.mpk}</span>
+                          </div>
+                          
+                          <div className="flex items-center text-gray-600">
+                            <User size={16} className="mr-2 text-orange-500" />
+                            <span className="font-medium">Odpowiedzialny:</span>
+                            <span className="ml-2 font-semibold">{transport.responsiblePerson || transport.createdBy || 'Brak'}</span>
+                          </div>
                         </div>
                         
-                        <div className="flex items-center text-gray-600">
-                          <FileText size={16} className="mr-2 text-purple-500" />
-                          <span className="font-medium">MPK:</span>
-                          <span className="ml-1 font-semibold">{transport.mpk}</span>
-                        </div>
-                        
-                        <div className="flex items-center text-gray-600">
-                          <User size={16} className="mr-2 text-orange-500" />
-                          <span className="font-medium">Odpowiedzialny:</span>
-                          <span className="ml-1 font-semibold">{transport.responsiblePerson || transport.createdBy || 'Brak'}</span>
-                        </div>
-                        
-                        <div className="flex items-center text-gray-600">
-                          <DollarSign size={16} className="mr-2 text-green-500" />
-                          <span className="font-medium">Cena:</span>
-                          <span className="ml-1 font-semibold">
-                            {transport.response?.deliveryPrice ? `${transport.response.deliveryPrice} PLN` : 'Brak danych'}
-                          </span>
-                        </div>
-                        
-                        <div className="flex items-center text-gray-600">
-                          <MapPin size={16} className="mr-2 text-blue-500" />
-                          <span className="font-medium">Odległość:</span>
-                          <span className="ml-1 font-semibold">
-                            {transport.distanceKm || transport.response?.distanceKm || 0} km
-                          </span>
+                        {/* Drugi rząd */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                          <div className="flex items-center text-gray-600">
+                            <DollarSign size={16} className="mr-2 text-green-500" />
+                            <span className="font-medium">Cena transportu:</span>
+                            <span className="ml-2 font-semibold">
+                              {transport.response?.deliveryPrice ? `${transport.response.deliveryPrice} PLN` : 'Brak danych'}
+                            </span>
+                          </div>
+                          
+                          <div className="flex items-center text-gray-600">
+                            <MapPin size={16} className="mr-2 text-blue-500" />
+                            <span className="font-medium">Odległość:</span>
+                            <span className="ml-2 font-semibold">
+                              {transport.distanceKm || transport.response?.distanceKm || 0} km
+                            </span>
+                          </div>
                         </div>
                       </div>
                       
@@ -687,27 +692,19 @@ export default function ArchiwumSpedycjiPage() {
                     </div>
                     
                     <div className="flex items-center space-x-3 ml-6">
-                      {/* Status badge */}
-                      <span className="px-4 py-2 rounded-full text-sm flex items-center bg-green-100 text-green-800 border border-green-300 font-medium">
-                        <CheckCircle size={16} className="mr-2" />
-                        Zakończone
-                      </span>
-                      
-                      {/* Przycisk CMR */}
-                      {transport.response && !transport.response.completedManually && (
-                        <button 
-                          type="button"
-                          className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 font-medium"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            generateCMR(transport);
-                          }}
-                          title="Generuj list przewozowy CMR"
-                        >
-                          <Printer size={16} />
-                          Generuj CMR
-                        </button>
-                      )}
+                      {/* Przycisk CMR - dostępny dla wszystkich */}
+                      <button 
+                        type="button"
+                        className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 font-medium"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          generateCMR(transport);
+                        }}
+                        title="Generuj list przewozowy CMR"
+                      >
+                        <FileText size={16} />
+                        Generuj CMR
+                      </button>
                       
                       {/* Przycisk rozwinięcia */}
                       <button 
@@ -953,7 +950,7 @@ export default function ArchiwumSpedycjiPage() {
 
                       {/* Przyciski akcji */}
                       <div className="flex justify-center space-x-4">
-                        {/* Przycisk Google Maps */}
+                        {/* Przycisk CMR - dostępny dla wszystkich */}
                         {generateGoogleMapsLink(transport) && (
                           <a 
                             href={generateGoogleMapsLink(transport)} 
@@ -968,16 +965,14 @@ export default function ArchiwumSpedycjiPage() {
                         )}
                         
                         {/* Przycisk CMR */}
-                        {transport.response && !transport.response.completedManually && (
-                          <button 
-                            type="button"
-                            className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg flex items-center transition-colors font-medium text-base"
-                            onClick={() => generateCMR(transport)}
-                          >
-                            <FileText size={18} className="mr-2" />
-                            Generuj list przewozowy CMR
-                          </button>
-                        )}
+                        <button 
+                          type="button"
+                          className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg flex items-center transition-colors font-medium text-base"
+                          onClick={() => generateCMR(transport)}
+                        >
+                          <FileText size={18} className="mr-2" />
+                          Generuj list przewozowy CMR
+                        </button>
                       </div>
                     </div>
                   )}
