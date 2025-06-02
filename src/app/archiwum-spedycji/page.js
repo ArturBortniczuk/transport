@@ -1085,19 +1085,6 @@ export default function ArchiwumSpedycjiPage() {
                                   </div>
                                 )}
                               </div>
-                            ) : (
-                              {/* Usuniętą sekcję "Zakończone przez" - zastąpiona prostszą informacją */}
-                              <div className="bg-yellow-50 text-yellow-800 p-4 rounded-lg border border-yellow-200 flex items-center">
-                                <AlertCircle size={18} className="mr-2" />
-                                <div>
-                                  <div className="font-medium">
-                                    Transport oznaczony jako zakończony ręcznie
-                                  </div>
-                                  <div className="text-sm mt-1">
-                                    przez {transport.response.completedBy} dnia {formatDate(transport.response.completedAt)}
-                                  </div>
-                                </div>
-                              </div>
                             )}
                           </div>
                         )}
