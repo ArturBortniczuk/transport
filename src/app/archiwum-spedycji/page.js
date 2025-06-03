@@ -156,6 +156,65 @@ export default function ArchiwumSpedycjiPage() {
     return transport.delivery?.city || 'Nie podano';
   }
 
+  // NOWA FUNKCJA: Pobieranie danych towaru z zlecenia transportowego
+  const getGoodsDataFromTransportOrder = (transport) => {
+    // Sprawdź order_data w bazie danych
+    if (transport.order_data) {
+      try {
+        const orderData = typeof transport.order_data === 'string' ? 
+          JSON.parse(transport.order_data) : transport.order_data;
+        
+        return {
+          description: orderData.towar || '',
+          weight: orderData.waga || ''
+        };
+      } catch (error) {
+        console.error('Błąd parsowania order_data:', error);
+      }
+    }
+    
+    // Fallback do danych z formularza spedycyjnego
+    if (transport.goodsDescription) {
+      return {
+        description: transport.goodsDescription.description || '',
+        weight: transport.goodsDescription.weight || ''
+      };
+    }
+    
+    return { description: '', weight: '' };
+  }
+
+  // NOWA FUNKCJA: Pobieranie odpowiedzialnego (osoba lub budowa)
+  const getResponsibleInfo = (transport) => {
+    // Jeśli są odpowiedzialne budowy, zwróć pierwszą budowę
+    if (transport.responsibleConstructions && transport.responsibleConstructions.length > 0) {
+      const construction = transport.responsibleConstructions[0];
+      return {
+        name: construction.name,
+        type: 'construction',
+        mpk: construction.mpk || ''
+      };
+    }
+    
+    // W przeciwnym razie zwróć osobę odpowiedzialną
+    return {
+      name: transport.responsiblePerson || transport.createdBy || 'Brak',
+      type: 'person',
+      mpk: transport.mpk || ''
+    };
+  }
+
+  // NOWA FUNKCJA: Pobieranie aktualnego MPK (z budowy lub transportu)
+  const getCurrentMPK = (transport) => {
+    // Jeśli są odpowiedzialne budowy, użyj MPK z pierwszej budowy
+    if (transport.responsibleConstructions && transport.responsibleConstructions.length > 0) {
+      return transport.responsibleConstructions[0].mpk || transport.mpk || '';
+    }
+    
+    // W przeciwnym razie użyj MPK z transportu
+    return transport.mpk || '';
+  }
+
   // Funkcja pomocnicza do formatowania adresu
   const formatAddress = (address) => {
     if (!address) return 'Brak danych';
@@ -203,9 +262,12 @@ export default function ArchiwumSpedycjiPage() {
         }
       }
       
-      // Filtrowanie po MPK
-      if (mpkValue && (!transport.mpk || !transport.mpk.toLowerCase().includes(mpkValue.toLowerCase()))) {
-        return false
+      // Filtrowanie po MPK - użyj funkcji getCurrentMPK
+      if (mpkValue) {
+        const currentMPK = getCurrentMPK(transport);
+        if (!currentMPK.toLowerCase().includes(mpkValue.toLowerCase())) {
+          return false;
+        }
       }
       
       // Filtrowanie po numerze zamówienia
@@ -283,17 +345,20 @@ export default function ArchiwumSpedycjiPage() {
       const distanceKm = transport.response?.distanceKm || transport.distanceKm || 0
       const price = transport.response?.deliveryPrice || 0
       const pricePerKm = calculatePricePerKm(price, distanceKm)
+      const responsibleInfo = getResponsibleInfo(transport)
+      const goodsData = getGoodsDataFromTransportOrder(transport)
       
       return {
         'Numer zamówienia': transport.orderNumber || '',
         'Data zlecenia': formatDate(transport.createdAt),
         'Data realizacji': transport.completedAt ? formatDate(transport.completedAt) : 'Brak',
         'Trasa': `${getLoadingCity(transport)} → ${getDeliveryCity(transport)}`,
-        'MPK': transport.mpk || '',
+        'MPK': getCurrentMPK(transport),
         'Dokumenty': transport.documents || '',
         'Nazwa klienta': transport.clientName || '',
         'Osoba dodająca': transport.createdBy || '',
-        'Osoba odpowiedzialna': transport.responsiblePerson || transport.createdBy || '',
+        'Osoba odpowiedzialna': responsibleInfo.name,
+        'Typ odpowiedzialnego': responsibleInfo.type === 'construction' ? 'Budowa' : 'Osoba',
         'Przewoźnik': (transport.response?.driverName || '') + ' ' + (transport.response?.driverSurname || ''),
         'Numer auta': transport.response?.vehicleNumber || '',
         'Telefon': transport.response?.driverPhone || '',
@@ -302,8 +367,8 @@ export default function ArchiwumSpedycjiPage() {
         'Cena za km (PLN/km)': pricePerKm,
         'Kontakt załadunek': transport.loadingContact || '',
         'Kontakt rozładunek': transport.unloadingContact || '',
-        'Opis towaru': transport.goodsDescription?.description || '',
-        'Waga towaru': transport.goodsDescription?.weight || '',
+        'Opis towaru (zlecenie)': goodsData.description,
+        'Waga towaru (zlecenie)': goodsData.weight,
         'Uwagi': transport.notes || '',
         'Uwagi przewoźnika': transport.response?.adminNotes || ''
       }
@@ -617,6 +682,8 @@ export default function ArchiwumSpedycjiPage() {
             {currentItems.map((transport) => {
               const dateChanged = isDeliveryDateChanged(transport);
               const displayDate = getActualDeliveryDate(transport);
+              const responsibleInfo = getResponsibleInfo(transport);
+              const currentMPK = getCurrentMPK(transport);
               
               return (
                 <div key={transport.id} className="p-6 hover:bg-gray-50 transition-colors">
@@ -644,90 +711,41 @@ export default function ArchiwumSpedycjiPage() {
                         </h3>
                       </div>
 
-                      {/* Informacje w dwóch rzędach z ramkami */}
-                      <div className="space-y-3">
-                        {/* Pierwszy rząd */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-center">
-                            <Hash size={16} className="mr-2 text-blue-600" />
-                            <div>
-                              <span className="text-xs font-medium text-blue-700 block">Nr zamówienia</span>
-                              <span className="font-semibold text-gray-900">{transport.orderNumber || '-'}</span>
-                            </div>
+                      {/* Informacje w trzech ramkach */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-center">
+                          <Hash size={16} className="mr-2 text-blue-600" />
+                          <div>
+                            <span className="text-xs font-medium text-blue-700 block">Nr zamówienia</span>
+                            <span className="font-semibold text-gray-900">{transport.orderNumber || '-'}</span>
                           </div>
-                          
-                          <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 flex items-center">
-                            <FileText size={16} className="mr-2 text-purple-600" />
-                            <div>
-                              <span className="text-xs font-medium text-purple-700 block">MPK</span>
-                              <span className="font-semibold text-gray-900">{transport.mpk}</span>
-                            </div>
+                        </div>
+                        
+                        <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 flex items-center">
+                          <FileText size={16} className="mr-2 text-purple-600" />
+                          <div>
+                            <span className="text-xs font-medium text-purple-700 block">MPK</span>
+                            <span className="font-semibold text-gray-900">{currentMPK}</span>
                           </div>
-                          
-                          <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 flex items-center">
+                        </div>
+                        
+                        <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 flex items-center">
+                          {responsibleInfo.type === 'construction' ? (
+                            <Building size={16} className="mr-2 text-orange-600" />
+                          ) : (
                             <User size={16} className="mr-2 text-orange-600" />
-                            <div>
-                              <span className="text-xs font-medium text-orange-700 block">Odpowiedzialny</span>
-                              <span className="font-semibold text-gray-900 text-sm">{transport.responsiblePerson || transport.createdBy || 'Brak'}</span>
-                            </div>
+                          )}
+                          <div>
+                            <span className="text-xs font-medium text-orange-700 block">
+                              {responsibleInfo.type === 'construction' ? 'Budowa' : 'Odpowiedzialny'}
+                            </span>
+                            <span className="font-semibold text-gray-900 text-sm">{responsibleInfo.name}</span>
                           </div>
                         </div>
-                        
-                        {/* Drugi rząd */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-center">
-                            <DollarSign size={16} className="mr-2 text-green-600" />
-                            <div>
-                              <span className="text-xs font-medium text-green-700 block">Cena transportu</span>
-                              <span className="font-semibold text-gray-900">
-                                {transport.response?.deliveryPrice ? `${transport.response.deliveryPrice} PLN` : 'Brak danych'}
-                              </span>
-                            </div>
-                          </div>
-                          
-                          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-center">
-                            <MapPin size={16} className="mr-2 text-blue-600" />
-                            <div>
-                              <span className="text-xs font-medium text-blue-700 block">Odległość</span>
-                              <span className="font-semibold text-gray-900">
-                                {transport.distanceKm || transport.response?.distanceKm || 0} km
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                        
-                        {/* Trzeci rząd - Informacje o towarze */}
-                        {(transport.goodsDescription?.description || transport.goodsDescription?.weight) && (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            {transport.goodsDescription?.description && (
-                              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-center">
-                                <ShoppingBag size={16} className="mr-2 text-amber-600" />
-                                <div className="flex-1 min-w-0">
-                                  <span className="text-xs font-medium text-amber-700 block">Rodzaj towaru</span>
-                                  <span className="font-semibold text-gray-900 text-sm truncate block">
-                                    {transport.goodsDescription.description}
-                                  </span>
-                                </div>
-                              </div>
-                            )}
-                            
-                            {transport.goodsDescription?.weight && (
-                              <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 flex items-center">
-                                <Weight size={16} className="mr-2 text-indigo-600" />
-                                <div>
-                                  <span className="text-xs font-medium text-indigo-700 block">Waga towaru</span>
-                                  <span className="font-semibold text-gray-900">
-                                    {transport.goodsDescription.weight}
-                                  </span>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )}
                       </div>
                       
                       {/* Wyświetl informacje o budowach jeśli istnieją */}
-                      {transport.responsibleConstructions && transport.responsibleConstructions.length > 0 && (
+                      {transport.responsibleConstructions && transport.responsibleConstructions.length > 1 && (
                         <div className="mt-3">
                           {renderResponsibleConstructions(transport)}
                         </div>
@@ -766,8 +784,10 @@ export default function ArchiwumSpedycjiPage() {
                   {/* Rozwinięty widok szczegółów */}
                   {expandedRowId === transport.id && (
                     <div className="mt-8 border-t border-gray-200 pt-6">
-                      {/* Podzielone panele z informacjami */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
+                      {/* NOWY LAYOUT: Dwa rzędy po trzy panele */}
+                      
+                      {/* PIERWSZY RZĄD: Dane zamówienia, Dane przewoźnika, Dane o towarze */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                         {/* Panel 1: Dane zamówienia */}
                         <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-5 rounded-xl shadow-sm border border-blue-200">
                           <h4 className="font-bold text-blue-700 mb-4 pb-2 border-b border-blue-300 flex items-center text-lg">
@@ -781,48 +801,22 @@ export default function ArchiwumSpedycjiPage() {
                             </div>
                             <div>
                               <span className="font-medium text-gray-700">MPK:</span>
-                              <div className="font-semibold text-gray-900">{transport.mpk}</div>
+                              <div className="font-semibold text-gray-900">{currentMPK}</div>
                             </div>
                             <div>
                               <span className="font-medium text-gray-700">Dokumenty:</span>
                               <div className="font-semibold text-gray-900">{transport.documents}</div>
                             </div>
-                          </div>
-                        </div>
-
-                        {/* Panel 2: Osoby odpowiedzialne */}
-                        <div className="bg-gradient-to-br from-green-50 to-green-100 p-5 rounded-xl shadow-sm border border-green-200">
-                          <h4 className="font-bold text-green-700 mb-4 pb-2 border-b border-green-300 flex items-center text-lg">
-                            <User size={20} className="mr-2" />
-                            Osoby odpowiedzialne
-                          </h4>
-                          <div className="space-y-3 text-sm">
-                            <div>
-                              <span className="font-medium text-gray-700">Dodane przez:</span>
-                              <div className="font-semibold text-gray-900">{transport.createdBy || 'Nie podano'}</div>
-                            </div>
-                            <div>
-                              <span className="font-medium text-gray-700">Odpowiedzialny:</span>
-                              <div className="font-semibold text-gray-900">
-                                {transport.responsiblePerson || transport.createdBy || 'Nie podano'}
-                              </div>
-                            </div>
-                            {transport.responsibleConstructions && transport.responsibleConstructions.length > 0 && (
+                            {transport.clientName && (
                               <div>
-                                <span className="font-medium text-gray-700">Budowa:</span>
-                                <div className="mt-1">
-                                  {transport.responsibleConstructions.map(construction => (
-                                    <div key={construction.id} className="bg-green-200 text-green-800 px-2 py-1 rounded text-xs font-medium inline-block mr-1 mb-1">
-                                      {construction.name} ({construction.mpk})
-                                    </div>
-                                  ))}
-                                </div>
+                                <span className="font-medium text-gray-700">Nazwa klienta:</span>
+                                <div className="font-semibold text-gray-900">{transport.clientName}</div>
                               </div>
                             )}
                           </div>
                         </div>
 
-                        {/* Panel 3: Dane przewoźnika */}
+                        {/* Panel 2: Dane przewoźnika */}
                         <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-5 rounded-xl shadow-sm border border-purple-200">
                           <h4 className="font-bold text-purple-700 mb-4 pb-2 border-b border-purple-300 flex items-center text-lg">
                             <Truck size={20} className="mr-2" />
@@ -856,7 +850,89 @@ export default function ArchiwumSpedycjiPage() {
                           )}
                         </div>
 
-                        {/* Panel 4: Daty i terminy */}
+                        {/* Panel 3: Dane o towarze */}
+                        <div className="bg-gradient-to-br from-amber-50 to-amber-100 p-5 rounded-xl shadow-sm border border-amber-200">
+                          <h4 className="font-bold text-amber-700 mb-4 pb-2 border-b border-amber-300 flex items-center text-lg">
+                            <ShoppingBag size={20} className="mr-2" />
+                            Dane o towarze
+                          </h4>
+                          {(() => {
+                            const goodsData = getGoodsDataFromTransportOrder(transport);
+                            
+                            if (!goodsData.description && !goodsData.weight) {
+                              return (
+                                <div className="text-sm text-gray-500 italic">
+                                  Brak danych o towarze
+                                </div>
+                              );
+                            }
+                            
+                            return (
+                              <div className="space-y-3 text-sm">
+                                {goodsData.description && (
+                                  <div>
+                                    <span className="font-medium text-gray-700">Rodzaj towaru:</span>
+                                    <div className="font-semibold text-gray-900">{goodsData.description}</div>
+                                  </div>
+                                )}
+                                {goodsData.weight && (
+                                  <div>
+                                    <span className="font-medium text-gray-700">Waga:</span>
+                                    <div className="font-semibold text-gray-900 flex items-center">
+                                      <Weight size={14} className="mr-1" />
+                                      {goodsData.weight}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      </div>
+
+                      {/* DRUGI RZĄD: Osoby odpowiedzialne, Daty i terminy, Informacje finansowe */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                        {/* Panel 4: Osoby odpowiedzialne */}
+                        <div className="bg-gradient-to-br from-green-50 to-green-100 p-5 rounded-xl shadow-sm border border-green-200">
+                          <h4 className="font-bold text-green-700 mb-4 pb-2 border-b border-green-300 flex items-center text-lg">
+                            <User size={20} className="mr-2" />
+                            Osoby odpowiedzialne
+                          </h4>
+                          <div className="space-y-3 text-sm">
+                            <div>
+                              <span className="font-medium text-gray-700">Dodane przez:</span>
+                              <div className="font-semibold text-gray-900">{transport.createdBy || 'Nie podano'}</div>
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-700">Odpowiedzialny:</span>
+                              <div className="font-semibold text-gray-900 flex items-center">
+                                {responsibleInfo.type === 'construction' ? (
+                                  <Building size={14} className="mr-1 text-green-600" />
+                                ) : (
+                                  <User size={14} className="mr-1 text-green-600" />
+                                )}
+                                {responsibleInfo.name}
+                              </div>
+                              <div className="text-xs text-gray-600 mt-1">
+                                {responsibleInfo.type === 'construction' ? 'Budowa' : 'Osoba'}
+                              </div>
+                            </div>
+                            {transport.responsibleConstructions && transport.responsibleConstructions.length > 0 && (
+                              <div>
+                                <span className="font-medium text-gray-700">Wszystkie budowy:</span>
+                                <div className="mt-1">
+                                  {transport.responsibleConstructions.map(construction => (
+                                    <div key={construction.id} className="bg-green-200 text-green-800 px-2 py-1 rounded text-xs font-medium inline-block mr-1 mb-1">
+                                      {construction.name} ({construction.mpk})
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Panel 5: Daty i terminy */}
                         <div className="bg-gradient-to-br from-orange-50 to-orange-100 p-5 rounded-xl shadow-sm border border-orange-200">
                           <h4 className="font-bold text-orange-700 mb-4 pb-2 border-b border-orange-300 flex items-center text-lg">
                             <Calendar size={20} className="mr-2" />
@@ -882,13 +958,17 @@ export default function ArchiwumSpedycjiPage() {
                               </div>
                             </div>
                             <div>
+                              <span className="font-medium text-gray-700">Data utworzenia:</span>
+                              <div className="font-semibold text-gray-900">{formatDate(transport.createdAt)}</div>
+                            </div>
+                            <div>
                               <span className="font-medium text-gray-700">Data zakończenia:</span>
                               <div className="font-semibold text-gray-900">{formatDateTime(transport.completedAt)}</div>
                             </div>
                           </div>
                         </div>
 
-                        {/* Panel 5: Informacje finansowe */}
+                        {/* Panel 6: Informacje finansowe */}
                         <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 p-5 rounded-xl shadow-sm border border-emerald-200">
                           <h4 className="font-bold text-emerald-700 mb-4 pb-2 border-b border-emerald-300 flex items-center text-lg">
                             <DollarSign size={20} className="mr-2" />
@@ -977,9 +1057,31 @@ export default function ArchiwumSpedycjiPage() {
                         </div>
                       </div>
 
+                      {/* Uwagi */}
+                      {(transport.notes || transport.response?.adminNotes) && (
+                        <div className="mb-6 bg-gray-50 p-4 rounded-lg border border-gray-200">
+                          <h4 className="font-bold text-gray-700 mb-3 flex items-center">
+                            <FileText size={18} className="mr-2" />
+                            Uwagi
+                          </h4>
+                          {transport.notes && (
+                            <div className="mb-2">
+                              <span className="font-medium text-gray-700">Uwagi zlecenia:</span>
+                              <p className="text-gray-900 mt-1">{transport.notes}</p>
+                            </div>
+                          )}
+                          {transport.response?.adminNotes && (
+                            <div>
+                              <span className="font-medium text-gray-700">Uwagi przewoźnika:</span>
+                              <p className="text-gray-900 mt-1">{transport.response.adminNotes}</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
                       {/* Przyciski akcji */}
                       <div className="flex justify-center space-x-4">
-                        {/* Przycisk CMR - dostępny dla wszystkich */}
+                        {/* Link do Google Maps */}
                         {generateGoogleMapsLink(transport) && (
                           <a 
                             href={generateGoogleMapsLink(transport)} 
