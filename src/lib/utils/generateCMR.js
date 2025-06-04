@@ -266,10 +266,10 @@ function addPageContent(doc, transport, safeAddText) {
   // Pole 11 - różne pozycje do testowania
   if (weight) {
     // Spróbuj kilka różnych pozycji dla wagi
-    safeAddText(`Waga pos1: ${weight}`, 138, 138, textOptions);
-    safeAddText(`Waga pos2: ${weight}`, 130, 200, textOptions);
-    safeAddText(`Waga pos3: ${weight}`, 130, 250, textOptions);
-    safeAddText(`Waga pos4: ${weight}`, 130, 300, textOptions);
+    safeAddText(`Waga pos1: ${weight}`, 150, 138, textOptions);
+    safeAddText(`Waga pos2: ${weight}`, 148, 145, textOptions);
+    safeAddText(`Waga pos3: ${weight}`, 145, 155, textOptions);
+    safeAddText(`Waga pos4: ${weight}`, 135, 165, textOptions);
   }
 
   // MPK (pole 13)
