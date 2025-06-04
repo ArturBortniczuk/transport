@@ -454,17 +454,35 @@ export default function SpedycjaList({
                   {/* Przyciski admina - odpowiadanie i oznaczanie jako zrealizowane */}
                   {isAdmin && zamowienie.status === 'new' && (
                     <>
-                      <button 
-                        type="button"
-                        className={buttonClasses.outline}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          onResponse(zamowienie)
-                        }}
-                      >
-                        <Clipboard size={16} />
-                        {isAutoResponse ? 'Edytuj odpowiedź' : 'Odpowiedz'}
-                      </button>
+                      {/* Pokaż przycisk "Odpowiedz" tylko jeśli NIE MA odpowiedzi */}
+                      {(!zamowienie.response || Object.keys(zamowienie.response).length === 0) && (
+                        <button 
+                          type="button"
+                          className={buttonClasses.outline}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            onResponse(zamowienie)
+                          }}
+                        >
+                          <Clipboard size={16} />
+                          Odpowiedz
+                        </button>
+                      )}
+                      
+                      {/* Pokaż przycisk "Edytuj odpowiedź" tylko jeśli JUŻ MA odpowiedź */}
+                      {(zamowienie.response && Object.keys(zamowienie.response).length > 0) && (
+                        <button 
+                          type="button"
+                          className={buttonClasses.outline}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            onResponse(zamowienie)
+                          }}
+                        >
+                          <Edit size={16} />
+                          Edytuj odpowiedź
+                        </button>
+                      )}
                       
                       <button 
                         type="button"
