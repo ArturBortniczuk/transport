@@ -124,6 +124,8 @@ function addPageContent(doc, transport, safeAddText) {
     // Najpierw sprawdź response.connectedTransports
     if (transport.response?.connectedTransports && transport.response.connectedTransports.length > 0) {
       console.log('Znaleziono connectedTransports:', transport.response.connectedTransports);
+      console.log('Pierwszy element connectedTransports:', transport.response.connectedTransports[0]);
+      console.log('Wszystkie klucze pierwszego elementu:', Object.keys(transport.response.connectedTransports[0]));
       return transport.response.connectedTransports;
     }
     
@@ -139,6 +141,8 @@ function addPageContent(doc, transport, safeAddText) {
         
         if (orderData?.additionalPlaces) {
           console.log('Znaleziono additionalPlaces:', orderData.additionalPlaces);
+          console.log('Pierwszy element additionalPlaces:', orderData.additionalPlaces[0]);
+          console.log('Wszystkie klucze pierwszego elementu additionalPlaces:', Object.keys(orderData.additionalPlaces[0]));
           return orderData.additionalPlaces;
         }
       } catch (error) {
