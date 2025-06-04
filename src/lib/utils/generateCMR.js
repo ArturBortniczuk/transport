@@ -1,4 +1,3 @@
-// src/lib/utils/generateCMR.js
 import { jsPDF } from 'jspdf'
 
 export async function generateCMR(transport) {
@@ -94,6 +93,13 @@ export async function generateCMR(transport) {
 
 // Funkcja dodająca zawartość na stronę
 function addPageContent(doc, transport, safeAddText) {
+  // DODAJ TE LOGI NA POCZĄTKU FUNKCJI:
+  console.log('=== DEBUG CMR GENERATION ===');
+  console.log('Cały obiekt transport:', transport);
+  console.log('transport.order_data:', transport.order_data);
+  console.log('transport.goodsDescription:', transport.goodsDescription);
+  console.log('transport.response:', transport.response);
+  
   const textOptions = {
     align: 'left',
     baseline: 'top'
@@ -179,57 +185,83 @@ function addPageContent(doc, transport, safeAddText) {
   // 6. Rodzaj towaru (Nature of the goods) - ZMODYFIKOWANE
   let goodsDescription = '';
   
-  // NOWE: Najpierw sprawdź czy są dane ze zlecenia transportowego (order_data)
+  console.log('=== SPRAWDZANIE DANYCH TOWARU ===');
+  
+  // Sprawdź czy są dane ze zlecenia transportowego (order_data)
   if (transport.order_data) {
+    console.log('Znaleziono transport.order_data:', transport.order_data);
     try {
       const orderData = typeof transport.order_data === 'string' ? 
         JSON.parse(transport.order_data) : transport.order_data;
       
+      console.log('Rozparsowane orderData:', orderData);
+      console.log('orderData.towar:', orderData.towar);
+      
       if (orderData.towar) {
         goodsDescription = orderData.towar;
+        console.log('Używam towaru ze zlecenia transportowego:', goodsDescription);
       }
     } catch (error) {
       console.error('Błąd parsowania order_data:', error);
     }
+  } else {
+    console.log('Brak transport.order_data');
   }
   
   // Jeśli nie ma danych ze zlecenia transportowego, sprawdź inne źródła
   if (!goodsDescription) {
+    console.log('Sprawdzam alternatywne źródła towaru...');
     if (transport.response && transport.response.goodsDescription) {
       goodsDescription = transport.response.goodsDescription;
+      console.log('Używam towaru z response.goodsDescription:', goodsDescription);
     } else if (transport.goodsDescription && transport.goodsDescription.description) {
       goodsDescription = transport.goodsDescription.description;
+      console.log('Używam towaru z goodsDescription.description:', goodsDescription);
     }
   }
   
+  console.log('FINALNA WARTOŚĆ goodsDescription:', goodsDescription);
   safeAddText(goodsDescription, 20, 495, textOptions);
 
   // 11. Waga brutto - ZMODYFIKOWANE
   let weight = '';
   
-  // NOWE: Najpierw sprawdź czy są dane ze zlecenia transportowego (order_data)
+  console.log('=== SPRAWDZANIE DANYCH WAGI ===');
+  
+  // Sprawdź czy są dane ze zlecenia transportowego (order_data)
   if (transport.order_data) {
+    console.log('Znaleziono transport.order_data dla wagi:', transport.order_data);
     try {
       const orderData = typeof transport.order_data === 'string' ? 
         JSON.parse(transport.order_data) : transport.order_data;
       
+      console.log('Rozparsowane orderData dla wagi:', orderData);
+      console.log('orderData.waga:', orderData.waga);
+      
       if (orderData.waga) {
         weight = orderData.waga;
+        console.log('Używam wagi ze zlecenia transportowego:', weight);
       }
     } catch (error) {
-      console.error('Błąd parsowania order_data:', error);
+      console.error('Błąd parsowania order_data dla wagi:', error);
     }
+  } else {
+    console.log('Brak transport.order_data dla wagi');
   }
   
   // Jeśli nie ma danych ze zlecenia transportowego, sprawdź inne źródła
   if (!weight) {
+    console.log('Sprawdzam alternatywne źródła wagi...');
     if (transport.response && transport.response.weight) {
       weight = transport.response.weight;
+      console.log('Używam wagi z response.weight:', weight);
     } else if (transport.goodsDescription && transport.goodsDescription.weight) {
       weight = transport.goodsDescription.weight;
+      console.log('Używam wagi z goodsDescription.weight:', weight);
     }
   }
   
+  console.log('FINALNA WARTOŚĆ weight:', weight);
   safeAddText(weight, 560, 495, textOptions);
 
   // MPK (pole 13)
