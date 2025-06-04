@@ -221,7 +221,7 @@ function addPageContent(doc, transport, safeAddText) {
   }
   
   console.log('FINALNA WARTOŚĆ goodsDescription:', goodsDescription);
-  safeAddText(goodsDescription, 20, 495, textOptions);
+  safeAddText(goodsDescription, 20, 395, textOptions);
 
   // 11. Waga brutto - ZMODYFIKOWANE
   let weight = '';
@@ -262,7 +262,7 @@ function addPageContent(doc, transport, safeAddText) {
   }
   
   console.log('FINALNA WARTOŚĆ weight:', weight);
-  safeAddText(weight, 560, 495, textOptions);
+  safeAddText(weight, 560, 395, textOptions);
 
   // MPK (pole 13)
   safeAddText(`MPK: ${transport.mpk}`, 110, 197, textOptions);
