@@ -220,9 +220,10 @@ function addPageContent(doc, transport, safeAddText) {
   // Pole 6 - różne pozycje do testowania
   if (goodsDescription) {
     // Spróbuj kilka różnych pozycji
-    safeAddText(goodsDescription, 80, 700, textOptions);  // Pozycja 1
-    safeAddText(goodsDescription, 20, 800, textOptions);  // Pozycja 2  
-    safeAddText(goodsDescription, 50, 750, textOptions);  // Pozycja 3
+    safeAddText(`Towar pos1: ${goodsDescription}`, 20, 150, textOptions);
+    safeAddText(`Towar pos2: ${goodsDescription}`, 20, 200, textOptions);
+    safeAddText(`Towar pos3: ${goodsDescription}`, 20, 250, textOptions);
+    safeAddText(`Towar pos4: ${goodsDescription}`, 20, 300, textOptions);
   }
 
   // 11. Waga brutto - POPRAWIONE
@@ -265,9 +266,10 @@ function addPageContent(doc, transport, safeAddText) {
   // Pole 11 - różne pozycje do testowania
   if (weight) {
     // Spróbuj kilka różnych pozycji dla wagi
-    safeAddText(weight, 640, 700, textOptions);  // Pozycja 1
-    safeAddText(weight, 580, 800, textOptions);  // Pozycja 2
-    safeAddText(weight, 620, 750, textOptions);  // Pozycja 3
+    safeAddText(`Waga pos1: ${weight}`, 400, 150, textOptions);
+    safeAddText(`Waga pos2: ${weight}`, 400, 200, textOptions);
+    safeAddText(`Waga pos3: ${weight}`, 400, 250, textOptions);
+    safeAddText(`Waga pos4: ${weight}`, 400, 300, textOptions);
   }
 
   // MPK (pole 13)
