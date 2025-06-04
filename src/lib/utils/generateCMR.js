@@ -114,8 +114,51 @@ function addPageContent(doc, transport, safeAddText) {
     }
   };
 
-  // 1. Nadawca (pole 1)
+  // Funkcja do pobierania dodatkowych miejsc z order_data
+  const getAdditionalPlaces = (type) => {
+    if (!transport.order_data) return [];
+    
+    try {
+      let orderData;
+      if (typeof transport.order_data === 'string') {
+        orderData = JSON.parse(transport.order_data);
+      } else {
+        orderData = transport.order_data;
+      }
+      
+      if (orderData && orderData.additionalPlaces) {
+        return orderData.additionalPlaces.filter(place => place.type === type);
+      }
+    } catch (error) {
+      console.error('Błąd parsowania additionalPlaces:', error);
+    }
+    
+    return [];
+  };
+
+  // Funkcja do formatowania kompaktowego adresu
+  const formatCompactAddress = (address, contact) => {
+    if (!address) return '';
+    
+    let formattedAddress = '';
+    if (typeof address === 'object') {
+      formattedAddress = `${address.postalCode || ''} ${address.city || ''}, ${address.street || ''}`.trim();
+    } else {
+      formattedAddress = String(address);
+    }
+    
+    if (contact) {
+      formattedAddress += `, t:${contact}`;
+    }
+    
+    return formattedAddress;
+  };
+
+  // 1. Nadawca (pole 1) - z dodatkowymi miejscami załadunku
   let sender;
+  const additionalLoadingPlaces = getAdditionalPlaces('załadunek');
+  
+  // Główny nadawca
   if (transport.location === 'Odbiory własne' && transport.producerAddress) {
     sender = [
       transport.producerAddress.city,
@@ -129,25 +172,89 @@ function addPageContent(doc, transport, safeAddText) {
     sender = `${transport.location}\nTel: ${transport.loadingContact}`;
   }
   
-  safeAddText(sender, 20, 32, textOptions);
+  // Dodaj dodatkowe miejsca załadunku
+  if (additionalLoadingPlaces.length > 0) {
+    sender += '\n--- DODATKOWE ZALADUNKI ---';
+    
+    additionalLoadingPlaces.forEach((place, index) => {
+      let additionalAddress = '';
+      
+      if (place.location === 'Odbiory własne' && place.address) {
+        additionalAddress = formatCompactAddress(place.address, place.contact);
+      } else if (place.location && place.location.includes('Magazyn')) {
+        additionalAddress = `${place.location}, t:${place.contact || ''}`;
+      } else {
+        additionalAddress = formatCompactAddress(place.address, place.contact);
+      }
+      
+      sender += `\n${index + 2}. ${additionalAddress}`;
+      if (place.orderNumber) {
+        sender += ` (${place.orderNumber})`;
+      }
+    });
+  }
+  
+  // Ustaw odpowiednią czcionkę
+  if (additionalLoadingPlaces.length > 0) {
+    doc.setFontSize(8);
+    safeAddText(sender, 20, 32, textOptions);
+    doc.setFontSize(10);
+  } else {
+    safeAddText(sender, 20, 32, textOptions);
+  }
 
-  // 2. Odbiorca (pole 2)
-  const recipient = [
+  // 2. Odbiorca (pole 2) - z dodatkowymi miejscami rozładunku
+  const additionalUnloadingPlaces = getAdditionalPlaces('rozładunek');
+  
+  let recipient = [
     transport.delivery?.city || '',
     transport.delivery?.postalCode || '',
     transport.delivery?.street || '',
     `Tel: ${transport.unloadingContact || ''}`
   ].join('\n');
   
-  safeAddText(recipient, 20, 55, textOptions);
+  // Dodaj dodatkowe miejsca rozładunku
+  if (additionalUnloadingPlaces.length > 0) {
+    recipient += '\n--- DODATKOWE ROZLADUNKI ---';
+    
+    additionalUnloadingPlaces.forEach((place, index) => {
+      const additionalAddress = formatCompactAddress(place.address, place.contact);
+      recipient += `\n${index + 2}. ${additionalAddress}`;
+      if (place.orderNumber) {
+        recipient += ` (${place.orderNumber})`;
+      }
+    });
+  }
+  
+  // Ustaw odpowiednią czcionkę
+  if (additionalUnloadingPlaces.length > 0) {
+    doc.setFontSize(8);
+    safeAddText(recipient, 20, 55, textOptions);
+    doc.setFontSize(10);
+  } else {
+    safeAddText(recipient, 20, 55, textOptions);
+  }
 
-  // 3. Miejsce dostawy (pole 3)
-  const deliveryAddress = [
+  // 3. Miejsce dostawy (pole 3) - główne miejsce + dodatkowe skrótowo
+  let deliveryAddress = [
     transport.delivery?.city || '',
     transport.delivery?.postalCode || '',
     transport.delivery?.street || ''
   ].join('\n');
-  safeAddText(deliveryAddress, 20, 79, textOptions);
+  
+  if (additionalUnloadingPlaces.length > 0) {
+    deliveryAddress += '\n+ DODATKOWE:';
+    additionalUnloadingPlaces.forEach((place, index) => {
+      const city = place.address?.city || '';
+      deliveryAddress += `\n${index + 2}. ${city}`;
+    });
+    
+    doc.setFontSize(8);
+    safeAddText(deliveryAddress, 20, 79, textOptions);
+    doc.setFontSize(10);
+  } else {
+    safeAddText(deliveryAddress, 20, 79, textOptions);
+  }
 
   // 4. Data i miejsce załadunku (pole 4)
   let deliveryDate = '';
@@ -159,6 +266,11 @@ function addPageContent(doc, transport, safeAddText) {
   let locationText = transport.location;
   if (magazynData[transport.location]) {
     locationText = transport.location;
+  }
+  
+  // Dodaj informację o dodatkowych miejscach
+  if (additionalLoadingPlaces.length > 0) {
+    locationText += ` +${additionalLoadingPlaces.length} miejsc`;
   }
   
   safeAddText(`${locationText} ${deliveryDate}`, 20, 104, textOptions);
@@ -217,9 +329,8 @@ function addPageContent(doc, transport, safeAddText) {
   
   console.log('FINALNA WARTOŚĆ goodsDescription:', goodsDescription);
   
-  // Pole 6 - różne pozycje do testowania
+  // Pole 6 - TWOJE POPRAWNE POZYCJE
   if (goodsDescription) {
-    // Spróbuj kilka różnych pozycji
     safeAddText(`${goodsDescription}`, 20, 138, textOptions);
   }
 
@@ -260,9 +371,8 @@ function addPageContent(doc, transport, safeAddText) {
   
   console.log('FINALNA WARTOŚĆ weight:', weight);
   
-  // Pole 11 - różne pozycje do testowania
+  // Pole 11 - TWOJE POPRAWNE POZYCJE
   if (weight) {
-    // Spróbuj kilka różnych pozycji dla wagi
     safeAddText(`${weight}`, 154, 138, textOptions);
   }
 
