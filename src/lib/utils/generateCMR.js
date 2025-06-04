@@ -50,7 +50,8 @@ export async function generateCMR(transport) {
     // Funkcja do bezpiecznego dodawania tekstu
     const safeAddText = (text, x, y, options = {}) => {
       try {
-        const convertedText = convertPolishChars(text)
+        if (!text) text = ''; // Zabezpieczenie przed undefined/null
+        const convertedText = convertPolishChars(String(text))
         doc.text(convertedText, x, y, { 
           ...options,
           charSpace: 0.5
@@ -93,12 +94,8 @@ export async function generateCMR(transport) {
 
 // Funkcja dodająca zawartość na stronę
 function addPageContent(doc, transport, safeAddText) {
-  // DODAJ TE LOGI NA POCZĄTKU FUNKCJI:
   console.log('=== DEBUG CMR GENERATION ===');
   console.log('Cały obiekt transport:', transport);
-  console.log('transport.order_data:', transport.order_data);
-  console.log('transport.goodsDescription:', transport.goodsDescription);
-  console.log('transport.response:', transport.response);
   
   const textOptions = {
     align: 'left',
@@ -119,7 +116,7 @@ function addPageContent(doc, transport, safeAddText) {
 
   // 1. Nadawca (pole 1)
   let sender;
-  if (transport.location === 'Producent' && transport.producerAddress) {
+  if (transport.location === 'Odbiory własne' && transport.producerAddress) {
     sender = [
       transport.producerAddress.city,
       transport.producerAddress.postalCode,
@@ -127,7 +124,6 @@ function addPageContent(doc, transport, safeAddText) {
       `Tel: ${transport.loadingContact}`
     ].join('\n');
   } else if (magazynData[transport.location]) {
-    // Użyj pełnego adresu magazynu
     sender = `${magazynData[transport.location].adres}\nTel: ${transport.loadingContact}`;
   } else {
     sender = `${transport.location}\nTel: ${transport.loadingContact}`;
@@ -137,133 +133,151 @@ function addPageContent(doc, transport, safeAddText) {
 
   // 2. Odbiorca (pole 2)
   const recipient = [
-    transport.delivery.city,
-    transport.delivery.postalCode,
-    transport.delivery.street,
-    `Tel: ${transport.unloadingContact}`
+    transport.delivery?.city || '',
+    transport.delivery?.postalCode || '',
+    transport.delivery?.street || '',
+    `Tel: ${transport.unloadingContact || ''}`
   ].join('\n');
   
   safeAddText(recipient, 20, 55, textOptions);
 
   // 3. Miejsce dostawy (pole 3)
   const deliveryAddress = [
-    transport.delivery.city,
-    transport.delivery.postalCode,
-    transport.delivery.street
+    transport.delivery?.city || '',
+    transport.delivery?.postalCode || '',
+    transport.delivery?.street || ''
   ].join('\n');
   safeAddText(deliveryAddress, 20, 79, textOptions);
 
-  // 4. Data i miejsce załadunku (pole 4) - usuwamy godzinę z daty
-  // Formatujemy datę aby usunąć godzinę
+  // 4. Data i miejsce załadunku (pole 4)
   let deliveryDate = '';
   if (transport.deliveryDate) {
     const date = new Date(transport.deliveryDate);
-    deliveryDate = date.toISOString().split('T')[0]; // Format YYYY-MM-DD
+    deliveryDate = date.toISOString().split('T')[0];
   }
   
   let locationText = transport.location;
   if (magazynData[transport.location]) {
-    locationText = transport.location; // Zostawiamy tylko nazwę magazynu w tym polu
+    locationText = transport.location;
   }
   
   safeAddText(`${locationText} ${deliveryDate}`, 20, 104, textOptions);
 
   // 5. Załączone dokumenty (pole 5)
-  safeAddText(transport.documents, 20, 120, textOptions);
+  safeAddText(transport.documents || '', 20, 120, textOptions);
 
   // Dane przewoźnika (pole 16)
   if (transport.response) {
     const carrierInfo = [
-      `${transport.response.driverName} ${transport.response.driverSurname}`,
-      `Telefon: ${transport.response.driverPhone}`,
-      `Nr pojazdu: ${transport.response.vehicleNumber}`,
+      `${transport.response.driverName || ''} ${transport.response.driverSurname || ''}`,
+      `Telefon: ${transport.response.driverPhone || ''}`,
+      `Nr pojazdu: ${transport.response.vehicleNumber || ''}`,
     ].join('\n');
     
     safeAddText(carrierInfo, 110, 55, textOptions);
   }
 
-  // 6. Rodzaj towaru (Nature of the goods) - ZMODYFIKOWANE
+  // 6. Rodzaj towaru (Nature of the goods) - POPRAWIONE
   let goodsDescription = '';
   
   console.log('=== SPRAWDZANIE DANYCH TOWARU ===');
   
-  // Sprawdź czy są dane ze zlecenia transportowego (order_data)
+  // Sprawdź order_data w różnych formatach
   if (transport.order_data) {
-    console.log('Znaleziono transport.order_data:', transport.order_data);
+    console.log('transport.order_data (raw):', transport.order_data);
     try {
-      const orderData = typeof transport.order_data === 'string' ? 
-        JSON.parse(transport.order_data) : transport.order_data;
+      let orderData;
+      if (typeof transport.order_data === 'string') {
+        orderData = JSON.parse(transport.order_data);
+      } else {
+        orderData = transport.order_data;
+      }
       
-      console.log('Rozparsowane orderData:', orderData);
-      console.log('orderData.towar:', orderData.towar);
+      console.log('Parsed orderData:', orderData);
       
-      if (orderData.towar) {
+      if (orderData && orderData.towar) {
         goodsDescription = orderData.towar;
-        console.log('Używam towaru ze zlecenia transportowego:', goodsDescription);
+        console.log('Znaleziono towar w order_data:', goodsDescription);
       }
     } catch (error) {
       console.error('Błąd parsowania order_data:', error);
     }
-  } else {
-    console.log('Brak transport.order_data');
   }
   
-  // Jeśli nie ma danych ze zlecenia transportowego, sprawdź inne źródła
+  // Fallback do innych źródeł
   if (!goodsDescription) {
-    console.log('Sprawdzam alternatywne źródła towaru...');
-    if (transport.response && transport.response.goodsDescription) {
+    if (transport.response?.goodsDescription) {
       goodsDescription = transport.response.goodsDescription;
-      console.log('Używam towaru z response.goodsDescription:', goodsDescription);
-    } else if (transport.goodsDescription && transport.goodsDescription.description) {
+      console.log('Używam towaru z response:', goodsDescription);
+    } else if (transport.goodsDescription?.description) {
       goodsDescription = transport.goodsDescription.description;
-      console.log('Używam towaru z goodsDescription.description:', goodsDescription);
+      console.log('Używam towaru z goodsDescription:', goodsDescription);
     }
   }
   
   console.log('FINALNA WARTOŚĆ goodsDescription:', goodsDescription);
-  safeAddText(goodsDescription, 20, 395, textOptions);
+  
+  // Pole 6 - różne pozycje do testowania
+  if (goodsDescription) {
+    // Spróbuj kilka różnych pozycji
+    safeAddText(goodsDescription, 80, 377, textOptions);  // Pozycja 1
+    safeAddText(goodsDescription, 20, 377, textOptions);  // Pozycja 2  
+    safeAddText(goodsDescription, 50, 385, textOptions);  // Pozycja 3
+  }
 
-  // 11. Waga brutto - ZMODYFIKOWANE
+  // 11. Waga brutto - POPRAWIONE
   let weight = '';
   
   console.log('=== SPRAWDZANIE DANYCH WAGI ===');
   
-  // Sprawdź czy są dane ze zlecenia transportowego (order_data)
+  // Sprawdź order_data
   if (transport.order_data) {
-    console.log('Znaleziono transport.order_data dla wagi:', transport.order_data);
     try {
-      const orderData = typeof transport.order_data === 'string' ? 
-        JSON.parse(transport.order_data) : transport.order_data;
+      let orderData;
+      if (typeof transport.order_data === 'string') {
+        orderData = JSON.parse(transport.order_data);
+      } else {
+        orderData = transport.order_data;
+      }
       
-      console.log('Rozparsowane orderData dla wagi:', orderData);
-      console.log('orderData.waga:', orderData.waga);
-      
-      if (orderData.waga) {
+      if (orderData && orderData.waga) {
         weight = orderData.waga;
-        console.log('Używam wagi ze zlecenia transportowego:', weight);
+        console.log('Znaleziono wagę w order_data:', weight);
       }
     } catch (error) {
       console.error('Błąd parsowania order_data dla wagi:', error);
     }
-  } else {
-    console.log('Brak transport.order_data dla wagi');
   }
   
-  // Jeśli nie ma danych ze zlecenia transportowego, sprawdź inne źródła
+  // Fallback do innych źródeł
   if (!weight) {
-    console.log('Sprawdzam alternatywne źródła wagi...');
-    if (transport.response && transport.response.weight) {
+    if (transport.response?.weight) {
       weight = transport.response.weight;
-      console.log('Używam wagi z response.weight:', weight);
-    } else if (transport.goodsDescription && transport.goodsDescription.weight) {
+      console.log('Używam wagi z response:', weight);
+    } else if (transport.goodsDescription?.weight) {
       weight = transport.goodsDescription.weight;
-      console.log('Używam wagi z goodsDescription.weight:', weight);
+      console.log('Używam wagi z goodsDescription:', weight);
     }
   }
   
   console.log('FINALNA WARTOŚĆ weight:', weight);
-  safeAddText(weight, 560, 395, textOptions);
+  
+  // Pole 11 - różne pozycje do testowania
+  if (weight) {
+    // Spróbuj kilka różnych pozycji dla wagi
+    safeAddText(weight, 640, 377, textOptions);  // Pozycja 1
+    safeAddText(weight, 580, 377, textOptions);  // Pozycja 2
+    safeAddText(weight, 620, 385, textOptions);  // Pozycja 3
+  }
 
   // MPK (pole 13)
-  safeAddText(`MPK: ${transport.mpk}`, 110, 197, textOptions);
+  safeAddText(`MPK: ${transport.mpk || ''}`, 110, 197, textOptions);
+  
+  // DODAJ TESTOWY TEKST NA GÓRZE STRONY
+  if (goodsDescription || weight) {
+    doc.setFontSize(12);
+    safeAddText(`DEBUG - Towar: ${goodsDescription}`, 20, 15, textOptions);
+    safeAddText(`DEBUG - Waga: ${weight}`, 20, 25, textOptions);
+    doc.setFontSize(10);
+  }
 }
