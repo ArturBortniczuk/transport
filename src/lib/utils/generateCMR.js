@@ -117,8 +117,10 @@ function addPageContent(doc, transport, safeAddText) {
     }
   };
 
-  // Funkcja do pobierania dodatkowych miejsc
+  // Funkcja do pobierania powiązanych transportów
   const getConnectedTransports = () => {
+    console.log('=== SPRAWDZANIE POWIĄZANYCH TRANSPORTÓW ===');
+    
     // Najpierw sprawdź response.connectedTransports
     if (transport.response?.connectedTransports && transport.response.connectedTransports.length > 0) {
       console.log('Znaleziono connectedTransports:', transport.response.connectedTransports);
@@ -144,12 +146,16 @@ function addPageContent(doc, transport, safeAddText) {
       }
     }
     
+    console.log('Nie znaleziono powiązanych transportów');
     return [];
   };
-  
+
+  // Funkcja do pobierania dodatkowych miejsc według typu
   const getAdditionalPlaces = (type) => {
     const connectedTransports = getConnectedTransports();
-    return connectedTransports.filter(place => place.type === type);
+    const filtered = connectedTransports.filter(place => place.type === type);
+    console.log(`Filtered places for type '${type}':`, filtered);
+    return filtered;
   };
 
   // Funkcja do formatowania kompaktowego adresu
@@ -170,9 +176,30 @@ function addPageContent(doc, transport, safeAddText) {
     return formattedAddress;
   };
 
+  // Funkcja do pobierania adresu z powiązanego transportu
+  const getTransportAddress = (connectedTransport, isLoading = true) => {
+    console.log('Getting address for connected transport:', connectedTransport);
+    
+    if (isLoading) {
+      // Dla załadunku
+      if (connectedTransport.location === 'Odbiory własne') {
+        return connectedTransport.producerAddress || connectedTransport.address;
+      } else if (connectedTransport.location?.includes('Magazyn')) {
+        return connectedTransport.location;
+      } else {
+        return connectedTransport.address;
+      }
+    } else {
+      // Dla rozładunku
+      return connectedTransport.delivery || connectedTransport.address;
+    }
+  };
+
   // 1. Nadawca (pole 1) - z dodatkowymi miejscami załadunku
   let sender;
   const additionalLoadingPlaces = getAdditionalPlaces('załadunek');
+  
+  console.log('Additional loading places:', additionalLoadingPlaces);
   
   // Główny nadawca
   if (transport.location === 'Odbiory własne' && transport.producerAddress) {
@@ -193,14 +220,16 @@ function addPageContent(doc, transport, safeAddText) {
     sender += '\n--- DODATKOWE ZALADUNKI ---';
     
     additionalLoadingPlaces.forEach((place, index) => {
-      let additionalAddress = '';
+      console.log(`Processing loading place ${index + 1}:`, place);
       
-      if (place.location === 'Odbiory własne' && place.address) {
-        additionalAddress = formatCompactAddress(place.address, place.contact);
-      } else if (place.location && place.location.includes('Magazyn')) {
-        additionalAddress = `${place.location}, t:${place.contact || ''}`;
+      let additionalAddress = '';
+      const address = getTransportAddress(place, true);
+      const contact = place.loadingContact || place.contact || '';
+      
+      if (typeof address === 'string' && address.includes('Magazyn')) {
+        additionalAddress = `${address}, t:${contact}`;
       } else {
-        additionalAddress = formatCompactAddress(place.address, place.contact);
+        additionalAddress = formatCompactAddress(address, contact);
       }
       
       sender += `\n${index + 2}. ${additionalAddress}`;
@@ -222,6 +251,8 @@ function addPageContent(doc, transport, safeAddText) {
   // 2. Odbiorca (pole 2) - z dodatkowymi miejscami rozładunku
   const additionalUnloadingPlaces = getAdditionalPlaces('rozładunek');
   
+  console.log('Additional unloading places:', additionalUnloadingPlaces);
+  
   let recipient = [
     transport.delivery?.city || '',
     transport.delivery?.postalCode || '',
@@ -234,7 +265,12 @@ function addPageContent(doc, transport, safeAddText) {
     recipient += '\n--- DODATKOWE ROZLADUNKI ---';
     
     additionalUnloadingPlaces.forEach((place, index) => {
-      const additionalAddress = formatCompactAddress(place.address, place.contact);
+      console.log(`Processing unloading place ${index + 1}:`, place);
+      
+      const address = getTransportAddress(place, false);
+      const contact = place.unloadingContact || place.contact || '';
+      const additionalAddress = formatCompactAddress(address, contact);
+      
       recipient += `\n${index + 2}. ${additionalAddress}`;
       if (place.orderNumber) {
         recipient += ` (${place.orderNumber})`;
@@ -261,7 +297,8 @@ function addPageContent(doc, transport, safeAddText) {
   if (additionalUnloadingPlaces.length > 0) {
     deliveryAddress += '\n+ DODATKOWE:';
     additionalUnloadingPlaces.forEach((place, index) => {
-      const city = place.address?.city || '';
+      const address = getTransportAddress(place, false);
+      const city = address?.city || '';
       deliveryAddress += `\n${index + 2}. ${city}`;
     });
     
@@ -285,8 +322,9 @@ function addPageContent(doc, transport, safeAddText) {
   }
   
   // Dodaj informację o dodatkowych miejscach
-  if (additionalLoadingPlaces.length > 0) {
-    locationText += ` +${additionalLoadingPlaces.length} miejsc`;
+  const totalAdditionalPlaces = additionalLoadingPlaces.length + additionalUnloadingPlaces.length;
+  if (totalAdditionalPlaces > 0) {
+    locationText += ` +${totalAdditionalPlaces} miejsc`;
   }
   
   safeAddText(`${locationText} ${deliveryDate}`, 20, 104, textOptions);
@@ -305,7 +343,7 @@ function addPageContent(doc, transport, safeAddText) {
     safeAddText(carrierInfo, 110, 55, textOptions);
   }
 
-  // 6. Rodzaj towaru (Nature of the goods) - POPRAWIONE
+  // 6. Rodzaj towaru (Nature of the goods)
   let goodsDescription = '';
   
   console.log('=== SPRAWDZANIE DANYCH TOWARU ===');
@@ -350,7 +388,7 @@ function addPageContent(doc, transport, safeAddText) {
     safeAddText(`${goodsDescription}`, 20, 138, textOptions);
   }
 
-  // 11. Waga brutto - POPRAWIONE
+  // 11. Waga brutto
   let weight = '';
   
   console.log('=== SPRAWDZANIE DANYCH WAGI ===');
