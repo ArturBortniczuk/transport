@@ -220,7 +220,7 @@ function addPageContent(doc, transport, safeAddText) {
   // Pole 6 - różne pozycje do testowania
   if (goodsDescription) {
     // Spróbuj kilka różnych pozycji
-    safeAddText(`Towar pos1: ${goodsDescription}`, 20, 150, textOptions);
+    safeAddText(`Towar pos1: ${goodsDescription}`, 20, 130, textOptions);
     safeAddText(`Towar pos2: ${goodsDescription}`, 20, 200, textOptions);
     safeAddText(`Towar pos3: ${goodsDescription}`, 20, 250, textOptions);
     safeAddText(`Towar pos4: ${goodsDescription}`, 20, 300, textOptions);
@@ -266,20 +266,12 @@ function addPageContent(doc, transport, safeAddText) {
   // Pole 11 - różne pozycje do testowania
   if (weight) {
     // Spróbuj kilka różnych pozycji dla wagi
-    safeAddText(`Waga pos1: ${weight}`, 400, 150, textOptions);
-    safeAddText(`Waga pos2: ${weight}`, 400, 200, textOptions);
-    safeAddText(`Waga pos3: ${weight}`, 400, 250, textOptions);
-    safeAddText(`Waga pos4: ${weight}`, 400, 300, textOptions);
+    safeAddText(`Waga pos1: ${weight}`, 130, 130, textOptions);
+    safeAddText(`Waga pos2: ${weight}`, 130, 200, textOptions);
+    safeAddText(`Waga pos3: ${weight}`, 130, 250, textOptions);
+    safeAddText(`Waga pos4: ${weight}`, 130, 300, textOptions);
   }
 
   // MPK (pole 13)
   safeAddText(`MPK: ${transport.mpk || ''}`, 110, 197, textOptions);
-  
-  // DODAJ TESTOWY TEKST NA GÓRZE STRONY
-  if (goodsDescription || weight) {
-    doc.setFontSize(12);
-    safeAddText(`DEBUG - Towar: ${goodsDescription}`, 20, 15, textOptions);
-    safeAddText(`DEBUG - Waga: ${weight}`, 20, 25, textOptions);
-    doc.setFontSize(10);
-  }
 }
