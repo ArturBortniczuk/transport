@@ -121,15 +121,7 @@ function addPageContent(doc, transport, safeAddText) {
   const getConnectedTransports = () => {
     console.log('=== SPRAWDZANIE POWIĄZANYCH TRANSPORTÓW ===');
     
-    // Najpierw sprawdź response.connectedTransports
-    if (transport.response?.connectedTransports && transport.response.connectedTransports.length > 0) {
-      console.log('Znaleziono connectedTransports:', transport.response.connectedTransports);
-      console.log('Pierwszy element connectedTransports:', transport.response.connectedTransports[0]);
-      console.log('Wszystkie klucze pierwszego elementu:', Object.keys(transport.response.connectedTransports[0]));
-      return transport.response.connectedTransports;
-    }
-    
-    // Potem sprawdź order_data.additionalPlaces
+    // ZMIANA PRIORYTETU: Najpierw sprawdź order_data.additionalPlaces
     if (transport.order_data) {
       try {
         let orderData;
@@ -139,7 +131,7 @@ function addPageContent(doc, transport, safeAddText) {
           orderData = transport.order_data;
         }
         
-        if (orderData?.additionalPlaces) {
+        if (orderData?.additionalPlaces && orderData.additionalPlaces.length > 0) {
           console.log('Znaleziono additionalPlaces:', orderData.additionalPlaces);
           console.log('Pierwszy element additionalPlaces:', orderData.additionalPlaces[0]);
           console.log('Wszystkie klucze pierwszego elementu additionalPlaces:', Object.keys(orderData.additionalPlaces[0]));
@@ -148,6 +140,14 @@ function addPageContent(doc, transport, safeAddText) {
       } catch (error) {
         console.error('Błąd parsowania order_data:', error);
       }
+    }
+    
+    // Potem sprawdź response.connectedTransports (jeśli additionalPlaces nie istnieje)
+    if (transport.response?.connectedTransports && transport.response.connectedTransports.length > 0) {
+      console.log('Znaleziono connectedTransports:', transport.response.connectedTransports);
+      console.log('Pierwszy element connectedTransports:', transport.response.connectedTransports[0]);
+      console.log('Wszystkie klucze pierwszego elementu:', Object.keys(transport.response.connectedTransports[0]));
+      return transport.response.connectedTransports;
     }
     
     console.log('Nie znaleziono powiązanych transportów');
