@@ -1,3 +1,4 @@
+// src/lib/utils/generateCMR.js
 import { jsPDF } from 'jspdf'
 
 export async function generateCMR(transport) {
@@ -175,24 +176,58 @@ function addPageContent(doc, transport, safeAddText) {
     safeAddText(carrierInfo, 110, 55, textOptions);
   }
 
-  // 9. Rodzaj towaru (Nature of the goods)
+  // 6. Rodzaj towaru (Nature of the goods) - ZMODYFIKOWANE
   let goodsDescription = '';
   
-  // Sprawdzamy różne możliwe źródła opisu towaru
-  if (transport.response && transport.response.goodsDescription) {
-    goodsDescription = transport.response.goodsDescription;
-  } else if (transport.goodsDescription && transport.goodsDescription.description) {
-    goodsDescription = transport.goodsDescription.description;
+  // NOWE: Najpierw sprawdź czy są dane ze zlecenia transportowego (order_data)
+  if (transport.order_data) {
+    try {
+      const orderData = typeof transport.order_data === 'string' ? 
+        JSON.parse(transport.order_data) : transport.order_data;
+      
+      if (orderData.towar) {
+        goodsDescription = orderData.towar;
+      }
+    } catch (error) {
+      console.error('Błąd parsowania order_data:', error);
+    }
+  }
+  
+  // Jeśli nie ma danych ze zlecenia transportowego, sprawdź inne źródła
+  if (!goodsDescription) {
+    if (transport.response && transport.response.goodsDescription) {
+      goodsDescription = transport.response.goodsDescription;
+    } else if (transport.goodsDescription && transport.goodsDescription.description) {
+      goodsDescription = transport.goodsDescription.description;
+    }
   }
   
   safeAddText(goodsDescription, 20, 495, textOptions);
 
-  // 11. Waga brutto
+  // 11. Waga brutto - ZMODYFIKOWANE
   let weight = '';
-  if (transport.response && transport.response.weight) {
-    weight = transport.response.weight;
-  } else if (transport.goodsDescription && transport.goodsDescription.weight) {
-    weight = transport.goodsDescription.weight;
+  
+  // NOWE: Najpierw sprawdź czy są dane ze zlecenia transportowego (order_data)
+  if (transport.order_data) {
+    try {
+      const orderData = typeof transport.order_data === 'string' ? 
+        JSON.parse(transport.order_data) : transport.order_data;
+      
+      if (orderData.waga) {
+        weight = orderData.waga;
+      }
+    } catch (error) {
+      console.error('Błąd parsowania order_data:', error);
+    }
+  }
+  
+  // Jeśli nie ma danych ze zlecenia transportowego, sprawdź inne źródła
+  if (!weight) {
+    if (transport.response && transport.response.weight) {
+      weight = transport.response.weight;
+    } else if (transport.goodsDescription && transport.goodsDescription.weight) {
+      weight = transport.goodsDescription.weight;
+    }
   }
   
   safeAddText(weight, 560, 495, textOptions);
