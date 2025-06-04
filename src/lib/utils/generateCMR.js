@@ -96,6 +96,9 @@ export async function generateCMR(transport) {
 function addPageContent(doc, transport, safeAddText) {
   console.log('=== DEBUG CMR GENERATION ===');
   console.log('Cały obiekt transport:', transport);
+  console.log('transport.response:', transport.response);
+  console.log('transport.response?.connectedTransports:', transport.response?.connectedTransports);
+  console.log('transport.order_data:', transport.order_data);
   
   const textOptions = {
     align: 'left',
@@ -114,26 +117,39 @@ function addPageContent(doc, transport, safeAddText) {
     }
   };
 
-  // Funkcja do pobierania dodatkowych miejsc z order_data
-  const getAdditionalPlaces = (type) => {
-    if (!transport.order_data) return [];
+  // Funkcja do pobierania dodatkowych miejsc
+  const getConnectedTransports = () => {
+    // Najpierw sprawdź response.connectedTransports
+    if (transport.response?.connectedTransports && transport.response.connectedTransports.length > 0) {
+      console.log('Znaleziono connectedTransports:', transport.response.connectedTransports);
+      return transport.response.connectedTransports;
+    }
     
-    try {
-      let orderData;
-      if (typeof transport.order_data === 'string') {
-        orderData = JSON.parse(transport.order_data);
-      } else {
-        orderData = transport.order_data;
+    // Potem sprawdź order_data.additionalPlaces
+    if (transport.order_data) {
+      try {
+        let orderData;
+        if (typeof transport.order_data === 'string') {
+          orderData = JSON.parse(transport.order_data);
+        } else {
+          orderData = transport.order_data;
+        }
+        
+        if (orderData?.additionalPlaces) {
+          console.log('Znaleziono additionalPlaces:', orderData.additionalPlaces);
+          return orderData.additionalPlaces;
+        }
+      } catch (error) {
+        console.error('Błąd parsowania order_data:', error);
       }
-      
-      if (orderData && orderData.additionalPlaces) {
-        return orderData.additionalPlaces.filter(place => place.type === type);
-      }
-    } catch (error) {
-      console.error('Błąd parsowania additionalPlaces:', error);
     }
     
     return [];
+  };
+  
+  const getAdditionalPlaces = (type) => {
+    const connectedTransports = getConnectedTransports();
+    return connectedTransports.filter(place => place.type === type);
   };
 
   // Funkcja do formatowania kompaktowego adresu
