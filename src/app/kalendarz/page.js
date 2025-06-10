@@ -15,6 +15,122 @@ import { wyslijPowiadomienieOdbioruBebnow } from '@/utils/smsNotifications'
 import { MAGAZYNY } from './constants'
 import { KIEROWCY } from './constants'
 
+// Komponent do naprawy kilometrów
+function FixDistances() {
+  const [isRunning, setIsRunning] = useState(false);
+  const [results, setResults] = useState(null);
+
+  const runFix = async (dryRun = false) => {
+    if (isRunning) return;
+    
+    if (!dryRun && !confirm('Czy na pewno chcesz przeliczyć kilometry? To zaktualizuje bazę danych.')) {
+      return;
+    }
+    
+    setIsRunning(true);
+    setResults(null);
+    
+    try {
+      const response = await fetch('/api/transports/fix-distances', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dryRun })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        setResults(data.results);
+        alert(dryRun ? 'Test zakończony' : 'Kilometry zostały przeliczone!');
+      } else {
+        alert('Błąd: ' + data.error);
+      }
+    } catch (error) {
+      alert('Wystąpił błąd: ' + error.message);
+    } finally {
+      setIsRunning(false);
+    }
+  };
+
+  return (
+    <div className="bg-white p-6 rounded-lg shadow border mt-8">
+      <h3 className="text-lg font-semibold mb-4">Naprawa kilometrów transportów</h3>
+      
+      <p className="text-gray-600 mb-4">
+        Przelicz kilometry dla wszystkich transportów - każdy transport będzie miał 
+        odległość liczoną od swojego magazynu do miejsca docelowego.
+      </p>
+      
+      <div className="flex gap-3 mb-4">
+        <button
+          onClick={() => runFix(true)}
+          disabled={isRunning}
+          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400"
+        >
+          {isRunning ? 'Przetwarzanie...' : 'Test (bez zapisu)'}
+        </button>
+        
+        <button
+          onClick={() => runFix(false)}
+          disabled={isRunning}
+          className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-400"
+        >
+          {isRunning ? 'Przetwarzanie...' : 'Wykonaj naprawę'}
+        </button>
+      </div>
+
+      {results && (
+        <div className="mt-4 p-4 bg-gray-50 rounded">
+          <h4 className="font-medium mb-2">Wyniki:</h4>
+          <div className="grid grid-cols-4 gap-4 mb-4">
+            <div className="text-center">
+              <div className="text-2xl font-bold">{results.total}</div>
+              <div className="text-sm text-gray-500">Łącznie</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-green-600">{results.updated}</div>
+              <div className="text-sm text-gray-500">Zaktualizowane</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-yellow-600">{results.skipped}</div>
+              <div className="text-sm text-gray-500">Pominięte</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-red-600">{results.errors}</div>
+              <div className="text-sm text-gray-500">Błędy</div>
+            </div>
+          </div>
+          
+          {results.changes.length > 0 && (
+            <details className="mt-4">
+              <summary className="cursor-pointer font-medium">Zobacz szczegóły zmian</summary>
+              <div className="mt-2 max-h-60 overflow-y-auto">
+                {results.changes.slice(0, 20).map((change, i) => (
+                  <div key={i} className="text-sm py-1 border-b">
+                    <strong>ID {change.id}</strong> ({change.city}): 
+                    {change.oldDistance}km → <span className="text-green-600">{change.newDistance}km</span>
+                    {change.difference !== 0 && (
+                      <span className={change.difference > 0 ? 'text-red-500' : 'text-green-500'}>
+                        {' '}({change.difference > 0 ? '+' : ''}{change.difference}km)
+                      </span>
+                    )}
+                  </div>
+                ))}
+                {results.changes.length > 20 && (
+                  <div className="text-sm text-gray-500 py-2">
+                    ... i {results.changes.length - 20} więcej
+                  </div>
+                )}
+              </div>
+            </details>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 export default function KalendarzPage() {
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [selectedDate, setSelectedDate] = useState(null)
@@ -1127,7 +1243,8 @@ export default function KalendarzPage() {
              </div>
            </div>
          )}
+         {(userRole === 'admin' || userRole === 'super_admin') && <FixDistances />}
        </div>
      </DragDropContext>
    )
-  }
+}
