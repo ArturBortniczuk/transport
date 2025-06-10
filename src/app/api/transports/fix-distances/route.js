@@ -1,4 +1,4 @@
-// Zastąp cały plik: src/app/api/transports/fix-distances/route.js
+// Kompletny plik: src/app/api/transports/fix-distances/route.js
 
 import { NextResponse } from 'next/server';
 import db from '@/database/db';
