@@ -15,10 +15,12 @@ import { wyslijPowiadomienieOdbioruBebnow } from '@/utils/smsNotifications'
 import { MAGAZYNY } from './constants'
 import { KIEROWCY } from './constants'
 
-// Komponent do naprawy kilometrów
+// Zastąp komponent FixDistances w src/app/kalendarz/page.js
+
 function FixDistances() {
   const [isRunning, setIsRunning] = useState(false);
   const [results, setResults] = useState(null);
+  const [progress, setProgress] = useState(null);
 
   const runFix = async (dryRun = false) => {
     if (isRunning) return;
@@ -29,29 +31,91 @@ function FixDistances() {
     
     setIsRunning(true);
     setResults(null);
+    setProgress({ processed: 0, total: 0, currentBatch: 1 });
     
     try {
-      const response = await fetch('/api/transports/fix-distances', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dryRun })
-      });
-      
-      const data = await response.json();
-      
-      if (data.success) {
-        setResults(data.results);
-        // Dodaj logowanie błędów
-        console.log('Szczegóły wyników:', data.results);
-        alert(dryRun ? 'Test zakończony - sprawdź konsola dla szczegółów' : 'Kilometry zostały przeliczone!');
-      } else {
-        alert('Błąd: ' + data.error);
-        console.error('Błąd API:', data);
+      let offset = 0;
+      const batchSize = 20;
+      let hasMore = true;
+      let totalResults = {
+        total: 0,
+        updated: 0,
+        skipped: 0,
+        errors: 0,
+        changes: []
+      };
+
+      // Przetwarzaj partie aż do końca
+      while (hasMore) {
+        console.log(`Przetwarzanie partii od ${offset}...`);
+        
+        setProgress(prev => ({
+          ...prev,
+          currentBatch: Math.floor(offset / batchSize) + 1,
+          status: `Przetwarzanie partii ${Math.floor(offset / batchSize) + 1}...`
+        }));
+
+        const response = await fetch('/api/transports/fix-distances', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            dryRun, 
+            batchSize, 
+            offset 
+          })
+        });
+        
+        const text = await response.text();
+        let data;
+        
+        try {
+          data = JSON.parse(text);
+        } catch (parseError) {
+          console.error('JSON parse error:', parseError);
+          console.error('Response text:', text);
+          alert('Błąd parsowania odpowiedzi API: ' + text.substring(0, 200));
+          return;
+        }
+        
+        if (!data.success) {
+          throw new Error(data.error);
+        }
+
+        // Akumuluj wyniki
+        totalResults.total = data.results.total;
+        totalResults.updated += data.results.updated;
+        totalResults.skipped += data.results.skipped;
+        totalResults.errors += data.results.errors;
+        totalResults.changes = [...totalResults.changes, ...data.results.changes];
+
+        // Aktualizuj progress
+        setProgress({
+          processed: offset + data.results.batchSize,
+          total: data.results.total,
+          currentBatch: Math.floor(offset / batchSize) + 1,
+          totalBatches: Math.ceil(data.results.total / batchSize),
+          status: `Przetworzone: ${offset + data.results.batchSize} z ${data.results.total}`
+        });
+
+        // Sprawdź czy są jeszcze transporty
+        hasMore = data.results.hasMore;
+        offset += batchSize;
+
+        // Krótka przerwa między partiami żeby nie przeciążyć API
+        if (hasMore) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
       }
+
+      setResults(totalResults);
+      alert(dryRun ? 'Test wszystkich transportów zakończony!' : 'Wszystkie transporty zostały przeliczone!');
+      
     } catch (error) {
+      console.error('Błąd:', error);
       alert('Wystąpił błąd: ' + error.message);
     } finally {
       setIsRunning(false);
+      setProgress(null);
     }
   };
 
@@ -82,9 +146,34 @@ function FixDistances() {
         </button>
       </div>
 
+      {/* Progress bar i info */}
+      {progress && (
+        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-blue-700 font-medium">
+              Partia {progress.currentBatch} z {progress.totalBatches || '?'}
+            </span>
+            <span className="text-blue-600 text-sm">
+              {progress.processed} / {progress.total} transportów
+            </span>
+          </div>
+          
+          {progress.total > 0 && (
+            <div className="w-full bg-blue-200 rounded-full h-2 mb-2">
+              <div 
+                className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
+                style={{ width: `${(progress.processed / progress.total) * 100}%` }}
+              ></div>
+            </div>
+          )}
+          
+          <div className="text-blue-700 text-sm">{progress.status}</div>
+        </div>
+      )}
+
       {results && (
         <div className="mt-4 p-4 bg-gray-50 rounded">
-          <h4 className="font-medium mb-2">Wyniki:</h4>
+          <h4 className="font-medium mb-2">Wyniki finalne:</h4>
           <div className="grid grid-cols-4 gap-4 mb-4">
             <div className="text-center">
               <div className="text-2xl font-bold">{results.total}</div>
@@ -106,22 +195,28 @@ function FixDistances() {
           
           {results.changes.length > 0 && (
             <details className="mt-4">
-              <summary className="cursor-pointer font-medium">Zobacz szczegóły zmian</summary>
+              <summary className="cursor-pointer font-medium">Zobacz szczegóły zmian ({results.changes.length})</summary>
               <div className="mt-2 max-h-60 overflow-y-auto">
-                {results.changes.slice(0, 20).map((change, i) => (
+                {results.changes.slice(0, 50).map((change, i) => (
                   <div key={i} className="text-sm py-1 border-b">
                     <strong>ID {change.id}</strong> ({change.city}): 
-                    {change.oldDistance}km → <span className="text-green-600">{change.newDistance}km</span>
-                    {change.difference !== 0 && (
-                      <span className={change.difference > 0 ? 'text-red-500' : 'text-green-500'}>
-                        {' '}({change.difference > 0 ? '+' : ''}{change.difference}km)
-                      </span>
+                    {change.oldDistance !== undefined ? (
+                      <>
+                        {change.oldDistance}km → <span className="text-green-600">{change.newDistance}km</span>
+                        {change.difference !== 0 && (
+                          <span className={change.difference > 0 ? 'text-red-500' : 'text-green-500'}>
+                            {' '}({change.difference > 0 ? '+' : ''}{change.difference}km)
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <span className="text-yellow-600">{change.reason || change.status}</span>
                     )}
                   </div>
                 ))}
-                {results.changes.length > 20 && (
+                {results.changes.length > 50 && (
                   <div className="text-sm text-gray-500 py-2">
-                    ... i {results.changes.length - 20} więcej
+                    ... i {results.changes.length - 50} więcej
                   </div>
                 )}
               </div>
