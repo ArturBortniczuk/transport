@@ -1,7 +1,7 @@
 // Utwórz plik: src/app/api/transports/fix-distances/route.js
 
 import { NextResponse } from 'next/server';
-import db from '@/lib/db';
+import db from '@/database/db';
 import { calculateDistance } from '@/app/services/calculateDistance';
 
 // Współrzędne magazynów
