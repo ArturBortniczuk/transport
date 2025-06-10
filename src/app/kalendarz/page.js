@@ -1081,7 +1081,6 @@ export default function KalendarzPage() {
              </div>
            </div>
          )}
-         {(userRole === 'admin' || userRole === 'super_admin') && <FixDistances />}
        </div>
      </DragDropContext>
    )
