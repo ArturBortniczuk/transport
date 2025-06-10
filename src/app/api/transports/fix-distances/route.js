@@ -60,22 +60,36 @@ function calculateStraightLineDistance(lat1, lon1, lat2, lon2) {
 
 export async function POST(request) {
   try {
-    const { dryRun = false } = await request.json();
+    const { dryRun = false, batchSize = 20, offset = 0 } = await request.json();
     
     console.log('=== PRZELICZANIE KILOMETRÓW TRANSPORTÓW ===');
     console.log('Tryb testowy:', dryRun);
+    console.log('Rozmiar partii:', batchSize);
+    console.log('Offset:', offset);
     console.log('Google Maps API Key dostępny:', !!process.env.GOOGLE_MAPS_API_KEY);
     
-    // Pobierz wszystkie transporty z współrzędnymi
+    // Pobierz transporty w partiach
     const transports = await db('transports')
       .select('id', 'source_warehouse', 'latitude', 'longitude', 'distance', 'destination_city')
       .whereNotNull('latitude')
-      .whereNotNull('longitude');
+      .whereNotNull('longitude')
+      .limit(batchSize)
+      .offset(offset);
     
-    console.log(`Znaleziono ${transports.length} transportów do przeliczenia`);
+    // Sprawdź łączną liczbę transportów
+    const totalCount = await db('transports')
+      .whereNotNull('latitude')
+      .whereNotNull('longitude')
+      .count('* as count')
+      .first();
+    
+    console.log(`Partia: ${offset + 1}-${offset + transports.length} z ${totalCount.count} transportów`);
     
     const results = {
-      total: transports.length,
+      total: parseInt(totalCount.count),
+      batchSize: transports.length,
+      offset: offset,
+      hasMore: (offset + batchSize) < totalCount.count,
       updated: 0,
       skipped: 0,
       errors: 0,
@@ -87,7 +101,6 @@ export async function POST(request) {
         console.log(`\n--- Przetwarzanie transportu ID: ${transport.id} ---`);
         console.log(`Miasto: ${transport.destination_city}`);
         console.log(`Magazyn: ${transport.source_warehouse}`);
-        console.log(`Współrzędne: ${transport.latitude}, ${transport.longitude}`);
         
         // Określ magazyn (domyślnie białystok)
         const warehouse = transport.source_warehouse || 'bialystok';
@@ -146,14 +159,15 @@ export async function POST(request) {
       }
     }
     
-    console.log('\n=== PODSUMOWANIE ===');
+    console.log('\n=== PODSUMOWANIE PARTII ===');
     console.log(`Zaktualizowane: ${results.updated}`);
     console.log(`Pominięte: ${results.skipped}`);
     console.log(`Błędy: ${results.errors}`);
+    console.log(`Pozostało: ${results.hasMore ? 'TAK' : 'NIE'}`);
     
     return NextResponse.json({
       success: true,
-      message: dryRun ? 'Test zakończony' : 'Przeliczanie zakończone',
+      message: dryRun ? 'Partia przetestowana' : 'Partia przeliczona',
       results
     });
     
