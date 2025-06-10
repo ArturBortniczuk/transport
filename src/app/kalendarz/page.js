@@ -41,9 +41,12 @@ function FixDistances() {
       
       if (data.success) {
         setResults(data.results);
-        alert(dryRun ? 'Test zakończony' : 'Kilometry zostały przeliczone!');
+        // Dodaj logowanie błędów
+        console.log('Szczegóły wyników:', data.results);
+        alert(dryRun ? 'Test zakończony - sprawdź konsola dla szczegółów' : 'Kilometry zostały przeliczone!');
       } else {
         alert('Błąd: ' + data.error);
+        console.error('Błąd API:', data);
       }
     } catch (error) {
       alert('Wystąpił błąd: ' + error.message);
