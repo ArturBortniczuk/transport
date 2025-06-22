@@ -71,7 +71,36 @@ export async function DELETE(request) {
         throw new Error('Transport not found');
       }
       
-      // 2. Sprawdzamy czy transport jest powiązany z jakimś opakowaniem
+      // 2. Usuń wszystkie oceny powiązane z transportem
+      await trx('transport_ratings')
+        .where('transport_id', id)
+        .del();
+      
+      console.log(`Usunięto oceny dla transportu ${id}`);
+      
+      // 3. Usuń wszystkie komentarze powiązane z transportem (jeśli tabela istnieje)
+      try {
+        await trx('transport_comments')
+          .where('transport_id', id)
+          .del();
+        console.log(`Usunięto komentarze dla transportu ${id}`);
+      } catch (error) {
+        // Tabela może nie istnieć - to jest OK
+        console.log(`Tabela transport_comments może nie istnieć: ${error.message}`);
+      }
+      
+      // 4. Usuń szczegółowe oceny (jeśli tabela istnieje)
+      try {
+        await trx('transport_detailed_ratings')
+          .where('transport_id', id)
+          .del();
+        console.log(`Usunięto szczegółowe oceny dla transportu ${id}`);
+      } catch (error) {
+        // Tabela może nie istnieć - to jest OK
+        console.log(`Tabela transport_detailed_ratings może nie istnieć: ${error.message}`);
+      }
+      
+      // 5. Sprawdzamy czy transport jest powiązany z jakimś opakowaniem
       if (transport.packaging_id) {
         // Aktualizujemy opakowanie, aby usunąć referencję do transportu
         await trx('packagings')
@@ -84,7 +113,7 @@ export async function DELETE(request) {
         console.log(`Usunięto powiązanie z opakowaniem ${transport.packaging_id}`);
       }
       
-      // 3. Sprawdzamy czy transport jest połączony z innymi transportami jako źródło
+      // 6. Sprawdzamy czy transport jest połączony z innymi transportami jako źródło
       const connectedTransports = await trx('transports')
         .where('connected_transport_id', id)
         .select('id');
@@ -98,14 +127,14 @@ export async function DELETE(request) {
         console.log(`Usunięto powiązania z ${connectedTransports.length} transportami`);
       }
       
-      // 4. Sprawdzamy czy transport jest połączony z innym transportem jako cel
+      // 7. Sprawdzamy czy transport jest połączony z innym transportem jako cel
       if (transport.connected_transport_id) {
         // Nie musimy nic robić, ponieważ usunięcie tego transportu 
         // nie wpłynie na transport źródłowy
         console.log(`Transport był połączony z transportem ${transport.connected_transport_id}`);
       }
       
-      // 5. Usuwamy transport
+      // 8. Na koniec usuwamy sam transport
       const deleted = await trx('transports').where('id', id).del();
       
       if (deleted === 0) {
@@ -117,7 +146,7 @@ export async function DELETE(request) {
     
     return NextResponse.json({ 
       success: true, 
-      message: 'Transport deleted successfully' 
+      message: 'Transport został usunięty wraz z wszystkimi powiązanymi danymi' 
     });
   } catch (error) {
     console.error('Error deleting transport:', error);
