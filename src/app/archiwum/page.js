@@ -160,56 +160,47 @@ export default function ArchiwumPage() {
   }
 
   const fetchAllRatings = async (transports) => {
-    if (!transports || transports.length === 0) {
-      return;
-    }
-    
     const ratingsData = {}
     
+    // Najpierw ustaw domyślne wartości dla wszystkich transportów
+    transports.forEach(transport => {
+      ratingsData[transport.id] = {
+        canBeRated: transport.status === 'completed',
+        hasUserRated: false,
+        userRating: null,
+        ratings: [],
+        stats: { totalRatings: 0, overallRatingPercentage: null }
+      }
+    })
+    
     try {
-      // Pobierz wszystkie transporty ID w jednym zapytaniu
-      const transportIds = transports.map(t => t.id);
-      
-      // Pojedyncze zapytanie dla wszystkich ocen zamiast wielu zapytań
-      const response = await fetch('/api/transport-ratings-bulk', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ transportIds })
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          // Przypisz dane do każdego transportu
-          transports.forEach(transport => {
-            const transportRating = data.ratings[transport.id];
-            ratingsData[transport.id] = transportRating || {
-              canBeRated: transport.status === 'completed',
-              hasUserRated: false,
+      // Sprawdź tylko proste oceny (is_positive)
+      for (const transport of transports) {
+        const response = await fetch(`/api/transport-ratings?transportId=${transport.id}`)
+        if (response.ok) {
+          const data = await response.json()
+          if (data.success) {
+            ratingsData[transport.id] = {
+              canBeRated: data.canBeRated || false,
+              hasUserRated: false, // Ustaw na false dla uproszczenia
               userRating: null,
-              ratings: [],
-              stats: { totalRatings: 0, overallRatingPercentage: null }
-            };
-          });
+              ratings: data.ratings || [],
+              stats: {
+                totalRatings: data.ratings ? data.ratings.length : 0,
+                overallRatingPercentage: data.ratings && data.ratings.length > 0 && data.isPositive !== null 
+                  ? (data.isPositive ? 100 : 0) 
+                  : null
+              }
+            }
+          }
         }
       }
     } catch (error) {
-      console.error('Błąd pobierania ocen:', error);
-      // Fallback - ustaw domyślne wartości
-      transports.forEach(transport => {
-        ratingsData[transport.id] = {
-          canBeRated: transport.status === 'completed',
-          hasUserRated: false,
-          userRating: null,
-          ratings: [],
-          stats: { totalRatings: 0, overallRatingPercentage: null }
-        };
-      });
+      console.error('Błąd pobierania ocen:', error)
+      // Zostaw domyślne wartości
     }
     
-    setTransportRatings(ratingsData);
+    setTransportRatings(ratingsData)
   }
   
   const applyFilters = async (transports, year, month, warehouse, driver, requester, rating, construction) => {
@@ -537,7 +528,7 @@ export default function ArchiwumPage() {
     }, [transport.id])
 
     useEffect(() => {
-      if (userHasRated && transportRating?.userRating) {
+      if (userHasRated && transportRating?.userRating && transportRating.userRating.ratings) {
         setRatings(transportRating.userRating.ratings)
         setComment(transportRating.userRating.comment || '')
         setIsEditMode(false)
@@ -545,7 +536,6 @@ export default function ArchiwumPage() {
         setIsEditMode(true)
       }
     }, [userHasRated, transportRating, hasMainRating])
-
     const categories = [
       {
         id: 'driver',
