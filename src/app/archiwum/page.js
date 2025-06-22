@@ -160,6 +160,10 @@ export default function ArchiwumPage() {
   }
 
   const fetchAllRatings = async (transports) => {
+    if (!transports || transports.length === 0) {
+      return;
+    }
+    
     const ratingsData = {}
     
     // Najpierw ustaw domyślne wartości dla wszystkich transportów
@@ -174,33 +178,50 @@ export default function ArchiwumPage() {
     })
     
     try {
-      // Sprawdź tylko proste oceny (is_positive)
-      for (const transport of transports) {
-        const response = await fetch(`/api/transport-ratings?transportId=${transport.id}`)
-        if (response.ok) {
-          const data = await response.json()
-          if (data.success) {
-            ratingsData[transport.id] = {
-              canBeRated: data.canBeRated || false,
-              hasUserRated: false, // Ustaw na false dla uproszczenia
-              userRating: null,
-              ratings: data.ratings || [],
-              stats: {
-                totalRatings: data.ratings ? data.ratings.length : 0,
-                overallRatingPercentage: data.ratings && data.ratings.length > 0 && data.isPositive !== null 
-                  ? (data.isPositive ? 100 : 0) 
-                  : null
-              }
+      // Pobierz wszystkie transporty ID w jednym zapytaniu
+      const transportIds = transports.map(t => t.id);
+      
+      console.log(`Pobieranie ocen dla ${transportIds.length} transportów za pomocą bulk API`)
+      
+      // Pojedyncze zapytanie dla wszystkich ocen zamiast wielu zapytań
+      const response = await fetch('/api/transport-ratings-bulk', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ transportIds })
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          console.log('Bulk API zwróciło dane dla transportów:', Object.keys(data.ratings).length)
+          
+          // Przypisz dane do każdego transportu
+          transports.forEach(transport => {
+            const transportRating = data.ratings[transport.id];
+            if (transportRating) {
+              ratingsData[transport.id] = {
+                canBeRated: transportRating.canBeRated || false,
+                hasUserRated: transportRating.hasUserRated || false,
+                userRating: transportRating.userRating || null,
+                ratings: transportRating.ratings || [],
+                stats: transportRating.stats || { totalRatings: 0, overallRatingPercentage: null }
+              };
             }
-          }
+          });
+        } else {
+          console.error('Bulk API error:', data.error)
         }
+      } else {
+        console.error('Bulk API response not ok:', response.status)
       }
     } catch (error) {
-      console.error('Błąd pobierania ocen:', error)
-      // Zostaw domyślne wartości
+      console.error('Błąd pobierania ocen:', error);
+      // Zostaw domyślne wartości - nie rób fallback na pojedyncze zapytania
     }
     
-    setTransportRatings(ratingsData)
+    setTransportRatings(ratingsData);
   }
   
   const applyFilters = async (transports, year, month, warehouse, driver, requester, rating, construction) => {
