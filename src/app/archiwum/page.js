@@ -549,12 +549,36 @@ export default function ArchiwumPage() {
     }, [transport.id])
 
     useEffect(() => {
-      if (userHasRated && transportRating?.userRating && transportRating.userRating.ratings) {
-        setRatings(transportRating.userRating.ratings)
+      // Sprawdź czy mamy dane oceny użytkownika
+      if (userHasRated && transportRating?.userRating) {
+        // Jeśli mamy szczegółowe oceny, użyj ich
+        if (transportRating.userRating.ratings) {
+          setRatings(transportRating.userRating.ratings)
+        } else {
+          // Jeśli nie ma szczegółowych ocen, ustaw domyślne wartości
+          setRatings({
+            driverProfessional: null,
+            driverTasksCompleted: null,
+            cargoComplete: null,
+            cargoCorrect: null,
+            deliveryNotified: null,
+            deliveryOnTime: null
+          })
+        }
         setComment(transportRating.userRating.comment || '')
         setIsEditMode(false)
       } else if (!hasMainRating) {
+        // Jeśli nie ma żadnej oceny, włącz tryb edycji
         setIsEditMode(true)
+        // I ustaw domyślne wartości
+        setRatings({
+          driverProfessional: null,
+          driverTasksCompleted: null,
+          cargoComplete: null,
+          cargoCorrect: null,
+          deliveryNotified: null,
+          deliveryOnTime: null
+        })
       }
     }, [userHasRated, transportRating, hasMainRating])
     const categories = [
