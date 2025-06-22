@@ -160,35 +160,56 @@ export default function ArchiwumPage() {
   }
 
   const fetchAllRatings = async (transports) => {
+    if (!transports || transports.length === 0) {
+      return;
+    }
+    
     const ratingsData = {}
     
-    for (const transport of transports) {
-      try {
-        const response = await fetch(`/api/transport-ratings?transportId=${transport.id}`)
-        const data = await response.json()
-        
+    try {
+      // Pobierz wszystkie transporty ID w jednym zapytaniu
+      const transportIds = transports.map(t => t.id);
+      
+      // Pojedyncze zapytanie dla wszystkich ocen zamiast wielu zapytań
+      const response = await fetch('/api/transport-ratings-bulk', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ transportIds })
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
         if (data.success) {
-          ratingsData[transport.id] = {
-            canBeRated: data.canBeRated,
-            hasUserRated: data.hasUserRated,
-            userRating: data.userRating,
-            ratings: data.ratings || [],
-            stats: data.stats || { totalRatings: 0, overallRatingPercentage: null }
-          }
+          // Przypisz dane do każdego transportu
+          transports.forEach(transport => {
+            const transportRating = data.ratings[transport.id];
+            ratingsData[transport.id] = transportRating || {
+              canBeRated: transport.status === 'completed',
+              hasUserRated: false,
+              userRating: null,
+              ratings: [],
+              stats: { totalRatings: 0, overallRatingPercentage: null }
+            };
+          });
         }
-      } catch (error) {
-        console.error(`Błąd pobierania oceny dla transportu ${transport.id}:`, error)
+      }
+    } catch (error) {
+      console.error('Błąd pobierania ocen:', error);
+      // Fallback - ustaw domyślne wartości
+      transports.forEach(transport => {
         ratingsData[transport.id] = {
-          canBeRated: false,
+          canBeRated: transport.status === 'completed',
           hasUserRated: false,
           userRating: null,
           ratings: [],
           stats: { totalRatings: 0, overallRatingPercentage: null }
-        }
-      }
+        };
+      });
     }
     
-    setTransportRatings(ratingsData)
+    setTransportRatings(ratingsData);
   }
   
   const applyFilters = async (transports, year, month, warehouse, driver, requester, rating, construction) => {
