@@ -617,33 +617,75 @@ export default function ArchiwumPage() {
         setSubmitting(true)
         setError('')
         
-        const response = await fetch('/api/transport-ratings', {
+        // Oblicz czy ocena jest pozytywna (więcej niż 50% kryteriów pozytywnych)
+        const positiveCount = Object.values(ratings).filter(r => r === true).length
+        const totalCount = Object.values(ratings).filter(r => r !== null).length
+        const isPositive = totalCount > 0 ? (positiveCount / totalCount) > 0.5 : true
+        
+        console.log('Wysyłanie oceny:', {
+          transportId: transport.id,
+          isPositive,
+          comment: comment.trim(),
+          detailedRatings: ratings
+        })
+        
+        // Najpierw wyślij prostą ocenę (is_positive)
+        const simpleRatingResponse = await fetch('/api/transport-ratings', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
             transportId: transport.id,
-            ratings,
+            isPositive,
             comment: comment.trim()
           })
         })
         
-        const result = await response.json()
+        const simpleResult = await simpleRatingResponse.json()
+        console.log('Odpowiedź prostej oceny:', simpleResult)
         
-        if (result.success) {
-          setSuccess(true)
-          setIsEditMode(false)
-          
-          // Odśwież dane
-          await fetchAllRatings([transport])
-          
-          setTimeout(() => {
-            setSuccess(false)
-          }, 3000)
-        } else {
-          setError(result.error || 'Wystąpił błąd podczas zapisywania oceny')
+        if (!simpleResult.success) {
+          setError(simpleResult.error || 'Wystąpił błąd podczas zapisywania oceny')
+          return
         }
+        
+        // Następnie wyślij szczegółowe oceny
+        try {
+          const detailedRatingResponse = await fetch('/api/transport-detailed-ratings', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              transportId: transport.id,
+              ratings,
+              comment: comment.trim()
+            })
+          })
+          
+          const detailedResult = await detailedRatingResponse.json()
+          console.log('Odpowiedź szczegółowej oceny:', detailedResult)
+          
+          if (!detailedResult.success) {
+            console.error('Błąd szczegółowej oceny:', detailedResult.error)
+            // Nie przerywamy - prosta ocena została zapisana
+          }
+        } catch (error) {
+          console.error('Błąd wysyłania szczegółowej oceny:', error)
+          // Nie przerywamy - prosta ocena została zapisana
+        }
+        
+        setSuccess(true)
+        setIsEditMode(false)
+        
+        // Odśwież dane
+        await fetchAllRatings([transport])
+        
+        setTimeout(() => {
+          setSuccess(false)
+        }, 3000)
+        
       } catch (error) {
         console.error('Błąd wysyłania oceny:', error)
         setError('Wystąpił błąd podczas wysyłania oceny')
