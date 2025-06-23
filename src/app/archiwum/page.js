@@ -574,9 +574,14 @@ export default function ArchiwumPage() {
         
         if (data.success && data.rating) {
           setDetailedRating(data.rating)
+          console.log('Pobrana szczegółowa ocena:', data.rating)
+        } else {
+          console.log('Brak szczegółowej oceny dla tego transportu')
+          setDetailedRating(null)
         }
       } catch (error) {
         console.error('Błąd pobierania szczegółowej oceny:', error)
+        setDetailedRating(null)
       } finally {
         setLoadingDetailedRating(false)
       }
@@ -907,7 +912,19 @@ export default function ArchiwumPage() {
                           <h5 className="font-medium text-sm mb-3 text-center">{category.title}</h5>
                           <div className="space-y-2">
                             {category.criteria.map(criteria => {
-                              const ratingValue = detailedRating[criteria.key.toLowerCase().replace(/([A-Z])/g, '_$1')]
+                              // Mapowanie nazw kolumn - dostosuj do struktury bazy danych
+                              const columnMapping = {
+                                'driverProfessional': 'driver_professional',
+                                'driverTasksCompleted': 'driver_tasks_completed', 
+                                'cargoComplete': 'cargo_complete',
+                                'cargoCorrect': 'cargo_correct',
+                                'deliveryNotified': 'delivery_notified',
+                                'deliveryOnTime': 'delivery_on_time'
+                              }
+                              
+                              const columnName = columnMapping[criteria.key] || criteria.key
+                              const ratingValue = detailedRating[columnName]
+                              
                               return (
                                 <div key={criteria.key} className="flex items-center justify-between text-xs">
                                   <span className="text-gray-600 flex-1 mr-2">{criteria.text}</span>
