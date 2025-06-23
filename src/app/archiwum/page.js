@@ -1,4 +1,4 @@
-// src/app/archiwum/page.js - NAPRAWIONA WERSJA
+// src/app/archiwum/page.js - NAPRAWIONA WERSJA z poprawkami przycisków
 'use client'
 import React, { useState, useEffect } from 'react'
 import { format } from 'date-fns'
@@ -346,6 +346,7 @@ export default function ArchiwumPage() {
   const handleCloseRating = () => {
     setShowRatingModal(false)
     setSelectedTransport(null)
+    // Odśwież dane po zamknięciu modala
     fetchArchivedTransports()
   }
 
@@ -483,7 +484,7 @@ export default function ArchiwumPage() {
     )
   }
 
-  // Komponent przycisków oceny - UPROSZCZONA WERSJA
+  // NAPRAWIONY komponent przycisków oceny
   const RatingButtons = ({ transport }) => {
     const rating = transportRatings[transport.id]
     
