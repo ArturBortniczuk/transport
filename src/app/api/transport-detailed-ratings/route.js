@@ -139,11 +139,13 @@ export async function POST(request) {
       
       if (existingRating) {
         // Aktualizuj istniejącą ocenę
+        console.log('Aktualizowanie szczegółowej oceny dla użytkownika:', userId);
         await db('transport_detailed_ratings')
           .where('id', existingRating.id)
           .update(ratingData);
       } else {
         // Dodaj nową ocenę
+        console.log('Dodawanie nowej szczegółowej oceny dla użytkownika:', userId);
         await db('transport_detailed_ratings')
           .insert(ratingData);
       }
