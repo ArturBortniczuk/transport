@@ -535,6 +535,8 @@ export default function ArchiwumPage() {
     const [addingComment, setAddingComment] = useState(false)
     const [allComments, setAllComments] = useState([])
     const [loadingComments, setLoadingComments] = useState(true)
+    const [detailedRating, setDetailedRating] = useState(null)
+    const [loadingDetailedRating, setLoadingDetailedRating] = useState(false)
     
     const transportRating = transportRatings[transport.id]
     const hasMainRating = transportRating?.stats.totalRatings > 0
@@ -560,6 +562,32 @@ export default function ArchiwumPage() {
       
       fetchComments()
     }, [transport.id])
+
+    // Dodaj funkcję do pobierania szczegółowej oceny
+    const fetchDetailedRating = async () => {
+      if (!hasMainRating || !transportRating.ratings[0]) return
+      
+      try {
+        setLoadingDetailedRating(true)
+        const response = await fetch(`/api/transport-detailed-ratings?transportId=${transport.id}&raterEmail=${transportRating.ratings[0].rater_email}`)
+        const data = await response.json()
+        
+        if (data.success && data.rating) {
+          setDetailedRating(data.rating)
+        }
+      } catch (error) {
+        console.error('Błąd pobierania szczegółowej oceny:', error)
+      } finally {
+        setLoadingDetailedRating(false)
+      }
+    }
+
+    // Dodaj useEffect do pobierania szczegółowej oceny
+    useEffect(() => {
+      if (hasMainRating) {
+        fetchDetailedRating()
+      }
+    }, [hasMainRating, transport.id])
 
     useEffect(() => {
       // Sprawdź czy mamy dane oceny użytkownika
@@ -862,10 +890,71 @@ export default function ArchiwumPage() {
                       <div className="text-sm">
                         <p><strong>Oceniający:</strong> {transportRating.ratings[0].rater_name || transportRating.ratings[0].rater_email}</p>
                         {transportRating.ratings[0].comment && (
-                          <p className="mt-2"><strong>Komentarz:</strong> {transportRating.ratings[0].comment}</p>
+                          <p className="mt-2"><strong>Komentarz do oceny:</strong> {transportRating.ratings[0].comment}</p>
                         )}
                       </div>
                     )}
+                  </div>
+                )}
+                
+                {/* Wyświetl szczegółowe kryteria oceny */}
+                {detailedRating ? (
+                  <div className="mb-4">
+                    <h4 className="font-medium text-gray-900 mb-3">Szczegóły oceny:</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {categories.map(category => (
+                        <div key={category.id} className="bg-white p-4 rounded-lg border">
+                          <h5 className="font-medium text-sm mb-3 text-center">{category.title}</h5>
+                          <div className="space-y-2">
+                            {category.criteria.map(criteria => {
+                              const ratingValue = detailedRating[criteria.key.toLowerCase().replace(/([A-Z])/g, '_$1')]
+                              return (
+                                <div key={criteria.key} className="flex items-center justify-between text-xs">
+                                  <span className="text-gray-600 flex-1 mr-2">{criteria.text}</span>
+                                  <div className="flex items-center">
+                                    {ratingValue === true ? (
+                                      <ThumbsUp size={12} className="text-green-600" />
+                                    ) : ratingValue === false ? (
+                                      <ThumbsDown size={12} className="text-red-600" />
+                                    ) : (
+                                      <span className="text-gray-400 text-xs">Brak</span>
+                                    )}
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mb-4">
+                    <h4 className="font-medium text-gray-900 mb-3">Ocena ogólna:</h4>
+                    <div className="p-4 bg-white rounded-lg border text-center">
+                      {transportRating.ratings[0]?.is_positive ? (
+                        <div className="flex items-center justify-center text-green-600">
+                          <ThumbsUp size={24} className="mr-2" />
+                          <span className="text-lg font-medium">Pozytywna ocena</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-center text-red-600">
+                          <ThumbsDown size={24} className="mr-2" />
+                          <span className="text-lg font-medium">Negatywna ocena</span>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Informacja o tym, że to uproszczona ocena */}
+                    <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                      <p className="text-xs text-yellow-800">
+                        <strong>Uwaga:</strong> Pokazana jest ogólna ocena transportu. 
+                        {transportRating.ratings[0]?.is_positive 
+                          ? " Transport został oceniony pozytywnie." 
+                          : " Transport został oceniony negatywnie."
+                        }
+                      </p>
+                    </div>
                   </div>
                 )}
                 
