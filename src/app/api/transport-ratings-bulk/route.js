@@ -1,6 +1,10 @@
-// src/app/api/transport-ratings-bulk/route.js
+// src/app/api/transport-ratings-bulk/route.js - Z CACHE
 import { NextResponse } from 'next/server';
 import db from '@/database/db';
+
+// Cache w pamięci - w produkcji można użyć Redis
+const ratingsCache = new Map()
+const CACHE_TTL = 5 * 60 * 1000 // 5 minut cache
 
 // Funkcja pomocnicza do weryfikacji sesji
 const validateSession = async (authToken) => {
@@ -90,18 +94,44 @@ export async function POST(request) {
       }, { status: 400 });
     }
     
-    console.log(`Pobieranie ocen dla ${transportIds.length} transportów`);
+    // CACHE: Sprawdź cache dla tego zestawu transportów
+    const cacheKey = `${userId}-${transportIds.sort().join(',')}`;
+    const cached = ratingsCache.get(cacheKey);
+    
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      console.log(`Cache hit dla ${transportIds.length} transportów`);
+      return NextResponse.json({ 
+        success: true, 
+        ratings: cached.data
+      });
+    }
+    
+    console.log(`Cache miss - pobieranie ocen dla ${transportIds.length} transportów z bazy`);
     
     const ratingsData = {};
     
     try {
-      // Pobierz wszystkie oceny w jednym zapytaniu
+      // OPTYMALIZACJA: Pobierz wszystkie oceny w jednym zapytaniu
       const allRatings = await db('transport_ratings')
         .whereIn('transport_id', transportIds)
         .select('*')
         .orderBy('created_at', 'desc');
       
-      console.log(`Znaleziono ${allRatings.length} ocen`);
+      console.log(`Znaleziono ${allRatings.length} ocen w bazie`);
+      
+      // OPTYMALIZACJA: Pobierz wszystkie szczegółowe oceny w jednym zapytaniu
+      let allDetailedRatings = [];
+      try {
+        const hasDetailedTable = await db.schema.hasTable('transport_detailed_ratings');
+        if (hasDetailedTable) {
+          allDetailedRatings = await db('transport_detailed_ratings')
+            .whereIn('transport_id', transportIds)
+            .select('*');
+          console.log(`Znaleziono ${allDetailedRatings.length} szczegółowych ocen`);
+        }
+      } catch (error) {
+        console.log('Tabela transport_detailed_ratings nie istnieje lub błąd:', error.message);
+      }
       
       // Grupuj oceny według transport_id
       const ratingsByTransport = {};
@@ -113,28 +143,58 @@ export async function POST(request) {
         ratingsByTransport[transportId].push(rating);
       });
       
+      // Grupuj szczegółowe oceny według transport_id
+      const detailedRatingsByTransport = {};
+      allDetailedRatings.forEach(rating => {
+        const transportId = rating.transport_id;
+        if (!detailedRatingsByTransport[transportId]) {
+          detailedRatingsByTransport[transportId] = [];
+        }
+        detailedRatingsByTransport[transportId].push(rating);
+      });
+      
       // Przygotuj dane dla każdego transportu
       for (const transportId of transportIds) {
         const ratings = ratingsByTransport[transportId] || [];
+        const detailedRatings = detailedRatingsByTransport[transportId] || [];
         const canBeRated = ratings.length === 0;
         const hasUserRated = ratings.some(r => r.rater_email === userId);
         const userRating = ratings.find(r => r.rater_email === userId) || null;
         
-        // Oblicz statystyki - POPRAWIONA WERSJA
+        // OPTYMALIZACJA: Oblicz statystyki lokalnie
         let overallRatingPercentage = null;
         
         if (ratings.length > 0) {
           // Najpierw spróbuj obliczyć na podstawie szczegółowych ocen
-          const detailedPercentage = await calculateDetailedPercentage(transportId);
-          
-          if (detailedPercentage !== null) {
-            overallRatingPercentage = detailedPercentage;
-            console.log(`Transport ${transportId}: Szczegółowy procent = ${detailedPercentage}%`);
+          if (detailedRatings.length > 0) {
+            let totalCriteria = 0;
+            let positiveCriteria = 0;
+            
+            detailedRatings.forEach(rating => {
+              const criteria = [
+                rating.driver_professional, 
+                rating.driver_tasks_completed, 
+                rating.cargo_complete, 
+                rating.cargo_correct, 
+                rating.delivery_notified, 
+                rating.delivery_on_time
+              ];
+              
+              criteria.forEach(criterion => {
+                if (criterion !== null && criterion !== undefined) {
+                  totalCriteria++;
+                  if (criterion === true || criterion === 1) {
+                    positiveCriteria++;
+                  }
+                }
+              });
+            });
+            
+            overallRatingPercentage = totalCriteria > 0 ? Math.round((positiveCriteria / totalCriteria) * 100) : null;
           } else {
             // Fallback - oblicz na podstawie prostych ocen pozytywnych/negatywnych
             const positiveRatings = ratings.filter(r => r.is_positive === true || r.is_positive === 1).length;
             overallRatingPercentage = Math.round((positiveRatings / ratings.length) * 100);
-            console.log(`Transport ${transportId}: Prosty procent = ${overallRatingPercentage}% (${positiveRatings}/${ratings.length})`);
           }
         }
         
@@ -164,6 +224,24 @@ export async function POST(request) {
       });
     }
     
+    // CACHE: Zapisz wyniki w cache
+    ratingsCache.set(cacheKey, {
+      data: ratingsData,
+      timestamp: Date.now()
+    });
+    
+    // OPTYMALIZACJA: Czyść stary cache co jakiś czas
+    if (ratingsCache.size > 1000) {
+      const now = Date.now();
+      for (const [key, value] of ratingsCache.entries()) {
+        if (now - value.timestamp > CACHE_TTL) {
+          ratingsCache.delete(key);
+        }
+      }
+    }
+    
+    console.log(`Zwracanie danych dla ${transportIds.length} transportów (cache size: ${ratingsCache.size})`);
+    
     return NextResponse.json({ 
       success: true, 
       ratings: ratingsData
@@ -171,6 +249,54 @@ export async function POST(request) {
     
   } catch (error) {
     console.error('Error fetching bulk ratings:', error);
+    return NextResponse.json({ 
+      success: false, 
+      error: error.message 
+    }, { status: 500 });
+  }
+}
+
+// Opcjonalnie: endpoint do czyszczenia cache (dla adminów)
+export async function DELETE(request) {
+  try {
+    const authToken = request.cookies.get('authToken')?.value;
+    const userId = await validateSession(authToken);
+    
+    if (!userId) {
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Unauthorized' 
+      }, { status: 401 });
+    }
+    
+    // Sprawdź czy użytkownik jest adminem
+    const user = await db('users')
+      .where('email', userId)
+      .select('is_admin', 'role')
+      .first();
+    
+    const isAdmin = user?.is_admin === true || 
+                  user?.is_admin === 1 || 
+                  user?.role === 'admin';
+    
+    if (!isAdmin) {
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Admin privileges required' 
+      }, { status: 403 });
+    }
+    
+    // Wyczyść cache
+    ratingsCache.clear();
+    console.log('Cache ratings został wyczyszczony przez admina');
+    
+    return NextResponse.json({ 
+      success: true,
+      message: 'Cache został wyczyszczony'
+    });
+    
+  } catch (error) {
+    console.error('Error clearing cache:', error);
     return NextResponse.json({ 
       success: false, 
       error: error.message 
