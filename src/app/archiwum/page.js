@@ -203,10 +203,12 @@ export default function ArchiwumPage() {
             if (transportRating) {
               // Bezpiecznie sprawdź czy mamy dane oceny użytkownika
               let userRating = null;
-              const hasUserRated = transportRating.ratings && transportRating.ratings.some(r => r.rater_email === currentUserEmail);
+              const hasUserRated = transportRating.ratings && 
+                Array.isArray(transportRating.ratings) && 
+                transportRating.ratings.some(r => r && r.rater_email === currentUserEmail);
               
               if (hasUserRated) {
-                const userMainRating = transportRating.ratings.find(r => r.rater_email === currentUserEmail);
+                const userMainRating = transportRating.ratings.find(r => r && r.rater_email === currentUserEmail);
                 if (userMainRating) {
                   userRating = {
                     comment: userMainRating.comment || '',
@@ -217,9 +219,9 @@ export default function ArchiwumPage() {
               
               ratingsData[transport.id] = {
                 canBeRated: transportRating.canBeRated || false,
-                hasUserRated: hasUserRated,  // Poprawione sprawdzanie
+                hasUserRated: hasUserRated,
                 userRating: userRating,
-                ratings: transportRating.ratings || [],
+                ratings: Array.isArray(transportRating.ratings) ? transportRating.ratings : [],
                 stats: transportRating.stats || { totalRatings: 0, overallRatingPercentage: null }
               };
             }
