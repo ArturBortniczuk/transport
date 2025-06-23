@@ -17,7 +17,59 @@ const validateSession = async (authToken) => {
   return session?.user_id;
 };
 
-// POST /api/transport-detailed-ratings
+// GET /api/transport-detailed-ratings?transportId=X&raterEmail=Y
+export async function GET(request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const transportId = searchParams.get('transportId');
+    const raterEmail = searchParams.get('raterEmail');
+    
+    if (!transportId) {
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Transport ID is required' 
+      }, { status: 400 });
+    }
+    
+    // Sprawdź czy tabela istnieje
+    try {
+      const hasTable = await db.schema.hasTable('transport_detailed_ratings');
+      if (!hasTable) {
+        return NextResponse.json({ 
+          success: true, 
+          rating: null 
+        });
+      }
+    } catch (error) {
+      return NextResponse.json({ 
+        success: true, 
+        rating: null 
+      });
+    }
+    
+    let query = db('transport_detailed_ratings')
+      .where('transport_id', transportId);
+    
+    if (raterEmail) {
+      query = query.where('rater_email', raterEmail);
+    }
+    
+    const rating = await query.first();
+    
+    return NextResponse.json({ 
+      success: true, 
+      rating 
+    });
+  } catch (error) {
+    console.error('Error fetching detailed rating:', error);
+    return NextResponse.json({ 
+      success: false, 
+      error: error.message 
+    }, { status: 500 });
+  }
+}
+
+// POST /api/transport-detailed-ratings (istniejący kod...)
 export async function POST(request) {
   try {
     // Sprawdzamy uwierzytelnienie
