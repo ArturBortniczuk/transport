@@ -203,12 +203,13 @@ export default function ArchiwumPage() {
             if (transportRating) {
               // Bezpiecznie sprawdź czy mamy dane oceny użytkownika
               let userRating = null;
-              if (transportRating.hasUserRated && transportRating.ratings && transportRating.ratings.length > 0) {
+              const hasUserRated = transportRating.ratings && transportRating.ratings.some(r => r.rater_email === currentUserEmail);
+              
+              if (hasUserRated) {
                 const userMainRating = transportRating.ratings.find(r => r.rater_email === currentUserEmail);
                 if (userMainRating) {
                   userRating = {
                     comment: userMainRating.comment || '',
-                    // Nie zakładamy że istnieją szczegółowe oceny - zostaną pobrane później
                     ratings: null
                   };
                 }
@@ -216,7 +217,7 @@ export default function ArchiwumPage() {
               
               ratingsData[transport.id] = {
                 canBeRated: transportRating.canBeRated || false,
-                hasUserRated: transportRating.hasUserRated || false,
+                hasUserRated: hasUserRated,  // Poprawione sprawdzanie
                 userRating: userRating,
                 ratings: transportRating.ratings || [],
                 stats: transportRating.stats || { totalRatings: 0, overallRatingPercentage: null }
@@ -595,6 +596,13 @@ export default function ArchiwumPage() {
     }, [hasMainRating, transport.id])
 
     useEffect(() => {
+      console.log('Modal state update:', {
+        hasMainRating,
+        userHasRated, 
+        currentUserEmail,
+        transportRatingEmail: transportRating?.ratings?.[0]?.rater_email
+      });
+      
       // Sprawdź czy mamy dane oceny użytkownika
       if (userHasRated && transportRating?.userRating) {
         // Ustaw komentarz jeśli istnieje
@@ -976,9 +984,12 @@ export default function ArchiwumPage() {
                 )}
                 
                 {/* Przycisk edycji dla twórcy oceny */}
-                {userHasRated && !isEditMode && (
+                {hasMainRating && userHasRated && !isEditMode && (
                   <button
-                    onClick={() => setIsEditMode(true)}
+                    onClick={() => {
+                      console.log('Próba edycji - userHasRated:', userHasRated, 'currentUserEmail:', currentUserEmail);
+                      setIsEditMode(true);
+                    }}
                     className="flex items-center px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
                   >
                     <Edit size={16} className="mr-1" />
