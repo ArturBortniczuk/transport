@@ -80,12 +80,13 @@ export async function POST(request) {
       }, { status: 401 });
     }
     
-    const { transportIds } = await request.json();
+    const requestBody = await request.json();
+    const { transportIds } = requestBody || {};
     
     if (!transportIds || !Array.isArray(transportIds) || transportIds.length === 0) {
       return NextResponse.json({ 
         success: false, 
-        error: 'Transport IDs are required' 
+        error: 'Transport IDs are required and must be an array' 
       }, { status: 400 });
     }
     
