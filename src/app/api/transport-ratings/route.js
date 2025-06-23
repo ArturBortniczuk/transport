@@ -82,19 +82,53 @@ export async function POST(request) {
       }, { status: 400 });
     }
     
-    // Najpierw sprawdź, czy transport już został oceniony
-    const existingRatings = await db('transport_ratings')
+    // Sprawdź czy użytkownik już ocenił ten transport
+    const existingUserRating = await db('transport_ratings')
       .where('transport_id', ratingData.transportId)
+      .where('rater_email', userId)
+      .first();
+    
+    if (existingUserRating) {
+      // Aktualizuj istniejącą ocenę użytkownika
+      console.log('Aktualizowanie istniejącej oceny dla użytkownika:', userId);
+      
+      try {
+        await db('transport_ratings')
+          .where('id', existingUserRating.id)
+          .update({
+            is_positive: ratingData.isPositive,
+            rating: numericRating,
+            comment: ratingData.comment || '',
+            created_at: db.fn.now() // Zaktualizuj datę
+          });
+        
+        return NextResponse.json({ 
+          success: true, 
+          message: 'Ocena została zaktualizowana' 
+        });
+      } catch (updateError) {
+        console.error('Błąd podczas aktualizacji oceny:', updateError);
+        return NextResponse.json({ 
+          success: false, 
+          error: `Błąd podczas aktualizacji oceny: ${updateError.message}` 
+        }, { status: 500 });
+      }
+    }
+    
+    // Sprawdź czy ktoś inny już ocenił ten transport (tylko pierwszy może oceniać)
+    const existingOtherRatings = await db('transport_ratings')
+      .where('transport_id', ratingData.transportId)
+      .where('rater_email', '!=', userId)
       .count('id as count')
       .first();
     
-    if (existingRatings && existingRatings.count > 0) {
+    if (existingOtherRatings && existingOtherRatings.count > 0) {
       return NextResponse.json({ 
         success: false, 
-        error: 'Ten transport został już oceniony i nie może być oceniony ponownie' 
+        error: 'Ten transport został już oceniony przez inną osobę i nie może być oceniony ponownie' 
       }, { status: 400 });
     }
-    
+        
     // Pobierz dane użytkownika
     const user = await db('users')
       .where('email', userId)
