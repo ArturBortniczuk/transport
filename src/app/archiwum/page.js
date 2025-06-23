@@ -566,7 +566,7 @@ export default function ArchiwumPage() {
 
     // Dodaj funkcję do pobierania szczegółowej oceny
     const fetchDetailedRating = async () => {
-      if (!hasMainRating || !transportRating.ratings[0]) return
+      if (!hasMainRating || !transportRating?.ratings?.[0]) return
       
       try {
         setLoadingDetailedRating(true)
@@ -590,10 +590,10 @@ export default function ArchiwumPage() {
 
     // Dodaj useEffect do pobierania szczegółowej oceny
     useEffect(() => {
-      if (hasMainRating) {
+      if (hasMainRating && transportRating?.ratings?.[0]) {
         fetchDetailedRating()
       }
-    }, [hasMainRating, transport.id])
+    }, [hasMainRating, transport.id, transportRating?.ratings])
 
     useEffect(() => {
       console.log('Modal state update:', {
@@ -608,21 +608,32 @@ export default function ArchiwumPage() {
         // Ustaw komentarz jeśli istnieje
         setComment(transportRating.userRating.comment || '')
         
-        // Ustaw domyślne wartości dla szczegółowych ocen
-        setRatings({
-          driverProfessional: null,
-          driverTasksCompleted: null,
-          cargoComplete: null,
-          cargoCorrect: null,
-          deliveryNotified: null,
-          deliveryOnTime: null
-        })
+        // Pobierz szczegółową ocenę i ustaw wartości
+        if (detailedRating) {
+          setRatings({
+            driverProfessional: detailedRating.driver_professional || null,
+            driverTasksCompleted: detailedRating.driver_tasks_completed || null,
+            cargoComplete: detailedRating.cargo_complete || null,
+            cargoCorrect: detailedRating.cargo_correct || null,
+            deliveryNotified: detailedRating.delivery_notified || null,
+            deliveryOnTime: detailedRating.delivery_on_time || null
+          })
+        } else {
+          // Ustaw domyślne wartości jeśli nie ma szczegółowej oceny
+          setRatings({
+            driverProfessional: null,
+            driverTasksCompleted: null,
+            cargoComplete: null,
+            cargoCorrect: null,
+            deliveryNotified: null,
+            deliveryOnTime: null
+          })
+        }
         
         setIsEditMode(false)
       } else if (!hasMainRating) {
         // Jeśli nie ma żadnej oceny, włącz tryb edycji
         setIsEditMode(true)
-        // I ustaw domyślne wartości
         setRatings({
           driverProfessional: null,
           driverTasksCompleted: null,
@@ -632,7 +643,7 @@ export default function ArchiwumPage() {
           deliveryOnTime: null
         })
       }
-    }, [userHasRated, transportRating, hasMainRating])
+    }, [userHasRated, transportRating, hasMainRating, detailedRating]) // Dodaj detailedRating jako dependency
     
     const categories = [
       {
