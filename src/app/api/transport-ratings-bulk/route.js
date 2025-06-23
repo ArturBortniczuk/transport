@@ -17,6 +17,55 @@ const validateSession = async (authToken) => {
   return session?.user_id;
 };
 
+// Funkcja do obliczania procentów na podstawie szczegółowych ocen
+const calculateDetailedPercentage = async (transportId) => {
+  try {
+    // Sprawdź czy tabela szczegółowych ocen istnieje
+    const hasTable = await db.schema.hasTable('transport_detailed_ratings');
+    if (!hasTable) {
+      return null;
+    }
+    
+    // Pobierz szczegółowe oceny dla tego transportu
+    const detailedRatings = await db('transport_detailed_ratings')
+      .where('transport_id', transportId)
+      .select('*');
+    
+    if (detailedRatings.length === 0) {
+      return null;
+    }
+    
+    // Oblicz procent na podstawie szczegółowych kryteriów
+    let totalCriteria = 0;
+    let positiveCriteria = 0;
+    
+    detailedRatings.forEach(rating => {
+      const criteria = [
+        rating.driver_professional, 
+        rating.driver_tasks_completed, 
+        rating.cargo_complete, 
+        rating.cargo_correct, 
+        rating.delivery_notified, 
+        rating.delivery_on_time
+      ];
+      
+      criteria.forEach(criterion => {
+        if (criterion !== null && criterion !== undefined) {
+          totalCriteria++;
+          if (criterion === true || criterion === 1) {
+            positiveCriteria++;
+          }
+        }
+      });
+    });
+    
+    return totalCriteria > 0 ? Math.round((positiveCriteria / totalCriteria) * 100) : null;
+  } catch (error) {
+    console.error('Błąd obliczania szczegółowego procentu:', error);
+    return null;
+  }
+};
+
 // POST /api/transport-ratings-bulk
 export async function POST(request) {
   try {
@@ -64,17 +113,28 @@ export async function POST(request) {
       });
       
       // Przygotuj dane dla każdego transportu
-      transportIds.forEach(transportId => {
+      for (const transportId of transportIds) {
         const ratings = ratingsByTransport[transportId] || [];
         const canBeRated = ratings.length === 0;
         const hasUserRated = ratings.some(r => r.rater_email === userId);
         const userRating = ratings.find(r => r.rater_email === userId) || null;
         
-        // Oblicz statystyki
+        // Oblicz statystyki - POPRAWIONA WERSJA
         let overallRatingPercentage = null;
+        
         if (ratings.length > 0) {
-          const positiveRatings = ratings.filter(r => r.is_positive === true).length;
-          overallRatingPercentage = Math.round((positiveRatings / ratings.length) * 100);
+          // Najpierw spróbuj obliczyć na podstawie szczegółowych ocen
+          const detailedPercentage = await calculateDetailedPercentage(transportId);
+          
+          if (detailedPercentage !== null) {
+            overallRatingPercentage = detailedPercentage;
+            console.log(`Transport ${transportId}: Szczegółowy procent = ${detailedPercentage}%`);
+          } else {
+            // Fallback - oblicz na podstawie prostych ocen pozytywnych/negatywnych
+            const positiveRatings = ratings.filter(r => r.is_positive === true || r.is_positive === 1).length;
+            overallRatingPercentage = Math.round((positiveRatings / ratings.length) * 100);
+            console.log(`Transport ${transportId}: Prosty procent = ${overallRatingPercentage}% (${positiveRatings}/${ratings.length})`);
+          }
         }
         
         ratingsData[transportId] = {
@@ -87,7 +147,7 @@ export async function POST(request) {
             overallRatingPercentage
           }
         };
-      });
+      }
       
     } catch (error) {
       console.error('Błąd pobierania ocen z bazy:', error);
