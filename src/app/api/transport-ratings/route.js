@@ -73,6 +73,7 @@ export async function POST(request) {
     
     // Pobierz dane oceny z żądania
     const ratingData = await request.json();
+    console.log('Otrzymane dane oceny:', ratingData);
     
     // Walidacja danych
     if (!ratingData.transportId || ratingData.isPositive === undefined) {
@@ -87,6 +88,9 @@ export async function POST(request) {
       .where('transport_id', ratingData.transportId)
       .where('rater_email', userId)
       .first();
+    
+    // Konwersja oceny boolowskiej na numeryczną (dla kompatybilności)
+    const numericRating = ratingData.isPositive ? 5 : 1;
     
     if (existingUserRating) {
       // Aktualizuj istniejącą ocenę użytkownika
@@ -154,9 +158,6 @@ export async function POST(request) {
       }, { status: 404 });
     }
     
-    // Konwersja oceny boolowskiej na numeryczną (dla kompatybilności)
-    const numericRating = ratingData.isPositive ? 5 : 1;
-    
     // Dodaj nową ocenę z wartościami dla obu kolumn
     try {
       await db('transport_ratings').insert({
@@ -165,7 +166,8 @@ export async function POST(request) {
         rating: numericRating, // Dodajemy wartość dla kolumny rating
         comment: ratingData.comment || '',
         rater_email: userId,
-        rater_name: user.name
+        rater_name: user.name,
+        created_at: db.fn.now()
       });
     
       return NextResponse.json({ 
