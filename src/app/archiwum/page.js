@@ -616,6 +616,7 @@ export default function ArchiwumPage() {
     const handleSubmitRating = async (e) => {
       e.preventDefault()
       
+      // Sprawdź, czy wszystkie kryteria zostały ocenione
       if (!hasMainRating) {
         const allRated = Object.values(ratings).every(rating => rating !== null)
         if (!allRated) {
@@ -628,33 +629,53 @@ export default function ArchiwumPage() {
         setSubmitting(true)
         setError('')
         
-        const response = await fetch('/api/transport-detailed-ratings', {
+        // 1. Oblicz ogólną ocenę (isPositive)
+        const positiveCount = Object.values(ratings).filter(r => r === true).length
+        const totalCount = Object.values(ratings).filter(r => r !== null).length
+        const isPositive = totalCount > 0 ? (positiveCount / totalCount) > 0.5 : true
+    
+        // 2. Wyślij prostą ocenę do /api/transport-ratings
+        const simpleRatingResponse = await fetch('/api/transport-ratings', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             transportId: transport.id,
-            ratings,
+            isPositive, // Wysyłamy obliczoną wartość
             comment: comment.trim()
           })
         })
         
-        const result = await response.json()
+        const simpleResult = await simpleRatingResponse.json()
         
-        if (result.success) {
-          setSuccess(true)
-          setIsEditMode(false)
-          
-          // Odśwież dane
-          await fetchAllRatings([transport])
-          
-          setTimeout(() => {
-            setSuccess(false)
-          }, 3000)
-        } else {
-          setError(result.error || 'Wystąpił błąd podczas zapisywania oceny')
+        if (!simpleResult.success) {
+          // Jeśli pierwsze zapytanie się nie powiedzie, przerwij i pokaż błąd
+          setError(simpleResult.error || 'Wystąpił błąd podczas zapisywania oceny ogólnej')
+          setSubmitting(false)
+          return
         }
+        
+        // 3. Wyślij szczegółowe oceny do /api/transport-detailed-ratings
+        // To zapytanie jest wysyłane niezależnie, aby zapisać szczegóły
+        await fetch('/api/transport-detailed-ratings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            transportId: transport.id,
+            ratings, // Wysyłamy obiekt ze szczegółowymi ocenami
+            comment: comment.trim()
+          })
+        })
+    
+        // Jeśli wszystko się udało
+        setSuccess(true)
+        setIsEditMode(false)
+        
+        // Odśwież dane po udanym zapisie
+        setTimeout(() => {
+          setSuccess(false);
+          onClose(); // Zamknij modal i odśwież dane w tle
+        }, 2000);
+        
       } catch (error) {
         console.error('Błąd wysyłania oceny:', error)
         setError('Wystąpił błąd podczas wysyłania oceny')
