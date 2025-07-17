@@ -1,6 +1,6 @@
-// src/app/archiwum/page.js - KOMPLETNA ZOPTYMALIZOWANA WERSJA
+// src/app/archiwum/page.js - KOMPLETNA WERSJA Z NAPRAWIONYM SYSTEMEM OCEN I KOMENTARZY
 'use client'
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect } from 'react'
 import { format } from 'date-fns'
 import { pl } from 'date-fns/locale'
 import { KIEROWCY, POJAZDY } from '../kalendarz/constants'
@@ -30,8 +30,7 @@ import {
   CheckCircle,
   AlertCircle,
   Plus,
-  Send,
-  Loader
+  Send
 } from 'lucide-react'
 
 export default function ArchiwumPage() {
@@ -39,13 +38,12 @@ export default function ArchiwumPage() {
   const [filteredArchiwum, setFilteredArchiwum] = useState([])
   const [isAdmin, setIsAdmin] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [ratingsLoading, setRatingsLoading] = useState(false)
   const [error, setError] = useState(null)
   const [deleteStatus, setDeleteStatus] = useState(null)
   const [exportFormat, setExportFormat] = useState('xlsx')
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
-  const [itemsPerPage] = useState(20) // Zwiększono z 10 do 20
+  const [itemsPerPage] = useState(10)
   const [selectedTransport, setSelectedTransport] = useState(null)
   const [showRatingModal, setShowRatingModal] = useState(false)
   const [expandedRows, setExpandedRows] = useState({})
@@ -90,54 +88,53 @@ export default function ArchiwumPage() {
     { value: 'unrated', label: 'Tylko nieocenione' }
   ]
 
-  // OPTYMALIZACJA: Równoległe ładowanie danych
   useEffect(() => {
-    const initializeData = async () => {
+    const checkAdmin = async () => {
       try {
-        setLoading(true)
-        
-        // Ładuj wszystkie dane równolegle
-        const [userResponse, usersResponse, constructionsResponse] = await Promise.all([
-          fetch('/api/user'),
-          fetch('/api/users/list'),
-          fetch('/api/constructions')
-        ])
-
-        // Przetwórz dane użytkownika
-        if (userResponse.ok) {
-          const userData = await userResponse.json()
-          setCurrentUserEmail(userData.user?.email || '')
-          setIsAdmin(userData.isAuthenticated && userData.user && (userData.user.isAdmin || userData.user.role === 'admin'))
+        const response = await fetch('/api/user')
+        if (response.ok) {
+          const data = await response.json()
+          setIsAdmin(data.isAuthenticated && data.user && (data.user.isAdmin || data.user.role === 'admin'))
+          setCurrentUserEmail(data.user?.email || '')
         }
-
-        // Przetwórz listę użytkowników
-        if (usersResponse.ok) {
-          const usersData = await usersResponse.json()
-          setUsers(usersData)
-        }
-
-        // Przetwórz budowy
-        if (constructionsResponse.ok) {
-          const constructionsData = await constructionsResponse.json()
-          setConstructions(constructionsData.constructions || [])
-        }
-
-        // Teraz załaduj transporty
-        await fetchArchivedTransports()
-        
       } catch (error) {
-        console.error('Błąd inicjalizacji danych:', error)
-        setError('Wystąpił błąd podczas ładowania danych')
-      } finally {
-        setLoading(false)
+        console.error('Błąd sprawdzania uprawnień:', error)
       }
     }
 
-    initializeData()
+    const fetchUsers = async () => {
+      try {
+        const response = await fetch('/api/users/list')
+        if (response.ok) {
+          const data = await response.json()
+          setUsers(data)
+        }
+      } catch (error) {
+        console.error('Błąd pobierania użytkowników:', error)
+      }
+    }
+
+    const fetchConstructions = async () => {
+      try {
+        const response = await fetch('/api/constructions')
+        if (response.ok) {
+          const data = await response.json()
+          setConstructions(data.constructions || [])
+        }
+      } catch (error) {
+        console.error('Błąd pobierania budów:', error)
+      }
+    }
+
+    checkAdmin()
+    fetchUsers()
+    fetchConstructions()
+    fetchArchivedTransports()
   }, [])
 
   const fetchArchivedTransports = async () => {
     try {
+      setLoading(true)
       const response = await fetch('/api/transports?status=completed')
       const data = await response.json()
       
@@ -147,89 +144,93 @@ export default function ArchiwumPage() {
         )
         setArchiwum(sortedTransports)
         
-        // OPTYMALIZACJA: Ładuj oceny w tle dla widocznych transportów
-        setTimeout(() => {
-          fetchRatingsForVisibleTransports(sortedTransports)
-        }, 100)
+        // Pobierz oceny dla wszystkich transportów
+        await fetchAllRatings(sortedTransports)
         
+        applyFilters(sortedTransports, selectedYear, selectedMonth, selectedWarehouse, selectedDriver, selectedRequester, selectedRating, selectedConstruction)
       } else {
         setError('Nie udało się pobrać archiwum transportów')
       }
     } catch (error) {
       console.error('Błąd pobierania archiwum:', error)
       setError('Wystąpił błąd podczas pobierania danych')
+    } finally {
+      setLoading(false)
     }
   }
 
-  // OPTYMALIZACJA: Ładuj oceny tylko dla widocznych transportów
-  const fetchRatingsForVisibleTransports = async (transports) => {
-    if (!transports || transports.length === 0 || !currentUserEmail) {
-      return
-    }
-
-    try {
-      setRatingsLoading(true)
-      
-      // Filtruj transporty aby załadować tylko te, które są widoczne
-      const currentTransports = getCurrentPageTransports(transports)
-      const transportIds = currentTransports.map(t => t.id)
-      
-      if (transportIds.length === 0) {
-        setRatingsLoading(false)
-        return
-      }
-
-      console.log(`Ładowanie ocen dla ${transportIds.length} widocznych transportów`)
-      
-      const response = await fetch('/api/transport-ratings-bulk', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transportIds })
-      })
-      
-      if (response.ok) {
+  const fetchAllRatings = async (transports) => {
+    const ratingsData = {}
+    
+    for (const transport of transports) {
+      try {
+        const response = await fetch(`/api/transport-ratings?transportId=${transport.id}`)
         const data = await response.json()
+        
         if (data.success) {
-          // Ustaw dane tylko dla załadowanych transportów
-          setTransportRatings(prev => ({
-            ...prev,
-            ...data.ratings
-          }))
+          ratingsData[transport.id] = {
+            canBeRated: data.canBeRated,
+            hasUserRated: data.hasUserRated,
+            userRating: data.userRating,
+            ratings: data.ratings || [],
+            stats: data.stats || { totalRatings: 0, overallRatingPercentage: null }
+          }
+        }
+      } catch (error) {
+        console.error(`Błąd pobierania oceny dla transportu ${transport.id}:`, error)
+        ratingsData[transport.id] = {
+          canBeRated: false,
+          hasUserRated: false,
+          userRating: null,
+          ratings: [],
+          stats: { totalRatings: 0, overallRatingPercentage: null }
         }
       }
-    } catch (error) {
-      console.error('Błąd ładowania ocen:', error)
-    } finally {
-      setRatingsLoading(false)
     }
-  }
-
-  // OPTYMALIZACJA: Memoizacja filtrowanych danych
-  const memoizedFilteredData = useMemo(() => {
-    if (!archiwum) return []
     
-    let filtered = archiwum.filter(transport => {
+    setTransportRatings(ratingsData)
+  }
+  
+  const applyFilters = async (transports, year, month, warehouse, driver, requester, rating, construction) => {
+    if (!transports) return
+    
+    let filtered = transports.filter(transport => {
       const date = new Date(transport.delivery_date)
       const transportYear = date.getFullYear()
       
-      if (transportYear !== parseInt(selectedYear)) return false
-      
-      if (selectedMonth !== 'all') {
-        const transportMonth = date.getMonth()
-        if (transportMonth !== parseInt(selectedMonth)) return false
+      if (transportYear !== parseInt(year)) {
+        return false
       }
       
-      if (selectedWarehouse && transport.source_warehouse !== selectedWarehouse) return false
-      if (selectedDriver && transport.driver_id.toString() !== selectedDriver) return false
-      if (selectedRequester && transport.requester_email !== selectedRequester) return false
+      if (month !== 'all') {
+        const transportMonth = date.getMonth()
+        if (transportMonth !== parseInt(month)) {
+          return false
+        }
+      }
       
-      if (selectedConstruction) {
-        const selectedConstructionObj = constructions.find(c => c.id.toString() === selectedConstruction);
-        if (selectedConstructionObj) {
+      if (warehouse && transport.source_warehouse !== warehouse) {
+        return false
+      }
+      
+      if (driver && transport.driver_id.toString() !== driver) {
+        return false
+      }
+      
+      if (requester && transport.requester_email !== requester) {
+        return false
+      }
+      
+      if (construction) {
+        const selectedConstruction = constructions.find(c => c.id.toString() === construction);
+        if (selectedConstruction) {
           const matchesClientName = transport.client_name && 
-            transport.client_name.toLowerCase().includes(selectedConstructionObj.name.toLowerCase());
-          const matchesMpk = transport.mpk && transport.mpk === selectedConstructionObj.mpk;
-          if (!matchesClientName && !matchesMpk) return false;
+            transport.client_name.toLowerCase().includes(selectedConstruction.name.toLowerCase());
+          const matchesMpk = transport.mpk && transport.mpk === selectedConstruction.mpk;
+          
+          if (!matchesClientName && !matchesMpk) {
+            return false;
+          }
         }
       }
       
@@ -237,10 +238,10 @@ export default function ArchiwumPage() {
     })
 
     // Filtrowanie po ocenach
-    if (selectedRating === 'rated' || selectedRating === 'unrated') {
+    if (rating === 'rated' || rating === 'unrated') {
       filtered = filtered.filter(transport => {
         const transportRating = transportRatings[transport.id]
-        if (selectedRating === 'rated') {
+        if (rating === 'rated') {
           return transportRating && transportRating.stats.totalRatings > 0
         } else {
           return !transportRating || transportRating.stats.totalRatings === 0
@@ -248,59 +249,12 @@ export default function ArchiwumPage() {
       })
     }
     
-    return filtered
-  }, [archiwum, selectedYear, selectedMonth, selectedWarehouse, selectedDriver, selectedRequester, selectedRating, selectedConstruction, constructions, transportRatings])
-
-  // Ustaw filtrowane dane
-  useEffect(() => {
-    setFilteredArchiwum(memoizedFilteredData)
-    setCurrentPage(1) // Reset strony po zmianie filtrów
-  }, [memoizedFilteredData])
-
-  // OPTYMALIZACJA: Ładuj oceny gdy zmienia się strona
-  const getCurrentPageTransports = (transports) => {
-    const indexOfLastItem = currentPage * itemsPerPage
-    const indexOfFirstItem = indexOfLastItem - itemsPerPage
-    return transports.slice(indexOfFirstItem, indexOfLastItem)
+    setFilteredArchiwum(filtered)
   }
 
   useEffect(() => {
-    if (filteredArchiwum.length > 0 && currentUserEmail) {
-      const currentTransports = getCurrentPageTransports(filteredArchiwum)
-      const transportIds = currentTransports.map(t => t.id)
-      
-      // Sprawdź które transporty nie mają jeszcze załadowanych ocen
-      const missingRatings = transportIds.filter(id => !transportRatings[id])
-      
-      if (missingRatings.length > 0) {
-        fetchRatingsForSpecificTransports(missingRatings)
-      }
-    }
-  }, [currentPage, filteredArchiwum, currentUserEmail])
-
-  const fetchRatingsForSpecificTransports = async (transportIds) => {
-    if (transportIds.length === 0) return
-
-    try {
-      const response = await fetch('/api/transport-ratings-bulk', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transportIds })
-      })
-      
-      if (response.ok) {
-        const data = await response.json()
-        if (data.success) {
-          setTransportRatings(prev => ({
-            ...prev,
-            ...data.ratings
-          }))
-        }
-      }
-    } catch (error) {
-      console.error('Błąd ładowania dodatkowych ocen:', error)
-    }
-  }
+    applyFilters(archiwum, selectedYear, selectedMonth, selectedWarehouse, selectedDriver, selectedRequester, selectedRating, selectedConstruction)
+  }, [selectedYear, selectedMonth, selectedWarehouse, selectedDriver, selectedRequester, selectedRating, selectedConstruction, archiwum, constructions, transportRatings])
 
   const handleDeleteTransport = async (id) => {
     if (!confirm('Czy na pewno chcesz usunąć ten transport?')) {
@@ -319,13 +273,7 @@ export default function ArchiwumPage() {
       if (data.success) {
         const updatedArchiwum = archiwum.filter(transport => transport.id !== id)
         setArchiwum(updatedArchiwum)
-        
-        // Usuń oceny dla tego transportu z cache
-        setTransportRatings(prev => {
-          const newRatings = { ...prev }
-          delete newRatings[id]
-          return newRatings
-        })
+        applyFilters(updatedArchiwum, selectedYear, selectedMonth, selectedWarehouse, selectedDriver, selectedRequester, selectedRating, selectedConstruction)
         
         setDeleteStatus({ type: 'success', message: 'Transport został usunięty' })
         
@@ -346,26 +294,22 @@ export default function ArchiwumPage() {
     setShowRatingModal(true)
   }
 
-  const handleCloseRating = async () => {
+  const handleCloseRating = () => {
     setShowRatingModal(false)
-    const transportId = selectedTransport?.id
     setSelectedTransport(null)
-    
-    // Odśwież tylko oceny dla tego konkretnego transportu
-    if (transportId) {
-      await fetchRatingsForSpecificTransports([transportId])
-    }
+    fetchArchivedTransports()
   }
 
-  const getDriverInfo = (driverId) => {
-    const driver = KIEROWCY.find(k => k.id === parseInt(driverId))
-    if (!driver) return 'Brak danych'
+  const getDriverInfo = (driverId, vehicleId) => {
+    const driver = KIEROWCY.find(k => k.id === parseInt(driverId));
+    if (!driver) return 'Brak danych';
     
-    const vehicle = POJAZDY.find(p => p.id === parseInt(driverId))
-    const vehicleInfo = vehicle ? vehicle.tabliceRej : 'Brak pojazdu'
+    // Użyj vehicle_id jeśli jest dostępne, w przeciwnym razie wróć do starej logiki
+    const vehicle = POJAZDY.find(p => p.id === parseInt(vehicleId || driverId));
+    const vehicleInfo = vehicle ? vehicle.tabliceRej : 'Brak pojazdu';
     
-    return `${driver.imie} (${vehicleInfo})`
-  }
+    return `${driver.imie} (${vehicleInfo})`;
+  };
 
   const getMagazynName = (warehouse) => {
     switch(warehouse) {
@@ -381,9 +325,22 @@ export default function ArchiwumPage() {
       return
     }
     
+    const calculateTransportCost = (distance) => {
+        if (distance <= 75) {
+          return distance * 13;
+        } else if (distance > 75 && distance <= 150) {
+          return distance * 8;
+        } else { // distance > 150
+          return distance * 3;
+        }
+    };
+
     const dataToExport = filteredArchiwum.map(transport => {
       const driver = KIEROWCY.find(k => k.id === parseInt(transport.driver_id))
       const rating = transportRatings[transport.id]
+      const handlowiec = users.find(u => u.email === transport.requester_email);
+      const distanceKm = transport.distance || 0;
+      const calculatedCost = calculateTransportCost(distanceKm);
       
       return {
         'Data transportu': format(new Date(transport.delivery_date), 'dd.MM.yyyy', { locale: pl }),
@@ -391,14 +348,16 @@ export default function ArchiwumPage() {
         'Kod pocztowy': transport.postal_code || '',
         'Ulica': transport.street || '',
         'Magazyn': getMagazynName(transport.source_warehouse),
-        'Odległość (km)': transport.distance || '',
+        'Odległość (km)': distanceKm,
+        'Koszt transportu (PLN)': calculatedCost.toFixed(2).replace('.', ','),
         'Firma': transport.client_name || '',
         'MPK': transport.mpk || '',
+        'Handlowiec': handlowiec ? handlowiec.name : (transport.requester_name || ''),
         'Nr WZ': transport.wz_number || '',
         'Kierowca': driver ? driver.imie : '',
-        'Nr rejestracyjny': driver ? POJAZDY.find(p => p.id === parseInt(transport.driver_id))?.tabliceRej || '' : '',
+        'Nr rejestracyjny': driver ? POJAZDY.find(p => p.id === parseInt(transport.vehicle_id || transport.driver_id))?.tabliceRej || '' : '',
         'Zamówił': transport.requester_email || '',
-        'Ocena (%)': rating?.stats.overallRatingPercentage || 'Brak oceny',
+        'Ocena (%)': rating?.stats.overallRatingPercentage !== null ? `${rating.stats.overallRatingPercentage}%` : 'Brak oceny',
         'Liczba ocen': rating?.stats.totalRatings || 0,
         'Uwagi': transport.notes || ''
       }
@@ -409,7 +368,27 @@ export default function ArchiwumPage() {
     if (exportFormat === 'csv') {
       exportToCSV(dataToExport, fileName)
     } else {
-      exportToXLSX(dataToExport, fileName)
+      // Przygotowanie danych do podsumowania
+      const summaryByMpk = filteredArchiwum.reduce((acc, transport) => {
+        const mpk = transport.mpk || 'Brak MPK';
+        const distance = transport.distance || 0;
+        const cost = calculateTransportCost(distance);
+        
+        if (!acc[mpk]) {
+          acc[mpk] = { totalCost: 0 };
+        }
+        
+        acc[mpk].totalCost += cost;
+        
+        return acc;
+      }, {});
+
+      const summaryData = Object.keys(summaryByMpk).map(mpk => ({
+        'MPK': mpk,
+        'Łączny koszt (PLN)': summaryByMpk[mpk].totalCost.toFixed(2).replace('.', ',')
+      }));
+
+      exportToXLSXWithSummary(dataToExport, summaryData, fileName)
     }
   }
 
@@ -438,11 +417,18 @@ export default function ArchiwumPage() {
     document.body.removeChild(link)
   }
 
-  const exportToXLSX = (data, fileName) => {
-    const ws = XLSX.utils.json_to_sheet(data)
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Transporty')
-    XLSX.writeFile(wb, `${fileName}.xlsx`)
+  const exportToXLSXWithSummary = (mainData, summaryData, fileName) => {
+    const wb = XLSX.utils.book_new();
+    
+    // Arkusz z transportami
+    const ws_main = XLSX.utils.json_to_sheet(mainData);
+    XLSX.utils.book_append_sheet(wb, ws_main, "Transporty");
+    
+    // Arkusz z podsumowaniem
+    const ws_summary = XLSX.utils.json_to_sheet(summaryData);
+    XLSX.utils.book_append_sheet(wb, ws_summary, "Podsumowanie po MPK");
+    
+    XLSX.writeFile(wb, `${fileName}.xlsx`);
   }
 
   // Paginacja
@@ -458,20 +444,11 @@ export default function ArchiwumPage() {
   // Statystyki
   const totalDistance = filteredArchiwum.reduce((sum, t) => sum + (t.distance || 0), 0)
 
-  // ZOPTYMALIZOWANY komponent wyświetlający ocenę transportu
-  const RatingDisplay = React.memo(({ transportId }) => {
+  // Komponent wyświetlający ocenę transportu
+  const RatingDisplay = ({ transportId }) => {
     const rating = transportRatings[transportId]
     
-    if (!rating) {
-      return (
-        <div className="flex items-center">
-          <Loader size={14} className="mr-1 animate-spin text-gray-400" />
-          <span className="text-gray-400 text-sm">Ładowanie...</span>
-        </div>
-      )
-    }
-    
-    if (rating.stats.totalRatings === 0) {
+    if (!rating || rating.stats.totalRatings === 0) {
       return (
         <span className="text-gray-400 text-sm flex items-center">
           <Star size={14} className="mr-1" />
@@ -498,18 +475,17 @@ export default function ArchiwumPage() {
         </span>
       </div>
     )
-  })
+  }
 
-  // ZOPTYMALIZOWANY komponent przycisków oceny
-  const RatingButtons = React.memo(({ transport }) => {
+  // Komponent przycisków oceny - UPROSZCZONA WERSJA
+  const RatingButtons = ({ transport }) => {
     const rating = transportRatings[transport.id]
     
     if (!rating) {
       return (
-        <div className="flex items-center">
-          <Loader size={14} className="mr-1 animate-spin text-gray-400" />
-          <span className="text-gray-400 text-sm">Ładowanie...</span>
-        </div>
+        <span className="text-gray-400 text-sm">
+          Ładowanie...
+        </span>
       )
     }
 
@@ -518,6 +494,7 @@ export default function ArchiwumPage() {
     
     return (
       <div className="flex flex-col space-y-1">
+        {/* Jeden przycisk dla wszystkich akcji */}
         <button
           onClick={() => handleOpenRatingModal(transport)}
           className={`flex items-center px-3 py-1 rounded-md hover:opacity-80 transition-colors text-sm ${
@@ -534,9 +511,9 @@ export default function ArchiwumPage() {
         </button>
       </div>
     )
-  })
+  }
 
-  // Kompletny modal oceny z komentarzami - KOMPLETNY KOD
+  // Kompletny modal oceny z komentarzami - NAPRAWIONA WERSJA
   const CompleteRatingModal = ({ transport, onClose }) => {
     const [ratings, setRatings] = useState({
       driverProfessional: null,
@@ -555,8 +532,6 @@ export default function ArchiwumPage() {
     const [addingComment, setAddingComment] = useState(false)
     const [allComments, setAllComments] = useState([])
     const [loadingComments, setLoadingComments] = useState(true)
-    const [detailedRating, setDetailedRating] = useState(null)
-    const [loadingDetailedRating, setLoadingDetailedRating] = useState(false)
     
     const transportRating = transportRatings[transport.id]
     const hasMainRating = transportRating?.stats.totalRatings > 0
@@ -583,64 +558,16 @@ export default function ArchiwumPage() {
       fetchComments()
     }, [transport.id])
 
-    // Pobierz szczegółową ocenę
-    const fetchDetailedRating = async () => {
-      if (!hasMainRating || !transportRating?.ratings?.[0]) return
-      
-      try {
-        setLoadingDetailedRating(true)
-        const response = await fetch(`/api/transport-detailed-ratings?transportId=${transport.id}&raterEmail=${transportRating.ratings[0].rater_email}`)
-        const data = await response.json()
-        
-        if (data.success && data.rating) {
-          setDetailedRating(data.rating)
-        } else {
-          setDetailedRating(null)
-        }
-      } catch (error) {
-        console.error('Błąd pobierania szczegółowej oceny:', error)
-        setDetailedRating(null)
-      } finally {
-        setLoadingDetailedRating(false)
-      }
-    }
-
     useEffect(() => {
-      if (hasMainRating && transportRating?.ratings?.[0]) {
-        fetchDetailedRating()
-      }
-    }, [hasMainRating, transport.id, transportRating?.ratings])
-
-    useEffect(() => {
-      // Sprawdź czy mamy dane oceny użytkownika
       if (userHasRated && transportRating?.userRating) {
+        setRatings(transportRating.userRating.ratings)
         setComment(transportRating.userRating.comment || '')
-        
-        if (detailedRating) {
-          setRatings({
-            driverProfessional: detailedRating.driver_professional || null,
-            driverTasksCompleted: detailedRating.driver_tasks_completed || null,
-            cargoComplete: detailedRating.cargo_complete || null,
-            cargoCorrect: detailedRating.cargo_correct || null,
-            deliveryNotified: detailedRating.delivery_notified || null,
-            deliveryOnTime: detailedRating.delivery_on_time || null
-          })
-        }
-        
         setIsEditMode(false)
       } else if (!hasMainRating) {
         setIsEditMode(true)
-        setRatings({
-          driverProfessional: null,
-          driverTasksCompleted: null,
-          cargoComplete: null,
-          cargoCorrect: null,
-          deliveryNotified: null,
-          deliveryOnTime: null
-        })
       }
-    }, [userHasRated, transportRating, hasMainRating, detailedRating])
-    
+    }, [userHasRated, transportRating, hasMainRating])
+
     const categories = [
       {
         id: 'driver',
@@ -701,51 +628,33 @@ export default function ArchiwumPage() {
         setSubmitting(true)
         setError('')
         
-        // Oblicz czy ocena jest pozytywna
-        const positiveCount = Object.values(ratings).filter(r => r === true).length
-        const totalCount = Object.values(ratings).filter(r => r !== null).length
-        const isPositive = totalCount > 0 ? (positiveCount / totalCount) > 0.5 : true
-        
-        // Wyślij prostą ocenę
-        const simpleRatingResponse = await fetch('/api/transport-ratings', {
+        const response = await fetch('/api/transport-ratings', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json'
+          },
           body: JSON.stringify({
             transportId: transport.id,
-            isPositive,
+            ratings,
             comment: comment.trim()
           })
         })
         
-        const simpleResult = await simpleRatingResponse.json()
+        const result = await response.json()
         
-        if (!simpleResult.success) {
-          setError(simpleResult.error || 'Wystąpił błąd podczas zapisywania oceny')
-          return
+        if (result.success) {
+          setSuccess(true)
+          setIsEditMode(false)
+          
+          // Odśwież dane
+          await fetchAllRatings([transport])
+          
+          setTimeout(() => {
+            setSuccess(false)
+          }, 3000)
+        } else {
+          setError(result.error || 'Wystąpił błąd podczas zapisywania oceny')
         }
-        
-        // Wyślij szczegółowe oceny
-        try {
-          await fetch('/api/transport-detailed-ratings', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              transportId: transport.id,
-              ratings,
-              comment: comment.trim()
-            })
-          })
-        } catch (error) {
-          console.error('Błąd wysyłania szczegółowej oceny:', error)
-        }
-        
-        setSuccess(true)
-        setIsEditMode(false)
-        
-        setTimeout(() => {
-          setSuccess(false)
-        }, 3000)
-        
       } catch (error) {
         console.error('Błąd wysyłania oceny:', error)
         setError('Wystąpił błąd podczas wysyłania oceny')
@@ -763,7 +672,9 @@ export default function ArchiwumPage() {
         
         const response = await fetch('/api/transport-comments', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json'
+          },
           body: JSON.stringify({
             transportId: transport.id,
             comment: newComment.trim()
@@ -874,86 +785,36 @@ export default function ArchiwumPage() {
                   ⭐ Ocena transportu: {transportRating.stats.overallRatingPercentage}%
                 </h3>
                 
-                {/* Wyświetl informację o ocenie */}
-                {transportRating.ratings && transportRating.ratings.length > 0 && (
-                  <div className="mb-4 p-4 bg-white rounded-lg">
-                    <p className="text-sm text-gray-600 mb-2">
-                      Transport został oceniony {transportRating.ratings.length} raz(y)
-                    </p>
-                    {transportRating.ratings[0] && (
-                      <div className="text-sm">
-                        <p><strong>Oceniający:</strong> {transportRating.ratings[0].rater_name || transportRating.ratings[0].rater_email}</p>
-                        {transportRating.ratings[0].comment && (
-                          <p className="mt-2"><strong>Komentarz do oceny:</strong> {transportRating.ratings[0].comment}</p>
-                        )}
+                {/* Wyświetl główną ocenę (pierwszą) */}
+                {transportRating.ratings && transportRating.ratings[0] && (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                    {categories.map(category => (
+                      <div key={category.id} className="bg-white p-4 rounded-lg">
+                        <h4 className="font-medium text-sm mb-2">{category.title}</h4>
+                        {category.criteria.map(criteria => {
+                          const ratingValue = transportRating.ratings[0].ratings[criteria.key]
+                          if (ratingValue === null || ratingValue === undefined) return null
+                          
+                          return (
+                            <div key={criteria.key} className="flex items-center justify-between text-sm mb-1">
+                              <span className="text-gray-600 text-xs">{criteria.text}</span>
+                              <div className="flex items-center">
+                                {ratingValue ? (
+                                  <ThumbsUp size={12} className="text-green-600" />
+                                ) : (
+                                  <ThumbsDown size={12} className="text-red-600" />
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })}
                       </div>
-                    )}
-                  </div>
-                )}
-                
-                {/* Wyświetl szczegółowe kryteria oceny */}
-                {detailedRating ? (
-                  <div className="mb-4">
-                    <h4 className="font-medium text-gray-900 mb-3">Szczegóły oceny:</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      {categories.map(category => (
-                        <div key={category.id} className="bg-white p-4 rounded-lg border">
-                          <h5 className="font-medium text-sm mb-3 text-center">{category.title}</h5>
-                          <div className="space-y-2">
-                            {category.criteria.map(criteria => {
-                              const columnMapping = {
-                                'driverProfessional': 'driver_professional',
-                                'driverTasksCompleted': 'driver_tasks_completed', 
-                                'cargoComplete': 'cargo_complete',
-                                'cargoCorrect': 'cargo_correct',
-                                'deliveryNotified': 'delivery_notified',
-                                'deliveryOnTime': 'delivery_on_time'
-                              }
-                              
-                              const columnName = columnMapping[criteria.key] || criteria.key
-                              const ratingValue = detailedRating[columnName]
-                              
-                              return (
-                                <div key={criteria.key} className="flex items-center justify-between text-xs">
-                                  <span className="text-gray-600 flex-1 mr-2">{criteria.text}</span>
-                                  <div className="flex items-center">
-                                    {ratingValue === true ? (
-                                      <ThumbsUp size={12} className="text-green-600" />
-                                    ) : ratingValue === false ? (
-                                      <ThumbsDown size={12} className="text-red-600" />
-                                    ) : (
-                                      <span className="text-gray-400 text-xs">Brak</span>
-                                    )}
-                                  </div>
-                                </div>
-                              )
-                            })}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="mb-4">
-                    <h4 className="font-medium text-gray-900 mb-3">Ocena ogólna:</h4>
-                    <div className="p-4 bg-white rounded-lg border text-center">
-                      {transportRating.ratings[0]?.is_positive ? (
-                        <div className="flex items-center justify-center text-green-600">
-                          <ThumbsUp size={24} className="mr-2" />
-                          <span className="text-lg font-medium">Pozytywna ocena</span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center justify-center text-red-600">
-                          <ThumbsDown size={24} className="mr-2" />
-                          <span className="text-lg font-medium">Negatywna ocena</span>
-                        </div>
-                      )}
-                    </div>
+                    ))}
                   </div>
                 )}
                 
                 {/* Przycisk edycji dla twórcy oceny */}
-                {hasMainRating && userHasRated && !isEditMode && (
+                {userHasRated && !isEditMode && (
                   <button
                     onClick={() => setIsEditMode(true)}
                     className="flex items-center px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
@@ -963,139 +824,140 @@ export default function ArchiwumPage() {
                   </button>
                 )}
               </div>
-            )}
+           )}
 
-            {/* Formularz oceny - tylko dla edycji lub nowych ocen */}
-            {(!hasMainRating || (userHasRated && isEditMode)) && (
-              <div className="mb-8 p-6 border border-gray-200 rounded-lg">
-                <h3 className="text-lg font-semibold mb-4">
-                  {userHasRated ? 'Edytuj swoją ocenę' : 'Oceń transport'}
-                </h3>
-                
-                <form onSubmit={handleSubmitRating} className="space-y-6">
-                  {categories.map(category => (
-                    <div key={category.id} className="border border-gray-200 rounded-lg p-6">
-                      <h4 className="text-lg font-semibold mb-4">{category.title}</h4>
-                      
-                      {category.criteria.map(criteria => (
-                        <div key={criteria.key} className="mb-4 last:mb-0">
-                          <p className="text-gray-700 mb-3">{criteria.text}</p>
-                          <div className="flex space-x-3">
-                            {renderRatingButton(criteria.key, true, 'Tak')}
-                            {renderRatingButton(criteria.key, false, 'Nie')}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ))}
+           {/* Formularz oceny - tylko dla edycji lub nowych ocen */}
+           {(!hasMainRating || (userHasRated && isEditMode)) && (
+             <div className="mb-8 p-6 border border-gray-200 rounded-lg">
+               <h3 className="text-lg font-semibold mb-4">
+                 {userHasRated ? 'Edytuj swoją ocenę' : 'Oceń transport'}
+               </h3>
+               
+               <form onSubmit={handleSubmitRating} className="space-y-6">
+                 {categories.map(category => (
+                   <div key={category.id} className="border border-gray-200 rounded-lg p-6">
+                     <h4 className="text-lg font-semibold mb-4">{category.title}</h4>
+                     
+                     {category.criteria.map(criteria => (
+                       <div key={criteria.key} className="mb-4 last:mb-0">
+                         <p className="text-gray-700 mb-3">{criteria.text}</p>
+                         <div className="flex space-x-3">
+                           {renderRatingButton(criteria.key, true, 'Tak')}
+                           {renderRatingButton(criteria.key, false, 'Nie')}
+                         </div>
+                       </div>
+                     ))}
+                   </div>
+                 ))}
 
-                  {/* Komentarz do oceny */}
-                  <div className="border border-gray-200 rounded-lg p-6">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Komentarz do oceny (opcjonalny)
-                    </label>
-                    <textarea
-                      value={comment}
-                      onChange={(e) => setComment(e.target.value)}
-                      rows={4}
-                      className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Opisz szczegóły transportu, problemy lub pozytywne aspekty..."
-                    />
-                  </div>
-                  
-                  {/* Przyciski akcji */}
-                  <div className="flex justify-end space-x-3">
-                    {isEditMode && userHasRated && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsEditMode(false)
-                          if (transportRating?.userRating) {
-                            setComment(transportRating.userRating.comment || '')
-                          }
-                        }}
-                        className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
-                      >
-                        Anuluj
-                      </button>
-                    )}
-                    <button
-                      type="submit"
-                      disabled={submitting}
-                      className="flex items-center px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-                    >
-                      {submitting ? 'Zapisywanie...' : (userHasRated ? 'Zapisz zmiany' : 'Zapisz ocenę')}
-                    </button>
-                  </div>
-                </form>
-              </div>
-            )}
+                 {/* Komentarz do oceny */}
+                 <div className="border border-gray-200 rounded-lg p-6">
+                   <label className="block text-sm font-medium text-gray-700 mb-2">
+                     Komentarz do oceny (opcjonalny)
+                   </label>
+                   <textarea
+                     value={comment}
+                     onChange={(e) => setComment(e.target.value)}
+                     rows={4}
+                     className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                     placeholder="Opisz szczegóły transportu, problemy lub pozytywne aspekty..."
+                   />
+                 </div>
+                 
+                 {/* Przyciski akcji */}
+                 <div className="flex justify-end space-x-3">
+                   {isEditMode && userHasRated && (
+                     <button
+                       type="button"
+                       onClick={() => {
+                         setIsEditMode(false)
+                         if (transportRating?.userRating) {
+                           setRatings(transportRating.userRating.ratings)
+                           setComment(transportRating.userRating.comment || '')
+                         }
+                       }}
+                       className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
+                     >
+                       Anuluj
+                     </button>
+                   )}
+                   <button
+                     type="submit"
+                     disabled={submitting}
+                     className="flex items-center px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                   >
+                     {submitting ? 'Zapisywanie...' : (userHasRated ? 'Zapisz zmiany' : 'Zapisz ocenę')}
+                   </button>
+                 </div>
+               </form>
+             </div>
+           )}
 
-            {/* SEKCJA KOMENTARZY - wyświetlana na dole */}
-            <div className="mt-8">
-              <h3 className="font-semibold text-lg mb-4">
-                💬 Komentarze ({allComments.length})
-              </h3>
-              
-              {/* Formularz dodawania komentarza */}
-              <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Dodaj komentarz do transportu
-                </label>
-                <div className="flex space-x-3">
-                  <textarea
-                    value={newComment}
-                    onChange={(e) => setNewComment(e.target.value)}
-                    rows={3}
-                    className="flex-1 border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Napisz swój komentarz do tego transportu..."
-                  />
-                  <button
-                    onClick={handleAddComment}
-                    disabled={!newComment.trim() || addingComment}
-                    className="flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 transition-colors"
-                  >
-                    <Send size={16} className="mr-1" />
-                    {addingComment ? 'Dodawanie...' : 'Dodaj'}
-                  </button>
-                </div>
-              </div>
+           {/* SEKCJA KOMENTARZY - wyświetlana na dole */}
+           <div className="mt-8">
+             <h3 className="font-semibold text-lg mb-4">
+               💬 Komentarze ({allComments.length})
+             </h3>
+             
+             {/* Formularz dodawania komentarza - dostępny dla wszystkich */}
+             <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+               <label className="block text-sm font-medium text-gray-700 mb-2">
+                 Dodaj komentarz do transportu
+               </label>
+               <div className="flex space-x-3">
+                 <textarea
+                   value={newComment}
+                   onChange={(e) => setNewComment(e.target.value)}
+                   rows={3}
+                   className="flex-1 border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                   placeholder="Napisz swój komentarz do tego transportu..."
+                 />
+                 <button
+                   onClick={handleAddComment}
+                   disabled={!newComment.trim() || addingComment}
+                   className="flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 transition-colors"
+                 >
+                   <Send size={16} className="mr-1" />
+                   {addingComment ? 'Dodawanie...' : 'Dodaj'}
+                 </button>
+               </div>
+             </div>
 
-              {/* Lista komentarzy */}
-              {loadingComments ? (
-                <div className="text-center py-4">
-                  <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500 mx-auto"></div>
-                </div>
-              ) : allComments.length > 0 ? (
-                <div className="space-y-4">
-                  {allComments.map((comment) => (
-                    <div key={comment.id} className="border border-gray-200 rounded-md p-4 bg-white">
-                      <div className="flex justify-between items-start mb-2">
-                        <span className="text-sm font-medium text-gray-900">
-                          {comment.commenter_email}
-                        </span>
-                        <span className="text-sm text-gray-500">
-                          {new Date(comment.created_at).toLocaleDateString('pl-PL', {
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          })}
-                        </span>
-                      </div>
-                      <p className="text-gray-700">{comment.comment}</p>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-8 text-gray-500">
-                  <MessageSquare size={48} className="mx-auto mb-4 text-gray-300" />
-                  <p>Brak komentarzy do tego transportu.</p>
-                  <p className="text-sm mt-1">Bądź pierwszy i dodaj komentarz!</p>
-                </div>
-              )}
-            </div>
+             {/* Lista komentarzy */}
+             {loadingComments ? (
+               <div className="text-center py-4">
+                 <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500 mx-auto"></div>
+               </div>
+             ) : allComments.length > 0 ? (
+               <div className="space-y-4">
+                 {allComments.map((comment) => (
+                   <div key={comment.id} className="border border-gray-200 rounded-md p-4 bg-white">
+                     <div className="flex justify-between items-start mb-2">
+                       <span className="text-sm font-medium text-gray-900">
+                         {comment.commenter_email}
+                       </span>
+                       <span className="text-sm text-gray-500">
+                         {new Date(comment.created_at).toLocaleDateString('pl-PL', {
+                           year: 'numeric',
+                           month: 'long',
+                           day: 'numeric',
+                           hour: '2-digit',
+                           minute: '2-digit'
+                         })}
+                       </span>
+                     </div>
+                     <p className="text-gray-700">{comment.comment}</p>
+                   </div>
+                 ))}
+               </div>
+             ) : (
+               <div className="text-center py-8 text-gray-500">
+                 <MessageSquare size={48} className="mx-auto mb-4 text-gray-300" />
+                 <p>Brak komentarzy do tego transportu.</p>
+                 <p className="text-sm mt-1">Bądź pierwszy i dodaj komentarz!</p>
+               </div>
+             )}
+           </div>
           </div>
         </div>
       </div>
@@ -1105,10 +967,7 @@ export default function ArchiwumPage() {
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-gray-600">Ładowanie archiwum transportów...</p>
-        </div>
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
       </div>
     )
   }
@@ -1124,17 +983,9 @@ export default function ArchiwumPage() {
         <h1 className="text-3xl font-bold text-gray-900 mb-2">
           Archiwum Transportów
         </h1>
-        <div className="flex items-center justify-between">
-          <p className="text-gray-600">
-            Zarządzaj zakończonymi transportami i ich ocenami
-          </p>
-          {ratingsLoading && (
-            <div className="flex items-center text-blue-600">
-              <Loader size={16} className="mr-2 animate-spin" />
-              <span className="text-sm">Ładowanie ocen...</span>
-            </div>
-          )}
-        </div>
+        <p className="text-gray-600">
+          Zarządzaj zakończonymi transportami i ich ocenami
+        </p>
       </div>
 
       {/* Status usuwania */}
@@ -1366,140 +1217,142 @@ export default function ArchiwumPage() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {currentItems.map((transport) => (
-                <React.Fragment key={transport.id}>
-                  <tr className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">
-                        {format(new Date(transport.delivery_date), 'dd.MM.yyyy', { locale: pl })}
-                      </div>
-                    </td>
+              {currentItems.map((transport) => {
+                return (
+                  <React.Fragment key={transport.id}>
+                    <tr className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">
+                          {format(new Date(transport.delivery_date), 'dd.MM.yyyy', { locale: pl })}
+                        </div>
+                      </td>
 
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">
-                        {transport.destination_city}
-                      </div>
-                    </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">
+                          {transport.destination_city}
+                        </div>
+                      </td>
 
-                    <td className="px-6 py-4">
-                      <div className="text-sm font-medium text-gray-900">
-                        {transport.client_name || 'Brak nazwy'}
-                      </div>
-                    </td>
+                      <td className="px-6 py-4">
+                        <div className="text-sm font-medium text-gray-900">
+                          {transport.client_name || 'Brak nazwy'}
+                        </div>
+                      </td>
 
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">
-                        {getMagazynName(transport.source_warehouse)}
-                      </div>
-                    </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">
+                          {getMagazynName(transport.source_warehouse)}
+                        </div>
+                      </td>
 
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <RatingDisplay transportId={transport.id} />
-                    </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <RatingDisplay transportId={transport.id} />
+                      </td>
 
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center space-x-2">
-                        <RatingButtons transport={transport} />
-                        
-                        <button
-                          onClick={() => setExpandedRows(prev => ({
-                            ...prev,
-                            [transport.id]: !prev[transport.id]
-                          }))}
-                          className="flex items-center px-2 py-1 text-gray-600 hover:text-gray-900 rounded-md hover:bg-gray-100 transition-colors text-sm"
-                        >
-                          <Eye size={14} className="mr-1" />
-                          {expandedRows[transport.id] ? 'Ukryj' : 'Szczegóły'}
-                        </button>
-
-                        {isAdmin && (
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center space-x-2">
+                          <RatingButtons transport={transport} />
+                          
                           <button
-                            onClick={() => handleDeleteTransport(transport.id)}
-                            className="flex items-center px-2 py-1 text-red-600 hover:text-red-900 rounded-md hover:bg-red-100 transition-colors text-sm"
+                            onClick={() => setExpandedRows(prev => ({
+                              ...prev,
+                              [transport.id]: !prev[transport.id]
+                            }))}
+                            className="flex items-center px-2 py-1 text-gray-600 hover:text-gray-900 rounded-md hover:bg-gray-100 transition-colors text-sm"
                           >
-                            <Trash2 size={14} className="mr-1" />
-                            Usuń
+                            <Eye size={14} className="mr-1" />
+                            {expandedRows[transport.id] ? 'Ukryj' : 'Szczegóły'}
                           </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
 
-                  {expandedRows[transport.id] && (
-                    <tr>
-                      <td colSpan="6" className="px-6 py-4 bg-gray-50">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div>
-                            <h4 className="font-medium text-gray-900 mb-2">Szczegóły dostawy</h4>
-                            <div className="space-y-2 text-sm">
-                              {transport.street && (
-                                <div className="flex items-center">
-                                  <MapPin size={14} className="text-gray-400 mr-2" />
-                                  <span className="text-gray-600">Adres:</span>
-                                  <span className="ml-1">{transport.street}</span>
-                                </div>
-                              )}
-                              {transport.postal_code && (
-                                <div className="flex items-center">
-                                  <span className="text-gray-600 ml-6">Kod:</span>
-                                  <span className="ml-1">{transport.postal_code}</span>
-                                </div>
-                              )}
-                              {transport.mpk && (
-                                <div className="flex items-center">
-                                  <Hash size={14} className="text-gray-400 mr-2" />
-                                  <span className="text-gray-600">MPK:</span>
-                                  <span className="ml-1">{transport.mpk}</span>
-                                </div>
-                              )}
-                              {transport.wz_number && (
-                                <div className="flex items-center">
-                                  <FileText size={14} className="text-gray-400 mr-2" />
-                                  <span className="text-gray-600">WZ:</span>
-                                  <span className="ml-1">{transport.wz_number}</span>
-                                </div>
-                              )}
-                              {transport.distance && (
-                                <div className="flex items-center">
-                                  <Route size={14} className="text-gray-400 mr-2" />
-                                  <span className="text-gray-600">Odległość:</span>
-                                  <span className="ml-1">{transport.distance} km</span>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-
-                          <div>
-                            <h4 className="font-medium text-gray-900 mb-2">Dodatkowe informacje</h4>
-                            <div className="space-y-2 text-sm">
-                              <div className="flex items-center">
-                                <User size={14} className="text-gray-400 mr-2" />
-                                <span className="text-gray-600">Kierowca:</span>
-                                <span className="ml-1">{getDriverInfo(transport.driver_id)}</span>
-                              </div>
-                              {transport.requester_email && (
-                                <div className="flex items-center">
-                                  <span className="text-gray-600">Zamówił:</span>
-                                  <span className="ml-1">{transport.requester_email}</span>
-                                </div>
-                              )}
-                              {transport.notes && (
-                                <div className="flex items-start">
-                                  <MessageSquare size={14} className="text-gray-400 mr-2 mt-1" />
-                                  <div>
-                                    <span className="text-gray-600">Uwagi:</span>
-                                    <p className="mt-1 text-gray-900">{transport.notes}</p>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          </div>
+                          {isAdmin && (
+                            <button
+                              onClick={() => handleDeleteTransport(transport.id)}
+                              className="flex items-center px-2 py-1 text-red-600 hover:text-red-900 rounded-md hover:bg-red-100 transition-colors text-sm"
+                            >
+                              <Trash2 size={14} className="mr-1" />
+                              Usuń
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
-                  )}
-                </React.Fragment>
-              ))}
+
+                    {expandedRows[transport.id] && (
+                      <tr>
+                        <td colSpan="6" className="px-6 py-4 bg-gray-50">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <h4 className="font-medium text-gray-900 mb-2">Szczegóły dostawy</h4>
+                              <div className="space-y-2 text-sm">
+                                {transport.street && (
+                                  <div className="flex items-center">
+                                    <MapPin size={14} className="text-gray-400 mr-2" />
+                                    <span className="text-gray-600">Adres:</span>
+                                    <span className="ml-1">{transport.street}</span>
+                                  </div>
+                                )}
+                                {transport.postal_code && (
+                                  <div className="flex items-center">
+                                    <span className="text-gray-600 ml-6">Kod:</span>
+                                    <span className="ml-1">{transport.postal_code}</span>
+                                  </div>
+                                )}
+                                {transport.mpk && (
+                                  <div className="flex items-center">
+                                    <Hash size={14} className="text-gray-400 mr-2" />
+                                    <span className="text-gray-600">MPK:</span>
+                                    <span className="ml-1">{transport.mpk}</span>
+                                  </div>
+                                )}
+                                {transport.wz_number && (
+                                  <div className="flex items-center">
+                                    <FileText size={14} className="text-gray-400 mr-2" />
+                                    <span className="text-gray-600">WZ:</span>
+                                    <span className="ml-1">{transport.wz_number}</span>
+                                  </div>
+                                )}
+                                {transport.distance && (
+                                  <div className="flex items-center">
+                                    <Route size={14} className="text-gray-400 mr-2" />
+                                    <span className="text-gray-600">Odległość:</span>
+                                    <span className="ml-1">{transport.distance} km</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            <div>
+                              <h4 className="font-medium text-gray-900 mb-2">Dodatkowe informacje</h4>
+                              <div className="space-y-2 text-sm">
+                                <div className="flex items-center">
+                                  <User size={14} className="text-gray-400 mr-2" />
+                                  <span className="text-gray-600">Kierowca:</span>
+                                  <span className="ml-1">{getDriverInfo(transport.driver_id, transport.vehicle_id)}</span>
+                                </div>
+                                {transport.requester_email && (
+                                  <div className="flex items-center">
+                                    <span className="text-gray-600">Zamówił:</span>
+                                    <span className="ml-1">{transport.requester_email}</span>
+                                  </div>
+                                )}
+                                {transport.notes && (
+                                  <div className="flex items-start">
+                                    <MessageSquare size={14} className="text-gray-400 mr-2 mt-1" />
+                                    <div>
+                                      <span className="text-gray-600">Uwagi:</span>
+                                      <p className="mt-1 text-gray-900">{transport.notes}</p>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                )
+              })}
             </tbody>
           </table>
 
