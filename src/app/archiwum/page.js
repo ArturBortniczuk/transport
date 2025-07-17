@@ -1,4 +1,4 @@
-// src/app/archiwum/page.js - WERSJA ZOPTYMALIZOWANA Z NAPRAWIONĄ PAGINACJĄ
+// src/app/archiwum/page.js - WERSJA ZOPTYMALIZOWANA Z NAPRAWIONYMI BŁĘDAMI
 'use client'
 import React, { useState, useEffect, useMemo } from 'react'
 import { format } from 'date-fns'
@@ -208,7 +208,6 @@ export default function ArchiwumPage() {
         if (idsToFetch.length > 0) {
             setRatingsLoading(true);
             try {
-                // Zastąpione hipotetyczne /api/transport-ratings-bulk pętlą
                 const ratingsPromises = idsToFetch.map(id => 
                     fetch(`/api/transport-ratings?transportId=${id}`).then(res => res.json())
                 );
@@ -559,34 +558,47 @@ export default function ArchiwumPage() {
     ]
 
     const handleSubmitRating = async (e) => {
-      e.preventDefault()
-      if (!hasMainRating && Object.values(ratings).some(r => r === null)) {
-        setError('Oceń wszystkie kryteria.')
-        return
-      }
-      
-      try {
-        setSubmitting(true)
-        setError('')
-        const response = await fetch('/api/transport-ratings', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ transportId: transport.id, ratings, comment: comment.trim() })
-        })
-        const result = await response.json()
-        if (result.success) {
-          setSuccess(true)
-          setIsEditMode(false)
-          setTimeout(() => setSuccess(false), 3000)
-        } else {
-          setError(result.error || 'Błąd zapisu oceny.')
+        e.preventDefault();
+        if (!hasMainRating && Object.values(ratings).some(r => r === null)) {
+            setError('Proszę ocenić wszystkie kryteria.');
+            return;
         }
-      } catch (error) {
-        setError('Błąd wysyłania oceny.')
-      } finally {
-        setSubmitting(false)
-      }
-    }
+
+        try {
+            setSubmitting(true);
+            setError('');
+
+            const positiveCount = Object.values(ratings).filter(r => r === true).length;
+            const ratedCount = Object.values(ratings).filter(r => r !== null).length;
+            const isPositive = ratedCount > 0 ? (positiveCount / ratedCount) >= 0.5 : true;
+
+            const response = await fetch('/api/transport-ratings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    transportId: transport.id,
+                    isPositive: isPositive,
+                    comment: comment.trim()
+                })
+            });
+
+            const result = await response.json();
+            if (result.success) {
+                setSuccess(true);
+                setIsEditMode(false);
+                setTimeout(() => {
+                    onClose();
+                }, 1500);
+            } else {
+                setError(result.error || 'Wystąpił błąd podczas zapisywania oceny.');
+            }
+        } catch (error) {
+            console.error('Błąd wysyłania oceny:', error);
+            setError('Wystąpił błąd sieci. Spróbuj ponownie.');
+        } finally {
+            setSubmitting(false);
+        }
+    };
 
     const handleAddComment = async () => {
       if (!newComment.trim()) return
