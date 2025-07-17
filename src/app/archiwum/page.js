@@ -628,7 +628,7 @@ export default function ArchiwumPage() {
         setSubmitting(true)
         setError('')
         
-        const response = await fetch('/api/transport-ratings', {
+        const response = await fetch('/api/transport-detailed-ratings', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
