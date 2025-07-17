@@ -1,6 +1,6 @@
-// src/app/archiwum/page.js - KOMPLETNA WERSJA Z NAPRAWIONYM SYSTEMEM OCEN I KOMENTARZY
+// src/app/archiwum/page.js - WERSJA ZOPTYMALIZOWANA Z NAPRAWIONĄ PAGINACJĄ
 'use client'
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { format } from 'date-fns'
 import { pl } from 'date-fns/locale'
 import { KIEROWCY, POJAZDY } from '../kalendarz/constants'
@@ -30,20 +30,21 @@ import {
   CheckCircle,
   AlertCircle,
   Plus,
-  Send
+  Send,
+  Loader
 } from 'lucide-react'
 
 export default function ArchiwumPage() {
   const [archiwum, setArchiwum] = useState([])
-  const [filteredArchiwum, setFilteredArchiwum] = useState([])
   const [isAdmin, setIsAdmin] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [ratingsLoading, setRatingsLoading] = useState(false)
   const [error, setError] = useState(null)
   const [deleteStatus, setDeleteStatus] = useState(null)
   const [exportFormat, setExportFormat] = useState('xlsx')
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
-  const [itemsPerPage] = useState(10)
+  const [itemsPerPage] = useState(20)
   const [selectedTransport, setSelectedTransport] = useState(null)
   const [showRatingModal, setShowRatingModal] = useState(false)
   const [expandedRows, setExpandedRows] = useState({})
@@ -88,173 +89,158 @@ export default function ArchiwumPage() {
     { value: 'unrated', label: 'Tylko nieocenione' }
   ]
 
+  // OPTYMALIZACJA: Równoległe ładowanie danych
   useEffect(() => {
-    const checkAdmin = async () => {
+    const initializeData = async () => {
       try {
-        const response = await fetch('/api/user')
-        if (response.ok) {
-          const data = await response.json()
-          setIsAdmin(data.isAuthenticated && data.user && (data.user.isAdmin || data.user.role === 'admin'))
-          setCurrentUserEmail(data.user?.email || '')
+        setLoading(true)
+        
+        const [userResponse, usersResponse, constructionsResponse, transportsResponse] = await Promise.all([
+          fetch('/api/user'),
+          fetch('/api/users/list'),
+          fetch('/api/constructions'),
+          fetch('/api/transports?status=completed')
+        ])
+
+        if (userResponse.ok) {
+          const userData = await userResponse.json()
+          setCurrentUserEmail(userData.user?.email || '')
+          setIsAdmin(userData.isAuthenticated && userData.user && (userData.user.isAdmin || userData.user.role === 'admin'))
         }
+
+        if (usersResponse.ok) {
+          const usersData = await usersResponse.json()
+          setUsers(usersData)
+        }
+
+        if (constructionsResponse.ok) {
+          const constructionsData = await constructionsResponse.json()
+          setConstructions(constructionsData.constructions || [])
+        }
+        
+        if (transportsResponse.ok) {
+            const data = await transportsResponse.json();
+            if (data.success) {
+                const sortedTransports = data.transports.sort((a, b) => new Date(b.delivery_date) - new Date(a.delivery_date));
+                setArchiwum(sortedTransports);
+            } else {
+                setError('Nie udało się pobrać archiwum transportów');
+            }
+        } else {
+            setError('Błąd pobierania transportów');
+        }
+
       } catch (error) {
-        console.error('Błąd sprawdzania uprawnień:', error)
+        console.error('Błąd inicjalizacji danych:', error)
+        setError('Wystąpił błąd podczas ładowania danych')
+      } finally {
+        setLoading(false)
       }
     }
 
-    const fetchUsers = async () => {
-      try {
-        const response = await fetch('/api/users/list')
-        if (response.ok) {
-          const data = await response.json()
-          setUsers(data)
-        }
-      } catch (error) {
-        console.error('Błąd pobierania użytkowników:', error)
-      }
-    }
-
-    const fetchConstructions = async () => {
-      try {
-        const response = await fetch('/api/constructions')
-        if (response.ok) {
-          const data = await response.json()
-          setConstructions(data.constructions || [])
-        }
-      } catch (error) {
-        console.error('Błąd pobierania budów:', error)
-      }
-    }
-
-    checkAdmin()
-    fetchUsers()
-    fetchConstructions()
-    fetchArchivedTransports()
+    initializeData()
   }, [])
 
-  const fetchArchivedTransports = async () => {
-    try {
-      setLoading(true)
-      const response = await fetch('/api/transports?status=completed')
-      const data = await response.json()
-      
-      if (data.success) {
-        const sortedTransports = data.transports.sort((a, b) => 
-          new Date(b.delivery_date) - new Date(a.delivery_date)
-        )
-        setArchiwum(sortedTransports)
-        
-        // Pobierz oceny dla wszystkich transportów
-        await fetchAllRatings(sortedTransports)
-        
-        applyFilters(sortedTransports, selectedYear, selectedMonth, selectedWarehouse, selectedDriver, selectedRequester, selectedRating, selectedConstruction)
-      } else {
-        setError('Nie udało się pobrać archiwum transportów')
-      }
-    } catch (error) {
-      console.error('Błąd pobierania archiwum:', error)
-      setError('Wystąpił błąd podczas pobierania danych')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const fetchAllRatings = async (transports) => {
-    const ratingsData = {}
+  // OPTYMALIZACJA: Memoizacja filtrowanych danych
+  const filteredArchiwum = useMemo(() => {
+    if (!archiwum) return []
     
-    for (const transport of transports) {
-      try {
-        const response = await fetch(`/api/transport-ratings?transportId=${transport.id}`)
-        const data = await response.json()
-        
-        if (data.success) {
-          ratingsData[transport.id] = {
-            canBeRated: data.canBeRated,
-            hasUserRated: data.hasUserRated,
-            userRating: data.userRating,
-            ratings: data.ratings || [],
-            stats: data.stats || { totalRatings: 0, overallRatingPercentage: null }
-          }
-        }
-      } catch (error) {
-        console.error(`Błąd pobierania oceny dla transportu ${transport.id}:`, error)
-        ratingsData[transport.id] = {
-          canBeRated: false,
-          hasUserRated: false,
-          userRating: null,
-          ratings: [],
-          stats: { totalRatings: 0, overallRatingPercentage: null }
-        }
-      }
-    }
-    
-    setTransportRatings(ratingsData)
-  }
-  
-  const applyFilters = async (transports, year, month, warehouse, driver, requester, rating, construction) => {
-    if (!transports) return
-    
-    let filtered = transports.filter(transport => {
+    let filtered = archiwum.filter(transport => {
       const date = new Date(transport.delivery_date)
       const transportYear = date.getFullYear()
       
-      if (transportYear !== parseInt(year)) {
-        return false
-      }
+      if (transportYear !== parseInt(selectedYear)) return false
       
-      if (month !== 'all') {
+      if (selectedMonth !== 'all') {
         const transportMonth = date.getMonth()
-        if (transportMonth !== parseInt(month)) {
-          return false
-        }
+        if (transportMonth !== parseInt(selectedMonth)) return false
       }
       
-      if (warehouse && transport.source_warehouse !== warehouse) {
-        return false
-      }
+      if (selectedWarehouse && transport.source_warehouse !== selectedWarehouse) return false
+      if (selectedDriver && transport.driver_id.toString() !== selectedDriver) return false
+      if (selectedRequester && transport.requester_email !== selectedRequester) return false
       
-      if (driver && transport.driver_id.toString() !== driver) {
-        return false
-      }
-      
-      if (requester && transport.requester_email !== requester) {
-        return false
-      }
-      
-      if (construction) {
-        const selectedConstruction = constructions.find(c => c.id.toString() === construction);
-        if (selectedConstruction) {
+      if (selectedConstruction) {
+        const selectedConstructionObj = constructions.find(c => c.id.toString() === selectedConstruction);
+        if (selectedConstructionObj) {
           const matchesClientName = transport.client_name && 
-            transport.client_name.toLowerCase().includes(selectedConstruction.name.toLowerCase());
-          const matchesMpk = transport.mpk && transport.mpk === selectedConstruction.mpk;
-          
-          if (!matchesClientName && !matchesMpk) {
-            return false;
-          }
+            transport.client_name.toLowerCase().includes(selectedConstructionObj.name.toLowerCase());
+          const matchesMpk = transport.mpk && transport.mpk === selectedConstructionObj.mpk;
+          if (!matchesClientName && !matchesMpk) return false;
         }
       }
       
       return true
     })
 
-    // Filtrowanie po ocenach
-    if (rating === 'rated' || rating === 'unrated') {
+    if (selectedRating === 'rated' || selectedRating === 'unrated') {
       filtered = filtered.filter(transport => {
         const transportRating = transportRatings[transport.id]
-        if (rating === 'rated') {
+        if (selectedRating === 'rated') {
           return transportRating && transportRating.stats.totalRatings > 0
-        } else {
+        } else { // unrated
           return !transportRating || transportRating.stats.totalRatings === 0
         }
       })
     }
     
-    setFilteredArchiwum(filtered)
+    return filtered
+  }, [archiwum, selectedYear, selectedMonth, selectedWarehouse, selectedDriver, selectedRequester, selectedRating, selectedConstruction, constructions, transportRatings])
+  
+  // Paginacja
+  const indexOfLastItem = currentPage * itemsPerPage
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage
+  const currentItems = filteredArchiwum.slice(indexOfFirstItem, indexOfLastItem)
+  const totalPages = Math.ceil(filteredArchiwum.length / itemsPerPage)
+
+  const paginate = (pageNumber) => {
+    if (pageNumber < 1 || pageNumber > totalPages) return;
+    setCurrentPage(pageNumber)
   }
 
+  // Efekt do ładowania ocen dla widocznych transportów
   useEffect(() => {
-    applyFilters(archiwum, selectedYear, selectedMonth, selectedWarehouse, selectedDriver, selectedRequester, selectedRating, selectedConstruction)
-  }, [selectedYear, selectedMonth, selectedWarehouse, selectedDriver, selectedRequester, selectedRating, selectedConstruction, archiwum, constructions, transportRatings])
+    const fetchRatingsForCurrentPage = async () => {
+        const idsToFetch = currentItems
+            .map(t => t.id)
+            .filter(id => !transportRatings[id]);
+
+        if (idsToFetch.length > 0) {
+            setRatingsLoading(true);
+            try {
+                // Zastąpione hipotetyczne /api/transport-ratings-bulk pętlą
+                const ratingsPromises = idsToFetch.map(id => 
+                    fetch(`/api/transport-ratings?transportId=${id}`).then(res => res.json())
+                );
+                const results = await Promise.all(ratingsPromises);
+                
+                const newRatings = {};
+                results.forEach((data, index) => {
+                    if (data.success) {
+                        newRatings[idsToFetch[index]] = {
+                            canBeRated: data.canBeRated,
+                            hasUserRated: data.hasUserRated,
+                            userRating: data.userRating,
+                            ratings: data.ratings || [],
+                            stats: data.stats || { totalRatings: 0, overallRatingPercentage: null }
+                        };
+                    }
+                });
+                setTransportRatings(prev => ({ ...prev, ...newRatings }));
+
+            } catch (error) {
+                console.error("Błąd ładowania ocen: ", error);
+            } finally {
+                setRatingsLoading(false);
+            }
+        }
+    };
+
+    if (currentItems.length > 0) {
+        fetchRatingsForCurrentPage();
+    }
+  }, [currentPage, filteredArchiwum]);
+
 
   const handleDeleteTransport = async (id) => {
     if (!confirm('Czy na pewno chcesz usunąć ten transport?')) {
@@ -271,9 +257,7 @@ export default function ArchiwumPage() {
       const data = await response.json()
       
       if (data.success) {
-        const updatedArchiwum = archiwum.filter(transport => transport.id !== id)
-        setArchiwum(updatedArchiwum)
-        applyFilters(updatedArchiwum, selectedYear, selectedMonth, selectedWarehouse, selectedDriver, selectedRequester, selectedRating, selectedConstruction)
+        setArchiwum(prev => prev.filter(transport => transport.id !== id))
         
         setDeleteStatus({ type: 'success', message: 'Transport został usunięty' })
         
@@ -294,17 +278,39 @@ export default function ArchiwumPage() {
     setShowRatingModal(true)
   }
 
-  const handleCloseRating = () => {
+  const handleCloseRating = async () => {
+    const transportId = selectedTransport?.id;
     setShowRatingModal(false)
     setSelectedTransport(null)
-    fetchArchivedTransports()
+    
+    if (transportId) {
+        setRatingsLoading(true);
+        try {
+            const response = await fetch(`/api/transport-ratings?transportId=${transportId}`);
+            if (response.ok) {
+                const data = await response.json();
+                if (data.success) {
+                    setTransportRatings(prev => ({ ...prev, [transportId]: {
+                        canBeRated: data.canBeRated,
+                        hasUserRated: data.hasUserRated,
+                        userRating: data.userRating,
+                        ratings: data.ratings || [],
+                        stats: data.stats || { totalRatings: 0, overallRatingPercentage: null }
+                    }}));
+                }
+            }
+        } catch (error) {
+            console.error("Błąd odświeżania oceny:", error);
+        } finally {
+            setRatingsLoading(false);
+        }
+    }
   }
 
   const getDriverInfo = (driverId, vehicleId) => {
     const driver = KIEROWCY.find(k => k.id === parseInt(driverId));
     if (!driver) return 'Brak danych';
     
-    // Użyj vehicle_id jeśli jest dostępne, w przeciwnym razie wróć do starej logiki
     const vehicle = POJAZDY.find(p => p.id === parseInt(vehicleId || driverId));
     const vehicleInfo = vehicle ? vehicle.tabliceRej : 'Brak pojazdu';
     
@@ -326,13 +332,9 @@ export default function ArchiwumPage() {
     }
     
     const calculateTransportCost = (distance) => {
-        if (distance <= 75) {
-          return distance * 13;
-        } else if (distance > 75 && distance <= 150) {
-          return distance * 8;
-        } else { // distance > 150
-          return distance * 3;
-        }
+        if (distance <= 75) return distance * 13;
+        if (distance > 75 && distance <= 150) return distance * 8;
+        return distance * 3;
     };
 
     const dataToExport = filteredArchiwum.map(transport => {
@@ -368,18 +370,12 @@ export default function ArchiwumPage() {
     if (exportFormat === 'csv') {
       exportToCSV(dataToExport, fileName)
     } else {
-      // Przygotowanie danych do podsumowania
       const summaryByMpk = filteredArchiwum.reduce((acc, transport) => {
         const mpk = transport.mpk || 'Brak MPK';
         const distance = transport.distance || 0;
         const cost = calculateTransportCost(distance);
-        
-        if (!acc[mpk]) {
-          acc[mpk] = { totalCost: 0 };
-        }
-        
+        if (!acc[mpk]) acc[mpk] = { totalCost: 0 };
         acc[mpk].totalCost += cost;
-        
         return acc;
       }, {});
 
@@ -395,7 +391,6 @@ export default function ArchiwumPage() {
   const exportToCSV = (data, fileName) => {
     const headers = Object.keys(data[0])
     let csvContent = headers.join(';') + '\n'
-    
     data.forEach(item => {
       const row = headers.map(header => {
         let cell = item[header] ? item[header] : ''
@@ -406,9 +401,7 @@ export default function ArchiwumPage() {
       }).join(';')
       csvContent += row + '\n'
     })
-
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' })
-    
     const link = document.createElement('a')
     link.href = URL.createObjectURL(blob)
     link.download = `${fileName}.csv`
@@ -419,35 +412,27 @@ export default function ArchiwumPage() {
 
   const exportToXLSXWithSummary = (mainData, summaryData, fileName) => {
     const wb = XLSX.utils.book_new();
-    
-    // Arkusz z transportami
     const ws_main = XLSX.utils.json_to_sheet(mainData);
     XLSX.utils.book_append_sheet(wb, ws_main, "Transporty");
-    
-    // Arkusz z podsumowaniem
     const ws_summary = XLSX.utils.json_to_sheet(summaryData);
     XLSX.utils.book_append_sheet(wb, ws_summary, "Podsumowanie po MPK");
-    
     XLSX.writeFile(wb, `${fileName}.xlsx`);
   }
 
-  // Paginacja
-  const indexOfLastItem = currentPage * itemsPerPage
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage
-  const currentItems = filteredArchiwum.slice(indexOfFirstItem, indexOfLastItem)
-  const totalPages = Math.ceil(filteredArchiwum.length / itemsPerPage)
-
-  const paginate = (pageNumber) => {
-    setCurrentPage(pageNumber)
-  }
-
-  // Statystyki
   const totalDistance = filteredArchiwum.reduce((sum, t) => sum + (t.distance || 0), 0)
 
-  // Komponent wyświetlający ocenę transportu
-  const RatingDisplay = ({ transportId }) => {
+  const RatingDisplay = React.memo(({ transportId }) => {
     const rating = transportRatings[transportId]
     
+    if (ratingsLoading && !rating) {
+        return (
+            <div className="flex items-center">
+                <Loader size={14} className="mr-1 animate-spin text-gray-400" />
+                <span className="text-gray-400 text-sm">Ładowanie...</span>
+            </div>
+        )
+    }
+
     if (!rating || rating.stats.totalRatings === 0) {
       return (
         <span className="text-gray-400 text-sm flex items-center">
@@ -475,26 +460,26 @@ export default function ArchiwumPage() {
         </span>
       </div>
     )
-  }
+  })
 
-  // Komponent przycisków oceny - UPROSZCZONA WERSJA
-  const RatingButtons = ({ transport }) => {
+  const RatingButtons = React.memo(({ transport }) => {
     const rating = transportRatings[transport.id]
     
-    if (!rating) {
-      return (
-        <span className="text-gray-400 text-sm">
-          Ładowanie...
-        </span>
-      )
+    if (ratingsLoading && !rating) {
+        return (
+            <div className="flex items-center">
+                <Loader size={14} className="mr-1 animate-spin text-gray-400" />
+            </div>
+        )
     }
+
+    if (!rating) return null;
 
     const hasMainRating = rating.stats.totalRatings > 0
     const userHasMainRating = rating.hasUserRated
     
     return (
       <div className="flex flex-col space-y-1">
-        {/* Jeden przycisk dla wszystkich akcji */}
         <button
           onClick={() => handleOpenRatingModal(transport)}
           className={`flex items-center px-3 py-1 rounded-md hover:opacity-80 transition-colors text-sm ${
@@ -505,23 +490,18 @@ export default function ArchiwumPage() {
         >
           <MessageSquare size={14} className="mr-1" />
           {hasMainRating 
-            ? (userHasMainRating ? 'Edytuj ocenę/komentarz' : 'Dodaj komentarz') 
+            ? (userHasMainRating ? 'Edytuj/Komentuj' : 'Dodaj komentarz') 
             : 'Oceń transport'
           }
         </button>
       </div>
     )
-  }
+  })
 
-  // Kompletny modal oceny z komentarzami - NAPRAWIONA WERSJA
   const CompleteRatingModal = ({ transport, onClose }) => {
     const [ratings, setRatings] = useState({
-      driverProfessional: null,
-      driverTasksCompleted: null,
-      cargoComplete: null,
-      cargoCorrect: null,
-      deliveryNotified: null,
-      deliveryOnTime: null
+      driverProfessional: null, driverTasksCompleted: null, cargoComplete: null,
+      cargoCorrect: null, deliveryNotified: null, deliveryOnTime: null
     })
     const [comment, setComment] = useState('')
     const [submitting, setSubmitting] = useState(false)
@@ -537,30 +517,25 @@ export default function ArchiwumPage() {
     const hasMainRating = transportRating?.stats.totalRatings > 0
     const userHasRated = transportRating?.hasUserRated
 
-    // Pobierz komentarze przy ładowaniu
     useEffect(() => {
       const fetchComments = async () => {
         try {
           setLoadingComments(true)
           const response = await fetch(`/api/transport-comments?transportId=${transport.id}`)
           const data = await response.json()
-          
-          if (data.success) {
-            setAllComments(data.comments || [])
-          }
+          if (data.success) setAllComments(data.comments || [])
         } catch (error) {
           console.error('Błąd pobierania komentarzy:', error)
         } finally {
           setLoadingComments(false)
         }
       }
-      
       fetchComments()
     }, [transport.id])
 
     useEffect(() => {
       if (userHasRated && transportRating?.userRating) {
-        setRatings(transportRating.userRating.ratings)
+        setRatings(transportRating.userRating.ratings || {})
         setComment(transportRating.userRating.comment || '')
         setIsEditMode(false)
       } else if (!hasMainRating) {
@@ -569,95 +544,45 @@ export default function ArchiwumPage() {
     }, [userHasRated, transportRating, hasMainRating])
 
     const categories = [
-      {
-        id: 'driver',
-        title: '👨‍💼 Kierowca',
-        criteria: [
-          {
-            key: 'driverProfessional',
-            text: 'Kierowca zachował się profesjonalnie wobec klienta.'
-          },
-          {
-            key: 'driverTasksCompleted',
-            text: 'Kierowca zrealizował wszystkie ustalone zadania.'
-          }
-        ]
-      },
-      {
-        id: 'cargo',
-        title: '📦 Towar',
-        criteria: [
-          {
-            key: 'cargoComplete',
-            text: 'Towar był kompletny i zgodny z zamówieniem.'
-          },
-          {
-            key: 'cargoCorrect',
-            text: 'Nie doszło do pomyłki – klient dostał właściwy towar.'
-          }
-        ]
-      },
-      {
-        id: 'delivery',
-        title: '🚚 Organizacja dostawy',
-        criteria: [
-          {
-            key: 'deliveryNotified',
-            text: 'Dostawa została wcześniej awizowana u klienta.'
-          },
-          {
-            key: 'deliveryOnTime',
-            text: 'Towar dotarł w ustalonym terminie.'
-          }
-        ]
-      }
+      { id: 'driver', title: '👨‍💼 Kierowca', criteria: [
+          { key: 'driverProfessional', text: 'Kierowca zachował się profesjonalnie.' },
+          { key: 'driverTasksCompleted', text: 'Kierowca zrealizował zadania.' }
+      ]},
+      { id: 'cargo', title: '📦 Towar', criteria: [
+          { key: 'cargoComplete', text: 'Towar był kompletny.' },
+          { key: 'cargoCorrect', text: 'Dostarczono właściwy towar.' }
+      ]},
+      { id: 'delivery', title: '🚚 Organizacja', criteria: [
+          { key: 'deliveryNotified', text: 'Dostawa była awizowana.' },
+          { key: 'deliveryOnTime', text: 'Towar dotarł w terminie.' }
+      ]}
     ]
 
     const handleSubmitRating = async (e) => {
       e.preventDefault()
-      
-      if (!hasMainRating) {
-        const allRated = Object.values(ratings).every(rating => rating !== null)
-        if (!allRated) {
-          setError('Oceń wszystkie kryteria przed wysłaniem')
-          return
-        }
+      if (!hasMainRating && Object.values(ratings).some(r => r === null)) {
+        setError('Oceń wszystkie kryteria.')
+        return
       }
       
       try {
         setSubmitting(true)
         setError('')
-        
         const response = await fetch('/api/transport-ratings', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            transportId: transport.id,
-            ratings,
-            comment: comment.trim()
-          })
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ transportId: transport.id, ratings, comment: comment.trim() })
         })
-        
         const result = await response.json()
-        
         if (result.success) {
           setSuccess(true)
           setIsEditMode(false)
-          
-          // Odśwież dane
-          await fetchAllRatings([transport])
-          
-          setTimeout(() => {
-            setSuccess(false)
-          }, 3000)
+          setTimeout(() => setSuccess(false), 3000)
         } else {
-          setError(result.error || 'Wystąpił błąd podczas zapisywania oceny')
+          setError(result.error || 'Błąd zapisu oceny.')
         }
       } catch (error) {
-        console.error('Błąd wysyłania oceny:', error)
-        setError('Wystąpił błąd podczas wysyłania oceny')
+        setError('Błąd wysyłania oceny.')
       } finally {
         setSubmitting(false)
       }
@@ -665,38 +590,24 @@ export default function ArchiwumPage() {
 
     const handleAddComment = async () => {
       if (!newComment.trim()) return
-      
       try {
         setAddingComment(true)
-        setError('')
-        
         const response = await fetch('/api/transport-comments', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            transportId: transport.id,
-            comment: newComment.trim()
-          })
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ transportId: transport.id, comment: newComment.trim() })
         })
-        
         const result = await response.json()
-        
         if (result.success) {
           setNewComment('')
-          // Odśwież komentarze
           const commentsResponse = await fetch(`/api/transport-comments?transportId=${transport.id}`)
           const commentsData = await commentsResponse.json()
-          if (commentsData.success) {
-            setAllComments(commentsData.comments || [])
-          }
+          if (commentsData.success) setAllComments(commentsData.comments || [])
         } else {
-          setError(result.error || 'Nie udało się dodać komentarza')
+          setError(result.error || 'Nie udało się dodać komentarza.')
         }
       } catch (error) {
-        console.error('Błąd dodawania komentarza:', error)
-        setError('Wystąpił błąd podczas dodawania komentarza')
+        setError('Błąd dodawania komentarza.')
       } finally {
         setAddingComment(false)
       }
@@ -705,259 +616,80 @@ export default function ArchiwumPage() {
     const renderRatingButton = (criteriaKey, value, label) => {
       const isSelected = ratings[criteriaKey] === value
       const disabled = hasMainRating && !isEditMode
-      
       const baseClasses = "flex items-center justify-center px-3 py-2 rounded-md transition-colors text-sm font-medium border"
-      
       if (disabled) {
-        const readOnlyClasses = isSelected 
-          ? (value ? "bg-green-100 text-green-700 border-green-300" : "bg-red-100 text-red-700 border-red-300")
-          : "bg-gray-50 text-gray-400 border-gray-200"
-        
-        return (
-          <div className={`${baseClasses} ${readOnlyClasses} cursor-not-allowed`}>
-            {value ? <ThumbsUp size={16} className="mr-1" /> : <ThumbsDown size={16} className="mr-1" />}
-            {label}
-          </div>
-        )
+        const readOnlyClasses = isSelected ? (value ? "bg-green-100 text-green-700 border-green-300" : "bg-red-100 text-red-700 border-red-300") : "bg-gray-50 text-gray-400 border-gray-200"
+        return <div className={`${baseClasses} ${readOnlyClasses} cursor-not-allowed`}>{value ? <ThumbsUp size={16} className="mr-1" /> : <ThumbsDown size={16} className="mr-1" />}{label}</div>
       }
-      
-      const selectedClasses = value 
-        ? "bg-green-100 text-green-700 border-green-300"
-        : "bg-red-100 text-red-700 border-red-300"
+      const selectedClasses = value ? "bg-green-100 text-green-700 border-green-300" : "bg-red-100 text-red-700 border-red-300"
       const unselectedClasses = "bg-gray-50 text-gray-600 border-gray-300 hover:bg-gray-100"
-      
-      return (
-        <button
-          type="button"
-          onClick={() => setRatings(prev => ({ ...prev, [criteriaKey]: value }))}
-          className={`${baseClasses} ${isSelected ? selectedClasses : unselectedClasses}`}
-        >
-          {value ? <ThumbsUp size={16} className="mr-1" /> : <ThumbsDown size={16} className="mr-1" />}
-          {label}
-        </button>
-      )
+      return <button type="button" onClick={() => setRatings(prev => ({ ...prev, [criteriaKey]: value }))} className={`${baseClasses} ${isSelected ? selectedClasses : unselectedClasses}`}>{value ? <ThumbsUp size={16} className="mr-1" /> : <ThumbsDown size={16} className="mr-1" />}{label}</button>
     }
 
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
         <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
           <div className="p-6">
-            {/* Header */}
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h2 className="text-2xl font-bold text-gray-900">
-                  {!hasMainRating 
-                    ? 'Oceń transport' 
-                    : 'Ocena i komentarze transportu'
-                  }
-                </h2>
-                <p className="text-gray-600 mt-1">
-                  {transport.destination_city} - {transport.client_name} ({getMagazynName(transport.source_warehouse)})
-                </p>
+                <h2 className="text-2xl font-bold text-gray-900">{!hasMainRating ? 'Oceń transport' : 'Ocena i komentarze'}</h2>
+                <p className="text-gray-600 mt-1">{transport.destination_city} - {transport.client_name}</p>
               </div>
-              <button
-                onClick={onClose}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <X size={24} />
-              </button>
+              <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={24} /></button>
             </div>
-
-            {/* Komunikaty */}
-            {success && (
-              <div className="mb-6 p-4 bg-green-50 text-green-700 rounded-md flex items-center">
-                <CheckCircle size={16} className="mr-2" />
-                {userHasRated ? 'Ocena została zaktualizowana!' : 'Ocena została zapisana!'}
-              </div>
-            )}
-
-            {error && (
-              <div className="mb-6 p-4 bg-red-50 text-red-700 rounded-md flex items-center">
-                <AlertCircle size={16} className="mr-2" />
-                {error}
-              </div>
-            )}
-
-            {/* SEKCJA OCENY - wyświetlana na górze */}
+            {success && <div className="mb-6 p-4 bg-green-50 text-green-700 rounded-md flex items-center"><CheckCircle size={16} className="mr-2" />{userHasRated ? 'Ocena zaktualizowana!' : 'Ocena zapisana!'}</div>}
+            {error && <div className="mb-6 p-4 bg-red-50 text-red-700 rounded-md flex items-center"><AlertCircle size={16} className="mr-2" />{error}</div>}
             {hasMainRating && (
               <div className="mb-8 p-6 bg-blue-50 rounded-lg border border-blue-200">
-                <h3 className="text-lg font-semibold mb-4 text-blue-900">
-                  ⭐ Ocena transportu: {transportRating.stats.overallRatingPercentage}%
-                </h3>
-                
-                {/* Wyświetl główną ocenę (pierwszą) */}
-                {transportRating.ratings && transportRating.ratings[0] && (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                    {categories.map(category => (
-                      <div key={category.id} className="bg-white p-4 rounded-lg">
-                        <h4 className="font-medium text-sm mb-2">{category.title}</h4>
-                        {category.criteria.map(criteria => {
-                          const ratingValue = transportRating.ratings[0].ratings[criteria.key]
-                          if (ratingValue === null || ratingValue === undefined) return null
-                          
-                          return (
-                            <div key={criteria.key} className="flex items-center justify-between text-sm mb-1">
-                              <span className="text-gray-600 text-xs">{criteria.text}</span>
-                              <div className="flex items-center">
-                                {ratingValue ? (
-                                  <ThumbsUp size={12} className="text-green-600" />
-                                ) : (
-                                  <ThumbsDown size={12} className="text-red-600" />
-                                )}
-                              </div>
-                            </div>
-                          )
-                        })}
+                <h3 className="text-lg font-semibold mb-4 text-blue-900">⭐ Ocena transportu: {transportRating.stats.overallRatingPercentage}%</h3>
+                {userHasRated && !isEditMode && <button onClick={() => setIsEditMode(true)} className="flex items-center px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"><Edit size={16} className="mr-1" /> Edytuj ocenę</button>}
+              </div>
+            )}
+            {(!hasMainRating || (userHasRated && isEditMode)) && (
+              <form onSubmit={handleSubmitRating} className="space-y-6 mb-8">
+                {categories.map(category => (
+                  <div key={category.id} className="border p-6 rounded-lg">
+                    <h4 className="text-lg font-semibold mb-4">{category.title}</h4>
+                    {category.criteria.map(criteria => (
+                      <div key={criteria.key} className="mb-4 last:mb-0">
+                        <p className="text-gray-700 mb-3">{criteria.text}</p>
+                        <div className="flex space-x-3">{renderRatingButton(criteria.key, true, 'Tak')}{renderRatingButton(criteria.key, false, 'Nie')}</div>
                       </div>
                     ))}
                   </div>
-                )}
-                
-                {/* Przycisk edycji dla twórcy oceny */}
-                {userHasRated && !isEditMode && (
-                  <button
-                    onClick={() => setIsEditMode(true)}
-                    className="flex items-center px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-                  >
-                    <Edit size={16} className="mr-1" />
-                    Edytuj swoją ocenę
-                  </button>
-                )}
+                ))}
+                <div className="border p-6 rounded-lg">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Komentarz (opcjonalny)</label>
+                  <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={4} className="w-full border-gray-300 rounded-md focus:ring-blue-500" />
+                </div>
+                <div className="flex justify-end space-x-3">
+                  {isEditMode && userHasRated && <button type="button" onClick={() => setIsEditMode(false)} className="px-4 py-2 border rounded-md">Anuluj</button>}
+                  <button type="submit" disabled={submitting} className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50">{submitting ? 'Zapisywanie...' : 'Zapisz'}</button>
+                </div>
+              </form>
+            )}
+            <div className="mt-8">
+              <h3 className="font-semibold text-lg mb-4">💬 Komentarze ({allComments.length})</h3>
+              <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+                <div className="flex space-x-3">
+                  <textarea value={newComment} onChange={(e) => setNewComment(e.target.value)} rows={3} className="flex-1 border-gray-300 rounded-md" placeholder="Dodaj komentarz..." />
+                  <button onClick={handleAddComment} disabled={!newComment.trim() || addingComment} className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"><Send size={16} className="mr-1" />{addingComment ? '...' : 'Dodaj'}</button>
+                </div>
               </div>
-           )}
-
-           {/* Formularz oceny - tylko dla edycji lub nowych ocen */}
-           {(!hasMainRating || (userHasRated && isEditMode)) && (
-             <div className="mb-8 p-6 border border-gray-200 rounded-lg">
-               <h3 className="text-lg font-semibold mb-4">
-                 {userHasRated ? 'Edytuj swoją ocenę' : 'Oceń transport'}
-               </h3>
-               
-               <form onSubmit={handleSubmitRating} className="space-y-6">
-                 {categories.map(category => (
-                   <div key={category.id} className="border border-gray-200 rounded-lg p-6">
-                     <h4 className="text-lg font-semibold mb-4">{category.title}</h4>
-                     
-                     {category.criteria.map(criteria => (
-                       <div key={criteria.key} className="mb-4 last:mb-0">
-                         <p className="text-gray-700 mb-3">{criteria.text}</p>
-                         <div className="flex space-x-3">
-                           {renderRatingButton(criteria.key, true, 'Tak')}
-                           {renderRatingButton(criteria.key, false, 'Nie')}
-                         </div>
-                       </div>
-                     ))}
-                   </div>
-                 ))}
-
-                 {/* Komentarz do oceny */}
-                 <div className="border border-gray-200 rounded-lg p-6">
-                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                     Komentarz do oceny (opcjonalny)
-                   </label>
-                   <textarea
-                     value={comment}
-                     onChange={(e) => setComment(e.target.value)}
-                     rows={4}
-                     className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                     placeholder="Opisz szczegóły transportu, problemy lub pozytywne aspekty..."
-                   />
-                 </div>
-                 
-                 {/* Przyciski akcji */}
-                 <div className="flex justify-end space-x-3">
-                   {isEditMode && userHasRated && (
-                     <button
-                       type="button"
-                       onClick={() => {
-                         setIsEditMode(false)
-                         if (transportRating?.userRating) {
-                           setRatings(transportRating.userRating.ratings)
-                           setComment(transportRating.userRating.comment || '')
-                         }
-                       }}
-                       className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
-                     >
-                       Anuluj
-                     </button>
-                   )}
-                   <button
-                     type="submit"
-                     disabled={submitting}
-                     className="flex items-center px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-                   >
-                     {submitting ? 'Zapisywanie...' : (userHasRated ? 'Zapisz zmiany' : 'Zapisz ocenę')}
-                   </button>
-                 </div>
-               </form>
-             </div>
-           )}
-
-           {/* SEKCJA KOMENTARZY - wyświetlana na dole */}
-           <div className="mt-8">
-             <h3 className="font-semibold text-lg mb-4">
-               💬 Komentarze ({allComments.length})
-             </h3>
-             
-             {/* Formularz dodawania komentarza - dostępny dla wszystkich */}
-             <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-               <label className="block text-sm font-medium text-gray-700 mb-2">
-                 Dodaj komentarz do transportu
-               </label>
-               <div className="flex space-x-3">
-                 <textarea
-                   value={newComment}
-                   onChange={(e) => setNewComment(e.target.value)}
-                   rows={3}
-                   className="flex-1 border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                   placeholder="Napisz swój komentarz do tego transportu..."
-                 />
-                 <button
-                   onClick={handleAddComment}
-                   disabled={!newComment.trim() || addingComment}
-                   className="flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 transition-colors"
-                 >
-                   <Send size={16} className="mr-1" />
-                   {addingComment ? 'Dodawanie...' : 'Dodaj'}
-                 </button>
-               </div>
-             </div>
-
-             {/* Lista komentarzy */}
-             {loadingComments ? (
-               <div className="text-center py-4">
-                 <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500 mx-auto"></div>
-               </div>
-             ) : allComments.length > 0 ? (
-               <div className="space-y-4">
-                 {allComments.map((comment) => (
-                   <div key={comment.id} className="border border-gray-200 rounded-md p-4 bg-white">
-                     <div className="flex justify-between items-start mb-2">
-                       <span className="text-sm font-medium text-gray-900">
-                         {comment.commenter_email}
-                       </span>
-                       <span className="text-sm text-gray-500">
-                         {new Date(comment.created_at).toLocaleDateString('pl-PL', {
-                           year: 'numeric',
-                           month: 'long',
-                           day: 'numeric',
-                           hour: '2-digit',
-                           minute: '2-digit'
-                         })}
-                       </span>
-                     </div>
-                     <p className="text-gray-700">{comment.comment}</p>
-                   </div>
-                 ))}
-               </div>
-             ) : (
-               <div className="text-center py-8 text-gray-500">
-                 <MessageSquare size={48} className="mx-auto mb-4 text-gray-300" />
-                 <p>Brak komentarzy do tego transportu.</p>
-                 <p className="text-sm mt-1">Bądź pierwszy i dodaj komentarz!</p>
-               </div>
-             )}
-           </div>
+              {loadingComments ? <div>Ładowanie...</div> : allComments.length > 0 ? (
+                <div className="space-y-4">
+                  {allComments.map(c => (
+                    <div key={c.id} className="border p-4 rounded-md">
+                      <div className="flex justify-between items-start mb-2">
+                        <span className="text-sm font-medium">{c.commenter_email}</span>
+                        <span className="text-sm text-gray-500">{format(new Date(c.created_at), 'dd.MM.yyyy HH:mm')}</span>
+                      </div>
+                      <p>{c.comment}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : <p>Brak komentarzy.</p>}
+            </div>
           </div>
         </div>
       </div>
@@ -978,435 +710,147 @@ export default function ArchiwumPage() {
 
   return (
     <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
-      {/* Header */}
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">
-          Archiwum Transportów
-        </h1>
-        <p className="text-gray-600">
-          Zarządzaj zakończonymi transportami i ich ocenami
-        </p>
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">Archiwum Transportów</h1>
+        <p className="text-gray-600">Zarządzaj zakończonymi transportami i ich ocenami</p>
       </div>
-
-      {/* Status usuwania */}
-      {deleteStatus && (
-        <div className={`mb-4 p-4 rounded-lg ${
-          deleteStatus.type === 'loading' ? 'bg-blue-50 text-blue-700' :
-          deleteStatus.type === 'success' ? 'bg-green-50 text-green-700' :
-          'bg-red-50 text-red-700'
-        }`}>
-          {deleteStatus.message}
-        </div>
-      )}
-
-      {/* Panel filtrów */}
+      {deleteStatus && <div className={`mb-4 p-4 rounded-lg ${deleteStatus.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>{deleteStatus.message}</div>}
       <div className="mb-8 bg-white rounded-lg shadow p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold">Filtry</h3>
-          <button
-            onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-            className="flex items-center text-blue-600 hover:text-blue-700 font-medium"
-          >
+          <button onClick={() => setShowAdvancedFilters(!showAdvancedFilters)} className="flex items-center text-blue-600 hover:text-blue-700 font-medium">
             <span>Filtry zaawansowane</span>
-            <ChevronDown 
-              size={16} 
-              className={`ml-1 transition-transform ${showAdvancedFilters ? 'rotate-180' : ''}`} 
-            />
+            <ChevronDown size={16} className={`ml-1 transition-transform ${showAdvancedFilters ? 'rotate-180' : ''}`} />
           </button>
         </div>
-
-        {/* Podstawowe filtry */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Rok
-            </label>
-            <select
-              value={selectedYear}
-              onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              {years.map(year => (
-                <option key={year} value={year}>{year}</option>
-              ))}
+            <label className="block text-sm font-medium text-gray-700 mb-2">Rok</label>
+            <select value={selectedYear} onChange={(e) => setSelectedYear(parseInt(e.target.value))} className="w-full border-gray-300 rounded-md focus:ring-blue-500">
+              {years.map(year => <option key={year} value={year}>{year}</option>)}
             </select>
           </div>
-
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Miesiąc
-            </label>
-            <select
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              {months.map(month => (
-                <option key={month.value} value={month.value}>
-                  {month.label}
-                </option>
-              ))}
+            <label className="block text-sm font-medium text-gray-700 mb-2">Miesiąc</label>
+            <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="w-full border-gray-300 rounded-md focus:ring-blue-500">
+              {months.map(month => <option key={month.value} value={month.value}>{month.label}</option>)}
             </select>
           </div>
-
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Magazyn
-            </label>
-            <select
-              value={selectedWarehouse}
-              onChange={(e) => setSelectedWarehouse(e.target.value)}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">Wszystkie magazyny</option>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Magazyn</label>
+            <select value={selectedWarehouse} onChange={(e) => setSelectedWarehouse(e.target.value)} className="w-full border-gray-300 rounded-md focus:ring-blue-500">
+              <option value="">Wszystkie</option>
               <option value="bialystok">Białystok</option>
               <option value="zielonka">Zielonka</option>
             </select>
           </div>
-
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Status oceny
-            </label>
-            <select
-              value={selectedRating}
-              onChange={(e) => setSelectedRating(e.target.value)}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              {ratingOptions.map(option => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
+            <label className="block text-sm font-medium text-gray-700 mb-2">Status oceny</label>
+            <select value={selectedRating} onChange={(e) => setSelectedRating(e.target.value)} className="w-full border-gray-300 rounded-md focus:ring-blue-500">
+              {ratingOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
           </div>
         </div>
-
-        {/* Zaawansowane filtry */}
         {showAdvancedFilters && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-gray-200">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Kierowca
-              </label>
-              <select
-                value={selectedDriver}
-                onChange={(e) => setSelectedDriver(e.target.value)}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">Wszyscy kierowcy</option>
-                {KIEROWCY.map(driver => (
-                  <option key={driver.id} value={driver.id}>
-                    {driver.imie}
-                  </option>
-                ))}
+              <label className="block text-sm font-medium text-gray-700 mb-2">Kierowca</label>
+              <select value={selectedDriver} onChange={(e) => setSelectedDriver(e.target.value)} className="w-full border-gray-300 rounded-md focus:ring-blue-500">
+                <option value="">Wszyscy</option>
+                {KIEROWCY.map(driver => <option key={driver.id} value={driver.id}>{driver.imie}</option>)}
               </select>
             </div>
-
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Zamówił
-              </label>
-              <select
-                value={selectedRequester}
-                onChange={(e) => setSelectedRequester(e.target.value)}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">Wszyscy użytkownicy</option>
-                {users.map(user => (
-                  <option key={user.email} value={user.email}>
-                    {user.name || user.email}
-                  </option>
-                ))}
+              <label className="block text-sm font-medium text-gray-700 mb-2">Zamówił</label>
+              <select value={selectedRequester} onChange={(e) => setSelectedRequester(e.target.value)} className="w-full border-gray-300 rounded-md focus:ring-blue-500">
+                <option value="">Wszyscy</option>
+                {users.map(user => <option key={user.email} value={user.email}>{user.name || user.email}</option>)}
               </select>
             </div>
-
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Budowa
-              </label>
-              <select
-                value={selectedConstruction}
-                onChange={(e) => setSelectedConstruction(e.target.value)}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">Wszystkie budowy</option>
-                {constructions.map(construction => (
-                  <option key={construction.id} value={construction.id}>
-                    {construction.name}
-                  </option>
-                ))}
+              <label className="block text-sm font-medium text-gray-700 mb-2">Budowa</label>
+              <select value={selectedConstruction} onChange={(e) => setSelectedConstruction(e.target.value)} className="w-full border-gray-300 rounded-md focus:ring-blue-500">
+                <option value="">Wszystkie</option>
+                {constructions.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
           </div>
         )}
       </div>
-
-      {/* Statystyki */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center">
-            <Truck className="h-8 w-8 text-blue-600" />
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Liczba transportów</p>
-              <p className="text-2xl font-bold text-gray-900">{filteredArchiwum.length}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center">
-            <Route className="h-8 w-8 text-green-600" />
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Łączna odległość</p>
-              <p className="text-2xl font-bold text-gray-900">{totalDistance.toLocaleString()} km</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center">
-            <Download className="h-8 w-8 text-purple-600" />
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Eksport danych</p>
-              <div className="flex items-center mt-2">
-                <select
-                  value={exportFormat}
-                  onChange={(e) => setExportFormat(e.target.value)}
-                  className="mr-2 border border-gray-300 rounded px-2 py-1 text-sm"
-                >
-                  <option value="xlsx">Excel</option>
-                  <option value="csv">CSV</option>
-                </select>
-                <button
-                  onClick={exportData}
-                  className="px-3 py-1 bg-purple-600 text-white rounded text-sm hover:bg-purple-700"
-                >
-                  Eksportuj
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <div className="bg-white rounded-lg shadow p-6 flex items-center"><Truck className="h-8 w-8 text-blue-600 mr-4" /><div><p className="text-sm font-medium text-gray-600">Liczba transportów</p><p className="text-2xl font-bold">{filteredArchiwum.length}</p></div></div>
+        <div className="bg-white rounded-lg shadow p-6 flex items-center"><Route className="h-8 w-8 text-green-600 mr-4" /><div><p className="text-sm font-medium text-gray-600">Łączna odległość</p><p className="text-2xl font-bold">{totalDistance.toLocaleString()} km</p></div></div>
+        <div className="bg-white rounded-lg shadow p-6 flex items-center"><Download className="h-8 w-8 text-purple-600 mr-4" /><div><p className="text-sm font-medium text-gray-600">Eksport</p><div className="flex items-center mt-1"><select value={exportFormat} onChange={(e) => setExportFormat(e.target.value)} className="mr-2 border-gray-300 rounded-md text-sm"><option value="xlsx">Excel</option><option value="csv">CSV</option></select><button onClick={exportData} className="px-3 py-1 bg-purple-600 text-white rounded text-sm hover:bg-purple-700">Eksportuj</button></div></div></div>
       </div>
-
-      {/* Lista transportów */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Data
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Miejscowość
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Firma
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Magazyn
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Ocena
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Akcje
-                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Data</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Miejscowość</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Firma</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Magazyn</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ocena</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Akcje</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {currentItems.map((transport) => {
-                return (
-                  <React.Fragment key={transport.id}>
-                    <tr className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">
-                          {format(new Date(transport.delivery_date), 'dd.MM.yyyy', { locale: pl })}
-                        </div>
-                      </td>
-
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">
-                          {transport.destination_city}
-                        </div>
-                      </td>
-
-                      <td className="px-6 py-4">
-                        <div className="text-sm font-medium text-gray-900">
-                          {transport.client_name || 'Brak nazwy'}
-                        </div>
-                      </td>
-
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">
-                          {getMagazynName(transport.source_warehouse)}
-                        </div>
-                      </td>
-
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <RatingDisplay transportId={transport.id} />
-                      </td>
-
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center space-x-2">
-                          <RatingButtons transport={transport} />
-                          
-                          <button
-                            onClick={() => setExpandedRows(prev => ({
-                              ...prev,
-                              [transport.id]: !prev[transport.id]
-                            }))}
-                            className="flex items-center px-2 py-1 text-gray-600 hover:text-gray-900 rounded-md hover:bg-gray-100 transition-colors text-sm"
-                          >
-                            <Eye size={14} className="mr-1" />
-                            {expandedRows[transport.id] ? 'Ukryj' : 'Szczegóły'}
-                          </button>
-
-                          {isAdmin && (
-                            <button
-                              onClick={() => handleDeleteTransport(transport.id)}
-                              className="flex items-center px-2 py-1 text-red-600 hover:text-red-900 rounded-md hover:bg-red-100 transition-colors text-sm"
-                            >
-                              <Trash2 size={14} className="mr-1" />
-                              Usuń
-                            </button>
-                          )}
+              {currentItems.map((transport) => (
+                <React.Fragment key={transport.id}>
+                  <tr className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{format(new Date(transport.delivery_date), 'dd.MM.yyyy')}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{transport.destination_city}</td>
+                    <td className="px-6 py-4 text-sm text-gray-900">{transport.client_name || 'Brak'}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{getMagazynName(transport.source_warehouse)}</td>
+                    <td className="px-6 py-4 whitespace-nowrap"><RatingDisplay transportId={transport.id} /></td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <div className="flex items-center space-x-2">
+                        <RatingButtons transport={transport} />
+                        <button onClick={() => setExpandedRows(p => ({...p, [transport.id]: !p[transport.id]}))} className="p-2 rounded-md hover:bg-gray-100"><Eye size={16} /></button>
+                        {isAdmin && <button onClick={() => handleDeleteTransport(transport.id)} className="p-2 rounded-md hover:bg-red-100 text-red-600"><Trash2 size={16} /></button>}
+                      </div>
+                    </td>
+                  </tr>
+                  {expandedRows[transport.id] && (
+                    <tr>
+                      <td colSpan="6" className="p-4 bg-gray-50">
+                        <div className="grid md:grid-cols-2 gap-4 text-sm">
+                          <div>
+                            <h4 className="font-semibold mb-2">Szczegóły dostawy</h4>
+                            <p><strong>Adres:</strong> {transport.street}, {transport.postal_code} {transport.destination_city}</p>
+                            <p><strong>MPK:</strong> {transport.mpk || '-'}</p>
+                            <p><strong>WZ:</strong> {transport.wz_number || '-'}</p>
+                            <p><strong>Odległość:</strong> {transport.distance} km</p>
+                          </div>
+                          <div>
+                            <h4 className="font-semibold mb-2">Dodatkowe informacje</h4>
+                            <p><strong>Kierowca:</strong> {getDriverInfo(transport.driver_id, transport.vehicle_id)}</p>
+                            <p><strong>Zamówił:</strong> {transport.requester_email}</p>
+                            {transport.notes && <p><strong>Uwagi:</strong> {transport.notes}</p>}
+                          </div>
                         </div>
                       </td>
                     </tr>
-
-                    {expandedRows[transport.id] && (
-                      <tr>
-                        <td colSpan="6" className="px-6 py-4 bg-gray-50">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                              <h4 className="font-medium text-gray-900 mb-2">Szczegóły dostawy</h4>
-                              <div className="space-y-2 text-sm">
-                                {transport.street && (
-                                  <div className="flex items-center">
-                                    <MapPin size={14} className="text-gray-400 mr-2" />
-                                    <span className="text-gray-600">Adres:</span>
-                                    <span className="ml-1">{transport.street}</span>
-                                  </div>
-                                )}
-                                {transport.postal_code && (
-                                  <div className="flex items-center">
-                                    <span className="text-gray-600 ml-6">Kod:</span>
-                                    <span className="ml-1">{transport.postal_code}</span>
-                                  </div>
-                                )}
-                                {transport.mpk && (
-                                  <div className="flex items-center">
-                                    <Hash size={14} className="text-gray-400 mr-2" />
-                                    <span className="text-gray-600">MPK:</span>
-                                    <span className="ml-1">{transport.mpk}</span>
-                                  </div>
-                                )}
-                                {transport.wz_number && (
-                                  <div className="flex items-center">
-                                    <FileText size={14} className="text-gray-400 mr-2" />
-                                    <span className="text-gray-600">WZ:</span>
-                                    <span className="ml-1">{transport.wz_number}</span>
-                                  </div>
-                                )}
-                                {transport.distance && (
-                                  <div className="flex items-center">
-                                    <Route size={14} className="text-gray-400 mr-2" />
-                                    <span className="text-gray-600">Odległość:</span>
-                                    <span className="ml-1">{transport.distance} km</span>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-
-                            <div>
-                              <h4 className="font-medium text-gray-900 mb-2">Dodatkowe informacje</h4>
-                              <div className="space-y-2 text-sm">
-                                <div className="flex items-center">
-                                  <User size={14} className="text-gray-400 mr-2" />
-                                  <span className="text-gray-600">Kierowca:</span>
-                                  <span className="ml-1">{getDriverInfo(transport.driver_id, transport.vehicle_id)}</span>
-                                </div>
-                                {transport.requester_email && (
-                                  <div className="flex items-center">
-                                    <span className="text-gray-600">Zamówił:</span>
-                                    <span className="ml-1">{transport.requester_email}</span>
-                                  </div>
-                                )}
-                                {transport.notes && (
-                                  <div className="flex items-start">
-                                    <MessageSquare size={14} className="text-gray-400 mr-2 mt-1" />
-                                    <div>
-                                      <span className="text-gray-600">Uwagi:</span>
-                                      <p className="mt-1 text-gray-900">{transport.notes}</p>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </React.Fragment>
-                )
-              })}
+                  )}
+                </React.Fragment>
+              ))}
             </tbody>
           </table>
-
-          {/* Brak wyników */}
-          {filteredArchiwum.length === 0 && (
-            <div className="text-center py-12">
-              <Package size={48} className="mx-auto text-gray-300 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Brak transportów</h3>
-              <p className="text-gray-500">
-                Nie znaleziono transportów spełniających wybrane kryteria.
-              </p>
-            </div>
-          )}
+          {filteredArchiwum.length === 0 && <div className="text-center py-12"><Package size={48} className="mx-auto text-gray-300 mb-4" /><h3 className="text-lg font-medium">Brak transportów</h3><p className="text-gray-500">Nie znaleziono transportów dla wybranych filtrów.</p></div>}
         </div>
-
-        {/* Paginacja */}
         {totalPages > 1 && (
-          <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+          <div className="bg-white px-4 py-3 flex items-center justify-between border-t sm:px-6">
             <div className="flex-1 flex justify-between sm:hidden">
-              <button
-                onClick={() => paginate(currentPage - 1)}
-                disabled={currentPage === 1}
-                className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Poprzednie
-              </button>
-              <button
-                onClick={() => paginate(currentPage + 1)}
-                disabled={currentPage === totalPages}
-                className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Następne
-              </button>
+              <button onClick={() => paginate(currentPage - 1)} disabled={currentPage === 1} className="relative inline-flex items-center px-4 py-2 border rounded-md text-sm font-medium">Poprzednie</button>
+              <button onClick={() => paginate(currentPage + 1)} disabled={currentPage === totalPages} className="ml-3 relative inline-flex items-center px-4 py-2 border rounded-md text-sm font-medium">Następne</button>
             </div>
             <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm text-gray-700">
-                  Pokazano <span className="font-medium">{indexOfFirstItem + 1}</span> do{' '}
-                  <span className="font-medium">
-                    {Math.min(indexOfLastItem, filteredArchiwum.length)}
-                  </span>{' '}
-                  z <span className="font-medium">{filteredArchiwum.length}</span> wyników
-                </p>
-              </div>
+              <div><p className="text-sm text-gray-700">Pokazano <span className="font-medium">{indexOfFirstItem + 1}</span> do <span className="font-medium">{Math.min(indexOfLastItem, filteredArchiwum.length)}</span> z <span className="font-medium">{filteredArchiwum.length}</span> wyników</p></div>
               <div>
                 <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
-                  <button
-                    onClick={() => paginate(currentPage - 1)}
-                    disabled={currentPage === 1}
-                    className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <ChevronLeft size={16} />
-                  </button>
-                  
+                  <button onClick={() => paginate(currentPage - 1)} disabled={currentPage === 1} className="relative inline-flex items-center px-2 py-2 rounded-l-md border bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"><ChevronLeft size={16} /></button>
+                  {/* NAPRAWIONA SEKCJA PAGINACJI */}
                   {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
                     let page;
                     if (totalPages <= 5) {
@@ -1419,6 +863,8 @@ export default function ArchiwumPage() {
                       page = currentPage - 2 + i;
                     }
                     
+                    if (page > totalPages || page < 1) return null;
+
                     return (
                       <button
                         key={page}
@@ -1433,28 +879,14 @@ export default function ArchiwumPage() {
                       </button>
                     );
                   })}
-                  
-                  <button
-                    onClick={() => paginate(currentPage + 1)}
-                    disabled={currentPage === totalPages}
-                    className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <ChevronRight size={16} />
-                  </button>
+                  <button onClick={() => paginate(currentPage + 1)} disabled={currentPage === totalPages} className="relative inline-flex items-center px-2 py-2 rounded-r-md border bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"><ChevronRight size={16} /></button>
                 </nav>
               </div>
             </div>
           </div>
         )}
       </div>
-
-      {/* Modal oceny transportu */}
-      {showRatingModal && selectedTransport && (
-        <CompleteRatingModal 
-          transport={selectedTransport} 
-          onClose={handleCloseRating} 
-        />
-      )}
+      {showRatingModal && <CompleteRatingModal transport={selectedTransport} onClose={handleCloseRating} />}
     </div>
   )
 }
