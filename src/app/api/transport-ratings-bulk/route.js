@@ -157,14 +157,17 @@ export async function POST(request) {
       for (const transportId of transportIds) {
         const ratings = ratingsByTransport[transportId] || [];
         const detailedRatings = detailedRatingsByTransport[transportId] || [];
-        const canBeRated = ratings.length === 0;
-        const hasUserRated = ratings.some(r => r.rater_email === userId);
+        const canBeRated = ratings.length === 0 && detailedRatings.length === 0; // Poprawiona logika
+        const hasUserRated = ratings.some(r => r.rater_email === userId) || detailedRatings.some(r => r.rater_email === userId); // Poprawiona logika
         const userRating = ratings.find(r => r.rater_email === userId) || null;
         
         // OPTYMALIZACJA: Oblicz statystyki lokalnie
         let overallRatingPercentage = null;
         
-        if (ratings.length > 0) {
+        // ZMIANA TUTAJ: Użyj `detailedRatings.length` do obliczenia liczby ocen
+        const totalRatings = detailedRatings.length > 0 ? detailedRatings.length : ratings.length;
+        
+        if (totalRatings > 0) {
           // Najpierw spróbuj obliczyć na podstawie szczegółowych ocen
           if (detailedRatings.length > 0) {
             let totalCriteria = 0;
@@ -204,7 +207,7 @@ export async function POST(request) {
           userRating,
           ratings,
           stats: {
-            totalRatings: ratings.length,
+            totalRatings: totalRatings, // Użycie nowej, poprawnej wartości
             overallRatingPercentage
           }
         };
