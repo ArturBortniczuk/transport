@@ -1,7 +1,7 @@
 // src/app/archiwum/page.js - KOMPLETNA WERSJA Z NAPRAWIONYM SYSTEMEM OCEN I KOMENTARZY
 'use client'
 import React, { useState, useEffect } from 'react'
-import { format } from 'date-fns'
+import { format, startOfWeek, endOfWeek, eachWeekOfInterval, startOfMonth, endOfMonth } from 'date-fns'
 import { pl } from 'date-fns/locale'
 import { KIEROWCY, POJAZDY } from '../kalendarz/constants'
 import * as XLSX from 'xlsx'
@@ -53,6 +53,8 @@ export default function ArchiwumPage() {
   // Filtry
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [selectedMonth, setSelectedMonth] = useState('all')
+  const [selectedWeek, setSelectedWeek] = useState('all');
+  const [weeksInMonth, setWeeksInMonth] = useState([]);
   const [selectedWarehouse, setSelectedWarehouse] = useState('')
   const [selectedDriver, setSelectedDriver] = useState('')
   const [selectedRequester, setSelectedRequester] = useState('')
@@ -131,6 +133,29 @@ export default function ArchiwumPage() {
     fetchConstructions()
     fetchArchivedTransports()
   }, [])
+  
+  useEffect(() => {
+    if (selectedMonth !== 'all') {
+      const monthDate = new Date(selectedYear, selectedMonth);
+      const firstDayOfMonth = startOfMonth(monthDate);
+      const lastDayOfMonth = endOfMonth(monthDate);
+      const weeks = eachWeekOfInterval({
+        start: firstDayOfMonth,
+        end: lastDayOfMonth,
+      }, { weekStartsOn: 1 }).map(weekStart => {
+        const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
+        return {
+          start: weekStart,
+          end: weekEnd,
+          label: `${format(weekStart, 'dd.MM')} - ${format(weekEnd, 'dd.MM')}`
+        };
+      });
+      setWeeksInMonth(weeks);
+    } else {
+      setWeeksInMonth([]);
+    }
+    setSelectedWeek('all');
+  }, [selectedYear, selectedMonth]);
 
   const fetchArchivedTransports = async () => {
     try {
@@ -147,7 +172,7 @@ export default function ArchiwumPage() {
         // Pobierz oceny dla wszystkich transportów
         await fetchAllRatings(sortedTransports)
         
-        applyFilters(sortedTransports, selectedYear, selectedMonth, selectedWarehouse, selectedDriver, selectedRequester, selectedRating, selectedConstruction)
+        applyFilters(sortedTransports, selectedYear, selectedMonth, selectedWeek, selectedWarehouse, selectedDriver, selectedRequester, selectedRating, selectedConstruction)
       } else {
         setError('Nie udało się pobrać archiwum transportów')
       }
@@ -190,7 +215,7 @@ export default function ArchiwumPage() {
       }
     };
   
-  const applyFilters = async (transports, year, month, warehouse, driver, requester, rating, construction) => {
+  const applyFilters = async (transports, year, month, week, warehouse, driver, requester, rating, construction) => {
     if (!transports) return
     
     let filtered = transports.filter(transport => {
@@ -205,6 +230,15 @@ export default function ArchiwumPage() {
         const transportMonth = date.getMonth()
         if (transportMonth !== parseInt(month)) {
           return false
+        }
+      }
+
+      if (month !== 'all' && week !== 'all') {
+        const selectedWeekObj = JSON.parse(week);
+        const startDate = new Date(selectedWeekObj.start);
+        const endDate = new Date(selectedWeekObj.end);
+        if (date < startDate || date > endDate) {
+          return false;
         }
       }
       
@@ -252,8 +286,8 @@ export default function ArchiwumPage() {
   }
 
   useEffect(() => {
-    applyFilters(archiwum, selectedYear, selectedMonth, selectedWarehouse, selectedDriver, selectedRequester, selectedRating, selectedConstruction)
-  }, [selectedYear, selectedMonth, selectedWarehouse, selectedDriver, selectedRequester, selectedRating, selectedConstruction, archiwum, constructions, transportRatings])
+    applyFilters(archiwum, selectedYear, selectedMonth, selectedWeek, selectedWarehouse, selectedDriver, selectedRequester, selectedRating, selectedConstruction)
+  }, [selectedYear, selectedMonth, selectedWeek, selectedWarehouse, selectedDriver, selectedRequester, selectedRating, selectedConstruction, archiwum, constructions, transportRatings])
 
   const handleDeleteTransport = async (id) => {
     if (!confirm('Czy na pewno chcesz usunąć ten transport?')) {
@@ -272,7 +306,7 @@ export default function ArchiwumPage() {
       if (data.success) {
         const updatedArchiwum = archiwum.filter(transport => transport.id !== id)
         setArchiwum(updatedArchiwum)
-        applyFilters(updatedArchiwum, selectedYear, selectedMonth, selectedWarehouse, selectedDriver, selectedRequester, selectedRating, selectedConstruction)
+        applyFilters(updatedArchiwum, selectedYear, selectedMonth, selectedWeek, selectedWarehouse, selectedDriver, selectedRequester, selectedRating, selectedConstruction)
         
         setDeleteStatus({ type: 'success', message: 'Transport został usunięty' })
         
@@ -1020,7 +1054,7 @@ export default function ArchiwumPage() {
         </div>
 
         {/* Podstawowe filtry */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Rok
@@ -1048,6 +1082,25 @@ export default function ArchiwumPage() {
               {months.map(month => (
                 <option key={month.value} value={month.value}>
                   {month.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Tydzień
+            </label>
+            <select
+              value={selectedWeek}
+              onChange={(e) => setSelectedWeek(e.target.value)}
+              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={selectedMonth === 'all'}
+            >
+              <option value="all">Wszystkie tygodnie</option>
+              {weeksInMonth.map((week, index) => (
+                <option key={index} value={JSON.stringify(week)}>
+                  {week.label}
                 </option>
               ))}
             </select>
