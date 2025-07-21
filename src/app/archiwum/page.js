@@ -356,6 +356,31 @@ export default function ArchiwumPage() {
     }
   }
 
+  const exportToXLSXWithMultipleSheets = (mainData, summaryData, biuraData, centraData, budowyData, fileName) => {
+    const wb = XLSX.utils.book_new();
+    
+    // Arkusz z transportami
+    const ws_main = XLSX.utils.json_to_sheet(mainData);
+    XLSX.utils.book_append_sheet(wb, ws_main, "Transporty");
+    
+    // Arkusz z podsumowaniem
+    const ws_summary = XLSX.utils.json_to_sheet(summaryData);
+    XLSX.utils.book_append_sheet(wb, ws_summary, "Podsumowanie po MPK");
+
+    // Nowe arkusze
+    const ws_biura = XLSX.utils.json_to_sheet(biuraData);
+    XLSX.utils.book_append_sheet(wb, ws_biura, "Biura handlowe");
+
+    const ws_centra = XLSX.utils.json_to_sheet(centraData);
+    XLSX.utils.book_append_sheet(wb, ws_centra, "Centra elektryczne");
+
+    const ws_budowy = XLSX.utils.json_to_sheet(budowyData);
+    XLSX.utils.book_append_sheet(wb, ws_budowy, "Budowy");
+    
+    XLSX.writeFile(wb, `${fileName}.xlsx`);
+  }
+
+
   const exportData = () => {
     if (filteredArchiwum.length === 0) {
       alert('Brak danych do eksportu')
@@ -366,7 +391,7 @@ export default function ArchiwumPage() {
         if (distance <= 75) {
           return distance * 13;
         } else if (distance > 75 && distance <= 150) {
-          return distance * 5.5;
+          return distance * 8;
         } else { // distance > 150
           return distance * 3;
         }
@@ -429,7 +454,18 @@ export default function ArchiwumPage() {
         'Łączny koszt (PLN)': summaryByMpk[mpk].totalCost.toFixed(2).replace('.', ',')
       }));
 
-      exportToXLSXWithSummary(dataToExport, summaryData, fileName)
+      // Filtrowanie dla nowych arkuszy
+      const biuraData = dataToExport.filter(item => {
+        const mpkMatch = /^\d{3}-\d{2}-\d{3}$/.test(item.MPK);
+        const nameMatch = !item.Handlowiec.toLowerCase().includes('centrum');
+        return mpkMatch && nameMatch;
+      });
+
+      const centraData = dataToExport.filter(item => item['Zamówił'].toLowerCase().includes('centrum'));
+
+      const budowyData = dataToExport.filter(item => /^\d{3}-\d{2}-\d{2}\/\d{4}$/.test(item.MPK));
+
+      exportToXLSXWithMultipleSheets(dataToExport, summaryData, biuraData, centraData, budowyData, fileName)
     }
   }
   const exportToCSV = (data, fileName) => {
