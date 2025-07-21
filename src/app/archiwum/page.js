@@ -410,12 +410,15 @@ export default function ArchiwumPage() {
         const mpk = transport.mpk || 'Brak MPK';
         const distance = transport.distance || 0;
         const cost = calculateTransportCost(distance);
+        const handlowiec = users.find(u => u.email === transport.requester_email);
+        const requesterName = handlowiec ? handlowiec.name : (transport.requester_name || 'Brak nazwy');
         
         if (!acc[mpk]) {
-          acc[mpk] = { totalCost: 0 };
+          acc[mpk] = { totalCost: 0, requesters: new Set() };
         }
         
         acc[mpk].totalCost += cost;
+        acc[mpk].requesters.add(requesterName);
         
         return acc;
       }, {});
@@ -429,7 +432,6 @@ export default function ArchiwumPage() {
       exportToXLSXWithSummary(dataToExport, summaryData, fileName)
     }
   }
-
   const exportToCSV = (data, fileName) => {
     const headers = Object.keys(data[0])
     let csvContent = headers.join(';') + '\n'
