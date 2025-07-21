@@ -160,36 +160,35 @@ export default function ArchiwumPage() {
   }
 
   const fetchAllRatings = async (transports) => {
-    const ratingsData = {}
-    
-    for (const transport of transports) {
+      if (!transports || transports.length === 0) {
+        setTransportRatings({});
+        return;
+      }
+  
       try {
-        const response = await fetch(`/api/transport-ratings?transportId=${transport.id}`)
-        const data = await response.json()
+        const transportIds = transports.map(t => t.id);
+        
+        const response = await fetch('/api/transport-ratings-bulk', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ transportIds }),
+        });
+        
+        const data = await response.json();
         
         if (data.success) {
-          ratingsData[transport.id] = {
-            canBeRated: data.canBeRated,
-            hasUserRated: data.hasUserRated,
-            userRating: data.userRating,
-            ratings: data.ratings || [],
-            stats: data.stats || { totalRatings: 0, overallRatingPercentage: null }
-          }
+          setTransportRatings(data.ratings);
+        } else {
+          console.error("Błąd podczas masowego pobierania ocen:", data.error);
+          setTransportRatings({});
         }
       } catch (error) {
-        console.error(`Błąd pobierania oceny dla transportu ${transport.id}:`, error)
-        ratingsData[transport.id] = {
-          canBeRated: false,
-          hasUserRated: false,
-          userRating: null,
-          ratings: [],
-          stats: { totalRatings: 0, overallRatingPercentage: null }
-        }
+        console.error('Błąd wywołania API do masowego pobierania ocen:', error);
+        setTransportRatings({});
       }
-    }
-    
-    setTransportRatings(ratingsData)
-  }
+    };
   
   const applyFilters = async (transports, year, month, warehouse, driver, requester, rating, construction) => {
     if (!transports) return
@@ -294,11 +293,15 @@ export default function ArchiwumPage() {
     setShowRatingModal(true)
   }
 
-  const handleCloseRating = () => {
-    setShowRatingModal(false)
-    setSelectedTransport(null)
-    fetchArchivedTransports()
-  }
+  const handleCloseRating = async () => {
+    setShowRatingModal(false);
+    setSelectedTransport(null);
+    
+    // Zamiast przeładowywać wszystko, odświeżamy tylko oceny
+    if (archiwum.length > 0) {
+      await fetchAllRatings(archiwum);
+    }
+  };
 
   const getDriverInfo = (driverId, vehicleId) => {
     const driver = KIEROWCY.find(k => k.id === parseInt(driverId));
