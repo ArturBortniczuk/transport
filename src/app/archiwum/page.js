@@ -422,6 +422,7 @@ export default function ArchiwumPage() {
 
       const summaryData = Object.keys(summaryByMpk).map(mpk => ({
         'MPK': mpk,
+        'Zamawiający': Array.from(summaryByMpk[mpk].requesters).join(', '),
         'Łączny koszt (PLN)': summaryByMpk[mpk].totalCost.toFixed(2).replace('.', ',')
       }));
 
