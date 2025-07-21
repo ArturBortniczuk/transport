@@ -366,7 +366,7 @@ export default function ArchiwumPage() {
         if (distance <= 75) {
           return distance * 13;
         } else if (distance > 75 && distance <= 150) {
-          return distance * 5,5;
+          return distance * 5.5;
         } else { // distance > 150
           return distance * 3;
         }
