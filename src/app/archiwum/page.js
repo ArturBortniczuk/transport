@@ -631,14 +631,15 @@ export default function ArchiwumPage() {
         setSubmitting(true)
         setError('')
         
-        const response = await fetch('/api/transport-ratings', {
+        // ZMIANA TUTAJ: Zmieniono URL na poprawny dla szczegółowych ocen
+        const response = await fetch('/api/transport-detailed-ratings', { // <-- POPRAWIONY URL
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
             transportId: transport.id,
-            ratings,
+            ratings, // Obiekt ratings jest już w poprawnym formacie
             comment: comment.trim()
           })
         })
@@ -650,7 +651,7 @@ export default function ArchiwumPage() {
           setIsEditMode(false)
           
           // Odśwież dane
-          await fetchAllRatings([transport])
+          await fetchAllRatings([transport]) // Ta funkcja powinna zostać zaktualizowana zgodnie z poprzednią sugestią
           
           setTimeout(() => {
             setSuccess(false)
