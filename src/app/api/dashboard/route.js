@@ -1,6 +1,7 @@
 // src/app/api/dashboard/route.js
 import { NextResponse } from 'next/server';
 import db from '@/database/db';
+import { KIEROWCY } from '@/app/kalendarz/constants';
 
 // Funkcja pomocnicza do weryfikacji sesji
 const validateSession = async (authToken) => {
@@ -22,7 +23,12 @@ const validateSession = async (authToken) => {
   }
 };
 
-// Funkcja formatująca datę
+// Funkcja pobierająca nazwę kierowcy
+const getDriverName = (driverId) => {
+  if (!driverId) return 'Nieznany kierowca';
+  const driver = KIEROWCY.find(k => k.id === parseInt(driverId));
+  return driver ? driver.imie : 'Nieznany kierowca';
+};
 const formatDate = (date) => {
   if (!date) return 'Brak daty';
   return new Date(date).toLocaleDateString('pl-PL', {
@@ -127,10 +133,19 @@ export async function GET(request) {
         dashboardData.todayTransports = todayTransports.map(transport => ({
           source: transport.source_warehouse || 'Nieznane',
           destination: transport.destination_city || 'Nieznane',
-          driver: 'Kierowca',
+          driver: getDriverName(transport.driver_id),
           mpk: transport.mpk || 'Brak',
           status: transport.status || 'pending'
         }));
+
+        // Aktywni kierowcy (unikalni kierowcy z aktywnymi transportami)
+        const activeDriversResult = await db('transports')
+          .whereNot('status', 'completed')
+          .whereNotNull('driver_id')
+          .countDistinct('driver_id as count')
+          .first();
+        
+        dashboardData.activeDrivers = parseInt(activeDriversResult?.count || 0);
 
         // Magazyny
         const warehouseData = await db('transports')
@@ -295,8 +310,12 @@ export async function GET(request) {
       lastWeek: Math.round(lastWeekCost)
     };
 
-    // 5. DANE DO WYKRESÓW - ostatnie 6 miesięcy z PRAWDZIWYMI danymi
-    const chartData = [];
+    // 5. DANE DO WYKRESÓW 
+    // Wykres podziału transportów (własny vs spedycyjny) - ostatnie 6 miesięcy
+    const transportChartData = [];
+    // Wykres kosztów spedycji (tylko spedycja) - ostatnie 6 miesięcy  
+    const costChartData = [];
+    
     for (let i = 5; i >= 0; i--) {
       const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
@@ -326,7 +345,7 @@ export async function GET(request) {
             .count('* as count').first();
           speditionCount = parseInt(spedResult?.count || 0);
 
-          // Koszty
+          // Koszty TYLKO spedycji
           const monthSpeditions = await db('spedycje')
             .where('completed_at', '>=', monthStart.toISOString())
             .where('completed_at', '<=', monthEnd.toISOString())
@@ -348,22 +367,30 @@ export async function GET(request) {
         console.error(`Błąd danych dla miesiąca ${monthName}:`, error);
       }
 
-      chartData.push({
+      // Dane do wykresu podziału transportów
+      transportChartData.push({
         month: monthName,
         własny: ownCount,
-        spedycyjny: speditionCount,
+        spedycyjny: speditionCount
+      });
+
+      // Dane do wykresu kosztów spedycji (TYLKO koszty)
+      costChartData.push({
+        month: monthName,
         koszt: Math.round(monthCost)
       });
     }
 
-    dashboardData.monthlyChartData = chartData;
-    dashboardData.costChartData = chartData;
+    dashboardData.monthlyChartData = transportChartData;  // Podział transportów
+    dashboardData.costChartData = costChartData;         // Koszty spedycji
 
     console.log('SPÓJNE DANE:', {
+      activeDrivers: dashboardData.activeDrivers,
       ownThisMonth: ownTransportsThisMonth,
       speditionThisMonth: speditionTransportsThisMonth,
       thisMonthCost: Math.round(thisMonthCost),
-      chartDataLength: chartData.length
+      transportChartLength: transportChartData.length,
+      costChartLength: costChartData.length
     });
 
     return NextResponse.json({
