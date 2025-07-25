@@ -4,8 +4,6 @@ import * as XLSX from 'xlsx';
 import fs from 'fs';
 import path from 'path';
 import { neon } from '@neondatabase/serverless';
-import { migrateKuriersTable } from './kuriers-migration.js';
-
 
 // Sprawdź, czy jesteśmy w fazie budowania
 const isBuildPhase = process.env.NODE_ENV === 'production' && typeof window === 'undefined' && !process.env.NEXT_RUNTIME;
