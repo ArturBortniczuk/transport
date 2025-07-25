@@ -118,11 +118,32 @@ export async function GET(request) {
     try {
       const transportsExist = await db.schema.hasTable('transports');
       if (transportsExist) {
+        // DEBUG: Sprawdź strukturę tabeli i przykładowe dane
+        try {
+          const sampleTransports = await db('transports')
+            .select('id', 'driver_id', 'vehicle_id', 'status', 'delivery_date')
+            .limit(3);
+          console.log('Przykładowe transporty:', sampleTransports);
+
+          // Sprawdź kolumny tabeli
+          const tableInfo = await db.raw(`
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'transports' 
+            AND table_schema = 'public'
+          `);
+          console.log('Kolumny w tabeli transports:', tableInfo.rows.map(r => r.column_name));
+        } catch (debugError) {
+          console.error('Błąd debug tabeli transports:', debugError);
+        }
+
         // Aktywne transporty
         const activeResult = await db('transports')
           .whereNot('status', 'completed')
           .count('* as count').first();
         dashboardData.activeTransports = parseInt(activeResult?.count || 0);
+
+        console.log('Aktywne transporty (status != completed):', dashboardData.activeTransports);
 
         // Dzisiejsze transporty
         const todayTransports = await db('transports')
@@ -146,6 +167,27 @@ export async function GET(request) {
           .first();
         
         dashboardData.activeDrivers = parseInt(activeDriversResult?.count || 0);
+
+        // Pojazdy w użyciu (unikalne pojazdy z aktywnymi transportami)
+        const fleetsInUseResult = await db('transports')
+          .whereNot('status', 'completed')
+          .whereNotNull('vehicle_id')
+          .countDistinct('vehicle_id as count')
+          .first();
+        
+        dashboardData.fleetsInUse = parseInt(fleetsInUseResult?.count || 0);
+
+        // Jeśli vehicle_id nie istnieje, sprawdź driver_id (kierowca = pojazd)
+        if (dashboardData.fleetsInUse === 0) {
+          console.log('Brak vehicle_id, sprawdzam driver_id jako pojazdy...');
+          const fleetsFromDriversResult = await db('transports')
+            .whereNot('status', 'completed')
+            .whereNotNull('driver_id')
+            .countDistinct('driver_id as count')
+            .first();
+          
+          dashboardData.fleetsInUse = parseInt(fleetsFromDriversResult?.count || 0);
+        }
 
         // Magazyny
         const warehouseData = await db('transports')
@@ -386,6 +428,8 @@ export async function GET(request) {
 
     console.log('SPÓJNE DANE:', {
       activeDrivers: dashboardData.activeDrivers,
+      fleetsInUse: dashboardData.fleetsInUse,
+      totalFleets: dashboardData.totalFleets,
       ownThisMonth: ownTransportsThisMonth,
       speditionThisMonth: speditionTransportsThisMonth,
       thisMonthCost: Math.round(thisMonthCost),
