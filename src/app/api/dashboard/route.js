@@ -60,7 +60,7 @@ export async function GET(request) {
       }, { status: 404 });
     }
 
-    // Sprawdź uprawnienia - dashboard tylko dla adminów i magazynów
+    // Sprawdź uprawnienia
     const isAdmin = user.role === 'admin';
     const isMagazyn = user.role === 'magazyn' || user.role?.startsWith('magazyn_');
     
@@ -71,89 +71,75 @@ export async function GET(request) {
       }, { status: 403 });
     }
 
-    console.log('Pobieranie danych dashboard dla użytkownika:', userId);
-
-    // Dzisiejsza data
-    const today = new Date();
-    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    // Daty dla analiz
+    const now = new Date();
+    const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+    const thisWeekStart = new Date(now);
+    thisWeekStart.setDate(now.getDate() - now.getDay());
+    const lastWeekStart = new Date(thisWeekStart);
+    lastWeekStart.setDate(thisWeekStart.getDate() - 7);
+    const lastWeekEnd = new Date(thisWeekStart);
+    lastWeekEnd.setDate(thisWeekStart.getDate() - 1);
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const todayEnd = new Date(todayStart);
     todayEnd.setDate(todayEnd.getDate() + 1);
 
-    // Inicjalizujemy obiekt z podstawowymi danymi
+    // Inicjalizujemy obiekt z danymi
     const dashboardData = {
       activeTransports: 0,
       pendingRequests: 0,
       activeDrivers: 0,
       averageRating: null,
       todayTransports: [],
-      warehouses: {
-        bialystok: 0,
-        zielonka: 0
-      },
+      warehouses: { bialystok: 0, zielonka: 0 },
       recentRatings: [],
       fleetsInUse: 0,
-      totalFleets: 7, // Z constants POJAZDY
-      // Nowe dane spedycyjne
+      totalFleets: 7,
       activeSpeditions: 0,
-      speditionCosts: {
-        thisMonth: 0,
-        lastMonth: 0,
-        thisWeek: 0,
-        lastWeek: 0
-      },
-      transportTypes: {
-        own: { count: 0, thisMonth: 0 },
-        spedition: { count: 0, thisMonth: 0 }
-      },
+      speditionCosts: { thisMonth: 0, lastMonth: 0, thisWeek: 0, lastWeek: 0 },
+      transportTypes: { own: { count: 0, thisMonth: 0 }, spedition: { count: 0, thisMonth: 0 } },
       monthlyChartData: [],
       weeklyChartData: [],
       costChartData: []
     };
 
-    // 1. Sprawdź transporty własne
+    // 1. TRANSPORTY WŁASNE
+    let ownTransportsThisMonth = 0;
+    let ownTransportsLastMonth = 0;
+    
     try {
       const transportsExist = await db.schema.hasTable('transports');
-      console.log('Tabela transports istnieje:', transportsExist);
-      
       if (transportsExist) {
-        // Sprawdź ile jest wszystkich transportów
-        const allTransports = await db('transports').count('* as count').first();
-        console.log('Wszystkich transportów w bazie:', allTransports?.count || 0);
-
-        // Aktywne transporty (status != 'completed')
-        const activeTransportsResult = await db('transports')
+        // Aktywne transporty
+        const activeResult = await db('transports')
           .whereNot('status', 'completed')
-          .count('* as count')
-          .first();
-        
-        dashboardData.activeTransports = parseInt(activeTransportsResult?.count || 0);
-        console.log('Aktywne transporty:', dashboardData.activeTransports);
+          .count('* as count').first();
+        dashboardData.activeTransports = parseInt(activeResult?.count || 0);
 
         // Dzisiejsze transporty
         const todayTransports = await db('transports')
           .where('delivery_date', '>=', todayStart.toISOString())
           .where('delivery_date', '<', todayEnd.toISOString())
-          .orderBy('delivery_date', 'asc')
-          .limit(10);
-
-        console.log('Dzisiejsze transporty:', todayTransports.length);
+          .orderBy('delivery_date', 'asc').limit(10);
 
         dashboardData.todayTransports = todayTransports.map(transport => ({
-          source: transport.source_warehouse || 'Nieznane źródło',
-          destination: transport.destination_city || 'Nieznany cel',
-          driver: 'Kierowca', // Uproszczenie - można dodać później lookup
+          source: transport.source_warehouse || 'Nieznane',
+          destination: transport.destination_city || 'Nieznane',
+          driver: 'Kierowca',
           mpk: transport.mpk || 'Brak',
           status: transport.status || 'pending'
         }));
 
-        // Transporty według magazynów
-        const warehouseTransports = await db('transports')
+        // Magazyny
+        const warehouseData = await db('transports')
           .whereNot('status', 'completed')
           .select('source_warehouse')
           .count('* as count')
           .groupBy('source_warehouse');
 
-        warehouseTransports.forEach(item => {
+        warehouseData.forEach(item => {
           if (item.source_warehouse === 'bialystok') {
             dashboardData.warehouses.bialystok = parseInt(item.count);
           } else if (item.source_warehouse === 'zielonka') {
@@ -161,57 +147,61 @@ export async function GET(request) {
           }
         });
 
-        console.log('Magazyny:', dashboardData.warehouses);
-
         // Transport własny w tym miesiącu
-        const thisMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-        const ownTransportsThisMonth = await db('transports')
+        const ownThisMonth = await db('transports')
           .where('delivery_date', '>=', thisMonthStart.toISOString())
-          .count('* as count')
-          .first();
+          .count('* as count').first();
+        ownTransportsThisMonth = parseInt(ownThisMonth?.count || 0);
 
-        dashboardData.transportTypes.own.thisMonth = parseInt(ownTransportsThisMonth?.count || 0);
+        // Transport własny w zeszłym miesiącu
+        const ownLastMonth = await db('transports')
+          .where('delivery_date', '>=', lastMonthStart.toISOString())
+          .where('delivery_date', '<=', lastMonthEnd.toISOString())
+          .count('* as count').first();
+        ownTransportsLastMonth = parseInt(ownLastMonth?.count || 0);
       }
     } catch (error) {
-      console.error('Błąd pobierania danych z tabeli transports:', error);
+      console.error('Błąd transportów własnych:', error);
     }
 
-    // 2. Sprawdź spedycje
+    // 2. SPEDYCJE
+    let speditionTransportsThisMonth = 0;
+    let speditionTransportsLastMonth = 0;
+    let thisMonthCost = 0;
+    let lastMonthCost = 0;
+    let thisWeekCost = 0;
+    let lastWeekCost = 0;
+
     try {
       const spedycjeExist = await db.schema.hasTable('spedycje');
-      console.log('Tabela spedycje istnieje:', spedycjeExist);
-      
       if (spedycjeExist) {
-        // Sprawdź ile jest wszystkich spedycji
-        const allSpeditions = await db('spedycje').count('* as count').first();
-        console.log('Wszystkich spedycji w bazie:', allSpeditions?.count || 0);
-
         // Aktywne spedycje
-        const activeSpeditionsResult = await db('spedycje')
+        const activeSpedResult = await db('spedycje')
           .whereNot('status', 'completed')
-          .count('* as count')
-          .first();
-        
-        dashboardData.activeSpeditions = parseInt(activeSpeditionsResult?.count || 0);
-        console.log('Aktywne spedycje:', dashboardData.activeSpeditions);
+          .count('* as count').first();
+        dashboardData.activeSpeditions = parseInt(activeSpedResult?.count || 0);
 
         // Spedycje w tym miesiącu
-        const thisMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-        const speditionTransportsThisMonth = await db('spedycje')
+        const spedThisMonth = await db('spedycje')
           .where('created_at', '>=', thisMonthStart.toISOString())
-          .count('* as count')
-          .first();
+          .count('* as count').first();
+        speditionTransportsThisMonth = parseInt(spedThisMonth?.count || 0);
 
-        dashboardData.transportTypes.spedition.thisMonth = parseInt(speditionTransportsThisMonth?.count || 0);
+        // Spedycje w zeszłym miesiącu
+        const spedLastMonth = await db('spedycje')
+          .where('created_at', '>=', lastMonthStart.toISOString())
+          .where('created_at', '<=', lastMonthEnd.toISOString())
+          .count('* as count').first();
+        speditionTransportsLastMonth = parseInt(spedLastMonth?.count || 0);
 
-        // Próbuj policzyć koszty spedycji
-        const completedSpeditions = await db('spedycje')
-          .where('status', 'completed')
+        // KOSZTY SPEDYCJI
+        // Ten miesiąc
+        const thisMonthSpeditions = await db('spedycje')
           .where('completed_at', '>=', thisMonthStart.toISOString())
+          .where('status', 'completed')
           .select('response_data');
 
-        let thisMonthCost = 0;
-        completedSpeditions.forEach(spedycja => {
+        thisMonthSpeditions.forEach(spedycja => {
           try {
             if (spedycja.response_data) {
               const responseData = JSON.parse(spedycja.response_data);
@@ -219,51 +209,161 @@ export async function GET(request) {
                 thisMonthCost += parseFloat(responseData.deliveryPrice);
               }
             }
-          } catch (e) {
-            // Ignoruj błędy parsowania
-          }
+          } catch (e) {}
         });
 
-        dashboardData.speditionCosts.thisMonth = Math.round(thisMonthCost);
-        console.log('Koszty spedycji w tym miesiącu:', dashboardData.speditionCosts.thisMonth);
+        // Zeszły miesiąc
+        const lastMonthSpeditions = await db('spedycje')
+          .where('completed_at', '>=', lastMonthStart.toISOString())
+          .where('completed_at', '<=', lastMonthEnd.toISOString())
+          .where('status', 'completed')
+          .select('response_data');
+
+        lastMonthSpeditions.forEach(spedycja => {
+          try {
+            if (spedycja.response_data) {
+              const responseData = JSON.parse(spedycja.response_data);
+              if (responseData.deliveryPrice) {
+                lastMonthCost += parseFloat(responseData.deliveryPrice);
+              }
+            }
+          } catch (e) {}
+        });
+
+        // Ten tydzień
+        const thisWeekSpeditions = await db('spedycje')
+          .where('completed_at', '>=', thisWeekStart.toISOString())
+          .where('status', 'completed')
+          .select('response_data');
+
+        thisWeekSpeditions.forEach(spedycja => {
+          try {
+            if (spedycja.response_data) {
+              const responseData = JSON.parse(spedycja.response_data);
+              if (responseData.deliveryPrice) {
+                thisWeekCost += parseFloat(responseData.deliveryPrice);
+              }
+            }
+          } catch (e) {}
+        });
+
+        // Zeszły tydzień
+        const lastWeekSpeditions = await db('spedycje')
+          .where('completed_at', '>=', lastWeekStart.toISOString())
+          .where('completed_at', '<=', lastWeekEnd.toISOString())
+          .where('status', 'completed')
+          .select('response_data');
+
+        lastWeekSpeditions.forEach(spedycja => {
+          try {
+            if (spedycja.response_data) {
+              const responseData = JSON.parse(spedycja.response_data);
+              if (responseData.deliveryPrice) {
+                lastWeekCost += parseFloat(responseData.deliveryPrice);
+              }
+            }
+          } catch (e) {}
+        });
       }
     } catch (error) {
-      console.error('Błąd pobierania danych spedycyjnych:', error);
+      console.error('Błąd spedycji:', error);
     }
 
-    // 3. Sprawdź wnioski transportowe
+    // 3. WNIOSKI TRANSPORTOWE
     try {
       const requestsExist = await db.schema.hasTable('transport_requests');
-      console.log('Tabela transport_requests istnieje:', requestsExist);
-      
       if (requestsExist) {
-        const pendingRequestsResult = await db('transport_requests')
+        const pendingResult = await db('transport_requests')
           .where('status', 'pending')
-          .count('* as count')
-          .first();
-        
-        dashboardData.pendingRequests = parseInt(pendingRequestsResult?.count || 0);
-        console.log('Oczekujące wnioski:', dashboardData.pendingRequests);
+          .count('* as count').first();
+        dashboardData.pendingRequests = parseInt(pendingResult?.count || 0);
       }
     } catch (error) {
-      console.error('Błąd pobierania danych z tabeli transport_requests:', error);
+      console.error('Błąd wniosków:', error);
     }
 
-    // 4. Generuj przykładowe dane do wykresów (będziemy uzupełniać później)
-    const monthNames = ['Sty', 'Lut', 'Mar', 'Kwi', 'Maj', 'Cze'];
-    dashboardData.monthlyChartData = monthNames.map(month => ({
-      month,
-      własny: Math.floor(Math.random() * 10) + 1,
-      spedycyjny: Math.floor(Math.random() * 8) + 1,
-      koszt: Math.floor(Math.random() * 50000) + 10000
-    }));
+    // 4. USTAW WSZYSTKIE DANE SPÓJNIE
+    dashboardData.transportTypes = {
+      own: { count: ownTransportsThisMonth, thisMonth: ownTransportsThisMonth },
+      spedition: { count: speditionTransportsThisMonth, thisMonth: speditionTransportsThisMonth }
+    };
 
-    console.log('Dashboard data zebrane:', {
-      activeTransports: dashboardData.activeTransports,
-      activeSpeditions: dashboardData.activeSpeditions,
-      pendingRequests: dashboardData.pendingRequests,
-      ownTransports: dashboardData.transportTypes.own.thisMonth,
-      speditionTransports: dashboardData.transportTypes.spedition.thisMonth
+    dashboardData.speditionCosts = {
+      thisMonth: Math.round(thisMonthCost),
+      lastMonth: Math.round(lastMonthCost),
+      thisWeek: Math.round(thisWeekCost),
+      lastWeek: Math.round(lastWeekCost)
+    };
+
+    // 5. DANE DO WYKRESÓW - ostatnie 6 miesięcy z PRAWDZIWYMI danymi
+    const chartData = [];
+    for (let i = 5; i >= 0; i--) {
+      const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
+      const monthName = monthStart.toLocaleDateString('pl-PL', { month: 'short' });
+
+      let ownCount = 0;
+      let speditionCount = 0;
+      let monthCost = 0;
+
+      try {
+        // Transport własny
+        const transportsExist = await db.schema.hasTable('transports');
+        if (transportsExist) {
+          const ownResult = await db('transports')
+            .where('delivery_date', '>=', monthStart.toISOString())
+            .where('delivery_date', '<=', monthEnd.toISOString())
+            .count('* as count').first();
+          ownCount = parseInt(ownResult?.count || 0);
+        }
+
+        // Spedycje
+        const spedycjeExist = await db.schema.hasTable('spedycje');
+        if (spedycjeExist) {
+          const spedResult = await db('spedycje')
+            .where('created_at', '>=', monthStart.toISOString())
+            .where('created_at', '<=', monthEnd.toISOString())
+            .count('* as count').first();
+          speditionCount = parseInt(spedResult?.count || 0);
+
+          // Koszty
+          const monthSpeditions = await db('spedycje')
+            .where('completed_at', '>=', monthStart.toISOString())
+            .where('completed_at', '<=', monthEnd.toISOString())
+            .where('status', 'completed')
+            .select('response_data');
+
+          monthSpeditions.forEach(spedycja => {
+            try {
+              if (spedycja.response_data) {
+                const responseData = JSON.parse(spedycja.response_data);
+                if (responseData.deliveryPrice) {
+                  monthCost += parseFloat(responseData.deliveryPrice);
+                }
+              }
+            } catch (e) {}
+          });
+        }
+      } catch (error) {
+        console.error(`Błąd danych dla miesiąca ${monthName}:`, error);
+      }
+
+      chartData.push({
+        month: monthName,
+        własny: ownCount,
+        spedycyjny: speditionCount,
+        koszt: Math.round(monthCost)
+      });
+    }
+
+    dashboardData.monthlyChartData = chartData;
+    dashboardData.costChartData = chartData;
+
+    console.log('SPÓJNE DANE:', {
+      ownThisMonth: ownTransportsThisMonth,
+      speditionThisMonth: speditionTransportsThisMonth,
+      thisMonthCost: Math.round(thisMonthCost),
+      chartDataLength: chartData.length
     });
 
     return NextResponse.json({
