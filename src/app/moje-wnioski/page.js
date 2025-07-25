@@ -525,7 +525,7 @@ const handleSubmit = async (e) => {
               {/* Pola nieedytowalne (klient i MPK) */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Nazwa klienta / Odbiorca</label>
+                    <label className="block text-sm font-medium text-gray-700">Handlowiec/budowa</label>
                     <input type="text" name="client_name" value={formData.client_name} className="mt-1 block w-full rounded-md border-gray-300 bg-gray-100" readOnly />
                   </div>
                    <div>
@@ -537,12 +537,12 @@ const handleSubmit = async (e) => {
               {/* Reszta formularza */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Miasto docelowe *</label>
+                  <label className="block text-sm font-medium text-gray-700">Miasto</label>
                   <input type="text" name="destination_city" value={formData.destination_city} onChange={handleInputChange} className={`mt-1 block w-full rounded-md shadow-sm ${formErrors.destination_city ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'}`} />
                   {formErrors.destination_city && (<p className="mt-1 text-sm text-red-600">{formErrors.destination_city}</p>)}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Data dostawy *</label>
+                  <label className="block text-sm font-medium text-gray-700">Data dostawy</label>
                   <input type="date" name="delivery_date" value={formData.delivery_date} onChange={handleInputChange} min={new Date().toISOString().split('T')[0]} className={`mt-1 block w-full rounded-md shadow-sm ${formErrors.delivery_date ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'}`} />
                   {formErrors.delivery_date && (<p className="mt-1 text-sm text-red-600">{formErrors.delivery_date}</p>)}
                 </div>
@@ -570,7 +570,7 @@ const handleSubmit = async (e) => {
               {/* NOWE POLA - dodaj po polach contact_person/contact_phone */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Rzeczywisty klient *</label>
+                  <label className="block text-sm font-medium text-gray-700">Klient</label>
                   <input 
                     type="text" 
                     name="real_client_name" 
@@ -583,7 +583,7 @@ const handleSubmit = async (e) => {
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Numery WZ</label>
+                  <label className="block text-sm font-medium text-gray-700">Numery dokumentów</label>
                   <input 
                     type="text" 
                     name="wz_numbers" 
@@ -617,7 +617,7 @@ const handleSubmit = async (e) => {
 
                     
               <div>
-                <label className="block text-sm font-medium text-gray-700">Uzasadnienie wniosku *</label>
+                <label className="block text-sm font-medium text-gray-700">Uzasadnienie wniosku</label>
                 <textarea name="justification" value={formData.justification} onChange={handleInputChange} rows={4} className={`mt-1 block w-full rounded-md shadow-sm ${formErrors.justification ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'}`} />
                 {formErrors.justification && (<p className="mt-1 text-sm text-red-600">{formErrors.justification}</p>)}
               </div>
