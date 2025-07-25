@@ -32,6 +32,7 @@ export default function WnioskiTransportowePage() {
   const [showRejectionModal, setShowRejectionModal] = useState(false)
   const [rejectionReason, setRejectionReason] = useState('')
   const [processing, setProcessing] = useState(false)
+  const [selectedWarehouse, setSelectedWarehouse] = useState('bialystok') // NOWY STAN
   
   // Filtry
   const [statusFilter, setStatusFilter] = useState('all')
@@ -150,7 +151,7 @@ export default function WnioskiTransportowePage() {
     setFilteredRequests(filtered)
   }, [requests, statusFilter, dateFilter, searchTerm])
 
-  // Akceptacja wniosku
+  // ZAKTUALIZOWANA FUNKCJA AKCEPTACJI z magazynem
   const handleApprove = async () => {
     if (!selectedRequest) return
 
@@ -163,16 +164,18 @@ export default function WnioskiTransportowePage() {
         },
         body: JSON.stringify({
           requestId: selectedRequest.id,
-          action: 'approve'
+          action: 'approve',
+          source_warehouse: selectedWarehouse // Dodajemy wybrany magazyn
         })
       })
 
       const data = await response.json()
 
       if (data.success) {
-        alert('Wniosek został zaakceptowany i dodany do kalendarza!')
+        alert(`Wniosek został zaakceptowany i dodany do kalendarza magazynu ${selectedWarehouse === 'bialystok' ? 'Białystok' : 'Zielonka'}!`)
         setShowApprovalModal(false)
         setSelectedRequest(null)
+        setSelectedWarehouse('bialystok') // Reset wyboru
         fetchRequests()
       } else {
         alert('Błąd: ' + data.error)
@@ -618,7 +621,7 @@ export default function WnioskiTransportowePage() {
           )}
         </div>
 
-        {/* Modal akceptacji */}
+        {/* ZAKTUALIZOWANY MODAL AKCEPTACJI z wyborem magazynu */}
         {showApprovalModal && selectedRequest && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
@@ -629,6 +632,26 @@ export default function WnioskiTransportowePage() {
                 Czy na pewno chcesz zaakceptować wniosek #{selectedRequest.id}?
                 Po akceptacji zostanie automatycznie utworzony transport w kalendarzu.
               </p>
+              
+              {/* Wybór magazynu */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Magazyn realizujący transport *
+                </label>
+                <select
+                  value={selectedWarehouse}
+                  onChange={(e) => setSelectedWarehouse(e.target.value)}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                >
+                  <option value="bialystok">Magazyn Białystok</option>
+                  <option value="zielonka">Magazyn Zielonka</option>
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Wybierz magazyn, z którego będzie realizowany ten transport
+                </p>
+              </div>
+              
               <div className="bg-gray-50 p-4 rounded-md mb-6">
                 <div className="text-sm">
                   <strong>Trasa:</strong> {selectedRequest.destination_city}
@@ -636,6 +659,10 @@ export default function WnioskiTransportowePage() {
                   <strong>Data:</strong> {format(new Date(selectedRequest.delivery_date), 'dd.MM.yyyy', { locale: pl })}
                   <br />
                   <strong>Zlecający:</strong> {selectedRequest.requester_name}
+                  <br />
+                  <strong>Magazyn:</strong> <span className="font-medium text-blue-600">
+                    {selectedWarehouse === 'bialystok' ? 'Białystok' : 'Zielonka'}
+                  </span>
                 </div>
               </div>
               <div className="flex justify-end space-x-3">
@@ -643,6 +670,7 @@ export default function WnioskiTransportowePage() {
                   onClick={() => {
                     setShowApprovalModal(false)
                     setSelectedRequest(null)
+                    setSelectedWarehouse('bialystok') // Reset przy anulowaniu
                   }}
                   className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
                   disabled={processing}
