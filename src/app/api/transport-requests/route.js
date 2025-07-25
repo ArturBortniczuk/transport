@@ -231,7 +231,6 @@ export async function GET(request) {
 }
 
 // POST - Dodawanie nowego wniosku transportowego
-// POST - Dodawanie nowego wniosku transportowego - NAPRAWIONA WERSJA
 export async function POST(request) {
   try {
     console.log('=== START POST /api/transport-requests ===');
@@ -434,7 +433,7 @@ export async function PUT(request) {
     const updateData = await request.json();
     const { requestId, action, ...data } = updateData;
     
-    console.log('Update data:', { requestId, action });
+    console.log('Update data:', { requestId, action, selectedWarehouse: data.source_warehouse });
 
     if (!requestId) {
       return NextResponse.json({ 
@@ -493,12 +492,16 @@ export async function PUT(request) {
             }, { status: 500 });
           }
 
-          // NOWA LOGIKA MAPOWANIA DANYCH - bez sprawdzania kolumn
+          // POBIERZ WYBRANY MAGAZYN Z DANYCH ŻĄDANIA (domyślnie białystok)
+          const selectedWarehouse = data.source_warehouse || 'bialystok';
+          console.log('Wybrany magazyn:', selectedWarehouse);
+
+          // NAPRAWIONA LOGIKA MAPOWANIA DANYCH - z wybranym magazynem
           const transportData = {
             destination_city: existingRequest.destination_city,
             delivery_date: existingRequest.delivery_date,
             status: 'active',
-            source_warehouse: 'bialystok',
+            source_warehouse: selectedWarehouse, // UŻYWAMY WYBRANEGO MAGAZYNU
             postal_code: existingRequest.postal_code || null,
             street: existingRequest.street || null,
             mpk: existingRequest.mpk || null,
@@ -514,6 +517,7 @@ export async function PUT(request) {
 
           console.log('🚀 DEBUGOWANIE: Pełne dane wniosku:', existingRequest);
           console.log('🚀 DEBUGOWANIE: Dane transportu do utworzenia:', transportData);
+          console.log('🚀 Magazyn wybrany przez użytkownika:', selectedWarehouse);
 
           // Rozpocznij transakcję
           const result = await db.transaction(async (trx) => {
@@ -547,14 +551,17 @@ export async function PUT(request) {
             return transportId;
           });
 
-          console.log(`✅ Zaakceptowano wniosek ${requestId} dla budowy ${existingRequest.construction_name}, utworzono transport ${result}`);
+          const warehouseName = selectedWarehouse === 'bialystok' ? 'Białystok' : 'Zielonka';
+          console.log(`✅ Zaakceptowano wniosek ${requestId} dla magazynu ${warehouseName}, utworzono transport ${result}`);
           console.log(`✅ WZ Numbers z wniosku: ${existingRequest.wz_numbers} → zapisane jako wz_number w transporcie`);
           console.log(`✅ Rynek z wniosku: ${existingRequest.market_id} → ${getMarketName(existingRequest.market_id)}`);
 
           return NextResponse.json({ 
             success: true, 
-            message: `Wniosek został zaakceptowany i dodany do kalendarza dla budowy: ${existingRequest.construction_name || 'brak nazwy'}`,
+            message: `Wniosek został zaakceptowany i dodany do kalendarza magazynu ${warehouseName}`,
             transportId: result,
+            warehouse: selectedWarehouse,
+            warehouseName: warehouseName,
             constructionName: existingRequest.construction_name,
             mpk: existingRequest.mpk,
             debugInfo: {
