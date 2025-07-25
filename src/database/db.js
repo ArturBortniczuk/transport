@@ -3,98 +3,57 @@ import knex from 'knex';
 import * as XLSX from 'xlsx';
 import fs from 'fs';
 import path from 'path';
+import { neon } from '@neondatabase/serverless';
+import { migrateKuriersTable } from './kuriers-migration.js';
+
 
 // Sprawdź, czy jesteśmy w fazie budowania
 const isBuildPhase = process.env.NODE_ENV === 'production' && typeof window === 'undefined' && !process.env.NEXT_RUNTIME;
-
-console.log('Database initialization:', {
-  NODE_ENV: process.env.NODE_ENV,
-  isBuildPhase,
-  hasDbUrl: !!process.env.DATABASE_URL
-});
 
 // Funkcja do tworzenia połączenia z bazą danych
 const createDbConnection = () => {
   // Jeśli jesteśmy w fazie budowania, zwróć mock zamiast prawdziwego połączenia
   if (isBuildPhase) {
-    console.log('Using mock database for build phase');
     return {
       schema: {
         hasTable: () => Promise.resolve(false),
         createTable: () => Promise.resolve(),
-        table: () => ({ timestamp: () => {} }),
-        hasColumn: () => Promise.resolve(false)
+        table: () => ({ timestamp: () => {} })
       },
       raw: () => Promise.resolve([[], []]),
-      select: () => ({ where: () => ({ first: () => Promise.resolve({}), orderBy: () => ({ select: () => Promise.resolve([]) }) }) }),
+      select: () => ({ where: () => ({ first: () => Promise.resolve({}) }) }),
       where: () => ({ update: () => Promise.resolve(1), first: () => Promise.resolve({}) }),
       insert: () => Promise.resolve([1]),
       count: () => ({ first: () => Promise.resolve({ count: 0 }) }),
-      fn: { now: () => 'NOW()' },
-      transaction: (callback) => Promise.resolve(callback(this))
+      fn: { now: () => 'NOW()' }
     };
   }
 
   // W przeciwnym razie utwórz prawdziwe połączenie
-  try {
-    const connection = knex({
-      client: 'pg',
-      connection: process.env.DATABASE_URL,
-      pool: {
-        min: 0,
-        max: 1 // Redukcja dla środowiska serverless
-      },
-      acquireConnectionTimeout: 30000,
-      // Dodaj debugging dla development
-      debug: process.env.NODE_ENV === 'development'
-    });
-
-    console.log('Database connection created successfully');
-    return connection;
-  } catch (error) {
-    console.error('Error creating database connection:', error);
-    throw error;
-  }
+  return knex({
+    client: 'pg',
+    connection: process.env.DATABASE_URL,
+    pool: {
+      min: 0,
+      max: 1 // Redukcja dla środowiska serverless
+    },
+    acquireConnectionTimeout: 30000
+  });
 };
 
 // Inicjalizacja połączenia
-let db;
-try {
-  db = createDbConnection();
-} catch (error) {
-  console.error('Failed to initialize database:', error);
-  // Fallback do mock database w przypadku błędu
-  db = {
-    schema: {
-      hasTable: () => Promise.resolve(false),
-      createTable: () => Promise.resolve(),
-      table: () => ({ timestamp: () => {} }),
-      hasColumn: () => Promise.resolve(false)
-    },
-    raw: () => Promise.resolve([[], []]),
-    select: () => ({ where: () => ({ first: () => Promise.resolve({}), orderBy: () => ({ select: () => Promise.resolve([]) }) }) }),
-    where: () => ({ update: () => Promise.resolve(1), first: () => Promise.resolve({}) }),
-    insert: () => Promise.resolve([1]),
-    count: () => ({ first: () => Promise.resolve({ count: 0 }) }),
-    fn: { now: () => 'NOW()' },
-    transaction: (callback) => Promise.resolve(callback(this))
-  };
-}
+const db = createDbConnection();
 
 // Inicjalizacja wszystkich tabel
 const initializeDatabase = async () => {
   if (isBuildPhase) {
-    console.log('Skipping database initialization during build phase');
     return true;
   }
   
   try {
-    console.log('Starting database initialization...');
-    
     // Tabela użytkowników
     const usersExists = await db.schema.hasTable('users');
     if (!usersExists) {
-      console.log('Creating users table...');
       await db.schema.createTable('users', table => {
         table.string('email').primary();
         table.string('name').notNullable();
@@ -107,13 +66,11 @@ const initializeDatabase = async () => {
         table.text('permissions');
         table.string('mpk');
       });
-      console.log('Users table created');
     }
 
     // Tabela sesji
     const sessionsExists = await db.schema.hasTable('sessions');
     if (!sessionsExists) {
-      console.log('Creating sessions table...');
       await db.schema.createTable('sessions', table => {
         table.string('token').primary();
         table.string('user_id').notNullable();
@@ -121,13 +78,11 @@ const initializeDatabase = async () => {
         table.timestamp('created_at').defaultTo(db.fn.now());
         table.foreign('user_id').references('email').inTable('users');
       });
-      console.log('Sessions table created');
     }
 
     // Tabela transportów
     const transportsExists = await db.schema.hasTable('transports');
     if (!transportsExists) {
-      console.log('Creating transports table...');
       await db.schema.createTable('transports', table => {
         table.increments('id').primary();
         table.string('source_warehouse').notNullable();
@@ -141,7 +96,7 @@ const initializeDatabase = async () => {
         table.integer('vehicle_id'); 
         table.string('status').defaultTo('active');
         table.string('wz_number');
-        table.string('client_name');  
+        table.string('client_name');
         table.string('market');
         table.string('loading_level');
         table.text('notes');
@@ -151,74 +106,59 @@ const initializeDatabase = async () => {
         table.string('requester_name');
         table.string('requester_email');
         table.string('mpk');
-        table.text('goods_description');  
-        table.text('responsible_constructions');  
+        table.text('goods_description');
+        table.text('responsible_constructions');
       });
-      console.log('Transports table created');
     }
 
     const packagingsExists = await db.schema.hasTable('packagings');
     if (!packagingsExists) {
-      console.log('Creating packagings table...');
       await db.schema.createTable('packagings', table => {
         table.increments('id').primary();
-        table.string('external_id'); 
-        table.string('description').notNullable();
-        table.string('client_name');
-        table.string('city').notNullable();
-        table.string('postal_code');
-        table.string('street');
-        table.float('latitude');
-        table.float('longitude');
-        table.string('status').defaultTo('pending'); 
-        table.integer('transport_id').references('id').inTable('transports');
+        table.string('name').notNullable();
+        table.float('weight');
+        table.string('unit').defaultTo('kg');
         table.timestamp('created_at').defaultTo(db.fn.now());
-        table.timestamp('updated_at').defaultTo(db.fn.now());
       });
-      console.log('Packagings table created');
-    }
-
-    const appSettingsExists = await db.schema.hasTable('app_settings');
-    if (!appSettingsExists) {
-      console.log('Creating app_settings table...');
-      await db.schema.createTable('app_settings', table => {
-        table.string('key').primary();
-        table.text('value');
-        table.timestamp('updated_at').defaultTo(db.fn.now());
-      });
-      console.log('App_settings table created');
     }
 
     // Tabela ocen transportów
-    const transportRatingsExists = await db.schema.hasTable('transport_ratings');
-    if (!transportRatingsExists) {
-      console.log('Creating transport_ratings table...');
+    const ratingsExists = await db.schema.hasTable('transport_ratings');
+    if (!ratingsExists) {
       await db.schema.createTable('transport_ratings', table => {
         table.increments('id').primary();
-        table.integer('transport_id').notNullable().references('id').inTable('transports');
-        table.boolean('is_positive').notNullable(); 
-        table.integer('rating'); // Zachowujemy dla kompatybilności
-        table.text('comment');
+        table.integer('transport_id').notNullable();
         table.string('rater_email').notNullable();
         table.string('rater_name');
+        table.integer('rating').notNullable();
+        table.text('comment');
         table.timestamp('created_at').defaultTo(db.fn.now());
+        table.foreign('transport_id').references('id').inTable('transports');
+        table.unique(['transport_id', 'rater_email']);
       });
-      console.log('Transport_ratings table created');
+      console.log('Tabela transport_ratings została utworzona');
     } else {
-      // Sprawdź, czy kolumna is_positive istnieje
-      const hasIsPositive = await db.schema.hasColumn('transport_ratings', 'is_positive');
-      const hasRating = await db.schema.hasColumn('transport_ratings', 'rating');
+      console.log('Tabela transport_ratings już istnieje');
+      
+      // Sprawdź czy kolumna is_positive istnieje
+      const columns = await db.raw(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_name = 'transport_ratings' 
+        AND table_schema = 'public'
+      `);
+      
+      const columnNames = columns.rows.map(row => row.column_name);
+      const hasIsPositive = columnNames.includes('is_positive');
+      const hasRating = columnNames.includes('rating');
       
       if (!hasIsPositive) {
-        console.log('Adding is_positive column to transport_ratings...');
-        // Dodaj nową kolumnę
         await db.schema.table('transport_ratings', table => {
           table.boolean('is_positive').defaultTo(true);
         });
         
         // Migracja danych tylko jeśli stara kolumna istnieje
         if (hasRating) {
-          console.log('Migrating rating data to is_positive...');
           const ratings = await db('transport_ratings').select('id', 'rating');
           for (const rating of ratings) {
             await db('transport_ratings')
@@ -226,14 +166,12 @@ const initializeDatabase = async () => {
               .update({ is_positive: rating.rating >= 3 });
           }
         }
-        console.log('Rating migration completed');
       }
     }
     
     // Tabela budów
     const constructionsExists = await db.schema.hasTable('constructions');
     if (!constructionsExists) {
-      console.log('Creating constructions table...');
       await db.schema.createTable('constructions', table => {
         table.increments('id').primary();
         table.string('name').notNullable();
@@ -241,13 +179,11 @@ const initializeDatabase = async () => {
         table.timestamp('created_at').defaultTo(db.fn.now());
         table.timestamp('updated_at').defaultTo(db.fn.now());
       });
-      console.log('Constructions table created');
     }
     
     // Tabela spedycji
     const spedycjeExists = await db.schema.hasTable('spedycje');
     if (!spedycjeExists) {
-      console.log('Creating spedycje table...');
       await db.schema.createTable('spedycje', table => {
         table.increments('id').primary();
         table.string('status').defaultTo('new');
@@ -275,241 +211,210 @@ const initializeDatabase = async () => {
         table.string('order_sent_by');
         table.string('order_recipient');
         table.text('order_data');
-        table.string('client_name');  
-        table.text('goods_description');  
-        table.text('responsible_constructions');  
+        table.string('client_name');
+        table.text('goods_description');
+        table.text('responsible_constructions');
+        table.text('merged_transports');
       });
-      console.log('Spedycje table created');
     }
 
-    // Tabela szczegółowych ocen transportów (jeśli nie istnieje)
-    const detailedRatingsExists = await db.schema.hasTable('transport_detailed_ratings');
-    if (!detailedRatingsExists) {
-      console.log('Creating transport_detailed_ratings table...');
-      await db.schema.createTable('transport_detailed_ratings', table => {
+    // Tabela kurierów - TYLKO ZAMÓWIENIA (bez zapytań)
+    const kuriersExists = await db.schema.hasTable('kuriers');
+    if (!kuriersExists) {
+      await db.schema.createTable('kuriers', table => {
         table.increments('id').primary();
-        table.integer('transport_id').notNullable().references('id').inTable('transports');
-        table.string('rater_email').notNullable();
-        table.string('rater_name');
-        table.boolean('driver_professional');
-        table.boolean('driver_tasks_completed');
-        table.boolean('cargo_complete');
-        table.boolean('cargo_correct');
-        table.boolean('delivery_notified');
-        table.boolean('delivery_on_time');
-        table.text('comment');
+        table.string('status').defaultTo('new');
+        table.string('created_by_email');
+        table.string('magazine_source');
+        table.string('magazine_destination');
+        table.string('recipient_name');
+        table.string('recipient_address');
+        table.string('recipient_phone');
+        table.string('package_description');
+        table.text('notes');
         table.timestamp('created_at').defaultTo(db.fn.now());
+        table.timestamp('completed_at');
+        table.string('completed_by');
       });
-      console.log('Transport_detailed_ratings table created');
+      console.log('Tabela kuriers została utworzona');
+    } else {
+      console.log('Tabela kuriers już istnieje');
     }
 
-    console.log('Database initialization completed successfully');
     return true;
   } catch (error) {
-    console.error('Błąd inicjalizacji bazy:', error);
+    console.error('Błąd inicjalizacji bazy danych:', error);
     return false;
   }
-};
+}
 
-// Inicjalizacja użytkowników z pliku Excel
+// Funkcja do inicjalizacji użytkowników z pliku Excel
 const initializeUsersFromExcel = async () => {
   if (isBuildPhase) {
-    console.log('Skipping user initialization during build phase');
     return;
   }
   
   try {
-    const filePath = path.join(process.cwd(), 'public', 'users.xlsx');
+    // Sprawdź, czy w bazie już są użytkownicy
+    const existingUsers = await db('users').count('* as count').first();
+    if (existingUsers.count > 0) {
+      console.log('Użytkownicy już istnieją w bazie danych');
+      return;
+    }
+
+    const excelPath = path.join(process.cwd(), 'src', 'data', 'users.xlsx');
     
-    if (!fs.existsSync(filePath)) {
-      console.log('Users.xlsx file not found, skipping user initialization');
+    if (!fs.existsSync(excelPath)) {
+      console.log('Plik users.xlsx nie istnieje - pomijam inicjalizację użytkowników');
       return;
     }
 
-    // Sprawdź, czy już mamy użytkowników w bazie
-    const userCount = await db('users').count('email as count').first();
+    const workbook = XLSX.readFile(excelPath);
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    const data = XLSX.utils.sheet_to_json(worksheet);
 
-    if (userCount && userCount.count > 0) {
-      console.log('Users already exist in database, skipping initialization');
-      return;
+    for (const row of data) {
+      try {
+        await db('users').insert({
+          email: row.email?.toLowerCase(),
+          name: row.name,
+          position: row.position,
+          phone: row.phone,
+          password: row.password,
+          role: row.role,
+          first_login: true,
+          is_admin: row.is_admin === 'TRUE' || row.is_admin === true,
+          permissions: row.permissions ? JSON.stringify(JSON.parse(row.permissions)) : null,
+          mpk: row.mpk
+        });
+        console.log(`Dodano użytkownika: ${row.email}`);
+      } catch (insertError) {
+        console.error(`Błąd dodawania użytkownika ${row.email}:`, insertError.message);
+      }
     }
 
-    console.log('Initializing users from Excel file...');
-    const buffer = fs.readFileSync(filePath);
-    const workbook = XLSX.read(buffer, { type: 'buffer' });
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const data = XLSX.utils.sheet_to_json(sheet, {
-      range: 1,
-      header: ['name', 'position', 'email', 'phone', 'password', 'mpk']
-    });
-
-    // Przygotuj domyślne uprawnienia
-    const getDefaultPermissions = (role, isAdmin) => {
-      const isMagazyn = role === 'magazyn_bialystok' || role === 'magazyn_zielonka' || role === 'magazyn';
-      
-      const permissions = {
-        calendar: {
-          view: true,
-          edit: isMagazyn || isAdmin
-        },
-        map: {
-          view: true
-        },
-        transport: {
-          markAsCompleted: isMagazyn || isAdmin
-        }
-      };
-      return JSON.stringify(permissions);
-    };
-
-    // Dodaj użytkowników do bazy - batch insert
-    const usersToInsert = data.map(row => {
-      const isAdmin = row.email === 'a.bortniczuk@grupaeltron.pl';
-      const role = isAdmin ? 'admin' : 
-                row.position.toLowerCase().includes('handlowy') ? 'handlowiec' : 
-                row.position.toLowerCase().includes('zielonka') ? 'magazyn_zielonka' : 'magazyn_bialystok';
-      
-      return {
-        email: row.email,
-        name: row.name,
-        position: row.position,
-        phone: row.phone,
-        password: row.password,
-        role: role,
-        first_login: true,
-        is_admin: isAdmin,
-        permissions: getDefaultPermissions(role, isAdmin),
-        mpk: row.mpk || ''
-      };
-    });
-
-    // Wstawianie wsadowe użytkowników
-    await db('users').insert(usersToInsert);
-    console.log(`Initialized ${usersToInsert.length} users from Excel file`);
+    console.log('Inicjalizacja użytkowników z Excel zakończona');
   } catch (error) {
-    console.error('Błąd inicjalizacji użytkowników:', error);
+    console.error('Błąd inicjalizacji użytkowników z Excel:', error);
   }
 };
 
-// Funkcja do wyświetlania użytkowników
+// Funkcja do wyświetlania wszystkich użytkowników
 const showAllUsers = async () => {
   if (isBuildPhase) {
     return;
   }
   
   try {
-    const users = await db('users').select('email', 'name', 'position', 'role');
-    console.log(`Database contains ${users.length} users`);
+    const users = await db('users').select('*');
+    console.log('Lista wszystkich użytkowników w bazie:', users.length);
+    users.forEach(user => {
+      console.log(`- ${user.email} (${user.name}) - Rola: ${user.role}, Admin: ${user.is_admin}`);
+    });
   } catch (error) {
-    console.error('Błąd wyświetlania użytkowników:', error);
+    console.error('Błąd pobierania użytkowników:', error);
   }
 };
 
-// Funkcja sprawdzająca strukturę tabeli transportów
+// Funkcja sprawdzająca tabelę transportów
 const checkTransportsTable = async () => {
-  if (isBuildPhase) {
-    return;
-  }
-  
   try {
-    // PostgreSQL używa information_schema zamiast SHOW COLUMNS
+    const tableExists = await db.schema.hasTable('transports');
+    if (!tableExists) {
+      console.log('Tabela transports nie istnieje');
+      return;
+    }
+
+    // Sprawdź kolumny
     const columns = await db.raw(`
       SELECT column_name 
       FROM information_schema.columns 
-      WHERE table_name = 'transports'
+      WHERE table_name = 'transports' 
+      AND table_schema = 'public'
     `);
-    const columnNames = columns.rows.map(col => col.column_name);
     
-    // Sprawdź czy kolumna vehicle_id istnieje
-    if (!columnNames.includes('vehicle_id')) {
-      console.log('Adding vehicle_id column to transports table...');
+    const columnNames = columns.rows.map(row => row.column_name);
+    console.log('Kolumny w tabeli transports:', columnNames);
+
+    // Dodaj brakujące kolumny dla wniosków transportowych
+    if (!columnNames.includes('wz_number')) {
       await db.schema.table('transports', table => {
-        table.integer('vehicle_id');
+        table.string('wz_number');
       });
-      console.log('Added vehicle_id column to transports table');
+      console.log('Dodano kolumnę wz_number do tabeli transports');
     }
 
-    // Sprawdź czy kolumna connected_transport_id istnieje
-    if (!columnNames.includes('connected_transport_id')) {
-      console.log('Adding connected_transport_id column to transports table...');
+    if (!columnNames.includes('market')) {
       await db.schema.table('transports', table => {
-        table.integer('connected_transport_id').references('id').inTable('transports');
+        table.string('market');
       });
-      console.log('Added connected_transport_id column to transports table');
+      console.log('Dodano kolumnę market do tabeli transports');
     }
 
-    // Sprawdź czy kolumna packaging_id istnieje
-    if (!columnNames.includes('packaging_id')) {
-      console.log('Adding packaging_id column to transports table...');
+    if (!columnNames.includes('real_client_name')) {
       await db.schema.table('transports', table => {
-        table.integer('packaging_id').references('id').inTable('packagings');
+        table.string('real_client_name');
       });
-      console.log('Added packaging_id column to transports table');
+      console.log('Dodano kolumnę real_client_name do tabeli transports');
     }
-    
-    // Sprawdź czy nowe kolumny istnieją
-    if (!columnNames.includes('client_name')) {
-      console.log('Adding client_name column to transports table...');
-      await db.schema.table('transports', table => {
-        table.string('client_name');
-      });
-      console.log('Added client_name column to transports table');
-    }
-    
+
     if (!columnNames.includes('goods_description')) {
-      console.log('Adding goods_description column to transports table...');
       await db.schema.table('transports', table => {
         table.text('goods_description');
       });
-      console.log('Added goods_description column to transports table');
+      console.log('Dodano kolumnę goods_description do tabeli transports');
     }
-    
+
     if (!columnNames.includes('responsible_constructions')) {
-      console.log('Adding responsible_constructions column to transports table...');
       await db.schema.table('transports', table => {
         table.text('responsible_constructions');
       });
-      console.log('Added responsible_constructions column to transports table');
+      console.log('Dodano kolumnę responsible_constructions do tabeli transports');
     }
+
+    if (!columnNames.includes('client_name')) {
+      await db.schema.table('transports', table => {
+        table.string('client_name');
+      });
+      console.log('Dodano kolumnę client_name do tabeli transports');
+    }
+
   } catch (error) {
-    console.error('Błąd sprawdzania tabeli transportów:', error);
+    console.error('Błąd sprawdzania tabeli transports:', error);
   }
 };
 
-// Funkcja sprawdzająca strukturę tabeli spedycji
+// Funkcja sprawdzająca tabelę spedycji
 const checkSpedycjeTable = async () => {
-  if (isBuildPhase) {
-    return;
-  }
-  
   try {
-    // Sprawdź czy tabela spedycje istnieje
-    const spedycjeExists = await db.schema.hasTable('spedycje');
-    if (!spedycjeExists) {
-      // Tabela zostanie utworzona w initializeDatabase
+    const tableExists = await db.schema.hasTable('spedycje');
+    if (!tableExists) {
+      console.log('Tabela spedycje nie istnieje');
       return;
     }
-    
-    // PostgreSQL używa information_schema zamiast SHOW COLUMNS
+
+    // Sprawdź kolumny
     const columns = await db.raw(`
       SELECT column_name 
       FROM information_schema.columns 
-      WHERE table_name = 'spedycje'
+      WHERE table_name = 'spedycje' 
+      AND table_schema = 'public'
     `);
-    const columnNames = columns.rows.map(col => col.column_name);
     
+    const columnNames = columns.rows.map(row => row.column_name);
+    console.log('Kolumny w tabeli spedycje:', columnNames);
+
     // Sprawdź czy kolumna distance_km istnieje
     if (!columnNames.includes('distance_km')) {
-      console.log('Adding distance_km column to spedycje table...');
       await db.schema.table('spedycje', table => {
         table.integer('distance_km');
       });
-      console.log('Added distance_km column to spedycje table');
+      console.log('Dodano kolumnę distance_km do tabeli spedycje');
     }
     
     // Sprawdź czy kolumny związane z zamówieniem istnieją
     if (!columnNames.includes('order_sent')) {
-      console.log('Adding order columns to spedycje table...');
       await db.schema.table('spedycje', table => {
         table.boolean('order_sent').defaultTo(false);
         table.timestamp('order_sent_at');
@@ -517,41 +422,195 @@ const checkSpedycjeTable = async () => {
         table.string('order_recipient');
         table.text('order_data');
       });
-      console.log('Added order columns to spedycje table');
+      console.log('Dodano kolumny zamówienia do tabeli spedycje');
     }
     
     // Sprawdź czy nowe kolumny istnieją
     if (!columnNames.includes('client_name')) {
-      console.log('Adding client_name column to spedycje table...');
       await db.schema.table('spedycje', table => {
         table.string('client_name');
       });
-      console.log('Added client_name column to spedycje table');
+      console.log('Dodano kolumnę client_name do tabeli spedycje');
     }
     
     if (!columnNames.includes('goods_description')) {
-      console.log('Adding goods_description column to spedycje table...');
       await db.schema.table('spedycje', table => {
         table.text('goods_description');
       });
-      console.log('Added goods_description column to spedycje table');
+      console.log('Dodano kolumnę goods_description do tabeli spedycje');
     }
     
     if (!columnNames.includes('responsible_constructions')) {
-      console.log('Adding responsible_constructions column to spedycje table...');
       await db.schema.table('spedycje', table => {
         table.text('responsible_constructions');
       });
-      console.log('Added responsible_constructions column to spedycje table');
+      console.log('Dodano kolumnę responsible_constructions do tabeli spedycje');
     }
   } catch (error) {
     console.error('Błąd sprawdzania tabeli spedycje:', error);
   }
 };
 
+// Funkcja sprawdzająca czy tabela transportów ma odpowiednie referencje dla ocen
+const checkTransportsTableForRatings = async () => {
+  try {
+    // Sprawdź czy tabela transportów ma kolumnę ID
+    const transportsExists = await db.schema.hasTable('transports');
+    if (!transportsExists) {
+      console.log('Tabela transportów nie istnieje - podstawowa wersja zostanie utworzona w initializeDatabase');
+      return;
+    }
+    
+    // Sprawdź czy mamy kolumnę status
+    const columns = await db.raw(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'transports' 
+      AND table_schema = 'public'
+    `);
+    
+    const columnNames = columns.rows.map(row => row.column_name);
+    
+    if (!columnNames.includes('status')) {
+      await db.schema.table('transports', table => {
+        table.string('status').defaultTo('active');
+      });
+      console.log('Dodano kolumnę status do tabeli transports');
+    }
+    
+    if (!columnNames.includes('completed_at')) {
+      await db.schema.table('transports', table => {
+        table.timestamp('completed_at');
+      });
+      console.log('Dodano kolumnę completed_at do tabeli transports');
+    }
+    
+  } catch (error) {
+    console.error('Błąd sprawdzania tabeli transportów dla ocen:', error);
+  }
+};
+
+// Funkcja sprawdzająca i tworząca tabele szczegółowych ocen
+const checkDetailedRatingsTable = async () => {
+  try {
+    console.log('Sprawdzanie tabeli transport_detailed_ratings...');
+    
+    // Sprawdź czy tabela istnieje
+    const tableExists = await db.schema.hasTable('transport_detailed_ratings');
+    if (!tableExists) {
+      console.log('Tworzenie tabeli transport_detailed_ratings...');
+      
+      await db.schema.createTable('transport_detailed_ratings', table => {
+        table.increments('id').primary();
+        table.integer('transport_id').notNullable();
+        table.string('rater_email').notNullable();
+        table.timestamp('rated_at').defaultTo(db.fn.now());
+        
+        // Kategoria: Kierowca
+        table.boolean('driver_professional');
+        table.boolean('driver_tasks_completed');
+        
+        // Kategoria: Towar
+        table.boolean('cargo_complete');
+        table.boolean('cargo_correct');
+        
+        // Kategoria: Organizacja dostawy
+        table.boolean('delivery_notified');
+        table.boolean('delivery_on_time');
+        
+        // Dodatkowy komentarz
+        table.text('comment');
+        
+        // Upewnij się, że jeden użytkownik może ocenić transport tylko raz
+        table.unique(['transport_id', 'rater_email']);
+        
+        // Indeksy
+        table.index('transport_id');
+        table.index('rater_email');
+        
+        // Klucz obcy do tabeli transportów
+        table.foreign('transport_id').references('id').inTable('transports').onDelete('CASCADE');
+      });
+      
+      console.log('Tabela transport_detailed_ratings została utworzona');
+    } else {
+      console.log('Tabela transport_detailed_ratings już istnieje');
+    }
+    
+    // Utwórz widok dla statystyk
+    await createRatingSummaryView();
+    
+  } catch (error) {
+    console.error('Błąd sprawdzania/tworzenia tabeli transport_detailed_ratings:', error);
+  }
+};
+
+// Funkcja tworząca widok dla statystyk ocen
+const createRatingSummaryView = async () => {
+  try {
+    console.log('Tworzenie widoku transport_rating_summary...');
+    
+    // Usuń widok jeśli istnieje (żeby móc go zaktualizować)
+    await db.raw('DROP VIEW IF EXISTS transport_rating_summary');
+    
+    // Utwórz nowy widok
+    await db.raw(`
+      CREATE VIEW transport_rating_summary AS
+      SELECT 
+        transport_id,
+        COUNT(*) as total_ratings,
+        
+        -- Statystyki dla kategorii Kierowca
+        COUNT(CASE WHEN driver_professional = true THEN 1 END) as driver_professional_positive,
+        COUNT(CASE WHEN driver_professional = false THEN 1 END) as driver_professional_negative,
+        COUNT(CASE WHEN driver_tasks_completed = true THEN 1 END) as driver_tasks_positive,
+        COUNT(CASE WHEN driver_tasks_completed = false THEN 1 END) as driver_tasks_negative,
+        
+        -- Statystyki dla kategorii Towar
+        COUNT(CASE WHEN cargo_complete = true THEN 1 END) as cargo_complete_positive,
+        COUNT(CASE WHEN cargo_complete = false THEN 1 END) as cargo_complete_negative,
+        COUNT(CASE WHEN cargo_correct = true THEN 1 END) as cargo_correct_positive,
+        COUNT(CASE WHEN cargo_correct = false THEN 1 END) as cargo_correct_negative,
+        
+        -- Statystyki dla kategorii Organizacja dostawy
+        COUNT(CASE WHEN delivery_notified = true THEN 1 END) as delivery_notified_positive,
+        COUNT(CASE WHEN delivery_notified = false THEN 1 END) as delivery_notified_negative,
+        COUNT(CASE WHEN delivery_on_time = true THEN 1 END) as delivery_on_time_positive,
+        COUNT(CASE WHEN delivery_on_time = false THEN 1 END) as delivery_on_time_negative,
+        
+        -- Ogólny wynik (średnia wszystkich pozytywnych ocen)
+        ROUND(
+          (
+            COUNT(CASE WHEN driver_professional = true THEN 1 END) +
+            COUNT(CASE WHEN driver_tasks_completed = true THEN 1 END) +
+            COUNT(CASE WHEN cargo_complete = true THEN 1 END) +
+            COUNT(CASE WHEN cargo_correct = true THEN 1 END) +
+            COUNT(CASE WHEN delivery_notified = true THEN 1 END) +
+            COUNT(CASE WHEN delivery_on_time = true THEN 1 END)
+          )::decimal / 
+          NULLIF(
+            COUNT(CASE WHEN driver_professional IS NOT NULL THEN 1 END) +
+            COUNT(CASE WHEN driver_tasks_completed IS NOT NULL THEN 1 END) +
+            COUNT(CASE WHEN cargo_complete IS NOT NULL THEN 1 END) +
+            COUNT(CASE WHEN cargo_correct IS NOT NULL THEN 1 END) +
+            COUNT(CASE WHEN delivery_notified IS NOT NULL THEN 1 END) +
+            COUNT(CASE WHEN delivery_on_time IS NOT NULL THEN 1 END), 0
+          ) * 100, 1
+        ) as overall_rating_percentage
+        
+      FROM transport_detailed_ratings
+      GROUP BY transport_id
+    `);
+    
+    console.log('Widok transport_rating_summary został utworzony');
+    
+  } catch (error) {
+    console.error('Błąd tworzenia widoku transport_rating_summary:', error);
+  }
+};
+
 // Wykonaj inicjalizację asynchronicznie tylko jeśli nie jesteśmy w fazie budowania
 if (!isBuildPhase) {
-  console.log('Starting database initialization process...');
   (async () => {
     try {
       await initializeDatabase();
@@ -559,13 +618,20 @@ if (!isBuildPhase) {
       await showAllUsers();
       await checkTransportsTable();
       await checkSpedycjeTable();
-      console.log('All database initialization completed');
+      
+      // Wywołania dla szczegółowych ocen:
+      await checkTransportsTableForRatings();
+      await checkDetailedRatingsTable();
+      
+      // NOWA MIGRACJA TABELI KURIERS
+      console.log('🚀 Uruchamiam migrację tabeli kuriers...');
+      await migrateKuriersTable();
+      
+      console.log('Wszystkie tabele zostały sprawdzone i utworzone (łącznie z migracją kuriers)');
     } catch (error) {
       console.error('Błąd inicjalizacji:', error);
     }
   })();
-} else {
-  console.log('Build phase detected, skipping database initialization');
 }
 
 export default db;
