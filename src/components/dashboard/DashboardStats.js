@@ -56,10 +56,10 @@ export function StatsGrid({ data }) {
   const stats = [
     {
       title: "Aktywne Transporty",
-      value: data?.activeTransports || 0,
+      value: (data?.activeTransports || 0) + (data?.activeSpeditions || 0),
       icon: <Truck className="w-8 h-8" />,
       color: "blue",
-      description: "Transporty w trakcie realizacji"
+      description: `Własne: ${data?.activeTransports || 0} | Spedycyjne: ${data?.activeSpeditions || 0}`
     },
     {
       title: "Oczekujące Wnioski",
@@ -76,11 +76,16 @@ export function StatsGrid({ data }) {
       description: "Aktywni kierowcy"
     },
     {
-      title: "Średnia Ocena",
-      value: data?.averageRating ? `${data.averageRating}%` : 'N/A',
+      title: "Koszty Spedycji",
+      value: data?.speditionCosts?.thisMonth ? `${data.speditionCosts.thisMonth.toLocaleString()} zł` : '0 zł',
       icon: <Star className="w-8 h-8" />,
       color: "purple",
-      description: "Oceny transportów"
+      description: "W tym miesiącu",
+      trend: data?.speditionCosts?.thisMonth > data?.speditionCosts?.lastMonth ? 'up' : 
+             data?.speditionCosts?.thisMonth < data?.speditionCosts?.lastMonth ? 'down' : null,
+      trendValue: data?.speditionCosts?.lastMonth ? 
+        `${Math.abs(Math.round(((data.speditionCosts.thisMonth - data.speditionCosts.lastMonth) / data.speditionCosts.lastMonth) * 100))}%` : 
+        null
     }
   ]
 
