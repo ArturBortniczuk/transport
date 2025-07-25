@@ -171,7 +171,7 @@ export default function DashboardPage() {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <MonthlyStatsWidget data={dashboardData?.monthlyChartData} />
+            <MonthlyStatsWidget data={dashboardData?.costChartData} />
             <TransportTypesWidget data={dashboardData?.transportTypes} />
             <QuickActionsWidget />
           </div>
@@ -559,29 +559,25 @@ function CostAnalysisWidget({ costData }) {
 function MonthlyStatsWidget({ data }) {
   return (
     <DashboardWidget
-      title="Statystyki Miesięczne"
-      icon={<Calendar className="w-5 h-5" />}
+      title="Wykres Kosztów Spedycji"
+      icon={<DollarSign className="w-5 h-5" />}
     >
       <div className="space-y-3">
         {data && data.length > 0 ? (
           data.slice(-3).map((month, index) => (
             <div key={index} className="bg-gray-50 p-3 rounded-lg">
               <div className="font-medium text-gray-900 mb-2">{month.month}</div>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="text-blue-600">Własny: {month.własny}</div>
-                <div className="text-red-600">Spedycja: {month.spedycyjny}</div>
-              </div>
-              {month.koszt > 0 && (
-                <div className="text-xs text-green-600 mt-1">
-                  Koszt: {month.koszt.toLocaleString()} zł
+              <div className="text-sm">
+                <div className="text-green-600 font-semibold">
+                  Koszt spedycji: {month.koszt.toLocaleString()} zł
                 </div>
-              )}
+              </div>
             </div>
           ))
         ) : (
           <div className="text-center py-6">
-            <Calendar className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-            <p className="text-gray-500 text-sm">Brak danych miesięcznych</p>
+            <DollarSign className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+            <p className="text-gray-500 text-sm">Brak danych o kosztach</p>
           </div>
         )}
       </div>
