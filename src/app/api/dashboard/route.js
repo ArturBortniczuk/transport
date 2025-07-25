@@ -1,7 +1,6 @@
 // src/app/api/dashboard/route.js
 import { NextResponse } from 'next/server';
 import db from '@/database/db';
-import { KIEROWCY, POJAZDY } from '@/app/kalendarz/constants';
 
 // Funkcja pomocnicza do weryfikacji sesji
 const validateSession = async (authToken) => {
@@ -21,13 +20,6 @@ const validateSession = async (authToken) => {
     console.error('Błąd walidacji sesji:', error);
     return null;
   }
-};
-
-// Funkcja pobierająca nazwę kierowcy
-const getDriverName = (driverId) => {
-  if (!driverId) return 'Nieznany kierowca';
-  const driver = KIEROWCY.find(k => k.id === parseInt(driverId));
-  return driver ? (driver.nazwa || driver.imie) : 'Nieznany kierowca';
 };
 
 // Funkcja formatująca datę
@@ -87,7 +79,7 @@ export async function GET(request) {
     const todayEnd = new Date(todayStart);
     todayEnd.setDate(todayEnd.getDate() + 1);
 
-    // Inicjalizujemy obiekt z danymi
+    // Inicjalizujemy obiekt z podstawowymi danymi
     const dashboardData = {
       activeTransports: 0,
       pendingRequests: 0,
@@ -100,20 +92,42 @@ export async function GET(request) {
       },
       recentRatings: [],
       fleetsInUse: 0,
-      totalFleets: POJAZDY.length
+      totalFleets: 7, // Z constants POJAZDY
+      // Nowe dane spedycyjne
+      activeSpeditions: 0,
+      speditionCosts: {
+        thisMonth: 0,
+        lastMonth: 0,
+        thisWeek: 0,
+        lastWeek: 0
+      },
+      transportTypes: {
+        own: { count: 0, thisMonth: 0 },
+        spedition: { count: 0, thisMonth: 0 }
+      },
+      monthlyChartData: [],
+      weeklyChartData: [],
+      costChartData: []
     };
 
-    // 1. Sprawdź czy tabele istnieją i pobierz dane z transportów
+    // 1. Sprawdź transporty własne
     try {
       const transportsExist = await db.schema.hasTable('transports');
+      console.log('Tabela transports istnieje:', transportsExist);
+      
       if (transportsExist) {
+        // Sprawdź ile jest wszystkich transportów
+        const allTransports = await db('transports').count('* as count').first();
+        console.log('Wszystkich transportów w bazie:', allTransports?.count || 0);
+
         // Aktywne transporty (status != 'completed')
-        const activeTransportsCount = await db('transports')
+        const activeTransportsResult = await db('transports')
           .whereNot('status', 'completed')
           .count('* as count')
           .first();
         
-        dashboardData.activeTransports = parseInt(activeTransportsCount?.count || 0);
+        dashboardData.activeTransports = parseInt(activeTransportsResult?.count || 0);
+        console.log('Aktywne transporty:', dashboardData.activeTransports);
 
         // Dzisiejsze transporty
         const todayTransports = await db('transports')
@@ -122,10 +136,12 @@ export async function GET(request) {
           .orderBy('delivery_date', 'asc')
           .limit(10);
 
+        console.log('Dzisiejsze transporty:', todayTransports.length);
+
         dashboardData.todayTransports = todayTransports.map(transport => ({
-          source: transport.source_warehouse || transport.zrodlo || 'Nieznane źródło',
-          destination: transport.destination_city || transport.cel || 'Nieznany cel',
-          driver: getDriverName(transport.driver_id || transport.kierowca),
+          source: transport.source_warehouse || 'Nieznane źródło',
+          destination: transport.destination_city || 'Nieznany cel',
+          driver: 'Kierowca', // Uproszczenie - można dodać później lookup
           mpk: transport.mpk || 'Brak',
           status: transport.status || 'pending'
         }));
@@ -145,77 +161,110 @@ export async function GET(request) {
           }
         });
 
-        // Aktywni kierowcy (unikalni kierowcy z aktywnymi transportami)
-        const activeDriversResult = await db('transports')
-          .whereNot('status', 'completed')
-          .countDistinct('driver_id as count')
-          .first();
-        
-        dashboardData.activeDrivers = parseInt(activeDriversResult?.count || 0);
+        console.log('Magazyny:', dashboardData.warehouses);
 
-        // Pojazdy w użyciu (unikalne pojazdy z aktywnymi transportami)
-        const fleetsInUseResult = await db('transports')
-          .whereNot('status', 'completed')
-          .countDistinct('vehicle_id as count')
+        // Transport własny w tym miesiącu
+        const thisMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+        const ownTransportsThisMonth = await db('transports')
+          .where('delivery_date', '>=', thisMonthStart.toISOString())
+          .count('* as count')
           .first();
-        
-        dashboardData.fleetsInUse = parseInt(fleetsInUseResult?.count || 0);
+
+        dashboardData.transportTypes.own.thisMonth = parseInt(ownTransportsThisMonth?.count || 0);
       }
     } catch (error) {
       console.error('Błąd pobierania danych z tabeli transports:', error);
     }
 
-    // 2. Sprawdź oczekujące wnioski transportowe
+    // 2. Sprawdź spedycje
+    try {
+      const spedycjeExist = await db.schema.hasTable('spedycje');
+      console.log('Tabela spedycje istnieje:', spedycjeExist);
+      
+      if (spedycjeExist) {
+        // Sprawdź ile jest wszystkich spedycji
+        const allSpeditions = await db('spedycje').count('* as count').first();
+        console.log('Wszystkich spedycji w bazie:', allSpeditions?.count || 0);
+
+        // Aktywne spedycje
+        const activeSpeditionsResult = await db('spedycje')
+          .whereNot('status', 'completed')
+          .count('* as count')
+          .first();
+        
+        dashboardData.activeSpeditions = parseInt(activeSpeditionsResult?.count || 0);
+        console.log('Aktywne spedycje:', dashboardData.activeSpeditions);
+
+        // Spedycje w tym miesiącu
+        const thisMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+        const speditionTransportsThisMonth = await db('spedycje')
+          .where('created_at', '>=', thisMonthStart.toISOString())
+          .count('* as count')
+          .first();
+
+        dashboardData.transportTypes.spedition.thisMonth = parseInt(speditionTransportsThisMonth?.count || 0);
+
+        // Próbuj policzyć koszty spedycji
+        const completedSpeditions = await db('spedycje')
+          .where('status', 'completed')
+          .where('completed_at', '>=', thisMonthStart.toISOString())
+          .select('response_data');
+
+        let thisMonthCost = 0;
+        completedSpeditions.forEach(spedycja => {
+          try {
+            if (spedycja.response_data) {
+              const responseData = JSON.parse(spedycja.response_data);
+              if (responseData.deliveryPrice) {
+                thisMonthCost += parseFloat(responseData.deliveryPrice);
+              }
+            }
+          } catch (e) {
+            // Ignoruj błędy parsowania
+          }
+        });
+
+        dashboardData.speditionCosts.thisMonth = Math.round(thisMonthCost);
+        console.log('Koszty spedycji w tym miesiącu:', dashboardData.speditionCosts.thisMonth);
+      }
+    } catch (error) {
+      console.error('Błąd pobierania danych spedycyjnych:', error);
+    }
+
+    // 3. Sprawdź wnioski transportowe
     try {
       const requestsExist = await db.schema.hasTable('transport_requests');
+      console.log('Tabela transport_requests istnieje:', requestsExist);
+      
       if (requestsExist) {
-        const pendingRequestsCount = await db('transport_requests')
+        const pendingRequestsResult = await db('transport_requests')
           .where('status', 'pending')
           .count('* as count')
           .first();
         
-        dashboardData.pendingRequests = parseInt(pendingRequestsCount?.count || 0);
+        dashboardData.pendingRequests = parseInt(pendingRequestsResult?.count || 0);
+        console.log('Oczekujące wnioski:', dashboardData.pendingRequests);
       }
     } catch (error) {
       console.error('Błąd pobierania danych z tabeli transport_requests:', error);
     }
 
-    // 3. Sprawdź oceny transportów
-    try {
-      const ratingsExist = await db.schema.hasTable('transport_detailed_ratings');
-      if (ratingsExist) {
-        // Średnia ocena ogólna
-        const avgRatingResult = await db('transport_detailed_ratings')
-          .avg('overall_percentage as avg_rating')
-          .first();
-        
-        if (avgRatingResult?.avg_rating) {
-          dashboardData.averageRating = Math.round(parseFloat(avgRatingResult.avg_rating));
-        }
+    // 4. Generuj przykładowe dane do wykresów (będziemy uzupełniać później)
+    const monthNames = ['Sty', 'Lut', 'Mar', 'Kwi', 'Maj', 'Cze'];
+    dashboardData.monthlyChartData = monthNames.map(month => ({
+      month,
+      własny: Math.floor(Math.random() * 10) + 1,
+      spedycyjny: Math.floor(Math.random() * 8) + 1,
+      koszt: Math.floor(Math.random() * 50000) + 10000
+    }));
 
-        // Ostatnie oceny
-        const recentRatings = await db('transport_detailed_ratings')
-          .join('transports', 'transport_detailed_ratings.transport_id', 'transports.id')
-          .select(
-            'transport_detailed_ratings.overall_percentage',
-            'transport_detailed_ratings.created_at',
-            'transports.destination_city',
-            'transports.source_warehouse'
-          )
-          .orderBy('transport_detailed_ratings.created_at', 'desc')
-          .limit(5);
-
-        dashboardData.recentRatings = recentRatings.map(rating => ({
-          transport: `${rating.source_warehouse || 'Nieznane'} → ${rating.destination_city || 'Nieznane'}`,
-          score: rating.overall_percentage,
-          date: formatDate(rating.created_at)
-        }));
-      }
-    } catch (error) {
-      console.error('Błąd pobierania danych z tabeli transport_detailed_ratings:', error);
-    }
-
-    console.log('Dashboard data collected:', dashboardData);
+    console.log('Dashboard data zebrane:', {
+      activeTransports: dashboardData.activeTransports,
+      activeSpeditions: dashboardData.activeSpeditions,
+      pendingRequests: dashboardData.pendingRequests,
+      ownTransports: dashboardData.transportTypes.own.thisMonth,
+      speditionTransports: dashboardData.transportTypes.spedition.thisMonth
+    });
 
     return NextResponse.json({
       success: true,
