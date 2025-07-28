@@ -502,6 +502,7 @@ const checkDetailedRatingsTable = async () => {
         table.increments('id').primary();
         table.integer('transport_id').notNullable();
         table.string('rater_email').notNullable();
+        table.string('rater_name'); // DODANA KOLUMNA
         table.timestamp('rated_at').defaultTo(db.fn.now());
         
         // Kategoria: Kierowca
@@ -532,14 +533,28 @@ const checkDetailedRatingsTable = async () => {
       
       console.log('Tabela transport_detailed_ratings została utworzona');
     } else {
-      console.log('Tabela transport_detailed_ratings już istnieje');
+      // Sprawdź czy kolumna rater_name istnieje i dodaj ją jeśli nie
+      const columns = await db.raw(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_name = 'transport_detailed_ratings' 
+        AND table_schema = 'public'
+      `);
+      
+      const columnNames = columns.rows.map(row => row.column_name);
+      
+      if (!columnNames.includes('rater_name')) {
+        console.log('Dodawanie kolumny rater_name do transport_detailed_ratings...');
+        await db.schema.table('transport_detailed_ratings', table => {
+          table.string('rater_name');
+        });
+        console.log('Kolumna rater_name została dodana');
+      }
+      
+      console.log('Tabela transport_detailed_ratings już istnieje i ma prawidłową strukturę');
     }
-    
-    // Utwórz widok dla statystyk
-    await createRatingSummaryView();
-    
   } catch (error) {
-    console.error('Błąd sprawdzania/tworzenia tabeli transport_detailed_ratings:', error);
+    console.error('Błąd podczas sprawdzania/tworzenia tabeli transport_detailed_ratings:', error);
   }
 };
 
