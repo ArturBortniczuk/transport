@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { format, startOfWeek, endOfWeek, eachWeekOfInterval, startOfMonth, endOfMonth } from 'date-fns'
 import { pl } from 'date-fns/locale'
-import { KIEROWCY, POJAZDY } from '../kalendarz/constants'
+import { KIEROWCY, POJAZDY, RYNKI } from '../kalendarz/constants' // DODANO RYNKI
 import * as XLSX from 'xlsx'
 import {
   AlertCircle,
@@ -611,6 +611,17 @@ export default function ArchiwumPage() {
     const [isEditMode, setIsEditMode] = useState(false)
     const [loading, setLoading] = useState(true)
     
+    // DODANE BRAKUJĄCE ZMIENNE STANU
+    const [newComment, setNewComment] = useState('')
+    const [addingComment, setAddingComment] = useState(false)
+    const [allComments, setAllComments] = useState([])
+    const [loadingComments, setLoadingComments] = useState(true)
+    
+    // DODANE BRAKUJĄCE ZMIENNE OBLICZENIOWE
+    const transportRating = transportRatings[transport.id]
+    const hasMainRating = transportRating?.stats.totalRatings > 0
+    const userHasRated = transportRating?.hasUserRated
+    
     // Ładowanie istniejącej oceny użytkownika
     useEffect(() => {
       const loadExistingRating = async () => {
@@ -645,6 +656,27 @@ export default function ArchiwumPage() {
       }
       
       loadExistingRating()
+    }, [transport.id])
+
+    // DODANY BRAKUJĄCY useEffect DO POBIERANIA KOMENTARZY
+    useEffect(() => {
+      const fetchComments = async () => {
+        try {
+          setLoadingComments(true)
+          const response = await fetch(`/api/transport-comments?transportId=${transport.id}`)
+          const data = await response.json()
+          
+          if (data.success) {
+            setAllComments(data.comments || [])
+          }
+        } catch (error) {
+          console.error('Błąd pobierania komentarzy:', error)
+        } finally {
+          setLoadingComments(false)
+        }
+      }
+      
+      fetchComments()
     }, [transport.id])
   
     const categories = [
@@ -745,6 +777,7 @@ export default function ArchiwumPage() {
         setSubmitting(false)
       }
     }
+    
     const handleAddComment = async () => {
       if (!newComment.trim()) return
       
@@ -915,7 +948,7 @@ export default function ArchiwumPage() {
                  {userHasRated ? 'Edytuj swoją ocenę' : 'Oceń transport'}
                </h3>
                
-               <form onSubmit={handleSubmitRating} className="space-y-6">
+               <div className="space-y-6">
                  {categories.map(category => (
                    <div key={category.id} className="border border-gray-200 rounded-lg p-6">
                      <h4 className="text-lg font-semibold mb-4">{category.title}</h4>
@@ -964,14 +997,15 @@ export default function ArchiwumPage() {
                      </button>
                    )}
                    <button
-                     type="submit"
+                     type="button"
+                     onClick={handleSubmitRating}
                      disabled={submitting}
                      className="flex items-center px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
                    >
                      {submitting ? 'Zapisywanie...' : (userHasRated ? 'Zapisz zmiany' : 'Zapisz ocenę')}
                    </button>
                  </div>
-               </form>
+               </div>
              </div>
            )}
 
