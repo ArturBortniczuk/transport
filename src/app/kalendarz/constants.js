@@ -2,7 +2,6 @@
 export const KIEROWCY = [
     { id: 1, imie: "Dzianis Nestser", telefon: "885 560 083" },
     { id: 2, imie: "Wojciech Ostaszewski", telefon: "691 690 165" },
-    { id: 3, imie: "Wojciech Ostaszewski", telefon: "691 690 165" },
     { id: 4, imie: "Krzysztof Sobolewski", telefon: "885 561 444" },
     { id: 5, imie: "Krzysztof Bauer", telefon: "693 880 149" },
     { id: 6, imie: "Paweł Stradomski", telefon: "885 560 557" }
