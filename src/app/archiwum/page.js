@@ -5,33 +5,38 @@ import { format, startOfWeek, endOfWeek, eachWeekOfInterval, startOfMonth, endOf
 import { pl } from 'date-fns/locale'
 import { KIEROWCY, POJAZDY } from '../kalendarz/constants'
 import * as XLSX from 'xlsx'
-import { 
-  ChevronLeft, 
-  ChevronRight, 
-  Download, 
-  Star, 
-  ChevronDown, 
-  MapPin, 
-  Truck, 
-  Building, 
-  User, 
-  Calendar, 
-  Trash2,
-  Package,
-  Route,
+import {
+  AlertCircle,
+  Building,
+  Calendar,
+  CheckCircle,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Compass,
+  Download,
+  Edit,
+  ExternalLink,
   Eye,
   FileText,
   Hash,
+  Info,
+  MapPin,
   MessageSquare,
-  Edit,
-  ThumbsUp,
-  ThumbsDown,
-  X,
-  CheckCircle,
-  AlertCircle,
+  Package,
+  Phone,
   Plus,
-  Send
-} from 'lucide-react'
+  Route,
+  Send,
+  Star,
+  StarOff,
+  ThumbsDown,
+  ThumbsUp,
+  Trash2,
+  Truck,
+  User,
+  X
+} from 'lucide-react';
 
 export default function ArchiwumPage() {
   const [archiwum, setArchiwum] = useState([])
@@ -604,46 +609,44 @@ export default function ArchiwumPage() {
     const [error, setError] = useState('')
     const [success, setSuccess] = useState(false)
     const [isEditMode, setIsEditMode] = useState(false)
-    const [newComment, setNewComment] = useState('')
-    const [addingComment, setAddingComment] = useState(false)
-    const [allComments, setAllComments] = useState([])
-    const [loadingComments, setLoadingComments] = useState(true)
+    const [loading, setLoading] = useState(true)
     
-    const transportRating = transportRatings[transport.id]
-    const hasMainRating = transportRating?.stats.totalRatings > 0
-    const userHasRated = transportRating?.hasUserRated
-
-    // Pobierz komentarze przy ładowaniu
+    // Ładowanie istniejącej oceny użytkownika
     useEffect(() => {
-      const fetchComments = async () => {
+      const loadExistingRating = async () => {
         try {
-          setLoadingComments(true)
-          const response = await fetch(`/api/transport-comments?transportId=${transport.id}`)
+          setLoading(true)
+          const response = await fetch(`/api/transport-detailed-ratings?transportId=${transport.id}`)
           const data = await response.json()
           
-          if (data.success) {
-            setAllComments(data.comments || [])
+          console.log('Dane oceny z API:', data)
+          
+          if (data.success && data.rating) {
+            // Załaduj istniejącą ocenę użytkownika
+            setRatings({
+              driverProfessional: data.rating.driver_professional,
+              driverTasksCompleted: data.rating.driver_tasks_completed,
+              cargoComplete: data.rating.cargo_complete,
+              cargoCorrect: data.rating.cargo_correct,
+              deliveryNotified: data.rating.delivery_notified,
+              deliveryOnTime: data.rating.delivery_on_time
+            })
+            setComment(data.rating.comment || '')
+            setIsEditMode(false) // Tryb tylko do odczytu jeśli już oceniono
+          } else {
+            setIsEditMode(true) // Tryb edycji jeśli jeszcze nie oceniono
           }
         } catch (error) {
-          console.error('Błąd pobierania komentarzy:', error)
+          console.error('Błąd ładowania oceny:', error)
+          setIsEditMode(true) // Domyślnie tryb edycji
         } finally {
-          setLoadingComments(false)
+          setLoading(false)
         }
       }
       
-      fetchComments()
+      loadExistingRating()
     }, [transport.id])
-
-    useEffect(() => {
-      if (userHasRated && transportRating?.userRating) {
-        setRatings(transportRating.userRating.ratings)
-        setComment(transportRating.userRating.comment || '')
-        setIsEditMode(false)
-      } else if (!hasMainRating) {
-        setIsEditMode(true)
-      }
-    }, [userHasRated, transportRating, hasMainRating])
-
+  
     const categories = [
       {
         id: 'driver',
@@ -669,66 +672,69 @@ export default function ArchiwumPage() {
           },
           {
             key: 'cargoCorrect',
-            text: 'Nie doszło do pomyłki – klient dostał właściwy towar.'
+            text: 'Towar był w dobrym stanie i prawidłowo zabezpieczony.'
           }
         ]
       },
       {
         id: 'delivery',
-        title: '🚚 Organizacja dostawy',
+        title: '🚛 Organizacja dostawy',
         criteria: [
           {
             key: 'deliveryNotified',
-            text: 'Dostawa została wcześniej awizowana u klienta.'
+            text: 'Klient został powiadomiony o dostawie z odpowiednim wyprzedzeniem.'
           },
           {
             key: 'deliveryOnTime',
-            text: 'Towar dotarł w ustalonym terminie.'
+            text: 'Dostawa odbyła się w uzgodnionym terminie.'
           }
         ]
       }
     ]
 
-    const handleSubmitRating = async (e) => {
-      e.preventDefault()
+    const handleSubmitRating = async () => {
+      // Sprawdź czy wszystkie oceny są wypełnione
+      const allRatingsCompleted = Object.values(ratings).every(value => value !== null);
       
-      if (!hasMainRating) {
-        const allRated = Object.values(ratings).every(rating => rating !== null)
-        if (!allRated) {
-          setError('Oceń wszystkie kryteria przed wysłaniem')
-          return
-        }
+      if (!allRatingsCompleted) {
+        setError('Wszystkie kryteria oceny muszą być wypełnione (tak/nie)')
+        return
       }
       
       try {
         setSubmitting(true)
         setError('')
         
-        // ZMIANA TUTAJ: Zmieniono URL na poprawny dla szczegółowych ocen
-        const response = await fetch('/api/transport-detailed-ratings', { // <-- POPRAWIONY URL
+        console.log('Wysyłanie oceny:', {
+          transportId: transport.id,
+          ratings,
+          comment: comment.trim()
+        });
+        
+        const response = await fetch('/api/transport-detailed-ratings', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
             transportId: transport.id,
-            ratings, // Obiekt ratings jest już w poprawnym formacie
+            ratings,
             comment: comment.trim()
           })
         })
         
         const result = await response.json()
         
+        console.log('Odpowiedź API:', result);
+        
         if (result.success) {
           setSuccess(true)
           setIsEditMode(false)
           
-          // Odśwież dane
-          await fetchAllRatings([transport]) // Ta funkcja powinna zostać zaktualizowana zgodnie z poprzednią sugestią
-          
           setTimeout(() => {
             setSuccess(false)
-          }, 3000)
+            onClose() // Zamknij modal po sukcesie
+          }, 2000)
         } else {
           setError(result.error || 'Wystąpił błąd podczas zapisywania oceny')
         }
@@ -739,7 +745,6 @@ export default function ArchiwumPage() {
         setSubmitting(false)
       }
     }
-
     const handleAddComment = async () => {
       if (!newComment.trim()) return
       
