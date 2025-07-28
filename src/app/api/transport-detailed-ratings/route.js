@@ -17,12 +17,16 @@ const validateSession = async (authToken) => {
   return session?.user_id;
 };
 
-// GET /api/transport-detailed-ratings?transportId=X&raterEmail=Y
+// GET /api/transport-detailed-ratings?transportId=X
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
     const transportId = searchParams.get('transportId');
     const raterEmail = searchParams.get('raterEmail');
+    
+    // Sprawdzamy uwierzytelnienie dla pełnych statystyk
+    const authToken = request.cookies.get('authToken')?.value;
+    const userId = await validateSession(authToken);
     
     if (!transportId) {
       return NextResponse.json({ 
@@ -37,28 +41,90 @@ export async function GET(request) {
       if (!hasTable) {
         return NextResponse.json({ 
           success: true, 
-          rating: null 
+          rating: null,
+          stats: {
+            totalRatings: 0,
+            overallRatingPercentage: null
+          },
+          canBeRated: true,
+          hasUserRated: false
         });
       }
     } catch (error) {
       return NextResponse.json({ 
         success: true, 
-        rating: null 
+        rating: null,
+        stats: {
+          totalRatings: 0,
+          overallRatingPercentage: null
+        },
+        canBeRated: true,
+        hasUserRated: false
       });
     }
     
-    let query = db('transport_detailed_ratings')
-      .where('transport_id', transportId);
+    // Pobierz wszystkie szczegółowe oceny dla tego transportu
+    const allDetailedRatings = await db('transport_detailed_ratings')
+      .where('transport_id', transportId)
+      .select('*');
     
-    if (raterEmail) {
-      query = query.where('rater_email', raterEmail);
+    console.log(`Znaleziono ${allDetailedRatings.length} szczegółowych ocen dla transportu ${transportId}`);
+    
+    // Oblicz statystyki
+    let overallRatingPercentage = null;
+    const totalRatings = allDetailedRatings.length;
+    
+    if (totalRatings > 0) {
+      let totalCriteria = 0;
+      let positiveCriteria = 0;
+      
+      allDetailedRatings.forEach(rating => {
+        const criteria = [
+          rating.driver_professional, 
+          rating.driver_tasks_completed, 
+          rating.cargo_complete, 
+          rating.cargo_correct, 
+          rating.delivery_notified, 
+          rating.delivery_on_time
+        ];
+        
+        criteria.forEach(criterion => {
+          if (criterion !== null && criterion !== undefined) {
+            totalCriteria++;
+            if (criterion === true || criterion === 1) {
+              positiveCriteria++;
+            }
+          }
+        });
+      });
+      
+      overallRatingPercentage = totalCriteria > 0 ? 
+        Math.round((positiveCriteria / totalCriteria) * 100) : null;
     }
     
-    const rating = await query.first();
+    // Sprawdź czy użytkownik może ocenić i czy już ocenił
+    const canBeRated = userId ? totalRatings === 0 : false;
+    const hasUserRated = userId ? 
+      allDetailedRatings.some(r => r.rater_email === userId) : false;
+    
+    // Pobierz konkretną ocenę użytkownika jeśli podano raterEmail
+    let rating = null;
+    if (raterEmail) {
+      rating = allDetailedRatings.find(r => r.rater_email === raterEmail);
+    } else if (userId) {
+      rating = allDetailedRatings.find(r => r.rater_email === userId);
+    }
     
     return NextResponse.json({ 
       success: true, 
-      rating 
+      rating,
+      stats: {
+        totalRatings,
+        overallRatingPercentage
+      },
+      canBeRated,
+      hasUserRated,
+      allRatings: allDetailedRatings // Wszystkie oceny dla dodatkowego kontekstu
     });
   } catch (error) {
     console.error('Error fetching detailed rating:', error);
@@ -69,7 +135,7 @@ export async function GET(request) {
   }
 }
 
-// POST /api/transport-detailed-ratings (istniejący kod...)
+// POST /api/transport-detailed-ratings - NAPRAWIONA WERSJA
 export async function POST(request) {
   try {
     // Sprawdzamy uwierzytelnienie
@@ -85,10 +151,31 @@ export async function POST(request) {
     
     const { transportId, ratings, comment } = await request.json();
     
+    console.log('Otrzymane dane oceny:', { transportId, ratings, comment });
+    
     if (!transportId || !ratings) {
       return NextResponse.json({ 
         success: false, 
         error: 'Brakujące dane: wymagane transport ID i oceny' 
+      }, { status: 400 });
+    }
+    
+    // WALIDACJA OCEN - sprawdź czy wszystkie wymagane pola są wypełnione
+    const requiredRatings = [
+      'driverProfessional',
+      'driverTasksCompleted', 
+      'cargoComplete',
+      'cargoCorrect',
+      'deliveryNotified',
+      'deliveryOnTime'
+    ];
+    
+    const hasAllRatings = requiredRatings.every(key => ratings[key] !== null && ratings[key] !== undefined);
+    
+    if (!hasAllRatings) {
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Wszystkie kryteria oceny muszą być wypełnione (tak/nie)' 
       }, { status: 400 });
     }
     
@@ -137,6 +224,8 @@ export async function POST(request) {
         comment: comment || ''
       };
       
+      console.log('Dane do zapisu:', ratingData);
+      
       if (existingRating) {
         // Aktualizuj istniejącą ocenę
         console.log('Aktualizowanie szczegółowej oceny dla użytkownika:', userId);
@@ -144,6 +233,21 @@ export async function POST(request) {
           .where('id', existingRating.id)
           .update(ratingData);
       } else {
+        // Sprawdź czy już istnieją jakieś oceny dla tego transportu
+        const existingRatingsCount = await db('transport_detailed_ratings')
+          .where('transport_id', transportId)
+          .count('* as count')
+          .first();
+        
+        const ratingsCount = parseInt(existingRatingsCount?.count || 0);
+        
+        if (ratingsCount > 0) {
+          return NextResponse.json({ 
+            success: false, 
+            error: 'Transport został już oceniony przez innego użytkownika' 
+          }, { status: 400 });
+        }
+        
         // Dodaj nową ocenę
         console.log('Dodawanie nowej szczegółowej oceny dla użytkownika:', userId);
         await db('transport_detailed_ratings')
