@@ -155,6 +155,7 @@ export default function TransportForm({
     const value = e.target.value
     const currentTime = Date.now()
     
+    // WAŻNE: Tylko aktualizuj lokalny bufor, NIE główny stan transportu
     setWzBuffer(value)
     
     // Walidacja kodów w czasie rzeczywistym
@@ -197,8 +198,16 @@ export default function TransportForm({
   // Rozpoczęcie trybu skanowania
   const startAddingWZ = () => {
     setIsAddingWZ(true)
+    // Załaduj istniejące kody do bufora (jeśli istnieją)
     setWzBuffer(nowyTransport.numerWZ || '')
     setWzValidation([])
+    
+    // Jeśli są już jakieś kody, natychmiast je zwaliduj
+    if (nowyTransport.numerWZ) {
+      const codes = nowyTransport.numerWZ.split(',').map(code => code.trim()).filter(code => code.length > 0)
+      const validation = codes.map(validateWZCode)
+      setWzValidation(validation)
+    }
   }
 
   // Zakończenie trybu skanowania i zapis kodów
@@ -490,8 +499,8 @@ export default function TransportForm({
                   <label className={labelBaseClass}>
                     Numery WZ 
                     {isAddingWZ && (
-                      <span className="text-blue-600 text-sm">
-                        (Tryb skanowania - {wzBuffer.split(',').filter(code => code.trim().length > 0).length} kodów)
+                      <span className="text-blue-600 text-sm font-medium">
+                        (🔄 Tryb buforowania - zmiany NIE są automatycznie zapisywane - {wzBuffer.split(',').filter(code => code.trim().length > 0).length} kodów)
                       </span>
                     )}
                   </label>
@@ -593,6 +602,7 @@ export default function TransportForm({
                         <br />• Skanuj kody jeden po drugim - system automatycznie je rozdzieli
                         <br />• Możesz ręcznie wpisać kody rozdzielone przecinkami  
                         <br />• Nieprawidłowe kody zostaną podświetlone na czerwono
+                        <br />• <strong>🔒 Zmiany NIE są automatycznie zapisywane podczas skanowania</strong>
                         <br />• Kliknij "Zapisz wszystkie kody" gdy skończysz skanowanie
                       </div>
                     </div>
