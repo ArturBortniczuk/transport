@@ -1,11 +1,10 @@
-// src/app/kalendarz/components/TransportForm.js
 import { useState, useEffect } from 'react'
 import { KIEROWCY, POJAZDY, RYNKI, POZIOMY_ZALADUNKU } from '../constants'
 import { format } from 'date-fns'
 import { pl } from 'date-fns/locale'
 import LocationSelector from './LocationSelector'
 import ConstructionSelector from './ConstructionSelector'
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight } from 'lucide-react' // Ikona dla połączonych tras
 
 export default function TransportForm({
   selectedDate,
@@ -17,48 +16,141 @@ export default function TransportForm({
   setEdytowanyTransport,
   setNowyTransport,
   userPermissions,
-  currentUserEmail,
-  userRole,
-  transporty,
+  currentUserEmail, // <-- NOWO DODANE
+  userRole, // <-- NOWO DODANE
+  transporty, // Dodajemy ten prop, aby mieć dostęp do wszystkich transportów
   userName
 }) {
-  // Istniejące stany
   const [users, setUsers] = useState([])
   const [isLoadingUsers, setIsLoadingUsers] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [filteredUsers, setFilteredUsers] = useState([])
   const [showUsersList, setShowUsersList] = useState(false)
   const [showLocationSelector, setShowLocationSelector] = useState(false)
-  const [recipientType, setRecipientType] = useState(nowyTransport.mpk ? 'construction' : 'person')
+  const [recipientType, setRecipientType] = useState(
+    nowyTransport.mpk ? 'construction' : 'sales'
+  )
+  const [selectedConstruction, setSelectedConstruction] = useState(null)
   const [connectToExistingTransport, setConnectToExistingTransport] = useState(false)
   const [selectedSourceTransport, setSelectedSourceTransport] = useState(null)
-  const [defaultMagazyn, setDefaultMagazyn] = useState('bialystok')
+  const [defaultMagazyn, setDefaultMagazyn] = useState(null)
 
-  // NOWE STANY dla skanowania kodów WZ
+  // NOWE STANY dla skanowania WZ
   const [wzBuffer, setWzBuffer] = useState('')
   const [isAddingWZ, setIsAddingWZ] = useState(false)
-  const [wzValidation, setWzValidation] = useState([])
-  const [lastScanTime, setLastScanTime] = useState(0)
 
-  // Funkcja sprawdzająca uprawnienia
+  // ✅ Funkcja sprawdzająca, czy użytkownik może edytować transport
   const canEditTransport = (transport) => {
-    if (userRole === 'admin') return true
-    if (userRole === 'spedytor') return true
-    if (!transport) return true
-    
-    return transport.osobaZlecajaca === userName || 
-           transport.emailZlecajacego === currentUserEmail
+    // Albo użytkownik ma uprawnienie calendar.edit,
+    // albo jest adminem, albo jest twórcą transportu
+    return userPermissions?.calendar?.edit === true || 
+           userRole === 'admin' || 
+           transport?.emailZlecajacego === currentUserEmail;
+  };
+
+  // FUNKCJE dla skanowania WZ
+  
+  // Funkcja obsługująca Enter w polu WZ (zapobiega automatycznemu submit)
+  const handleWZKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault() // Zablokuj automatyczny submit formularza
+      
+      // Jeśli jest tryb skanowania, dodaj przecinek i przejdź do nowej linii
+      if (isAddingWZ) {
+        const currentValue = wzBuffer.trim()
+        if (currentValue && !currentValue.endsWith(',')) {
+          setWzBuffer(currentValue + ', ')
+        }
+      }
+    }
   }
 
-  // Pobieranie użytkowników
+  // Funkcja obsługująca zmianę pola WZ
+  const handleWZChange = (e) => {
+    const value = e.target.value
+    
+    if (isAddingWZ) {
+      // W trybie buforowania - tylko aktualizuj lokalny bufor
+      setWzBuffer(value)
+    } else {
+      // W trybie normalnym - aktualizuj przez handleInputChange
+      handleInputChange(e)
+    }
+  }
+
+  // Rozpoczęcie trybu skanowania
+  const startAddingWZ = () => {
+    setIsAddingWZ(true)
+    setWzBuffer(nowyTransport.numerWZ || '')
+  }
+
+  // Zakończenie trybu skanowania i zapis kodów
+  const finishAddingWZ = () => {
+    // Wyczyść kody i sformatuj
+    const cleanedCodes = wzBuffer
+      .split(',')
+      .map(code => code.trim().toUpperCase())
+      .filter(code => code.length > 0)
+      .filter((code, index, arr) => arr.indexOf(code) === index) // usuń duplikaty
+      .join(', ')
+    
+    // Aktualizuj transport
+    setNowyTransport(prev => ({
+      ...prev,
+      numerWZ: cleanedCodes
+    }))
+    
+    setIsAddingWZ(false)
+    setWzBuffer('')
+  }
+
+  // Anulowanie trybu skanowania
+  const cancelAddingWZ = () => {
+    setIsAddingWZ(false)
+    setWzBuffer('')
+  }
+
   useEffect(() => {
-    const fetchUsers = async () => {
+    const fetchUserRole = async () => {
       try {
-        const response = await fetch('/api/users')
-        const data = await response.json()
-        if (data.success) {
-          setUsers(data.users)
-          setFilteredUsers(data.users)
+        const response = await fetch('/api/user');
+        const data = await response.json();
+        
+        if (data.isAuthenticated && data.user) {
+          let defaultMag = 'bialystok'; // Domyślnie Białystok
+          
+          // Ustawienie domyślnego magazynu na podstawie roli użytkownika
+          if (data.user.role === 'magazyn_bialystok') {
+            defaultMag = 'bialystok';
+          } else if (data.user.role === 'magazyn_zielonka') {
+            defaultMag = 'zielonka';
+          }
+          
+          setDefaultMagazyn(defaultMag);
+          
+          // Ustaw magazyn w formularzu
+          setNowyTransport(prev => ({
+            ...prev,
+            magazyn: defaultMag
+          }));
+        }
+      } catch (error) {
+        console.error('Błąd pobierania roli użytkownika:', error);
+      }
+    };
+  
+    fetchUserRole();
+  }, [setNowyTransport]);
+
+  
+  useEffect(() => {
+    async function fetchUsers() {
+      try {
+        const response = await fetch('/api/users/list')
+        if (response.ok) {
+          const data = await response.json()
+          setUsers(data)
+          setFilteredUsers(data)
         }
       } catch (error) {
         console.error('Błąd pobierania użytkowników:', error)
@@ -66,10 +158,82 @@ export default function TransportForm({
         setIsLoadingUsers(false)
       }
     }
+
     fetchUsers()
   }, [])
 
-  // Obsługa wyboru magazynu
+  // Ustawienie typu odbiorcy i konstrukcji przy edycji transportu
+  useEffect(() => {
+    if (edytowanyTransport && edytowanyTransport.mpk) {
+      // Jeśli transport ma numer MPK, prawdopodobnie jest to budowa
+      setRecipientType('construction')
+      
+      // Utworzenie obiektu construction bazując na danych transportu
+      if (edytowanyTransport.nazwaKlienta && edytowanyTransport.mpk) {
+        setSelectedConstruction({
+          id: 'temp', // ID tymczasowe
+          name: edytowanyTransport.nazwaKlienta,
+          mpk: edytowanyTransport.mpk
+        })
+      }
+    } else {
+      setRecipientType('sales')
+      setSelectedConstruction(null)
+    }
+
+    // Resetowanie stanu połączeń przy edycji transportu
+    setConnectToExistingTransport(false)
+    setSelectedSourceTransport(null)
+  }, [edytowanyTransport])
+
+  // Filtrowanie użytkowników na podstawie wpisanego tekstu
+  useEffect(() => {
+    if (searchTerm.trim() === '') {
+      setFilteredUsers(users)
+    } else {
+      const filtered = users.filter(user => 
+        user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (user.mpk && user.mpk.toLowerCase().includes(searchTerm.toLowerCase()))
+      )
+      setFilteredUsers(filtered)
+    }
+  }, [searchTerm, users])
+
+  // Efekt do aktualizacji nowyTransport przy wyborze transportu źródłowego
+  useEffect(() => {
+    if (selectedSourceTransport && connectToExistingTransport) {
+      setNowyTransport(prev => ({
+        ...prev,
+        kierowcaId: selectedSourceTransport.kierowcaId,
+        connectedTransportId: selectedSourceTransport.id
+      }))
+    } else {
+      // Jeśli odłączamy transport, usuwamy powiązanie
+      setNowyTransport(prev => ({
+        ...prev,
+        connectedTransportId: null
+      }))
+    }
+  }, [selectedSourceTransport, connectToExistingTransport, setNowyTransport])
+
+  const handleUserSelect = (user) => {
+    console.log('Wybrany użytkownik:', user)
+    
+    setNowyTransport(prev => {
+      const updated = {
+        ...prev,
+        osobaZlecajaca: user.name,
+        emailZlecajacego: user.email,
+        mpk: user.mpk || ''
+      }
+      console.log('Aktualizacja transportu z MPK:', updated)
+      return updated
+    })
+    
+    setSearchTerm(user.name)
+    setShowUsersList(false)
+  }
+
   const handleMagazynSelect = (magazyn) => {
     setNowyTransport(prev => ({
       ...prev,
@@ -77,22 +241,62 @@ export default function TransportForm({
     }))
   }
 
-  // Zapisywanie lokalizacji
-  const handleSaveLocation = async () => {
+  // Obsługa zmiany typu odbiorcy
+  const handleRecipientTypeChange = (type) => {
+    setRecipientType(type);
+    
+    // Resetuj pola zależne od typu
+    if (type === 'construction') {
+      setNowyTransport(prev => ({
+        ...prev,
+        // Używamy danych zalogowanego użytkownika
+        osobaZlecajaca: userName || localStorage.getItem('userName') || 'Użytkownik', 
+        emailZlecajacego: currentUserEmail || localStorage.getItem('userEmail') || '',
+      }))
+    } else {
+      setSelectedConstruction(null);
+      setNowyTransport(prev => ({
+        ...prev,
+        mpk: ''
+      }))
+    }
+  }
+
+  // Obsługa wyboru budowy
+  const handleConstructionSelect = (construction) => {
+    setSelectedConstruction(construction)
+    setNowyTransport(prev => ({
+      ...prev,
+      nazwaKlienta: construction.name,
+      mpk: construction.mpk
+    }))
+  }
+
+  // Funkcja do zapisywania lokalizacji
+  const saveCurrentLocation = () => {
     if (!nowyTransport.miasto || !nowyTransport.kodPocztowy) {
-      alert('Podaj miasto i kod pocztowy przed zapisaniem lokalizacji')
+      alert('Uzupełnij przynajmniej miasto i kod pocztowy, aby zapisać lokalizację')
       return
     }
-
+    
     try {
-      const locations = JSON.parse(localStorage.getItem('savedLocations') || '[]')
+      // Pobierz aktualną listę zapisanych lokalizacji
+      const savedLocations = localStorage.getItem('savedLocations')
+      let locations = []
+      
+      if (savedLocations) {
+        locations = JSON.parse(savedLocations)
+      }
+      
+      // Przygotuj lokalizację do zapisania
       const locationToSave = {
-        miasto: nowyTransport.miasto || '',
-        kodPocztowy: nowyTransport.kodPocztowy || '',
+        miasto: nowyTransport.miasto,
+        kodPocztowy: nowyTransport.kodPocztowy,
         ulica: nowyTransport.ulica || '',
         nazwaKlienta: nowyTransport.nazwaKlienta || ''
       }
       
+      // Sprawdź czy lokalizacja już istnieje
       const exists = locations.some(loc => 
         loc.miasto === locationToSave.miasto && 
         loc.kodPocztowy === locationToSave.kodPocztowy && 
@@ -100,6 +304,7 @@ export default function TransportForm({
       )
       
       if (!exists) {
+        // Dodaj nową lokalizację i zapisz
         locations.push(locationToSave)
         localStorage.setItem('savedLocations', JSON.stringify(locations))
         alert('Lokalizacja została zapisana')
@@ -111,8 +316,8 @@ export default function TransportForm({
       alert('Wystąpił błąd podczas zapisywania lokalizacji')
     }
   }
-
-  // Obsługa wyboru lokalizacji z selektora
+  
+  // Funkcja obsługująca wybór lokalizacji z selektora
   const handleLocationSelect = (location) => {
     setNowyTransport(prev => ({
       ...prev,
@@ -123,135 +328,20 @@ export default function TransportForm({
     }))
   }
 
-  // Pobieranie dostępnych transportów dla połączeń
+  // Funkcja do pobierania dostępnych transportów z tego samego dnia dla połączenia
   const getAvailableTransportsForConnection = () => {
-    if (!selectedDate) return []
+    if (!selectedDate) return [];
     
-    const dateKey = format(selectedDate, 'yyyy-MM-dd')
-    const availableTransports = transporty[dateKey] || []
+    const dateKey = format(selectedDate, 'yyyy-MM-dd');
+    const availableTransports = transporty[dateKey] || [];
     
     return availableTransports.filter(t => 
       (t.status === 'aktywny' || t.status === 'active') && 
-      !t.connected_transport_id && 
-      t.id !== (edytowanyTransport?.id || 0)
-    )
-  }
+      !t.connected_transport_id && // Nie pokazujemy transportów, które już są połączone jako drugi punkt
+      t.id !== (edytowanyTransport?.id || 0) // Nie pokazujemy aktualnie edytowanego transportu
+    );
+  };
 
-  // ========================
-  // FUNKCJE SKANOWANIA WZ
-  // ========================
-
-  // Walidacja kodu WZ
-  const validateWZCode = (code) => {
-    const trimmed = code.trim()
-    if (trimmed.length < 5) return { valid: false, message: 'Za krótki' }
-    if (!trimmed.includes('/')) return { valid: false, message: 'Brak separatorów /' }
-    if (trimmed.length > 50) return { valid: false, message: 'Za długi' }
-    return { valid: true, message: 'OK' }
-  }
-
-  // Obsługa zmiany pola WZ w trybie skanowania
-  const handleWZChange = (e) => {
-    const value = e.target.value
-    const currentTime = Date.now()
-    
-    // WAŻNE: Tylko aktualizuj lokalny bufor, NIE główny stan transportu
-    setWzBuffer(value)
-    
-    // Walidacja kodów w czasie rzeczywistym
-    const codes = value.split(',').map(code => code.trim()).filter(code => code.length > 0)
-    const validation = codes.map(validateWZCode)
-    setWzValidation(validation)
-    
-    // Auto-separator: jeśli minęło mniej niż 100ms od ostatniej zmiany,
-    // to prawdopodobnie skaner wprowadza dane bardzo szybko
-    if (currentTime - lastScanTime > 100) {
-      const lastCode = codes[codes.length - 1]
-      
-      // Sprawdź czy ostatni kod wygląda na kompletny
-      if (lastCode && lastCode.length >= 8 && lastCode.includes('/') && !value.endsWith(',')) {
-        // Automatycznie dodaj przecinek po krótkim opóźnieniu
-        setTimeout(() => {
-          setWzBuffer(prev => {
-            if (prev === value && !prev.endsWith(',')) {
-              return prev + ', '
-            }
-            return prev
-          })
-        }, 200)
-      }
-    }
-    
-    setLastScanTime(currentTime)
-  }
-
-  // Czyszczenie i formatowanie kodów WZ
-  const cleanAndFormatWZ = (rawValue) => {
-    return rawValue
-      .split(',')
-      .map(code => code.trim().toUpperCase())
-      .filter(code => code.length > 0)
-      .filter((code, index, arr) => arr.indexOf(code) === index) // usuń duplikaty
-      .join(', ')
-  }
-
-  // Rozpoczęcie trybu skanowania
-  const startAddingWZ = () => {
-    setIsAddingWZ(true)
-    // Załaduj istniejące kody do bufora (jeśli istnieją)
-    setWzBuffer(nowyTransport.numerWZ || '')
-    setWzValidation([])
-    
-    // Jeśli są już jakieś kody, natychmiast je zwaliduj
-    if (nowyTransport.numerWZ) {
-      const codes = nowyTransport.numerWZ.split(',').map(code => code.trim()).filter(code => code.length > 0)
-      const validation = codes.map(validateWZCode)
-      setWzValidation(validation)
-    }
-  }
-
-  // Zakończenie trybu skanowania i zapis kodów
-  const finishAddingWZ = () => {
-    const cleanedCodes = cleanAndFormatWZ(wzBuffer)
-    const finalCodes = cleanedCodes.split(',').map(code => code.trim())
-    const allValid = finalCodes.every(code => validateWZCode(code).valid)
-    
-    if (!allValid) {
-      const invalidCodes = finalCodes.filter(code => !validateWZCode(code).valid)
-      if (!confirm(`Niektóre kody mogą być nieprawidłowe: ${invalidCodes.join(', ')}. Czy kontynuować?`)) {
-        return
-      }
-    }
-    
-    setIsAddingWZ(false)
-    
-    // Aktualizuj stan transportu
-    if (edytowanyTransport) {
-      // W trybie edycji
-      setNowyTransport(prev => ({
-        ...prev,
-        numerWZ: cleanedCodes
-      }))
-    } else {
-      // W trybie dodawania nowego transportu
-      setNowyTransport(prev => ({
-        ...prev,
-        numerWZ: cleanedCodes
-      }))
-    }
-    
-    setWzBuffer('')
-    setWzValidation([])
-  }
-
-  // Anulowanie trybu skanowania
-  const cancelAddingWZ = () => {
-    setIsAddingWZ(false)
-    setWzBuffer(nowyTransport.numerWZ || '')
-    setWzValidation([])
-  }
-
-  // Sprawdź uprawnienia
   if (!canEditTransport(edytowanyTransport || {})) {
     return (
       <div className="mt-8 bg-white rounded-xl shadow-lg p-6 text-center">
@@ -262,7 +352,6 @@ export default function TransportForm({
     )
   }
 
-  // Klasy CSS
   const inputBaseClass = "w-full rounded-lg border-gray-300 shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
   const labelBaseClass = "block text-sm font-medium text-gray-700 mb-1"
   const sectionBaseClass = "bg-white p-5 rounded-lg border-2 border-gray-200 shadow-md mb-6"
@@ -274,9 +363,7 @@ export default function TransportForm({
         {/* Nagłówek formularza */}
         <div className="bg-gradient-to-r from-blue-600 to-blue-800 px-6 py-5">
           <h2 className="text-2xl font-bold text-white">
-            {edytowanyTransport 
-              ? 'Edytuj transport' 
-              : `Dodaj transport na ${format(selectedDate, 'd MMMM yyyy', { locale: pl })}`}
+            {edytowanyTransport ? 'Edytuj transport' : `Dodaj transport na ${format(selectedDate, 'd MMMM yyyy', { locale: pl })}`}
           </h2>
           <p className="mt-1 text-blue-100 text-sm">
             {edytowanyTransport ? 'Zaktualizuj dane transportu' : 'Wypełnij poniższy formularz aby dodać nowy transport'}
@@ -308,10 +395,18 @@ export default function TransportForm({
         </div>
 
         {/* Formularz */}
-        <form onSubmit={edytowanyTransport ? handleUpdateTransport : handleSubmit} className="p-6">
+        <form 
+          onSubmit={edytowanyTransport ? handleUpdateTransport : handleSubmit} 
+          onKeyDown={(e) => {
+            // Zablokuj Enter w całym formularzu - tylko przycisk "Zapisz zmiany" może zapisać
+            if (e.key === 'Enter' && e.target.type !== 'submit') {
+              e.preventDefault()
+            }
+          }}
+          className="p-6"
+        >
           <div className="space-y-6">
-            
-            {/* Sekcja łączenia transportów - tylko przy dodawaniu nowego */}
+            {/* Sekcja łączenia transportów - nowa sekcja */}
             {!edytowanyTransport && (
               <div className={sectionBaseClass}>
                 <h3 className="text-lg font-semibold text-gray-700 mb-4 flex items-center">
@@ -343,38 +438,76 @@ export default function TransportForm({
                       <select
                         value={selectedSourceTransport?.id || ""}
                         onChange={(e) => {
-                          const transportId = e.target.value
-                          const transport = getAvailableTransportsForConnection().find(t => t.id === parseInt(transportId))
-                          setSelectedSourceTransport(transport)
+                          const transportId = e.target.value;
+                          const transport = getAvailableTransportsForConnection().find(t => t.id === parseInt(transportId));
+                          setSelectedSourceTransport(transport);
                         }}
                         className={inputBaseClass}
                         disabled={!connectToExistingTransport}
                         required={connectToExistingTransport}
                       >
-                        <option value="">Wybierz transport do połączenia...</option>
+                        <option value="">Wybierz transport</option>
                         {getAvailableTransportsForConnection().map(transport => (
                           <option key={transport.id} value={transport.id}>
-                            {transport.miasto} - {transport.nazwaKlienta} - {transport.kierowcaNazwa}
+                            {transport.miasto} - {transport.kodPocztowy} 
+                            ({KIEROWCY.find(k => k.id === parseInt(transport.kierowcaId))?.imie})
                           </option>
                         ))}
                       </select>
+                      
+                      {selectedSourceTransport && (
+                        <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                          <p className="font-medium">Transport źródłowy:</p>
+                          <div className="flex items-center mt-2">
+                            <div className="text-gray-700">
+                              <span className="font-semibold">{selectedSourceTransport.miasto}</span> 
+                              ({selectedSourceTransport.kodPocztowy})
+                            </div>
+                            <ChevronRight className="mx-2 text-blue-500" />
+                            <div className="text-gray-700">
+                              <span className="font-semibold">{nowyTransport.miasto || "Wybierz cel"}</span>
+                              {nowyTransport.kodPocztowy && ` (${nowyTransport.kodPocztowy})`}
+                            </div>
+                          </div>
+                          <p className="mt-2 text-sm text-gray-600">
+                            Kierowca: {KIEROWCY.find(k => k.id === parseInt(selectedSourceTransport.kierowcaId))?.imie || "Nieznany"}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
               </div>
             )}
 
-            {/* Sekcja: Miejsce dostawy */}
+            {/* Sekcja: Lokalizacja */}
             <div className={sectionBaseClass}>
-              <h3 className="text-lg font-semibold text-gray-700 mb-4 flex items-center">
-                <svg className="w-5 h-5 mr-2 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-                Miejsce dostawy
-              </h3>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold text-gray-700 flex items-center">
+                  <svg className="w-5 h-5 mr-2 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  Lokalizacja dostawy
+                </h3>
+                <div className="flex space-x-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowLocationSelector(true)}
+                    className="px-3 py-1 text-sm border border-blue-300 text-blue-600 rounded hover:bg-blue-50"
+                  >
+                    Wczytaj z listy
+                  </button>
+                  <button
+                    type="button"
+                    onClick={saveCurrentLocation}
+                    className="px-3 py-1 text-sm border border-green-300 text-green-600 rounded hover:bg-green-50"
+                  >
+                    Zapisz lokalizację
+                  </button>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className={labelBaseClass}>
                     Miasto
@@ -385,7 +518,6 @@ export default function TransportForm({
                     value={nowyTransport.miasto}
                     onChange={handleInputChange}
                     className={inputBaseClass}
-                    placeholder="Nazwa miasta"
                     required
                   />
                 </div>
@@ -404,37 +536,20 @@ export default function TransportForm({
                     required
                   />
                 </div>
-              </div>
-              
-              <div className="mb-4">
-                <label className={labelBaseClass}>
-                  Ulica i numer budynku
-                </label>
-                <input
-                  type="text"
-                  name="ulica"
-                  value={nowyTransport.ulica}
-                  onChange={handleInputChange}
-                  className={inputBaseClass}
-                  placeholder="Nazwa ulicy i numer budynku"
-                />
-              </div>
 
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowLocationSelector(true)}
-                  className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 transition-colors"
-                >
-                  📍 Wybierz z zapisanych
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSaveLocation}
-                  className="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors"
-                >
-                  💾 Zapisz lokalizację
-                </button>
+                <div className="md:col-span-2">
+                  <label className={labelBaseClass}>
+                    Ulica i numer
+                  </label>
+                  <input
+                    type="text"
+                    name="ulica"
+                    value={nowyTransport.ulica}
+                    onChange={handleInputChange}
+                    className={inputBaseClass}
+                    placeholder="Nazwa ulicy i numer budynku"
+                  />
+                </div>
               </div>
             </div>
 
@@ -446,7 +561,6 @@ export default function TransportForm({
                 </svg>
                 Szczegóły transportu
               </h3>
-              
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className={labelBaseClass}>
@@ -458,7 +572,7 @@ export default function TransportForm({
                     onChange={handleInputChange}
                     className={inputBaseClass}
                     required
-                    disabled={connectToExistingTransport && selectedSourceTransport}
+                    disabled={connectToExistingTransport && selectedSourceTransport} // Blokujemy zmianę kierowcy przy połączonych trasach
                   >
                     <option value="">Wybierz kierowcę</option>
                     {KIEROWCY.map(kierowca => (
@@ -474,6 +588,33 @@ export default function TransportForm({
                   )}
                 </div>
                 
+                {/* Nowe pole wyboru pojazdu */}
+                <div>
+                  <label className={labelBaseClass}>
+                    Pojazd
+                  </label>
+                  <select
+                    name="pojazdId"
+                    value={nowyTransport.pojazdId}
+                    onChange={handleInputChange}
+                    className={inputBaseClass}
+                    required
+                    disabled={connectToExistingTransport && selectedSourceTransport}
+                  >
+                    <option value="">Wybierz pojazd</option>
+                    {POJAZDY.map(pojazd => (
+                      <option key={pojazd.id} value={pojazd.id}>
+                        {pojazd.tabliceRej} - {pojazd.model}
+                      </option>
+                    ))}
+                  </select>
+                  {connectToExistingTransport && selectedSourceTransport && (
+                    <p className="mt-1 text-xs text-blue-600">
+                      Pojazd jest ustawiony automatycznie dla połączonych transportów
+                    </p>
+                  )}
+                </div>
+
                 <div>
                   <label className={labelBaseClass}>
                     Rynek
@@ -494,121 +635,107 @@ export default function TransportForm({
                   </select>
                 </div>
 
-                {/* POLE NUMERÓW WZ Z FUNKCJĄ SKANOWANIA */}
-                <div className="md:col-span-2">
+                {/* POLE NUMER WZ ZE SKANOWANIEM */}
+                <div>
                   <label className={labelBaseClass}>
-                    Numery WZ 
-                    {isAddingWZ && (
-                      <span className="text-blue-600 text-sm font-medium">
-                        (🔄 Tryb buforowania - zmiany NIE są automatycznie zapisywane - {wzBuffer.split(',').filter(code => code.trim().length > 0).length} kodów)
-                      </span>
-                    )}
+                    Numer WZ
+                    {isAddingWZ && <span className="text-blue-600 text-sm ml-2">(Tryb skanowania - bez auto-zapisu)</span>}
                   </label>
                   
                   {!isAddingWZ ? (
-                    <div className="space-y-2">
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          name="numerWZ"
-                          value={nowyTransport.numerWZ}
-                          onChange={handleInputChange}
-                          className={inputBaseClass}
-                          placeholder="WZ/XXXXX/YY/XXX/25"
-                          required
-                        />
-                        <button
-                          type="button"
-                          onClick={startAddingWZ}
-                          className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors flex items-center gap-2 whitespace-nowrap"
-                        >
-                          📱 Tryb skanowania
-                        </button>
-                      </div>
-                      
-                      {/* Podgląd zapisanych kodów */}
-                      {nowyTransport.numerWZ && (
-                        <div className="text-xs text-gray-600 bg-gray-50 p-2 rounded">
-                          Zapisane kody: {nowyTransport.numerWZ.split(',').length} • {nowyTransport.numerWZ}
-                        </div>
-                      )}
+                    // Tryb normalny
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        name="numerWZ"
+                        value={nowyTransport.numerWZ}
+                        onChange={handleInputChange}
+                        onKeyDown={handleWZKeyDown} // Blokuje Enter
+                        className={inputBaseClass}
+                        placeholder="WZ/XXXXX/YY/XXX/25"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={startAddingWZ}
+                        className="px-3 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors text-sm whitespace-nowrap"
+                      >
+                        📱 Skanuj więcej
+                      </button>
                     </div>
                   ) : (
-                    <div className="space-y-3 border border-blue-200 rounded-lg p-3 bg-blue-50">
+                    // Tryb skanowania
+                    <div className="space-y-2">
                       <textarea
                         value={wzBuffer}
                         onChange={handleWZChange}
-                        className="w-full h-32 p-3 border border-gray-300 rounded-md font-mono text-sm resize-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="Miejsce na zeskanowane kody WZ...&#10;System automatycznie rozdzieli je przecinkami."
+                        onKeyDown={handleWZKeyDown} // Blokuje Enter (dodaje przecinek zamiast submit)
+                        className={`${inputBaseClass} h-24 font-mono text-sm`}
+                        placeholder="Skanuj kody jeden po drugim...&#10;Enter dodaje przecinek, nie zapisuje!"
                         autoFocus
                       />
                       
-                      {/* Status walidacji */}
-                      {wzValidation.length > 0 && (
-                        <div className="max-h-24 overflow-y-auto">
-                          {wzBuffer.split(',').map((code, index) => {
-                            const trimmed = code.trim()
-                            if (!trimmed) return null
-                            const validation = wzValidation[index] || { valid: false, message: 'Sprawdzanie...' }
-                            
-                            return (
-                              <div key={index} className={`text-xs flex items-center gap-2 py-1 px-2 rounded ${
-                                validation.valid ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                              }`}>
-                                <span>{validation.valid ? '✅' : '❌'}</span>
-                                <span className="font-mono">{trimmed}</span>
-                                <span className="ml-auto">{validation.message}</span>
-                              </div>
-                            )
-                          }).filter(Boolean)}
-                        </div>
-                      )}
-                      
-                      {/* Przyciski kontrolne */}
-                      <div className="flex gap-2 text-sm flex-wrap">
+                      <div className="flex gap-2 text-sm">
                         <button
                           type="button"
                           onClick={() => setWzBuffer(prev => prev.trim() + (prev.trim() ? ', ' : ''))}
-                          className="px-3 py-1 bg-gray-500 text-white rounded hover:bg-gray-600"
+                          className="px-2 py-1 bg-gray-500 text-white rounded hover:bg-gray-600"
                         >
-                          ➕ Dodaj separator
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setWzBuffer('')}
-                          className="px-3 py-1 bg-orange-500 text-white rounded hover:bg-orange-600"
-                        >
-                          🗑️ Wyczyść
+                          ➕ Przecinek
                         </button>
                         <button
                           type="button"
                           onClick={finishAddingWZ}
-                          className="px-4 py-1 bg-green-500 text-white rounded hover:bg-green-600 font-medium"
+                          className="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600 font-medium"
                         >
-                          ✅ Zapisz wszystkie kody
+                          ✅ Zapisz kody
                         </button>
                         <button
                           type="button"
                           onClick={cancelAddingWZ}
-                          className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600"
+                          className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600"
                         >
                           ❌ Anuluj
                         </button>
                       </div>
                       
-                      {/* Instrukcje */}
                       <div className="text-xs text-blue-700 bg-blue-100 p-2 rounded">
-                        <strong>💡 Jak korzystać:</strong>
-                        <br />• Skanuj kody jeden po drugim - system automatycznie je rozdzieli
-                        <br />• Możesz ręcznie wpisać kody rozdzielone przecinkami  
-                        <br />• Nieprawidłowe kody zostaną podświetlone na czerwono
-                        <br />• <strong>🔒 Zmiany NIE są automatycznie zapisywane podczas skanowania</strong>
-                        <br />• Kliknij "Zapisz wszystkie kody" gdy skończysz skanowanie
+                        💡 Skanuj kody jeden po drugim. Enter dodaje przecinek. 
+                        <strong>Kliknij "Zapisz kody" gdy skończysz</strong> - nie będzie auto-zapisu!
                       </div>
                     </div>
                   )}
                 </div>
 
+                <div>
+                  <label className={labelBaseClass}>
+                    Poziom napełnienia
+                  </label>
+                  <select
+                    name="poziomZaladunku"
+                    value={nowyTransport.poziomZaladunku}
+                    onChange={handleInputChange}
+                    className={inputBaseClass}
+                    required
+                  >
+                    <option value="">0%</option>
+                    {POZIOMY_ZALADUNKU.map(poziom => (
+                      <option key={poziom} value={poziom}>{poziom}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Sekcja: Informacje dodatkowe */}
+            <div className={sectionBaseClass}>
+              <h3 className="text-lg font-semibold text-gray-700 mb-4 flex items-center">
+                <svg className="w-5 h-5 mr-2 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Informacje dodatkowe
+              </h3>
+              <div className="space-y-4">
                 <div>
                   <label className={labelBaseClass}>
                     Nazwa klienta
@@ -618,12 +745,105 @@ export default function TransportForm({
                     name="nazwaKlienta"
                     value={nowyTransport.nazwaKlienta}
                     onChange={handleInputChange}
+                    placeholder="Firma"
                     className={inputBaseClass}
-                    placeholder="Nazwa klienta/odbiorcy"
                     required
                   />
                 </div>
 
+                {/* Wybór typu odbiorcy */}
+                <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <h4 className="text-base font-medium text-gray-800 mb-3">Typ odbiorcy</h4>
+                  <div className="flex space-x-4">
+                    <button
+                      type="button"
+                      onClick={() => handleRecipientTypeChange('sales')}
+                      className={`px-4 py-2 rounded-md ${
+                        recipientType === 'sales'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-white text-gray-700 border border-gray-300'
+                      }`}
+                    >
+                      Handlowiec
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleRecipientTypeChange('construction')}
+                      className={`px-4 py-2 rounded-md ${
+                        recipientType === 'construction'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-white text-gray-700 border border-gray-300'
+                      }`}
+                    >
+                      Budowa
+                    </button>
+                  </div>
+                </div>
+
+                {/* Wybór odbiorcy w zależności od typu */}
+                {recipientType === 'sales' ? (
+                  <>
+                    {/* Pole wyszukiwania użytkowników (handlowców) */}
+                    <div>
+                      <label className={labelBaseClass}>
+                        Osoba odpowiedzialna
+                      </label>
+                      {isLoadingUsers ? (
+                        <div className="animate-pulse h-10 bg-gray-200 rounded"></div>
+                      ) : (
+                        <div className="relative">
+                          <input
+                            type="text"
+                            value={searchTerm}
+                            onChange={(e) => {
+                              setSearchTerm(e.target.value)
+                              setShowUsersList(true)
+                            }}
+                            onFocus={() => setShowUsersList(true)}
+                            placeholder="Wpisz, aby wyszukać osobę"
+                            className={inputBaseClass}
+                            required
+                          />
+                          {showUsersList && (
+                            <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto">
+                              {filteredUsers.length > 0 ? (
+                                filteredUsers.map(user => (
+                                  <div
+                                    key={user.email}
+                                    onClick={() => handleUserSelect(user)}
+                                    className="p-2 hover:bg-gray-100 cursor-pointer"
+                                  >
+                                    <div className="font-medium">{user.name}</div>
+                                    {user.mpk && (
+                                      <div className="text-sm text-gray-500">MPK: {user.mpk}</div>
+                                    )}
+                                  </div>
+                                ))
+                              ) : (
+                                <div className="p-2 text-gray-500">Brak wyników</div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {/* Wybór budowy */}
+                    <div>
+                      <label className={labelBaseClass}>
+                        Budowa
+                      </label>
+                      <ConstructionSelector
+                        value={selectedConstruction}
+                        onChange={handleConstructionSelect}
+                      />
+                    </div>
+                  </>
+                )}
+
+                {/* Pole wyświetlające numer MPK */}
                 <div>
                   <label className={labelBaseClass}>
                     MPK
@@ -631,101 +851,13 @@ export default function TransportForm({
                   <input
                     type="text"
                     name="mpk"
-                    value={nowyTransport.mpk}
-                    onChange={handleInputChange}
+                    value={nowyTransport.mpk || ''}
                     className={inputBaseClass}
-                    placeholder="Numer MPK"
-                    required
+                    readOnly
                   />
                 </div>
 
-                <div>
-                  <label className={labelBaseClass}>
-                    Poziom załadunku
-                  </label>
-                  <select
-                    name="poziomZaladunku"
-                    value={nowyTransport.poziomZaladunku}
-                    onChange={handleInputChange}
-                    className={inputBaseClass}
-                    required
-                  >
-                    <option value="">Wybierz poziom załadunku</option>
-                    {POZIOMY_ZALADUNKU.map(poziom => (
-                      <option key={poziom} value={poziom}>
-                        {poziom}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className={labelBaseClass}>
-                    Dokumenty magazynowe
-                  </label>
-                  <textarea
-                    name="dokumenty"
-                    value={nowyTransport.dokumenty || ''}
-                    onChange={handleInputChange}
-                    className={`${inputBaseClass} h-20`}
-                    placeholder="Lista dokumentów magazynowych..."
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Sekcja: Osoba zlecająca */}
-            <div className={sectionBaseClass}>
-              <h3 className="text-lg font-semibold text-gray-700 mb-4 flex items-center">
-                <svg className="w-5 h-5 mr-2 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
-                Osoba zlecająca
-              </h3>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className={labelBaseClass}>
-                    Imię i nazwisko
-                  </label>
-                  <input
-                    type="text"
-                    name="osobaZlecajaca"
-                    value={nowyTransport.osobaZlecajaca}
-                    onChange={handleInputChange}
-                    className={inputBaseClass}
-                    placeholder="Imię i nazwisko zlecającego"
-                    required
-                  />
-                </div>
-                
-                <div>
-                  <label className={labelBaseClass}>
-                    Email zlecającego
-                  </label>
-                  <input
-                    type="email"
-                    name="emailZlecajacego"
-                    value={nowyTransport.emailZlecajacego}
-                    onChange={handleInputChange}
-                    className={inputBaseClass}
-                    placeholder="email@example.com"
-                    required
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Sekcja: Uwagi */}
-            <div className={sectionBaseClass}>
-              <h3 className="text-lg font-semibold text-gray-700 mb-4 flex items-center">
-                <svg className="w-5 h-5 mr-2 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                </svg>
-                Informacje dodatkowe
-              </h3>
-              
-              <div>
+                {/* Dodatkowe informacje o transporcie */}
                 <div>
                   <label className={labelBaseClass}>
                     Uwagi dodatkowe
@@ -775,7 +907,7 @@ export default function TransportForm({
                     dokumenty: '',
                     trasaCykliczna: false,
                     magazyn: 'bialystok',
-                    connectedTransportId: null
+                    connectedTransportId: null // Resetujemy również to pole
                   })
                 }}
                 className="flex-1 py-3 px-4 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200"
