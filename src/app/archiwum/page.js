@@ -332,15 +332,16 @@ export default function ArchiwumPage() {
     setShowRatingModal(true)
   }
 
-  const getRynekNazwa = (id) => {
-    if (!id) return 'Nieznany rynek'
-    try {
-      const rynek = RYNKI.find(r => r.id === parseInt(id))
-      return rynek ? rynek.nazwa : 'Nieznany rynek'
-    } catch (error) {
-      console.error('Błąd w getRynekNazwa:', error)
-      return 'Nieznany rynek'
+  const getRynekNazwa = (marketName) => {
+    if (!marketName) return 'Nieznany rynek'
+    
+    // Jeśli w bazie jest już nazwa rynku jako string, sprawdź czy jest w naszej liście
+    if (RYNKI.includes(marketName)) {
+      return marketName
     }
+    
+    // Fallback - zwróć co jest w bazie, nawet jeśli nie ma w stałych
+    return marketName || 'Nieznany rynek'
   }
   
   const handleCloseRating = async () => {
@@ -1605,5 +1606,6 @@ export default function ArchiwumPage() {
     </div>
   )
 }
+
 
 
