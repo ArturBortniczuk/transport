@@ -332,6 +332,17 @@ export default function ArchiwumPage() {
     setShowRatingModal(true)
   }
 
+  const getRynekNazwa = (id) => {
+    if (!id) return 'Nieznany rynek'
+    try {
+      const rynek = RYNKI.find(r => r.id === parseInt(id))
+      return rynek ? rynek.nazwa : 'Nieznany rynek'
+    } catch (error) {
+      console.error('Błąd w getRynekNazwa:', error)
+      return 'Nieznany rynek'
+    }
+  }
+  
   const handleCloseRating = async () => {
     setShowRatingModal(false);
     setSelectedTransport(null);
@@ -1594,4 +1605,5 @@ export default function ArchiwumPage() {
     </div>
   )
 }
+
 
