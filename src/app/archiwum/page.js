@@ -415,6 +415,7 @@ export default function ArchiwumPage() {
         'Kod pocztowy': transport.postal_code || '',
         'Ulica': transport.street || '',
         'Magazyn': getMagazynName(transport.source_warehouse),
+        'Rynek': getRynekNazwa(transport.market),  // DODAJ TĘ LINIĘ
         'Odległość (km)': distanceKm,
         'Koszt transportu (PLN)': parseFloat(calculatedCost.toFixed(2)),
         'Firma': transport.client_name || '',
@@ -1593,3 +1594,4 @@ export default function ArchiwumPage() {
     </div>
   )
 }
+
