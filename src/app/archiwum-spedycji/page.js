@@ -333,26 +333,47 @@ export default function ArchiwumSpedycjiPage() {
     return (price / distance).toFixed(2);
   }
   
-  // Funkcja eksportująca dane do pliku
+// NOWA ZAAWANSOWANA FUNKCJA EKSPORTU - zastąp obecną funkcję exportData
   const exportData = () => {
     if (filteredArchiwum.length === 0) {
       alert('Brak danych do eksportu')
       return
     }
     
-    // Przygotuj dane do eksportu
+    // Funkcja obliczania kosztu spedycji (można dostosować własne stawki)
+    const calculateSpedycjaCost = (price, distance) => {
+      // Jeśli mamy cenę z odpowiedzi przewoźnika, użyj jej
+      if (price && price > 0) return price;
+      
+      // W przeciwnym razie użyj standardowych stawek (można je dostosować)
+      if (distance <= 100) {
+        return distance * 15; // 15 PLN za km do 100km
+      } else if (distance > 100 && distance <= 200) {
+        return distance * 12; // 12 PLN za km od 100-200km
+      } else {
+        return distance * 10; // 10 PLN za km powyżej 200km
+      }
+    };
+
+    // Przygotowanie głównych danych do eksportu
     const dataToExport = filteredArchiwum.map(transport => {
       const distanceKm = transport.response?.distanceKm || transport.distanceKm || 0
       const price = transport.response?.deliveryPrice || 0
-      const pricePerKm = calculatePricePerKm(price, distanceKm)
+      const calculatedCost = calculateSpedycjaCost(price, distanceKm)
+      const pricePerKm = calculatePricePerKm(price || calculatedCost, distanceKm)
       const responsibleInfo = getResponsibleInfo(transport)
       const goodsData = getGoodsDataFromTransportOrder(transport)
       
       return {
-        'Numer zamówienia': transport.orderNumber || '',
         'Data zlecenia': formatDate(transport.createdAt),
         'Data realizacji': transport.completedAt ? formatDate(transport.completedAt) : 'Brak',
+        'Numer zamówienia': transport.orderNumber || '',
+        'Tydzień': `${format(new Date(transport.completedAt || transport.createdAt), 'yyyy')}-T${format(new Date(transport.completedAt || transport.createdAt), 'I', { locale: pl })}`,
         'Trasa': `${getLoadingCity(transport)} → ${getDeliveryCity(transport)}`,
+        'Załadunek - miasto': getLoadingCity(transport),
+        'Załadunek - firma': getLoadingCompanyName(transport),
+        'Rozładunek - miasto': getDeliveryCity(transport),
+        'Rozładunek - firma': getUnloadingCompanyName(transport),
         'MPK': getCurrentMPK(transport),
         'Dokumenty': transport.documents || '',
         'Nazwa klienta': transport.clientName || '',
@@ -361,30 +382,166 @@ export default function ArchiwumSpedycjiPage() {
         'Typ odpowiedzialnego': responsibleInfo.type === 'construction' ? 'Budowa' : 'Osoba',
         'Przewoźnik': (transport.response?.driverName || '') + ' ' + (transport.response?.driverSurname || ''),
         'Numer auta': transport.response?.vehicleNumber || '',
-        'Telefon': transport.response?.driverPhone || '',
-        'Cena (PLN)': price,
+        'Telefon przewoźnika': transport.response?.driverPhone || '',
+        'Cena rzeczywista (PLN)': price || '',
+        'Cena obliczona (PLN)': calculatedCost.toFixed(2).replace('.', ','),
         'Odległość (km)': distanceKm,
         'Cena za km (PLN/km)': pricePerKm,
         'Kontakt załadunek': transport.loadingContact || '',
         'Kontakt rozładunek': transport.unloadingContact || '',
-        'Opis towaru (zlecenie)': goodsData.description,
-        'Waga towaru (zlecenie)': goodsData.weight,
-        'Uwagi': transport.notes || '',
-        'Uwagi przewoźnika': transport.response?.adminNotes || ''
+        'Opis towaru': goodsData.description,
+        'Waga towaru': goodsData.weight,
+        'Uwagi zlecenia': transport.notes || '',
+        'Uwagi przewoźnika': transport.response?.adminNotes || '',
+        'Status': transport.status === 'completed' ? 'Zakończony' : transport.status
       }
     })
     
     // Przygotuj nazwę pliku
-    const monthLabel = selectedMonth === 'all' ? 'wszystkie_miesiace' : 
+    const monthLabel = selectedMonth === 'all' ? 
+                      'wszystkie_miesiace' : 
                       months.find(m => m.value === selectedMonth)?.label.toLowerCase() || selectedMonth
     
-    const fileName = `spedycja_${selectedYear}_${monthLabel}`
+    const fileName = `spedycja_${selectedYear}_${monthLabel}_${format(new Date(), 'yyyy-MM-dd')}`
     
     if (exportFormat === 'csv') {
       exportToCSV(dataToExport, fileName)
     } else {
-      exportToXLSX(dataToExport, fileName)
+      // ===== TWORZENIE WIELU ARKUSZY =====
+      
+      // 1. PODSUMOWANIE PO MPK
+      const summaryByMpk = filteredArchiwum.reduce((acc, transport) => {
+        const mpk = getCurrentMPK(transport) || 'Brak MPK';
+        const distance = transport.response?.distanceKm || transport.distanceKm || 0;
+        const price = transport.response?.deliveryPrice || 0;
+        const cost = calculateSpedycjaCost(price, distance);
+        
+        if (!acc[mpk]) {
+          acc[mpk] = { 
+            totalCost: 0, 
+            totalDistance: 0, 
+            count: 0,
+            totalRealPrice: 0
+          };
+        }
+        
+        acc[mpk].totalCost += cost;
+        acc[mpk].totalDistance += distance;
+        acc[mpk].count += 1;
+        acc[mpk].totalRealPrice += (price || 0);
+        
+        return acc;
+      }, {});
+
+      const summaryDataMpk = Object.keys(summaryByMpk).map(mpk => ({
+        'MPK': mpk,
+        'Liczba transportów': summaryByMpk[mpk].count,
+        'Łączna odległość (km)': summaryByMpk[mpk].totalDistance,
+        'Łączny koszt obliczony (PLN)': summaryByMpk[mpk].totalCost.toFixed(2).replace('.', ','),
+        'Łączna cena rzeczywista (PLN)': summaryByMpk[mpk].totalRealPrice.toFixed(2).replace('.', ','),
+        'Średni koszt za transport (PLN)': (summaryByMpk[mpk].totalCost / summaryByMpk[mpk].count).toFixed(2).replace('.', ',')
+      }));
+
+      // 2. PODSUMOWANIE PO TYGODNIACH
+      const summaryByWeek = filteredArchiwum.reduce((acc, transport) => {
+        const weekKey = `${format(new Date(transport.completedAt || transport.createdAt), 'yyyy')}-T${format(new Date(transport.completedAt || transport.createdAt), 'I', { locale: pl })}`;
+        const distance = transport.response?.distanceKm || transport.distanceKm || 0;
+        const price = transport.response?.deliveryPrice || 0;
+        const cost = calculateSpedycjaCost(price, distance);
+        
+        if (!acc[weekKey]) {
+          acc[weekKey] = { 
+            totalCost: 0, 
+            totalDistance: 0, 
+            count: 0,
+            totalRealPrice: 0,
+            weekStart: format(new Date(transport.completedAt || transport.createdAt), 'dd.MM.yyyy', { locale: pl })
+          };
+        }
+        
+        acc[weekKey].totalCost += cost;
+        acc[weekKey].totalDistance += distance;
+        acc[weekKey].count += 1;
+        acc[weekKey].totalRealPrice += (price || 0);
+        
+        return acc;
+      }, {});
+
+      const summaryDataWeek = Object.keys(summaryByWeek)
+        .sort()
+        .map(week => ({
+          'Tydzień': week,
+          'Data początkowa': summaryByWeek[week].weekStart,
+          'Liczba transportów': summaryByWeek[week].count,
+          'Łączna odległość (km)': summaryByWeek[week].totalDistance,
+          'Łączny koszt obliczony (PLN)': summaryByWeek[week].totalCost.toFixed(2).replace('.', ','),
+          'Łączna cena rzeczywista (PLN)': summaryByWeek[week].totalRealPrice.toFixed(2).replace('.', ','),
+          'Średni koszt za transport (PLN)': (summaryByWeek[week].totalCost / summaryByWeek[week].count).toFixed(2).replace('.', ',')
+        }));
+
+      // 3. PODSUMOWANIE PO PRZEWOŹNIKACH
+      const summaryByCarrier = filteredArchiwum.reduce((acc, transport) => {
+        const carrierName = ((transport.response?.driverName || '') + ' ' + (transport.response?.driverSurname || '')).trim() || 'Nieznany przewoźnik';
+        const distance = transport.response?.distanceKm || transport.distanceKm || 0;
+        const price = transport.response?.deliveryPrice || 0;
+        const cost = calculateSpedycjaCost(price, distance);
+        
+        if (!acc[carrierName]) {
+          acc[carrierName] = { 
+            totalCost: 0, 
+            totalDistance: 0, 
+            count: 0,
+            totalRealPrice: 0,
+            phone: transport.response?.driverPhone || '',
+            vehicle: transport.response?.vehicleNumber || ''
+          };
+        }
+        
+        acc[carrierName].totalCost += cost;
+        acc[carrierName].totalDistance += distance;
+        acc[carrierName].count += 1;
+        acc[carrierName].totalRealPrice += (price || 0);
+        
+        return acc;
+      }, {});
+
+      const summaryDataCarrier = Object.keys(summaryByCarrier).map(carrier => ({
+        'Przewoźnik': carrier,
+        'Telefon': summaryByCarrier[carrier].phone,
+        'Pojazd': summaryByCarrier[carrier].vehicle,
+        'Liczba transportów': summaryByCarrier[carrier].count,
+        'Łączna odległość (km)': summaryByCarrier[carrier].totalDistance,
+        'Łączny koszt obliczony (PLN)': summaryByCarrier[carrier].totalCost.toFixed(2).replace('.', ','),
+        'Łączna cena rzeczywista (PLN)': summaryByCarrier[carrier].totalRealPrice.toFixed(2).replace('.', ','),
+        'Średni koszt za transport (PLN)': (summaryByCarrier[carrier].totalCost / summaryByCarrier[carrier].count).toFixed(2).replace('.', ',')
+      }));
+
+      // Eksport do Excel z wieloma arkuszami
+      exportToXLSXWithMultipleSheets(dataToExport, summaryDataMpk, summaryDataWeek, summaryDataCarrier, fileName)
     }
+  }
+
+  // NOWA FUNKCJA - Eksport do Excel z wieloma arkuszami
+  const exportToXLSXWithMultipleSheets = (mainData, summaryMpk, summaryWeek, summaryCarrier, fileName) => {
+    const wb = XLSX.utils.book_new();
+    
+    // Arkusz 1: Wszystkie transporty
+    const ws_main = XLSX.utils.json_to_sheet(mainData);
+    XLSX.utils.book_append_sheet(wb, ws_main, "Wszystkie transporty");
+    
+    // Arkusz 2: Podsumowanie po MPK
+    const ws_mpk = XLSX.utils.json_to_sheet(summaryMpk);
+    XLSX.utils.book_append_sheet(wb, ws_mpk, "Podsumowanie po MPK");
+    
+    // Arkusz 3: Podsumowanie po tygodniach
+    const ws_week = XLSX.utils.json_to_sheet(summaryWeek);
+    XLSX.utils.book_append_sheet(wb, ws_week, "Podsumowanie po tygodniach");
+    
+    // Arkusz 4: Podsumowanie po przewoźnikach
+    const ws_carrier = XLSX.utils.json_to_sheet(summaryCarrier);
+    XLSX.utils.book_append_sheet(wb, ws_carrier, "Podsumowanie po przewoźnikach");
+    
+    XLSX.writeFile(wb, `${fileName}.xlsx`);
   }
 
   // Funkcja do generowania linku do Google Maps
@@ -1164,3 +1321,4 @@ export default function ArchiwumSpedycjiPage() {
     </div>
   )
 }
+
