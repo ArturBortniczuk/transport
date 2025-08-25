@@ -158,32 +158,41 @@ export default function ArchiwumSpedycjiPage() {
 
   // NOWA FUNKCJA: Pobieranie danych towaru z zlecenia transportowego
   const getGoodsDataFromTransportOrder = (transport) => {
-    // Sprawdź order_data w bazie danych
+    // 1. Priorytet dla nowej kolumny `goods_description`
+    if (transport.goodsDescription) {
+      const desc = transport.goodsDescription.description || '';
+      const weight = transport.goodsDescription.weight || '';
+      // Zwróć dane, jeśli którekolwiek z pól jest wypełnione
+      if (desc || weight) {
+          return {
+              description: desc,
+              weight: weight
+          };
+      }
+    }
+    
+    // 2. Fallback do starszego pola `order_data`
     if (transport.order_data) {
       try {
-        const orderData = typeof transport.order_data === 'string' ? 
-          JSON.parse(transport.order_data) : transport.order_data;
+        const orderData = typeof transport.order_data === 'string' 
+          ? JSON.parse(transport.order_data) 
+          : transport.order_data;
         
-        return {
-          description: orderData.towar || '',
-          weight: orderData.waga || ''
-        };
+        // Zwróć dane, jeśli którekolwiek z pól jest wypełnione
+        if (orderData.towar || orderData.waga) {
+          return {
+            description: orderData.towar || '',
+            weight: orderData.waga || ''
+          };
+        }
       } catch (error) {
         console.error('Błąd parsowania order_data:', error);
       }
     }
     
-    // Fallback do danych z formularza spedycyjnego
-    if (transport.goodsDescription) {
-      return {
-        description: transport.goodsDescription.description || '',
-        weight: transport.goodsDescription.weight || ''
-      };
-    }
-    
+    // 3. Jeśli nigdzie nie ma danych, zwróć puste wartości
     return { description: '', weight: '' };
   }
-
   // NOWA FUNKCJA: Pobieranie odpowiedzialnego (osoba lub budowa)
   const getResponsibleInfo = (transport) => {
     // Jeśli są odpowiedzialne budowy, zwróć pierwszą budowę
@@ -1321,4 +1330,5 @@ export default function ArchiwumSpedycjiPage() {
     </div>
   )
 }
+
 
