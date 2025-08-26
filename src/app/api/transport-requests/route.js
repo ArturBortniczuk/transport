@@ -48,7 +48,7 @@ const ensureTableExists = async () => {
         table.string('status').defaultTo('pending');
         table.string('requester_email').notNullable();
         table.string('requester_name').notNullable();
-        table.string('destination_city').notNullable();
+        table.string('destination_city');
         table.string('postal_code');
         table.string('street');
         table.date('delivery_date').notNullable();
@@ -67,6 +67,11 @@ const ensureTableExists = async () => {
         table.timestamp('approved_at');
         table.string('rejection_reason');
         table.integer('transport_id');
+        // NOWE POLA DLA PRZESUNIĘĆ MIĘDZYMAGAZYNOWYCH
+        table.string('transport_type').defaultTo('standard'); // 'standard' lub 'warehouse'
+        table.string('transport_direction'); // 'zielonka_bialystok' lub 'bialystok_zielonka'
+        table.text('goods_description');      // opis transportowanych towarów
+        table.string('document_numbers');     // numery dokumentów (opcjonalnie)
         table.timestamp('created_at').defaultTo(db.fn.now());
         table.timestamp('updated_at').defaultTo(db.fn.now());
       });
@@ -113,6 +118,39 @@ const ensureTableExists = async () => {
           table.integer('market_id');
         });
         console.log('Dodano kolumnę market_id');
+      }
+
+      // ===== NOWE SPRAWDZENIA DLA PRZESUNIĘĆ MIĘDZYMAGAZYNOWYCH =====
+      const hasTransportType = await db.schema.hasColumn('transport_requests', 'transport_type');
+      if (!hasTransportType) {
+        await db.schema.table('transport_requests', table => {
+          table.string('transport_type').defaultTo('standard');
+        });
+        console.log('Dodano kolumnę transport_type');
+      }
+
+      const hasTransportDirection = await db.schema.hasColumn('transport_requests', 'transport_direction');
+      if (!hasTransportDirection) {
+        await db.schema.table('transport_requests', table => {
+          table.string('transport_direction');
+        });
+        console.log('Dodano kolumnę transport_direction');
+      }
+
+      const hasGoodsDescription = await db.schema.hasColumn('transport_requests', 'goods_description');
+      if (!hasGoodsDescription) {
+        await db.schema.table('transport_requests', table => {
+          table.text('goods_description');
+        });
+        console.log('Dodano kolumnę goods_description');
+      }
+
+      const hasDocumentNumbers = await db.schema.hasColumn('transport_requests', 'document_numbers');
+      if (!hasDocumentNumbers) {
+        await db.schema.table('transport_requests', table => {
+          table.string('document_numbers');
+        });
+        console.log('Dodano kolumnę document_numbers');
       }
     }
     
@@ -294,23 +332,49 @@ export async function POST(request) {
     const requestData = await request.json();
     console.log('🚀 PEŁNE DANE Z FORMULARZA:', JSON.stringify(requestData, null, 2));
 
-    // Walidacja wymaganych pól
-    const requiredFields = ['destination_city', 'delivery_date', 'justification'];
-    for (const field of requiredFields) {
-      if (!requestData[field]) {
+    // Określ typ transportu
+    const transportType = requestData.transport_type || 'standard';
+    
+    // Walidacja w zależności od typu wniosku
+    if (transportType === 'warehouse') {
+      // Walidacja dla przesunięć międzymagazynowych
+      const requiredWarehouseFields = ['transport_direction', 'goods_description', 'delivery_date', 'justification'];
+      for (const field of requiredWarehouseFields) {
+        if (!requestData[field]) {
+          return NextResponse.json({ 
+            success: false, 
+            error: `Pole ${field} jest wymagane dla przesunięć międzymagazynowych` 
+          }, { status: 400 });
+        }
+      }
+
+      // Walidacja kierunku transportu
+      const validDirections = ['zielonka_bialystok', 'bialystok_zielonka'];
+      if (!validDirections.includes(requestData.transport_direction)) {
         return NextResponse.json({ 
           success: false, 
-          error: `Pole ${field} jest wymagane` 
+          error: 'Nieprawidłowy kierunek transportu' 
         }, { status: 400 });
       }
-    }
+    } else {
+      // Walidacja dla standardowych transportów
+      const requiredFields = ['destination_city', 'delivery_date', 'justification'];
+      for (const field of requiredFields) {
+        if (!requestData[field]) {
+          return NextResponse.json({ 
+            success: false, 
+            error: `Pole ${field} jest wymagane` 
+          }, { status: 400 });
+        }
+      }
 
-    // Walidacja budowy/MPK
-    if (!requestData.mpk && !requestData.construction_name) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Wybór budowy/MPK jest wymagany' 
-      }, { status: 400 });
+      // Walidacja budowy/MPK dla standardowych transportów
+      if (!requestData.mpk && !requestData.construction_name) {
+        return NextResponse.json({ 
+          success: false, 
+          error: 'Wybór budowy/MPK jest wymagany' 
+        }, { status: 400 });
+      }
     }
 
     // Sprawdź czy data dostawy nie jest w przeszłości
@@ -325,42 +389,63 @@ export async function POST(request) {
       }, { status: 400 });
     }
 
-    // NAPRAWIONE PRZYGOTOWANIE DANYCH - wszystkie pola z formularza
+    // PRZYGOTOWANIE DANYCH - obsługa różnych typów wniosków
     const newRequest = {
       // Podstawowe pola
       status: 'pending',
       requester_email: userId,
       requester_name: user.name || userId,
-      
-      // Lokalizacja
-      destination_city: requestData.destination_city || '',
-      postal_code: requestData.postal_code || null,
-      street: requestData.street || null,
       delivery_date: requestData.delivery_date,
-      
-      // Budowa/MPK
-      mpk: requestData.mpk || null,
-      construction_name: requestData.construction_name || null,
-      construction_id: requestData.construction_id ? parseInt(requestData.construction_id) : null,
-      
-      // Uzasadnienie i uwagi
       justification: requestData.justification || '',
       notes: requestData.notes || null,
       
-      // KLUCZOWE POLA - te które brakowały
-      client_name: requestData.client_name || null,                    // Handlowiec/budowa
-      real_client_name: requestData.real_client_name || null,          // Rzeczywisty klient  
-      wz_numbers: requestData.wz_numbers || null,                      // Numery WZ
-      market_id: requestData.market_id ? parseInt(requestData.market_id) : null, // Rynek
-      
-      // Kontakt
-      contact_person: requestData.contact_person || null,
-      contact_phone: requestData.contact_phone || null,
+      // Typ transportu i pola specyficzne
+      transport_type: transportType,
       
       // Metadane
       created_at: new Date(),
       updated_at: new Date()
     };
+
+    if (transportType === 'warehouse') {
+      // Pola dla przesunięć międzymagazynowych
+      newRequest.transport_direction = requestData.transport_direction;
+      newRequest.goods_description = requestData.goods_description;
+      newRequest.document_numbers = requestData.document_numbers || null;
+      
+      // Dla przesunięć międzymagazynowych nie używamy lokalizacji ani danych klienta
+      newRequest.destination_city = null;
+      newRequest.postal_code = null;
+      newRequest.street = null;
+      newRequest.mpk = null;
+      newRequest.construction_name = null;
+      newRequest.construction_id = null;
+      newRequest.client_name = null;
+      newRequest.real_client_name = null;
+      newRequest.wz_numbers = null;
+      newRequest.market_id = null;
+      newRequest.contact_person = null;
+      newRequest.contact_phone = null;
+    } else {
+      // Pola dla standardowych transportów
+      newRequest.destination_city = requestData.destination_city || '';
+      newRequest.postal_code = requestData.postal_code || null;
+      newRequest.street = requestData.street || null;
+      newRequest.mpk = requestData.mpk || null;
+      newRequest.construction_name = requestData.construction_name || null;
+      newRequest.construction_id = requestData.construction_id ? parseInt(requestData.construction_id) : null;
+      newRequest.client_name = requestData.client_name || null;
+      newRequest.real_client_name = requestData.real_client_name || null;
+      newRequest.wz_numbers = requestData.wz_numbers || null;
+      newRequest.market_id = requestData.market_id ? parseInt(requestData.market_id) : null;
+      newRequest.contact_person = requestData.contact_person || null;
+      newRequest.contact_phone = requestData.contact_phone || null;
+      
+      // Dla standardowych transportów nie używamy pól przesunięć międzymagazynowych
+      newRequest.transport_direction = null;
+      newRequest.goods_description = null;
+      newRequest.document_numbers = null;
+    }
 
     console.log('🚀 DANE DO ZAPISANIA W BAZIE:', JSON.stringify(newRequest, null, 2));
 
@@ -496,24 +581,53 @@ export async function PUT(request) {
           const selectedWarehouse = data.source_warehouse || 'bialystok';
           console.log('Wybrany magazyn:', selectedWarehouse);
 
-          // NAPRAWIONA LOGIKA MAPOWANIA DANYCH - z wybranym magazynem
-          const transportData = {
-            destination_city: existingRequest.destination_city,
-            delivery_date: existingRequest.delivery_date,
-            status: 'active',
-            source_warehouse: selectedWarehouse, // UŻYWAMY WYBRANEGO MAGAZYNU
-            postal_code: existingRequest.postal_code || null,
-            street: existingRequest.street || null,
-            mpk: existingRequest.mpk || null,
-            client_name: existingRequest.real_client_name || existingRequest.client_name || null,
-            requester_name: existingRequest.client_name || existingRequest.requester_name || null,
-            requester_email: existingRequest.requester_email || null,
-            wz_number: existingRequest.wz_numbers || null, // WAŻNE: mapowanie wz_numbers → wz_number
-            market: getMarketName(existingRequest.market_id) || null,
-            notes: `Utworzony z wniosku #${requestId}${existingRequest.construction_name ? ` dla budowy: ${existingRequest.construction_name}` : ''}${existingRequest.notes ? `. ${existingRequest.notes}` : ''}`.trim(),
-            loading_level: '100%',
-            is_cyclical: false
-          };
+          // MAPOWANIE DANYCH W ZALEŻNOŚCI OD TYPU TRANSPORTU
+          let transportData;
+          
+          if (existingRequest.transport_type === 'warehouse') {
+            // Przesunięcie międzymagazynowe
+            const directionNames = {
+              'zielonka_bialystok': 'Zielonka → Białystok',
+              'bialystok_zielonka': 'Białystok → Zielonka'
+            };
+            
+            transportData = {
+              destination_city: directionNames[existingRequest.transport_direction] || existingRequest.transport_direction,
+              delivery_date: existingRequest.delivery_date,
+              status: 'active',
+              source_warehouse: existingRequest.transport_direction === 'zielonka_bialystok' ? 'zielonka' : 'bialystok',
+              postal_code: null,
+              street: null,
+              mpk: null,
+              client_name: 'Przesunięcie międzymagazynowe',
+              requester_name: existingRequest.requester_name || null,
+              requester_email: existingRequest.requester_email || null,
+              wz_number: existingRequest.document_numbers || null,
+              market: null,
+              notes: `Przesunięcie międzymagazynowe z wniosku #${requestId}. Kierunek: ${directionNames[existingRequest.transport_direction]}. Towary: ${existingRequest.goods_description}${existingRequest.notes ? `. Uwagi: ${existingRequest.notes}` : ''}`.trim(),
+              loading_level: '100%',
+              is_cyclical: false
+            };
+          } else {
+            // Standardowy transport - używamy wybranego magazynu
+            transportData = {
+              destination_city: existingRequest.destination_city,
+              delivery_date: existingRequest.delivery_date,
+              status: 'active',
+              source_warehouse: selectedWarehouse, // UŻYWAMY WYBRANEGO MAGAZYNU
+              postal_code: existingRequest.postal_code || null,
+              street: existingRequest.street || null,
+              mpk: existingRequest.mpk || null,
+              client_name: existingRequest.real_client_name || existingRequest.client_name || null,
+              requester_name: existingRequest.client_name || existingRequest.requester_name || null,
+              requester_email: existingRequest.requester_email || null,
+              wz_number: existingRequest.wz_numbers || null, // WAŻNE: mapowanie wz_numbers → wz_number
+              market: getMarketName(existingRequest.market_id) || null,
+              notes: `Utworzony z wniosku #${requestId}${existingRequest.construction_name ? ` dla budowy: ${existingRequest.construction_name}` : ''}${existingRequest.notes ? `. ${existingRequest.notes}` : ''}`.trim(),
+              loading_level: '100%',
+              is_cyclical: false
+            };
+          }
 
           console.log('🚀 DEBUGOWANIE: Pełne dane wniosku:', existingRequest);
           console.log('🚀 DEBUGOWANIE: Dane transportu do utworzenia:', transportData);

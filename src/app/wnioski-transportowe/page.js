@@ -138,13 +138,18 @@ export default function WnioskiTransportowePage() {
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase()
       filtered = filtered.filter(req =>
-        req.destination_city.toLowerCase().includes(term) ||
+        req.destination_city?.toLowerCase().includes(term) ||
         req.requester_name.toLowerCase().includes(term) ||
         req.client_name?.toLowerCase().includes(term) ||
         req.real_client_name?.toLowerCase().includes(term) ||
         req.construction_name?.toLowerCase().includes(term) ||
         req.mpk?.toLowerCase().includes(term) ||
-        req.justification.toLowerCase().includes(term)
+        req.justification.toLowerCase().includes(term) ||
+        // Pola dla przesunięć międzymagazynowych
+        req.goods_description?.toLowerCase().includes(term) ||
+        req.document_numbers?.toLowerCase().includes(term) ||
+        (req.transport_direction === 'zielonka_bialystok' && 'zielonka białystok'.includes(term)) ||
+        (req.transport_direction === 'bialystok_zielonka' && 'białystok zielonka'.includes(term))
       )
     }
 
@@ -428,6 +433,16 @@ export default function WnioskiTransportowePage() {
                           <h3 className="text-lg font-medium text-gray-900">
                             Wniosek #{request.id}
                           </h3>
+                          {/* Typ wniosku */}
+                          {request.transport_type === 'warehouse' ? (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                              Przesunięcie międzymagazynowe
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                              Transport standardowy
+                            </span>
+                          )}
                           {getStatusBadge(request.status)}
                           {getPriorityBadge(request.delivery_date)}
                         </div>
@@ -436,97 +451,163 @@ export default function WnioskiTransportowePage() {
                         </div>
                       </div>
 
-                      {/* Informacje podstawowe */}
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm mb-4">
-                        <div>
-                          <div className="flex items-center text-gray-600 mb-1">
-                            <MapPin className="w-4 h-4 mr-2" />
-                            <strong>Trasa:</strong>
+                      {/* Informacje podstawowe - różne w zależności od typu */}
+                      {request.transport_type === 'warehouse' ? (
+                        // Informacje dla przesunięć międzymagazynowych
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm mb-4 bg-green-50 p-4 rounded-lg">
+                          <div>
+                            <div className="flex items-center text-gray-600 mb-1">
+                              <MapPin className="w-4 h-4 mr-2" />
+                              <strong>Kierunek transportu:</strong>
+                            </div>
+                            <div className="ml-6 text-gray-900 font-medium">
+                              {request.transport_direction === 'zielonka_bialystok' ? 'Zielonka → Białystok' : 
+                               request.transport_direction === 'bialystok_zielonka' ? 'Białystok → Zielonka' : 
+                               request.transport_direction}
+                            </div>
                           </div>
-                          <div className="ml-6 text-gray-900">
-                            {request.destination_city}
-                            {request.postal_code && `, ${request.postal_code}`}
-                            {request.street && (
-                              <div className="text-gray-600">{request.street}</div>
-                            )}
-                          </div>
-                        </div>
 
-                        <div>
-                          <div className="flex items-center text-gray-600 mb-1">
-                            <Calendar className="w-4 h-4 mr-2" />
-                            <strong>Data dostawy:</strong>
+                          <div>
+                            <div className="flex items-center text-gray-600 mb-1">
+                              <Calendar className="w-4 h-4 mr-2" />
+                              <strong>Data transportu:</strong>
+                            </div>
+                            <div className="ml-6 text-gray-900">
+                              {format(new Date(request.delivery_date), 'dd.MM.yyyy', { locale: pl })}
+                            </div>
                           </div>
-                          <div className="ml-6 text-gray-900">
-                            {format(new Date(request.delivery_date), 'dd.MM.yyyy', { locale: pl })}
-                          </div>
-                        </div>
 
-                        <div>
-                          <div className="flex items-center text-gray-600 mb-1">
-                            <User className="w-4 h-4 mr-2" />
-                            <strong>Zlecający:</strong>
+                          <div>
+                            <div className="flex items-center text-gray-600 mb-1">
+                              <User className="w-4 h-4 mr-2" />
+                              <strong>Zlecający:</strong>
+                            </div>
+                            <div className="ml-6 text-gray-900">
+                              {request.requester_name}
+                              <div className="text-gray-600 flex items-center">
+                                <Mail className="w-3 h-3 mr-1" />
+                                {request.requester_email}
+                              </div>
+                            </div>
                           </div>
-                          <div className="ml-6 text-gray-900">
-                            {request.requester_name}
-                            <div className="text-gray-600 flex items-center">
-                              <Mail className="w-3 h-3 mr-1" />
-                              {request.requester_email}
+
+                          <div className="md:col-span-3">
+                            <div className="flex items-start text-gray-600 mb-1">
+                              <FileText className="w-4 h-4 mr-2 mt-0.5" />
+                              <strong>Transportowane towary:</strong>
+                            </div>
+                            <div className="ml-6 text-gray-900 bg-white p-2 rounded border">
+                              {request.goods_description}
+                            </div>
+                          </div>
+
+                          {request.document_numbers && (
+                            <div className="md:col-span-3">
+                              <div className="flex items-center text-gray-600 mb-1">
+                                <FileText className="w-4 h-4 mr-2" />
+                                <strong>Numery dokumentów:</strong>
+                              </div>
+                              <div className="ml-6 text-gray-900">
+                                {request.document_numbers}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        // Informacje dla standardowych transportów
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm mb-4">
+                          <div>
+                            <div className="flex items-center text-gray-600 mb-1">
+                              <MapPin className="w-4 h-4 mr-2" />
+                              <strong>Trasa:</strong>
+                            </div>
+                            <div className="ml-6 text-gray-900">
+                              {request.destination_city}
+                              {request.postal_code && `, ${request.postal_code}`}
+                              {request.street && (
+                                <div className="text-gray-600">{request.street}</div>
+                              )}
+                            </div>
+                          </div>
+
+                          <div>
+                            <div className="flex items-center text-gray-600 mb-1">
+                              <Calendar className="w-4 h-4 mr-2" />
+                              <strong>Data dostawy:</strong>
+                            </div>
+                            <div className="ml-6 text-gray-900">
+                              {format(new Date(request.delivery_date), 'dd.MM.yyyy', { locale: pl })}
+                            </div>
+                          </div>
+
+                          <div>
+                            <div className="flex items-center text-gray-600 mb-1">
+                              <User className="w-4 h-4 mr-2" />
+                              <strong>Zlecający:</strong>
+                            </div>
+                            <div className="ml-6 text-gray-900">
+                              {request.requester_name}
+                              <div className="text-gray-600 flex items-center">
+                                <Mail className="w-3 h-3 mr-1" />
+                                {request.requester_email}
+                              </div>
                             </div>
                           </div>
                         </div>
-                      </div>
+                      )}
 
-                      {/* NOWA SEKCJA: Szczegółowe informacje z wniosku */}
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm mb-4 bg-blue-50 p-4 rounded-lg">
-                        <div>
-                          <div className="text-gray-600 mb-1">
-                            <strong>Handlowiec/Budowa:</strong>
+                      {/* Szczegółowe informacje z wniosku - tylko dla standardowych transportów */}
+                      {request.transport_type !== 'warehouse' && (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm mb-4 bg-blue-50 p-4 rounded-lg">
+                          <div>
+                            <div className="text-gray-600 mb-1">
+                              <strong>Handlowiec/Budowa:</strong>
+                            </div>
+                            <div className="text-gray-900">{request.client_name || 'Brak danych'}</div>
                           </div>
-                          <div className="text-gray-900">{request.client_name || 'Brak danych'}</div>
+
+                          <div>
+                            <div className="text-gray-600 mb-1">
+                              <strong>Rzeczywisty klient:</strong>
+                            </div>
+                            <div className="text-gray-900">{request.real_client_name || 'Brak danych'}</div>
+                          </div>
+
+                          <div>
+                            <div className="text-gray-600 mb-1">
+                              <strong>Numery WZ:</strong>
+                            </div>
+                            <div className="text-gray-900">{request.wz_numbers || 'Brak danych'}</div>
+                          </div>
+
+                          <div>
+                            <div className="text-gray-600 mb-1">
+                              <strong>Rynek:</strong>
+                            </div>
+                            <div className="text-gray-900">
+                              {request.market_id ? getMarketName(request.market_id) : 'Brak danych'}
+                            </div>
+                          </div>
+
+                          <div>
+                            <div className="text-gray-600 mb-1">
+                              <strong>Budowa:</strong>
+                            </div>
+                            <div className="text-gray-900">{request.construction_name || 'Brak danych'}</div>
+                          </div>
+
+                          <div>
+                            <div className="text-gray-600 mb-1">
+                              <strong>MPK:</strong>
+                            </div>
+                            <div className="text-gray-900">{request.mpk || 'Brak danych'}</div>
+                          </div>
                         </div>
+                      )}
 
-                        <div>
-                          <div className="text-gray-600 mb-1">
-                            <strong>Rzeczywisty klient:</strong>
-                          </div>
-                          <div className="text-gray-900">{request.real_client_name || 'Brak danych'}</div>
-                        </div>
-
-                        <div>
-                          <div className="text-gray-600 mb-1">
-                            <strong>Numery WZ:</strong>
-                          </div>
-                          <div className="text-gray-900">{request.wz_numbers || 'Brak danych'}</div>
-                        </div>
-
-                        <div>
-                          <div className="text-gray-600 mb-1">
-                            <strong>Rynek:</strong>
-                          </div>
-                          <div className="text-gray-900">
-                            {request.market_id ? getMarketName(request.market_id) : 'Brak danych'}
-                          </div>
-                        </div>
-
-                        <div>
-                          <div className="text-gray-600 mb-1">
-                            <strong>Budowa:</strong>
-                          </div>
-                          <div className="text-gray-900">{request.construction_name || 'Brak danych'}</div>
-                        </div>
-
-                        <div>
-                          <div className="text-gray-600 mb-1">
-                            <strong>MPK:</strong>
-                          </div>
-                          <div className="text-gray-900">{request.mpk || 'Brak danych'}</div>
-                        </div>
-                      </div>
-
-                      {/* Dodatkowe informacje */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm mb-4">
-                        {request.contact_person && (
+                      {/* Dodatkowe informacje - tylko dla standardowych transportów */}
+                      {request.transport_type !== 'warehouse' && request.contact_person && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm mb-4">
                           <div>
                             <div className="flex items-center text-gray-600 mb-1">
                               <User className="w-4 h-4 mr-2" />
@@ -542,8 +623,8 @@ export default function WnioskiTransportowePage() {
                               )}
                             </div>
                           </div>
-                        )}
-                      </div>
+                        </div>
+                      )}
 
                       {/* Uzasadnienie */}
                       <div className="mb-4">
@@ -633,36 +714,56 @@ export default function WnioskiTransportowePage() {
                 Po akceptacji zostanie automatycznie utworzony transport w kalendarzu.
               </p>
               
-              {/* Wybór magazynu */}
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Magazyn realizujący transport *
-                </label>
-                <select
-                  value={selectedWarehouse}
-                  onChange={(e) => setSelectedWarehouse(e.target.value)}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                >
-                  <option value="bialystok">Magazyn Białystok</option>
-                  <option value="zielonka">Magazyn Zielonka</option>
-                </select>
-                <p className="text-xs text-gray-500 mt-1">
-                  Wybierz magazyn, z którego będzie realizowany ten transport
-                </p>
-              </div>
+              {/* Wybór magazynu - tylko dla standardowych transportów */}
+              {selectedRequest.transport_type !== 'warehouse' && (
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Magazyn realizujący transport *
+                  </label>
+                  <select
+                    value={selectedWarehouse}
+                    onChange={(e) => setSelectedWarehouse(e.target.value)}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  >
+                    <option value="bialystok">Magazyn Białystok</option>
+                    <option value="zielonka">Magazyn Zielonka</option>
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Wybierz magazyn, z którego będzie realizowany ten transport
+                  </p>
+                </div>
+              )}
               
               <div className="bg-gray-50 p-4 rounded-md mb-6">
                 <div className="text-sm">
-                  <strong>Trasa:</strong> {selectedRequest.destination_city}
-                  <br />
-                  <strong>Data:</strong> {format(new Date(selectedRequest.delivery_date), 'dd.MM.yyyy', { locale: pl })}
-                  <br />
-                  <strong>Zlecający:</strong> {selectedRequest.requester_name}
-                  <br />
-                  <strong>Magazyn:</strong> <span className="font-medium text-blue-600">
-                    {selectedWarehouse === 'bialystok' ? 'Białystok' : 'Zielonka'}
-                  </span>
+                  {selectedRequest.transport_type === 'warehouse' ? (
+                    <>
+                      <strong>Typ:</strong> Przesunięcie międzymagazynowe
+                      <br />
+                      <strong>Kierunek:</strong> {selectedRequest.transport_direction === 'zielonka_bialystok' ? 'Zielonka → Białystok' : 'Białystok → Zielonka'}
+                      <br />
+                      <strong>Data:</strong> {format(new Date(selectedRequest.delivery_date), 'dd.MM.yyyy', { locale: pl })}
+                      <br />
+                      <strong>Towary:</strong> {selectedRequest.goods_description}
+                      <br />
+                      <strong>Zlecający:</strong> {selectedRequest.requester_name}
+                    </>
+                  ) : (
+                    <>
+                      <strong>Typ:</strong> Transport standardowy
+                      <br />
+                      <strong>Trasa:</strong> {selectedRequest.destination_city}
+                      <br />
+                      <strong>Data:</strong> {format(new Date(selectedRequest.delivery_date), 'dd.MM.yyyy', { locale: pl })}
+                      <br />
+                      <strong>Zlecający:</strong> {selectedRequest.requester_name}
+                      <br />
+                      <strong>Magazyn:</strong> <span className="font-medium text-blue-600">
+                        {selectedWarehouse === 'bialystok' ? 'Białystok' : 'Zielonka'}
+                      </span>
+                    </>
+                  )}
                 </div>
               </div>
               <div className="flex justify-end space-x-3">

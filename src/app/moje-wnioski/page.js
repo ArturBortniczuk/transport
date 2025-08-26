@@ -171,6 +171,7 @@ export default function MojeWnioskiPage() {
   const [userInfo, setUserInfo] = useState(null)
 
   // NOWE STANY
+  const [transportType, setTransportType] = useState('standard'); // 'standard' lub 'warehouse'
   const [recipientType, setRecipientType] = useState('construction'); // Domyślnie 'budowa'
   const [selectedEntity, setSelectedEntity] = useState(null); // Przechowuje wybrany obiekt (budowę lub usera)
 
@@ -187,7 +188,11 @@ export default function MojeWnioskiPage() {
     mpk: '',
     contact_person: '',
     contact_phone: '',
-    notes: ''
+    notes: '',
+    // NOWE POLA DLA PRZESUNIĘĆ MIĘDZYMAGAZYNOWYCH
+    transport_direction: '',
+    goods_description: '',
+    document_numbers: ''
   })
 
   const [formErrors, setFormErrors] = useState({})
@@ -248,11 +253,21 @@ export default function MojeWnioskiPage() {
 
   const validateForm = () => {
     const errors = {}
-    if (!formData.destination_city.trim()) errors.destination_city = 'Miasto docelowe jest wymagane'
-    if (!formData.delivery_date) errors.delivery_date = 'Data dostawy jest wymagana'
-    if (!formData.justification.trim()) errors.justification = 'Uzasadnienie jest wymagane'
-    if (!formData.real_client_name.trim()) errors.real_client_name = 'Rzeczywisty klient jest wymagany'
-    if (!selectedEntity) errors.entity = 'Wybór budowy lub handlowca jest wymagany'
+    
+    if (transportType === 'warehouse') {
+      // Walidacja dla przesunięć międzymagazynowych
+      if (!formData.transport_direction) errors.transport_direction = 'Kierunek transportu jest wymagany'
+      if (!formData.goods_description.trim()) errors.goods_description = 'Opis towarów jest wymagany'
+      if (!formData.delivery_date) errors.delivery_date = 'Data transportu jest wymagana'
+      if (!formData.justification.trim()) errors.justification = 'Uzasadnienie jest wymagane'
+    } else {
+      // Walidacja dla standardowych transportów
+      if (!formData.destination_city.trim()) errors.destination_city = 'Miasto docelowe jest wymagane'
+      if (!formData.delivery_date) errors.delivery_date = 'Data dostawy jest wymagana'
+      if (!formData.justification.trim()) errors.justification = 'Uzasadnienie jest wymagane'
+      if (!formData.real_client_name.trim()) errors.real_client_name = 'Rzeczywisty klient jest wymagany'
+      if (!selectedEntity) errors.entity = 'Wybór budowy lub handlowca jest wymagany'
+    }
 
     setFormErrors(errors)
     return Object.keys(errors).length === 0
@@ -270,34 +285,36 @@ const handleSubmit = async (e) => {
       const method = editingRequest ? 'PUT' : 'POST';
 
       const dataToSend = {
-        // Lokalizacja
-        destination_city: formData.destination_city || '',
-        postal_code: formData.postal_code || '',
-        street: formData.street || '',
-        delivery_date: formData.delivery_date || '',
+        // Typ transportu
+        transport_type: transportType,
         
-        // Uzasadnienie i uwagi
+        // Podstawowe pola
+        delivery_date: formData.delivery_date || '',
         justification: formData.justification || '',
         notes: formData.notes || '',
-        
-        // Podstawowe pola klienta  
-        client_name: formData.client_name || '',
-        mpk: formData.mpk || '',
-        
-        // KLUCZOWE NOWE POLA - te które muszą być wysłane
-        real_client_name: formData.real_client_name || '',      // Rzeczywisty klient
-        wz_numbers: formData.wz_numbers || '',                  // Numery WZ  
-        market_id: formData.market_id || '',                    // Rynek (jako string, będzie konwertowane na int)
-        
-        // Kontakt
-        contact_person: formData.contact_person || '',
-        contact_phone: formData.contact_phone || '',
-        
-        // Budowa (z selektora)
-        construction_id: recipientType === 'construction' ? (selectedEntity?.id || null) : null,
-        construction_name: recipientType === 'construction' ? (selectedEntity?.name || null) : null,
-        user_id: recipientType === 'sales' ? (selectedEntity?.id || null) : null,
       };
+
+      if (transportType === 'warehouse') {
+        // Pola dla przesunięć międzymagazynowych
+        dataToSend.transport_direction = formData.transport_direction;
+        dataToSend.goods_description = formData.goods_description;
+        dataToSend.document_numbers = formData.document_numbers || '';
+      } else {
+        // Pola dla standardowych transportów
+        dataToSend.destination_city = formData.destination_city || '';
+        dataToSend.postal_code = formData.postal_code || '';
+        dataToSend.street = formData.street || '';
+        dataToSend.client_name = formData.client_name || '';
+        dataToSend.mpk = formData.mpk || '';
+        dataToSend.real_client_name = formData.real_client_name || '';
+        dataToSend.wz_numbers = formData.wz_numbers || '';
+        dataToSend.market_id = formData.market_id || '';
+        dataToSend.contact_person = formData.contact_person || '';
+        dataToSend.contact_phone = formData.contact_phone || '';
+        dataToSend.construction_id = recipientType === 'construction' ? (selectedEntity?.id || null) : null;
+        dataToSend.construction_name = recipientType === 'construction' ? (selectedEntity?.name || null) : null;
+        dataToSend.user_id = recipientType === 'sales' ? (selectedEntity?.id || null) : null;
+      }
       
       console.log('🚀 WYSYŁANIE DANYCH Z FORMULARZA:', JSON.stringify(dataToSend, null, 2));
 
@@ -342,6 +359,9 @@ const handleSubmit = async (e) => {
   };
 
   const startEdit = (request) => {
+    // Ustaw typ transportu
+    setTransportType(request.transport_type || 'standard');
+    
     setFormData({
       destination_city: request.destination_city || '',
       postal_code: request.postal_code || '',
@@ -349,24 +369,33 @@ const handleSubmit = async (e) => {
       delivery_date: request.delivery_date || '',
       justification: request.justification || '',
       client_name: request.client_name || '',
-      real_client_name: request.real_client_name || '',  // ← NOWE
-      wz_numbers: request.wz_numbers || '',              // ← NOWE  
-      market_id: request.market_id || '',                // ← NOWE
+      real_client_name: request.real_client_name || '',
+      wz_numbers: request.wz_numbers || '',
+      market_id: request.market_id || '',
       mpk: request.mpk || '',
       contact_person: request.contact_person || '',
       contact_phone: request.contact_phone || '',
-      notes: request.notes || ''
+      notes: request.notes || '',
+      // Pola dla przesunięć międzymagazynowych
+      transport_direction: request.transport_direction || '',
+      goods_description: request.goods_description || '',
+      document_numbers: request.document_numbers || ''
     })
 
-    // Ustawienie typu i wybranego elementu na podstawie danych z edytowanego wniosku
-    if(request.construction_id) {
-        setRecipientType('construction');
-        setSelectedEntity({ id: request.construction_id, name: request.construction_name || request.client_name, mpk: request.mpk });
-    } else if (request.user_id) {
-        setRecipientType('sales');
-        setSelectedEntity({ id: request.user_id, name: request.requester_name || request.client_name, mpk: request.mpk });
+    if (request.transport_type === 'warehouse') {
+      // Dla przesunięć międzymagazynowych nie używamy selektorów budów/handlowców
+      setSelectedEntity(null);
     } else {
-        setSelectedEntity(null);
+      // Ustawienie typu i wybranego elementu dla standardowych transportów
+      if(request.construction_id) {
+          setRecipientType('construction');
+          setSelectedEntity({ id: request.construction_id, name: request.construction_name || request.client_name, mpk: request.mpk });
+      } else if (request.user_id) {
+          setRecipientType('sales');
+          setSelectedEntity({ id: request.user_id, name: request.requester_name || request.client_name, mpk: request.mpk });
+      } else {
+          setSelectedEntity(null);
+      }
     }
 
     setEditingRequest(request)
@@ -376,11 +405,14 @@ const handleSubmit = async (e) => {
   const cancelForm = () => {
     setShowForm(false)
     setEditingRequest(null)
+    setTransportType('standard')
+    setRecipientType('construction')
     setFormData({
       destination_city: '', postal_code: '', street: '',
       delivery_date: '', justification: '', client_name: '',
-      real_client_name: '', wz_numbers: '', market_id: '',  // ← NOWE
-      mpk: '', contact_person: '', contact_phone: '', notes: ''
+      real_client_name: '', wz_numbers: '', market_id: '',
+      mpk: '', contact_person: '', contact_phone: '', notes: '',
+      transport_direction: '', goods_description: '', document_numbers: ''
     })
     setSelectedEntity(null)
     setFormErrors({})
@@ -449,12 +481,15 @@ const handleSubmit = async (e) => {
             <button
               onClick={() => {
                 setShowForm(true)
+                setTransportType('standard'); // Reset typu transportu
                 setRecipientType('construction'); // Reset do domyślnego przy otwieraniu
                 setSelectedEntity(null);
                 setFormData({ // Resetowanie formularza
                   destination_city: '', postal_code: '', street: '',
                   delivery_date: '', justification: '', client_name: '',
-                  mpk: '', contact_person: '', contact_phone: '', notes: ''
+                  real_client_name: '', wz_numbers: '', market_id: '',
+                  mpk: '', contact_person: '', contact_phone: '', notes: '',
+                  transport_direction: '', goods_description: '', document_numbers: ''
                 });
               }}
               className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
@@ -473,146 +508,271 @@ const handleSubmit = async (e) => {
               </h2>
             </div>
             <form onSubmit={handleSubmit} className="p-6 space-y-6">
-              {/* NOWY BLOK: Wybór typu odbiorcy */}
-              <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                <h4 className="text-base font-medium text-gray-800 mb-3">Wybierz typ odbiorcy</h4>
+              {/* NOWY BLOK: Wybór typu transportu */}
+              <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <h4 className="text-base font-medium text-gray-800 mb-3">Typ wniosku transportowego</h4>
                 <div className="flex space-x-4">
                   <button
                     type="button"
-                    onClick={() => { setRecipientType('construction'); setSelectedEntity(null); setFormData(prev => ({...prev, client_name: '', mpk: ''})) }}
-                    className={`px-4 py-2 rounded-md transition-colors ${recipientType === 'construction' ? 'bg-blue-600 text-white shadow-sm' : 'bg-white text-gray-700 border hover:bg-gray-100'}`}
+                    onClick={() => {
+                      setTransportType('standard');
+                      setFormData(prev => ({
+                        ...prev,
+                        transport_direction: '',
+                        goods_description: '',
+                        document_numbers: ''
+                      }));
+                    }}
+                    className={`px-4 py-2 rounded-md transition-colors ${transportType === 'standard' ? 'bg-blue-600 text-white shadow-sm' : 'bg-white text-gray-700 border hover:bg-gray-100'}`}
                   >
-                    Budowa
+                    Transport do budowy/handlowca
                   </button>
                   <button
                     type="button"
-                    onClick={() => { setRecipientType('sales'); setSelectedEntity(null); setFormData(prev => ({...prev, client_name: '', mpk: ''})) }}
-                    className={`px-4 py-2 rounded-md transition-colors ${recipientType === 'sales' ? 'bg-blue-600 text-white shadow-sm' : 'bg-white text-gray-700 border hover:bg-gray-100'}`}
+                    onClick={() => {
+                      setTransportType('warehouse');
+                      setSelectedEntity(null);
+                      setFormData(prev => ({
+                        ...prev,
+                        destination_city: '',
+                        postal_code: '',
+                        street: '',
+                        client_name: '',
+                        real_client_name: '',
+                        wz_numbers: '',
+                        market_id: '',
+                        mpk: '',
+                        contact_person: '',
+                        contact_phone: ''
+                      }));
+                    }}
+                    className={`px-4 py-2 rounded-md transition-colors ${transportType === 'warehouse' ? 'bg-green-600 text-white shadow-sm' : 'bg-white text-gray-700 border hover:bg-gray-100'}`}
                   >
-                    Handlowiec
+                    Przesunięcie międzymagazynowe
                   </button>
                 </div>
               </div>
 
-              {/* NOWA LOGIKA: Warunkowe wyświetlanie selektorów */}
-              {recipientType === 'construction' ? (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Wybierz budowę/MPK *</label>
-                  <ConstructionSelector
-                    value={selectedEntity}
-                    onChange={(selection) => {
-                      setSelectedEntity(selection);
-                      if (selection) setFormData(prev => ({ ...prev, client_name: selection.name, mpk: selection.mpk }));
-                    }}
-                    className={formErrors.entity ? 'border-red-300' : ''}
-                  />
-                </div>
-              ) : (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Wybierz handlowca *</label>
-                  <UserSelector
-                    value={selectedEntity}
-                    onChange={(user) => {
-                      setSelectedEntity(user);
-                      if (user) setFormData(prev => ({ ...prev, client_name: user.name, mpk: user.mpk || '' }));
-                    }}
-                    className={formErrors.entity ? 'border-red-300' : ''}
-                  />
+              {/* BLOK WYBORU ODBIORCY - tylko dla standardowych transportów */}
+              {transportType === 'standard' && (
+                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <h4 className="text-base font-medium text-gray-800 mb-3">Wybierz typ odbiorcy</h4>
+                  <div className="flex space-x-4">
+                    <button
+                      type="button"
+                      onClick={() => { setRecipientType('construction'); setSelectedEntity(null); setFormData(prev => ({...prev, client_name: '', mpk: ''})) }}
+                      className={`px-4 py-2 rounded-md transition-colors ${recipientType === 'construction' ? 'bg-blue-600 text-white shadow-sm' : 'bg-white text-gray-700 border hover:bg-gray-100'}`}
+                    >
+                      Budowa
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setRecipientType('sales'); setSelectedEntity(null); setFormData(prev => ({...prev, client_name: '', mpk: ''})) }}
+                      className={`px-4 py-2 rounded-md transition-colors ${recipientType === 'sales' ? 'bg-blue-600 text-white shadow-sm' : 'bg-white text-gray-700 border hover:bg-gray-100'}`}
+                    >
+                      Handlowiec
+                    </button>
+                  </div>
                 </div>
               )}
-              {formErrors.entity && (<p className="mt-1 text-sm text-red-600">{formErrors.entity}</p>)}
 
-              {/* Pola nieedytowalne (klient i MPK) */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* POLA DLA PRZESUNIĘĆ MIĘDZYMAGAZYNOWYCH */}
+              {transportType === 'warehouse' && (
+                <>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Handlowiec/budowa</label>
-                    <input type="text" name="client_name" value={formData.client_name} className="mt-1 block w-full rounded-md border-gray-300 bg-gray-100" readOnly />
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Kierunek transportu *
+                    </label>
+                    <select
+                      name="transport_direction"
+                      value={formData.transport_direction}
+                      onChange={handleInputChange}
+                      className={`mt-1 block w-full rounded-md shadow-sm ${formErrors.transport_direction ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'}`}
+                      required
+                    >
+                      <option value="">Wybierz kierunek</option>
+                      <option value="zielonka_bialystok">Zielonka → Białystok</option>
+                      <option value="bialystok_zielonka">Białystok → Zielonka</option>
+                    </select>
+                    {formErrors.transport_direction && (
+                      <p className="mt-1 text-sm text-red-600">{formErrors.transport_direction}</p>
+                    )}
                   </div>
-                   <div>
-                    <label className="block text-sm font-medium text-gray-700">MPK</label>
-                    <input type="text" name="mpk" value={formData.mpk} className="mt-1 block w-full rounded-md border-gray-300 bg-gray-100" readOnly />
-                  </div>
-              </div>
-              
-              {/* Reszta formularza */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Miasto</label>
-                  <input type="text" name="destination_city" value={formData.destination_city} onChange={handleInputChange} className={`mt-1 block w-full rounded-md shadow-sm ${formErrors.destination_city ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'}`} />
-                  {formErrors.destination_city && (<p className="mt-1 text-sm text-red-600">{formErrors.destination_city}</p>)}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Data dostawy</label>
-                  <input type="date" name="delivery_date" value={formData.delivery_date} onChange={handleInputChange} min={new Date().toISOString().split('T')[0]} className={`mt-1 block w-full rounded-md shadow-sm ${formErrors.delivery_date ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'}`} />
-                  {formErrors.delivery_date && (<p className="mt-1 text-sm text-red-600">{formErrors.delivery_date}</p>)}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Kod pocztowy</label>
-                  <input type="text" name="postal_code" value={formData.postal_code} onChange={handleInputChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"/>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Ulica i numer</label>
-                  <input type="text" name="street" value={formData.street} onChange={handleInputChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"/>
-                </div>
-              </div>
-              
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Osoba kontaktowa</label>
-                  <input type="text" name="contact_person" value={formData.contact_person} onChange={handleInputChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"/>
-                </div>
-                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Telefon kontaktowy</label>
-                  <input type="text" name="contact_phone" value={formData.contact_phone} onChange={handleInputChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"/>
-                </div>
-              </div>
 
-              {/* NOWE POLA - dodaj po polach contact_person/contact_phone */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Klient</label>
-                  <input 
-                    type="text" 
-                    name="real_client_name" 
-                    value={formData.real_client_name} 
-                    onChange={handleInputChange} 
-                    placeholder="Nazwa firmy/klienta docelowego"
-                    className={`mt-1 block w-full rounded-md shadow-sm ${formErrors.real_client_name ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'}`} 
-                  />
-                  {formErrors.real_client_name && (<p className="mt-1 text-sm text-red-600">{formErrors.real_client_name}</p>)}
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Numery dokumentów</label>
-                  <input 
-                    type="text" 
-                    name="wz_numbers" 
-                    value={formData.wz_numbers} 
-                    onChange={handleInputChange} 
-                    placeholder="np. WZ001, WZ002"
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Rynek</label>
-                  <select 
-                    name="market_id" 
-                    value={formData.market_id} 
-                    onChange={handleInputChange}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                  >
-                    <option value="">Wybierz rynek</option>
-                    <option value="1">Podlaski</option>
-                    <option value="2">Mazowiecki</option>
-                    <option value="3">Małopolski</option>
-                    <option value="4">Wielkopolski</option>
-                    <option value="5">Dolnośląski</option>
-                    <option value="6">Śląski</option>
-                    <option value="7">Lubelski</option>
-                    <option value="8">Pomorski</option>
-                  </select>
-                </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Opis transportowanych towarów *
+                    </label>
+                    <textarea
+                      name="goods_description"
+                      value={formData.goods_description}
+                      onChange={handleInputChange}
+                      rows={4}
+                      placeholder="Opisz jakie towary mają zostać przetransportowane..."
+                      className={`mt-1 block w-full rounded-md shadow-sm ${formErrors.goods_description ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'}`}
+                      required
+                    />
+                    {formErrors.goods_description && (
+                      <p className="mt-1 text-sm text-red-600">{formErrors.goods_description}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Numery dokumentów (opcjonalnie)
+                    </label>
+                    <input
+                      type="text"
+                      name="document_numbers"
+                      value={formData.document_numbers}
+                      onChange={handleInputChange}
+                      placeholder="np. WZ001, DOK123, etc."
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* SELEKTORY BUDÓW/HANDLOWCÓW - tylko dla standardowych transportów */}
+              {transportType === 'standard' && (
+                <>
+                  {recipientType === 'construction' ? (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Wybierz budowę/MPK *</label>
+                      <ConstructionSelector
+                        value={selectedEntity}
+                        onChange={(selection) => {
+                          setSelectedEntity(selection);
+                          if (selection) setFormData(prev => ({ ...prev, client_name: selection.name, mpk: selection.mpk }));
+                        }}
+                        className={formErrors.entity ? 'border-red-300' : ''}
+                      />
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Wybierz handlowca *</label>
+                      <UserSelector
+                        value={selectedEntity}
+                        onChange={(user) => {
+                          setSelectedEntity(user);
+                          if (user) setFormData(prev => ({ ...prev, client_name: user.name, mpk: user.mpk || '' }));
+                        }}
+                        className={formErrors.entity ? 'border-red-300' : ''}
+                      />
+                    </div>
+                  )}
+                  {formErrors.entity && (<p className="mt-1 text-sm text-red-600">{formErrors.entity}</p>)}
+                </>
+              )}
+
+              {/* POLA DLA STANDARDOWYCH TRANSPORTÓW */}
+              {transportType === 'standard' && (
+                <>
+                  {/* Pola nieedytowalne (klient i MPK) */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Handlowiec/budowa</label>
+                      <input type="text" name="client_name" value={formData.client_name} className="mt-1 block w-full rounded-md border-gray-300 bg-gray-100" readOnly />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">MPK</label>
+                      <input type="text" name="mpk" value={formData.mpk} className="mt-1 block w-full rounded-md border-gray-300 bg-gray-100" readOnly />
+                    </div>
+                  </div>
+                  
+                  {/* Lokalizacja i data */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Miasto *</label>
+                      <input type="text" name="destination_city" value={formData.destination_city} onChange={handleInputChange} className={`mt-1 block w-full rounded-md shadow-sm ${formErrors.destination_city ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'}`} />
+                      {formErrors.destination_city && (<p className="mt-1 text-sm text-red-600">{formErrors.destination_city}</p>)}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Kod pocztowy</label>
+                      <input type="text" name="postal_code" value={formData.postal_code} onChange={handleInputChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"/>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Ulica i numer</label>
+                      <input type="text" name="street" value={formData.street} onChange={handleInputChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"/>
+                    </div>
+                  </div>
+                  
+                  {/* Kontakt */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Osoba kontaktowa</label>
+                      <input type="text" name="contact_person" value={formData.contact_person} onChange={handleInputChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"/>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Telefon kontaktowy</label>
+                      <input type="text" name="contact_phone" value={formData.contact_phone} onChange={handleInputChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"/>
+                    </div>
+                  </div>
+
+                  {/* Dodatkowe pola klienta */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Klient *</label>
+                      <input 
+                        type="text" 
+                        name="real_client_name" 
+                        value={formData.real_client_name} 
+                        onChange={handleInputChange} 
+                        placeholder="Nazwa firmy/klienta docelowego"
+                        className={`mt-1 block w-full rounded-md shadow-sm ${formErrors.real_client_name ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'}`} 
+                      />
+                      {formErrors.real_client_name && (<p className="mt-1 text-sm text-red-600">{formErrors.real_client_name}</p>)}
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Numery dokumentów</label>
+                      <input 
+                        type="text" 
+                        name="wz_numbers" 
+                        value={formData.wz_numbers} 
+                        onChange={handleInputChange} 
+                        placeholder="np. WZ001, WZ002"
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Rynek</label>
+                      <select 
+                        name="market_id" 
+                        value={formData.market_id} 
+                        onChange={handleInputChange}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      >
+                        <option value="">Wybierz rynek</option>
+                        <option value="1">Podlaski</option>
+                        <option value="2">Mazowiecki</option>
+                        <option value="3">Małopolski</option>
+                        <option value="4">Wielkopolski</option>
+                        <option value="5">Dolnośląski</option>
+                        <option value="6">Śląski</option>
+                        <option value="7">Lubelski</option>
+                        <option value="8">Pomorski</option>
+                      </select>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* WSPÓLNE POLA - data i uzasadnienie */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  {transportType === 'warehouse' ? 'Data transportu *' : 'Data dostawy *'}
+                </label>
+                <input 
+                  type="date" 
+                  name="delivery_date" 
+                  value={formData.delivery_date} 
+                  onChange={handleInputChange} 
+                  min={new Date().toISOString().split('T')[0]} 
+                  className={`mt-1 block w-full rounded-md shadow-sm ${formErrors.delivery_date ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'}`} 
+                />
+                {formErrors.delivery_date && (<p className="mt-1 text-sm text-red-600">{formErrors.delivery_date}</p>)}
               </div>
 
                     
@@ -667,44 +827,94 @@ const handleSubmit = async (e) => {
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center justify-between mb-2">
-                        <h3 className="text-lg font-medium text-gray-900">
-                          Wniosek #{request.id}
-                        </h3>
+                        <div className="flex items-center space-x-3">
+                          <h3 className="text-lg font-medium text-gray-900">
+                            Wniosek #{request.id}
+                          </h3>
+                          {/* Typ wniosku */}
+                          {request.transport_type === 'warehouse' ? (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                              Przesunięcie międzymagazynowe
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                              Transport standardowy
+                            </span>
+                          )}
+                        </div>
                         {getStatusBadge(request.status)}
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600">
-                        <div className="flex items-center">
-                          <MapPin className="w-4 h-4 mr-2" />
-                          {request.destination_city}
-                          {request.postal_code && `, ${request.postal_code}`}
-                        </div>
-                        <div className="flex items-center">
-                          <Calendar className="w-4 h-4 mr-2" />
-                          {format(new Date(request.delivery_date), 'dd.MM.yyyy', { locale: pl })}
-                        </div>
-                        {request.client_name && (
+                      {/* Różne wyświetlanie w zależności od typu */}
+                      {request.transport_type === 'warehouse' ? (
+                        // Wyświetlanie dla przesunięć międzymagazynowych
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600 bg-green-50 p-4 rounded-md">
                           <div className="flex items-center">
-                            <User className="w-4 h-4 mr-2" />
-                            {request.client_name}
-                          </div>
-                        )}
-                        {request.contact_phone && (
-                          <div className="flex items-center">
-                            <Phone className="w-4 h-4 mr-2" />
-                            {request.contact_phone}
-                          </div>
-                        )}
-                        {(request.mpk || request.construction_name) && (
-                          <div className="flex items-center md:col-span-2">
-                            <Building className="w-4 h-4 mr-2" />
-                            <span>
-                              {request.construction_name && `${request.construction_name} - `}
-                              MPK: {request.mpk}
+                            <MapPin className="w-4 h-4 mr-2" />
+                            <strong>Kierunek:</strong>
+                            <span className="ml-2">
+                              {request.transport_direction === 'zielonka_bialystok' ? 'Zielonka → Białystok' : 
+                               request.transport_direction === 'bialystok_zielonka' ? 'Białystok → Zielonka' : 
+                               request.transport_direction}
                             </span>
                           </div>
-                        )}
-                      </div>
+                          <div className="flex items-center">
+                            <Calendar className="w-4 h-4 mr-2" />
+                            <strong>Data transportu:</strong>
+                            <span className="ml-2">{format(new Date(request.delivery_date), 'dd.MM.yyyy', { locale: pl })}</span>
+                          </div>
+                          <div className="md:col-span-2">
+                            <div className="flex items-start">
+                              <FileText className="w-4 h-4 mr-2 mt-0.5" />
+                              <div>
+                                <strong>Towary:</strong>
+                                <p className="mt-1">{request.goods_description}</p>
+                              </div>
+                            </div>
+                          </div>
+                          {request.document_numbers && (
+                            <div className="md:col-span-2 flex items-center">
+                              <FileText className="w-4 h-4 mr-2" />
+                              <strong>Dokumenty:</strong>
+                              <span className="ml-2">{request.document_numbers}</span>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        // Wyświetlanie dla standardowych transportów
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600">
+                          <div className="flex items-center">
+                            <MapPin className="w-4 h-4 mr-2" />
+                            {request.destination_city}
+                            {request.postal_code && `, ${request.postal_code}`}
+                          </div>
+                          <div className="flex items-center">
+                            <Calendar className="w-4 h-4 mr-2" />
+                            {format(new Date(request.delivery_date), 'dd.MM.yyyy', { locale: pl })}
+                          </div>
+                          {request.client_name && (
+                            <div className="flex items-center">
+                              <User className="w-4 h-4 mr-2" />
+                              {request.client_name}
+                            </div>
+                          )}
+                          {request.contact_phone && (
+                            <div className="flex items-center">
+                              <Phone className="w-4 h-4 mr-2" />
+                              {request.contact_phone}
+                            </div>
+                          )}
+                          {(request.mpk || request.construction_name) && (
+                            <div className="flex items-center md:col-span-2">
+                              <Building className="w-4 h-4 mr-2" />
+                              <span>
+                                {request.construction_name && `${request.construction_name} - `}
+                                MPK: {request.mpk}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      )}
 
                       <div className="mt-3">
                         <p className="text-sm text-gray-800">
