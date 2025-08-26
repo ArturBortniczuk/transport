@@ -714,14 +714,11 @@ export default function WnioskiTransportowePage() {
                 Po akceptacji zostanie automatycznie utworzony transport w kalendarzu.
               </p>
               
-              {/* Wybór magazynu - tylko dla standardowych transportów */}
-              {selectedRequest.transport_type !== 'warehouse' && (
-                {/* UJEDNOLICONY WYBÓR MAGAZYNU dla wszystkich typów */}
-                <div className="mb-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Magazyn realizujący transport *
-                  </label>
-                  
+              {/* UJEDNOLICONY WYBÓR MAGAZYNU dla wszystkich typów */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Magazyn realizujący transport *
+                </label>
                   {selectedRequest.transport_type === 'warehouse' ? (
                     // Radio buttons dla przesunięć międzymagazynowych
                     <div className="space-y-2">
