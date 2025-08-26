@@ -414,7 +414,7 @@ export async function POST(request) {
       newRequest.document_numbers = requestData.document_numbers || null;
       
       // Dla przesunięć międzymagazynowych nie używamy lokalizacji ani danych klienta
-      newRequest.destination_city = null;
+      newRequest.destination_city = requestData.transport_direction === 'zielonka_bialystok' ? 'Białystok' : 'Zielonka';
       newRequest.postal_code = null;
       newRequest.street = null;
       newRequest.mpk = null;
@@ -592,7 +592,7 @@ export async function PUT(request) {
             };
             
             transportData = {
-              destination_city: directionNames[existingRequest.transport_direction] || existingRequest.transport_direction,
+              destination_city: existingRequest.transport_direction === 'zielonka_bialystok' ? 'Białystok' : 'Zielonka',
               delivery_date: existingRequest.delivery_date,
               status: 'active',
               source_warehouse: existingRequest.transport_direction === 'zielonka_bialystok' ? 'zielonka' : 'bialystok',
