@@ -599,11 +599,10 @@ export async function PUT(request) {
             
             transportData = {
               destination_city: existingRequest.transport_direction === 'zielonka_bialystok' ? 'Białystok' : 'Zielonka',
-              delivery_date: existingRequest.delivery_date,
+              postal_code: existingRequest.transport_direction === 'zielonka_bialystok' ? '15-169' : '05-220',
+              street: existingRequest.transport_direction === 'zielonka_bialystok' ? 'ul. Wysockiego 69' : 'ul. Krótka 2',              delivery_date: existingRequest.delivery_date,
               status: 'active',
               source_warehouse: existingRequest.transport_direction === 'zielonka_bialystok' ? 'zielonka' : 'bialystok',
-              postal_code: null,
-              street: null,
               mpk: null,
               client_name: 'Przesunięcie międzymagazynowe',
               requester_name: existingRequest.requester_name || null,
