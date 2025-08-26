@@ -414,9 +414,15 @@ export async function POST(request) {
       newRequest.document_numbers = requestData.document_numbers || null;
       
       // Dla przesunięć międzymagazynowych nie używamy lokalizacji ani danych klienta
-      newRequest.destination_city = requestData.transport_direction === 'zielonka_bialystok' ? 'Białystok' : 'Zielonka';
-      newRequest.postal_code = null;
-      newRequest.street = null;
+      if (requestData.transport_direction === 'zielonka_bialystok') {
+        newRequest.destination_city = 'Białystok';
+        newRequest.postal_code = '15-169';
+        newRequest.street = 'ul. Wysockiego 69';
+      } else {
+        newRequest.destination_city = 'Zielonka';
+        newRequest.postal_code = '05-220';
+        newRequest.street = 'ul. Krótka 2';
+      }
       newRequest.mpk = null;
       newRequest.construction_name = null;
       newRequest.construction_id = null;
