@@ -716,24 +716,66 @@ export default function WnioskiTransportowePage() {
               
               {/* Wybór magazynu - tylko dla standardowych transportów */}
               {selectedRequest.transport_type !== 'warehouse' && (
+                {/* UJEDNOLICONY WYBÓR MAGAZYNU dla wszystkich typów */}
                 <div className="mb-6">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Magazyn realizujący transport *
                   </label>
-                  <select
-                    value={selectedWarehouse}
-                    onChange={(e) => setSelectedWarehouse(e.target.value)}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    required
-                  >
-                    <option value="bialystok">Magazyn Białystok</option>
-                    <option value="zielonka">Magazyn Zielonka</option>
-                  </select>
+                  
+                  {selectedRequest.transport_type === 'warehouse' ? (
+                    // Radio buttons dla przesunięć międzymagazynowych
+                    <div className="space-y-2">
+                      <label className="flex items-center">
+                        <input
+                          type="radio"
+                          name="warehouse_choice"
+                          value={selectedRequest.transport_direction === 'zielonka_bialystok' ? 'zielonka' : 'bialystok'}
+                          checked={selectedWarehouse === (selectedRequest.transport_direction === 'zielonka_bialystok' ? 'zielonka' : 'bialystok')}
+                          onChange={(e) => setSelectedWarehouse(e.target.value)}
+                          className="mr-2"
+                        />
+                        <span className="text-sm">
+                          {selectedRequest.transport_direction === 'zielonka_bialystok' 
+                            ? 'Magazyn Zielonka (jedzie do Białegostoku)' 
+                            : 'Magazyn Białystok (jedzie do Zielonki)'}
+                        </span>
+                      </label>
+                      <label className="flex items-center">
+                        <input
+                          type="radio"
+                          name="warehouse_choice"
+                          value={selectedRequest.transport_direction === 'zielonka_bialystok' ? 'bialystok' : 'zielonka'}
+                          checked={selectedWarehouse === (selectedRequest.transport_direction === 'zielonka_bialystok' ? 'bialystok' : 'zielonka')}
+                          onChange={(e) => setSelectedWarehouse(e.target.value)}
+                          className="mr-2"
+                        />
+                        <span className="text-sm">
+                          {selectedRequest.transport_direction === 'zielonka_bialystok' 
+                            ? 'Magazyn Białystok (jedzie do Zielonki)' 
+                            : 'Magazyn Zielonka (jedzie do Białegostoku)'}
+                        </span>
+                      </label>
+                    </div>
+                  ) : (
+                    // Select dla standardowych transportów
+                    <select
+                      value={selectedWarehouse}
+                      onChange={(e) => setSelectedWarehouse(e.target.value)}
+                      className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      required
+                    >
+                      <option value="bialystok">Magazyn Białystok</option>
+                      <option value="zielonka">Magazyn Zielonka</option>
+                    </select>
+                  )}
+                  
                   <p className="text-xs text-gray-500 mt-1">
-                    Wybierz magazyn, z którego będzie realizowany ten transport
+                    {selectedRequest.transport_type === 'warehouse' 
+                      ? 'Wybierz magazyn, który będzie realizował przesunięcie międzymagazynowe'
+                      : 'Wybierz magazyn, z którego będzie realizowany transport'
+                    }
                   </p>
                 </div>
-              )}
               
               <div className="bg-gray-50 p-4 rounded-md mb-6">
                 <div className="text-sm">
