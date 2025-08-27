@@ -615,7 +615,6 @@ export async function PUT(request) {
               requester_email: existingRequest.requester_email || null,
               wz_number: existingRequest.document_numbers || null,
               market: null,
-              distance_km: 200,
               notes: `Przesunięcie międzymagazynowe z wniosku #${requestId}. Kierunek: ${existingRequest.transport_direction === 'bialystok_zielonka' ? 'Białystok → Zielonka' : 'Zielonka → Białystok'}. Towary: ${existingRequest.goods_description}. Realizuje: Magazyn ${selectedWarehouse === 'bialystok' ? 'Białystok' : 'Zielonka'}.${existingRequest.notes ? ` Uwagi: ${existingRequest.notes}` : ''}`.trim(),
               loading_level: '100%',
               is_cyclical: false
