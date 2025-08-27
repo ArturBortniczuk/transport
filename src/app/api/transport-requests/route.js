@@ -412,6 +412,8 @@ export async function POST(request) {
       newRequest.transport_direction = requestData.transport_direction;
       newRequest.goods_description = requestData.goods_description;
       newRequest.document_numbers = requestData.document_numbers || null;
+      newRequest.mpk = requestData.transport_direction === 'bialystok_zielonka' ? '549-03-01' : '549-03-02';
+
       
       // Dla przesunięć międzymagazynowych nie używamy lokalizacji ani danych klienta
       if (requestData.transport_direction === 'zielonka_bialystok') {
@@ -591,25 +593,30 @@ export async function PUT(request) {
           let transportData;
           
           if (existingRequest.transport_type === 'warehouse') {
-            // Przesunięcie międzymagazynowe
-            const directionNames = {
-              'zielonka_bialystok': 'Zielonka → Białystok',
-              'bialystok_zielonka': 'Białystok → Zielonka'
-            };
+            // Przesunięcie międzymagazynowe - logika kalendarza
+            const isAcceptedByBialystok = selectedWarehouse === 'bialystok';
+            
+            // Określ docelową lokalizację w kalendarzu (przeciwna do akceptującego magazynu)
+            const calendarDestination = isAcceptedByBialystok ? 'Zielonka' : 'Białystok';
+            
+            // Automatyczne MPK na podstawie kierunku
+            const autoMpk = existingRequest.transport_direction === 'bialystok_zielonka' ? '549-03-01' : '549-03-02';
             
             transportData = {
-              destination_city: existingRequest.transport_direction === 'zielonka_bialystok' ? 'Białystok' : 'Zielonka',
-              postal_code: existingRequest.transport_direction === 'zielonka_bialystok' ? '15-169' : '05-220',
-              street: existingRequest.transport_direction === 'zielonka_bialystok' ? 'ul. Wysockiego 69' : 'ul. Krótka 2',              delivery_date: existingRequest.delivery_date,
+              destination_city: calendarDestination,
+              delivery_date: existingRequest.delivery_date,
               status: 'active',
-              source_warehouse: existingRequest.transport_direction === 'zielonka_bialystok' ? 'zielonka' : 'bialystok',
-              mpk: null,
+              source_warehouse: selectedWarehouse, // Magazyn akceptujący = kolor kalendarza
+              postal_code: calendarDestination === 'Białystok' ? '15-169' : '05-220',
+              street: calendarDestination === 'Białystok' ? 'ul. Wysockiego 69' : 'ul. Krótka 2',
+              mpk: autoMpk,
               client_name: 'Przesunięcie międzymagazynowe',
               requester_name: existingRequest.requester_name || null,
               requester_email: existingRequest.requester_email || null,
               wz_number: existingRequest.document_numbers || null,
               market: null,
-              notes: `Przesunięcie międzymagazynowe z wniosku #${requestId}. Kierunek: ${directionNames[existingRequest.transport_direction]}. Towary: ${existingRequest.goods_description}${existingRequest.notes ? `. Uwagi: ${existingRequest.notes}` : ''}`.trim(),
+              distance_km: 200,
+              notes: `Przesunięcie międzymagazynowe z wniosku #${requestId}. Kierunek: ${existingRequest.transport_direction === 'bialystok_zielonka' ? 'Białystok → Zielonka' : 'Zielonka → Białystok'}. Towary: ${existingRequest.goods_description}. Realizuje: Magazyn ${selectedWarehouse === 'bialystok' ? 'Białystok' : 'Zielonka'}.${existingRequest.notes ? ` Uwagi: ${existingRequest.notes}` : ''}`.trim(),
               loading_level: '100%',
               is_cyclical: false
             };
