@@ -615,6 +615,7 @@ export async function PUT(request) {
               requester_email: existingRequest.requester_email || null,
               wz_number: existingRequest.document_numbers || null,
               market: null,
+              distance: 183,
               notes: `Przesunięcie międzymagazynowe z wniosku #${requestId}. Kierunek: ${existingRequest.transport_direction === 'bialystok_zielonka' ? 'Białystok → Zielonka' : 'Zielonka → Białystok'}. Towary: ${existingRequest.goods_description}. Realizuje: Magazyn ${selectedWarehouse === 'bialystok' ? 'Białystok' : 'Zielonka'}.${existingRequest.notes ? ` Uwagi: ${existingRequest.notes}` : ''}`.trim(),
               loading_level: '100%',
               is_cyclical: false
@@ -634,6 +635,7 @@ export async function PUT(request) {
               requester_email: existingRequest.requester_email || null,
               wz_number: existingRequest.wz_numbers || null, // WAŻNE: mapowanie wz_numbers → wz_number
               market: getMarketName(existingRequest.market_id) || null,
+              distance: existingRequest.distance_km || null,
               notes: `Utworzony z wniosku #${requestId}${existingRequest.construction_name ? ` dla budowy: ${existingRequest.construction_name}` : ''}${existingRequest.notes ? `. ${existingRequest.notes}` : ''}`.trim(),
               loading_level: '100%',
               is_cyclical: false
