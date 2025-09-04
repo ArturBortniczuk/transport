@@ -845,13 +845,15 @@ export default function ArchiwumPage() {
       }
     }
     
-    // NAPRAWIONA funkcja dodawania komentarza z powiadomieniami
+    // NAPRAWIONA funkcja dodawania komentarza
     const handleAddComment = async () => {
       if (!newComment.trim()) return
       
       try {
         setAddingComment(true)
         setError('')
+        
+        console.log('📝 Dodawanie komentarza:', newComment.trim())
         
         const response = await fetch('/api/transport-comments', {
           method: 'POST',
@@ -867,15 +869,24 @@ export default function ArchiwumPage() {
         const result = await response.json()
         
         if (result.success) {
-          // NOWE: Po dodaniu komentarza, odśwież listę
+          // ODŚWIEŻ listę komentarzy po dodaniu
+          console.log('✅ Komentarz dodany, odświeżanie listy...')
+          setNewComment('') // Wyczyść pole tekstowe
+          
+          // Pobierz aktualną listę komentarzy
           const commentsResponse = await fetch(`/api/transport-comments?transportId=${transport.id}`)
           const commentsData = await commentsResponse.json()
           
           if (commentsData.success) {
             setAllComments(commentsData.comments || [])
-            setNewComment('') // Wyczyść pole tekstowe
-            console.log('✅ Komentarz dodany i lista odświeżona')
+            console.log('🔄 Lista komentarzy odświeżona')
           }
+          
+          // Pokaż informację o powiadomieniu
+          if (result.notification?.message) {
+            console.log('📧 Powiadomienie:', result.notification.message)
+          }
+          
         } else {
           setError(result.error || 'Nie udało się dodać komentarza')
         }
