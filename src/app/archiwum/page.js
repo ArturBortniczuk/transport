@@ -947,31 +947,59 @@ export default function ArchiwumPage() {
                   ⭐ Ocena transportu: {transportRating.stats.overallRatingPercentage}%
                 </h3>
                 
-                {/* Wyświetl główną ocenę (pierwszą) */}
-                {transportRating.ratings && transportRating.ratings[0] && (
+                {/* Wyświetl szczegółowe kryteria */}
+                {loading ? (
+                  <div className="text-center py-4">
+                    <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-blue-500 mx-auto"></div>
+                    <p className="text-sm text-gray-500 mt-2">Ładowanie szczegółów oceny...</p>
+                  </div>
+                ) : (
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                     {categories.map(category => (
-                      <div key={category.id} className="bg-white p-4 rounded-lg">
-                        <h4 className="font-medium text-sm mb-2">{category.title}</h4>
+                      <div key={category.id} className="bg-white p-4 rounded-lg border border-gray-200">
+                        <h4 className="font-medium text-sm mb-3 text-gray-800">{category.title}</h4>
                         {category.criteria.map(criteria => {
-                          const ratingValue = transportRating.ratings[0].ratings[criteria.key]
-                          if (ratingValue === null || ratingValue === undefined) return null
+                          const ratingValue = ratings[criteria.key];
+                          if (ratingValue === null || ratingValue === undefined) {
+                            return (
+                              <div key={criteria.key} className="flex items-center justify-between text-sm mb-2 p-2 bg-gray-50 rounded">
+                                <span className="text-gray-500 text-xs">{criteria.text}</span>
+                                <span className="text-gray-400 text-xs">Brak oceny</span>
+                              </div>
+                            );
+                          }
                           
                           return (
-                            <div key={criteria.key} className="flex items-center justify-between text-sm mb-1">
-                              <span className="text-gray-600 text-xs">{criteria.text}</span>
+                            <div key={criteria.key} className={`flex items-center justify-between text-sm mb-2 p-2 rounded ${
+                              ratingValue ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
+                            }`}>
+                              <span className="text-gray-700 text-xs flex-1 mr-2">{criteria.text}</span>
                               <div className="flex items-center">
                                 {ratingValue ? (
-                                  <ThumbsUp size={12} className="text-green-600" />
+                                  <>
+                                    <ThumbsUp size={14} className="text-green-600 mr-1" />
+                                    <span className="text-green-700 text-xs font-medium">TAK</span>
+                                  </>
                                 ) : (
-                                  <ThumbsDown size={12} className="text-red-600" />
+                                  <>
+                                    <ThumbsDown size={14} className="text-red-600 mr-1" />
+                                    <span className="text-red-700 text-xs font-medium">NIE</span>
+                                  </>
                                 )}
                               </div>
                             </div>
-                          )
+                          );
                         })}
                       </div>
                     ))}
+                  </div>
+                )}
+                
+                {/* Wyświetl komentarz z oceny */}
+                {comment && (
+                  <div className="mt-4 p-4 bg-white rounded-lg border border-blue-200">
+                    <h5 className="font-medium text-sm text-blue-800 mb-2">💬 Komentarz do oceny:</h5>
+                    <p className="text-gray-700 text-sm italic">"{comment}"</p>
                   </div>
                 )}
                 
@@ -979,14 +1007,14 @@ export default function ArchiwumPage() {
                 {userHasRated && !isEditMode && (
                   <button
                     onClick={() => setIsEditMode(true)}
-                    className="flex items-center px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                    className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors mt-4"
                   >
-                    <Edit size={16} className="mr-1" />
+                    <Edit size={16} className="mr-2" />
                     Edytuj swoją ocenę
                   </button>
                 )}
               </div>
-           )}
+            )}
 
            {/* Formularz oceny - tylko dla edycji lub nowych ocen */}
            {(!hasMainRating || (userHasRated && isEditMode)) && (
