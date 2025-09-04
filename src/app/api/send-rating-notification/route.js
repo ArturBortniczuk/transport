@@ -197,7 +197,8 @@ export async function POST(request) {
     // Lista odbiorców - kierownicy magazynów + Mateusz
     const recipients = [
       ...managers.map(manager => manager.email),
-      'mateusz.klewinowski@grupaeltron.pl'
+      'mateusz.klewinowski@grupaeltron.pl',
+      'a.bortniczuk@grupaeltron.pl'
     ];
     
     // Usuń duplikaty
