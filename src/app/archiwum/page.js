@@ -246,18 +246,11 @@ export default function ArchiwumPage() {
       }))
     }
   }
-  const handleToggleRow = async (transportId) => {
-    const isCurrentlyExpanded = expandedRows[transportId]
-    
+  const handleToggleRow = (transportId) => {
     setExpandedRows(prev => ({
       ...prev,
-      [transportId]: !isCurrentlyExpanded
+      [transportId]: !prev[transportId]
     }))
-    
-    // Jeśli rozwijamy wiersz i nie mamy jeszcze szczegółowej oceny, pobierz ją
-    if (!isCurrentlyExpanded && !detailedRatings[transportId] && detailedRatings[transportId] !== null) {
-      await fetchDetailedRating(transportId)
-    }
   }
 
 
@@ -1443,10 +1436,7 @@ export default function ArchiwumPage() {
                           <RatingButtons transport={transport} />
                           
                           <button
-                            onClick={() => setExpandedRows(prev => ({
-                              ...prev,
-                              [transport.id]: !prev[transport.id]
-                            }))}
+                            onClick={() => handleToggleRow(transport.id)}
                             className="flex items-center px-2 py-1 text-gray-600 hover:text-gray-900 rounded-md hover:bg-gray-100 transition-colors text-sm"
                           >
                             <Eye size={14} className="mr-1" />
@@ -1469,164 +1459,96 @@ export default function ArchiwumPage() {
                     {expandedRows[transport.id] && (
                       <tr>
                         <td colSpan="6" className="px-6 py-4 bg-gray-50">
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            {/* Kolumna 1: Szczegóły dostawy */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                              <h4 className="font-medium text-gray-900 mb-3 flex items-center">
-                                <MapPin size={16} className="mr-2 text-blue-600" />
-                                Szczegóły dostawy
-                              </h4>
+                              <h4 className="font-medium text-gray-900 mb-2">Szczegóły dostawy</h4>
                               <div className="space-y-2 text-sm">
                                 {transport.street && (
-                                  <div className="flex items-start">
-                                    <span className="text-gray-600 w-16">Adres:</span>
+                                  <div className="flex items-center">
+                                    <MapPin size={14} className="text-gray-400 mr-2" />
+                                    <span className="text-gray-600">Adres:</span>
                                     <span className="ml-1">{transport.street}</span>
                                   </div>
                                 )}
                                 {transport.postal_code && (
-                                  <div className="flex items-start">
-                                    <span className="text-gray-600 w-16">Kod:</span>
+                                  <div className="flex items-center">
+                                    <span className="text-gray-600 ml-6">Kod:</span>
                                     <span className="ml-1">{transport.postal_code}</span>
                                   </div>
                                 )}
+                                {transport.mpk && (
+                                  <div className="flex items-center">
+                                    <Hash size={14} className="text-gray-400 mr-2" />
+                                    <span className="text-gray-600">MPK:</span>
+                                    <span className="ml-1">{transport.mpk}</span>
+                                  </div>
+                                )}
+                                {transport.wz_number && (
+                                  <div className="flex items-center">
+                                    <FileText size={14} className="text-gray-400 mr-2" />
+                                    <span className="text-gray-600">WZ:</span>
+                                    <span className="ml-1">{transport.wz_number}</span>
+                                  </div>
+                                )}
                                 {transport.distance && (
-                                  <div className="flex items-start">
-                                    <span className="text-gray-600 w-16">Dystans:</span>
+                                  <div className="flex items-center">
+                                    <Route size={14} className="text-gray-400 mr-2" />
+                                    <span className="text-gray-600">Odległość:</span>
                                     <span className="ml-1">{transport.distance} km</span>
                                   </div>
                                 )}
-                                {transport.notes && (
-                                  <div className="flex items-start">
-                                    <span className="text-gray-600 w-16">Uwagi:</span>
-                                    <span className="ml-1">{transport.notes}</span>
+                                {transport.market && (
+                                  <div className="flex items-center">
+                                    <Compass size={14} className="text-gray-400 mr-2" />
+                                    <span className="text-gray-600">Rynek:</span>
+                                    <span className="ml-1">{getRynekNazwa(transport.market)}</span>
                                   </div>
                                 )}
                               </div>
                             </div>
 
-                            {/* Kolumna 2: Informacje o transporcie */}
                             <div>
-                              <h4 className="font-medium text-gray-900 mb-3 flex items-center">
-                                <Truck size={16} className="mr-2 text-green-600" />
-                                Informacje transportowe
-                              </h4>
+                              <h4 className="font-medium text-gray-900 mb-2">Dodatkowe informacje</h4>
                               <div className="space-y-2 text-sm">
-                                {transport.market && (
-                                  <div className="flex items-start">
-                                    <span className="text-gray-600 w-20">Rynek:</span>
-                                    <span className="ml-1">{transport.market}</span>
+                                <div className="flex items-center">
+                                  <User size={14} className="text-gray-400 mr-2" />
+                                  <span className="text-gray-600">Kierowca:</span>
+                                  <span className="ml-1">{getDriverInfo(transport.driver_id, transport.vehicle_id)}</span>
+                                </div>
+                                {transport.requester_email && (
+                                  <div className="flex items-center">
+                                    <span className="text-gray-600">Zamówił:</span>
+                                    <span className="ml-1">{transport.requester_email}</span>
                                   </div>
                                 )}
                                 {transport.delivery_date && (
-                                  <div className="flex items-start">
-                                    <span className="text-gray-600 w-20">Data:</span>
+                                  <div className="flex items-center">
+                                    <Calendar size={14} className="text-gray-400 mr-2" />
+                                    <span className="text-gray-600">Data dostawy:</span>
                                     <span className="ml-1">
                                       {format(new Date(transport.delivery_date), 'dd.MM.yyyy', { locale: pl })}
                                     </span>
                                   </div>
                                 )}
                                 {transport.completed_at && (
-                                  <div className="flex items-start">
-                                    <span className="text-gray-600 w-20">Ukończono:</span>
+                                  <div className="flex items-center">
+                                    <CheckCircle size={14} className="text-gray-400 mr-2" />
+                                    <span className="text-gray-600">Ukończono:</span>
                                     <span className="ml-1">
                                       {format(new Date(transport.completed_at), 'dd.MM.yyyy HH:mm', { locale: pl })}
                                     </span>
                                   </div>
                                 )}
+                                {transport.notes && (
+                                  <div className="flex items-start">
+                                    <MessageSquare size={14} className="text-gray-400 mr-2 mt-1" />
+                                    <div>
+                                      <span className="text-gray-600">Uwagi:</span>
+                                      <p className="mt-1 text-gray-900">{transport.notes}</p>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
-                            </div>
-
-                            {/* NOWA Kolumna 3: Szczegółowe oceny */}
-                            <div>
-                              <h4 className="font-medium text-gray-900 mb-3 flex items-center">
-                                <Star size={16} className="mr-2 text-yellow-600" />
-                                Szczegóły oceny
-                              </h4>
-                              
-                              {detailedRatings[transport.id] === undefined ? (
-                                <div className="text-sm text-gray-500">Ładowanie...</div>
-                              ) : detailedRatings[transport.id] === null ? (
-                                <div className="text-sm text-gray-500">Brak szczegółowej oceny</div>
-                              ) : (
-                                <div className="space-y-3">
-                                  {/* Informacje o oceniającym */}
-                                  <div className="text-xs text-gray-500 border-b pb-2">
-                                    <div>Ocenił: {detailedRatings[transport.id].rater_email}</div>
-                                    <div>Data: {format(new Date(detailedRatings[transport.id].rated_at), 'dd.MM.yyyy HH:mm', { locale: pl })}</div>
-                                  </div>
-                                  
-                                  {/* Szczegółowe kryteria */}
-                                  <div className="space-y-2">
-                                    <div className="text-sm font-medium text-gray-700">👨‍💼 Kierowca</div>
-                                    <div className="ml-4 space-y-1 text-sm">
-                                      <div className="flex items-center">
-                                        {detailedRatings[transport.id].driver_professional ? (
-                                          <ThumbsUp size={12} className="text-green-600 mr-2" />
-                                        ) : (
-                                          <ThumbsDown size={12} className="text-red-600 mr-2" />
-                                        )}
-                                        <span className="text-xs">Zachowanie profesjonalne</span>
-                                      </div>
-                                      <div className="flex items-center">
-                                        {detailedRatings[transport.id].driver_tasks_completed ? (
-                                          <ThumbsUp size={12} className="text-green-600 mr-2" />
-                                        ) : (
-                                          <ThumbsDown size={12} className="text-red-600 mr-2" />
-                                        )}
-                                        <span className="text-xs">Zadania wykonane</span>
-                                      </div>
-                                    </div>
-
-                                    <div className="text-sm font-medium text-gray-700">📦 Towar</div>
-                                    <div className="ml-4 space-y-1 text-sm">
-                                      <div className="flex items-center">
-                                        {detailedRatings[transport.id].cargo_complete ? (
-                                          <ThumbsUp size={12} className="text-green-600 mr-2" />
-                                        ) : (
-                                          <ThumbsDown size={12} className="text-red-600 mr-2" />
-                                        )}
-                                        <span className="text-xs">Towar kompletny</span>
-                                      </div>
-                                      <div className="flex items-center">
-                                        {detailedRatings[transport.id].cargo_correct ? (
-                                          <ThumbsUp size={12} className="text-green-600 mr-2" />
-                                        ) : (
-                                          <ThumbsDown size={12} className="text-red-600 mr-2" />
-                                        )}
-                                        <span className="text-xs">Towar zgodny</span>
-                                      </div>
-                                    </div>
-
-                                    <div className="text-sm font-medium text-gray-700">🚚 Organizacja</div>
-                                    <div className="ml-4 space-y-1 text-sm">
-                                      <div className="flex items-center">
-                                        {detailedRatings[transport.id].delivery_notified ? (
-                                          <ThumbsUp size={12} className="text-green-600 mr-2" />
-                                        ) : (
-                                          <ThumbsDown size={12} className="text-red-600 mr-2" />
-                                        )}
-                                        <span className="text-xs">Dostawa awizowana</span>
-                                      </div>
-                                      <div className="flex items-center">
-                                        {detailedRatings[transport.id].delivery_on_time ? (
-                                          <ThumbsUp size={12} className="text-green-600 mr-2" />
-                                        ) : (
-                                          <ThumbsDown size={12} className="text-red-600 mr-2" />
-                                        )}
-                                        <span className="text-xs">Dostawa na czas</span>
-                                      </div>
-                                    </div>
-                                  </div>
-
-                                  {/* Komentarz */}
-                                  {detailedRatings[transport.id].comment && (
-                                    <div className="mt-3 p-2 bg-blue-50 rounded border-l-4 border-blue-400">
-                                      <div className="text-xs font-medium text-blue-800">Komentarz:</div>
-                                      <div className="text-xs text-blue-700 mt-1">"{detailedRatings[transport.id].comment}"</div>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
                             </div>
                           </div>
                         </td>
