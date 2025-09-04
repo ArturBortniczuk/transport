@@ -715,29 +715,41 @@ export default function ArchiwumPage() {
       const loadExistingRating = async () => {
         try {
           setLoading(true)
+          console.log('🔍 Ładowanie oceny dla transportu:', transport.id)
+          
           const response = await fetch(`/api/transport-detailed-ratings?transportId=${transport.id}`)
           const data = await response.json()
           
-          console.log('Dane oceny z API:', data)
+          console.log('📦 Odpowiedź z API:', data)
           
-          if (data.success && data.rating) {
-            // Załaduj istniejącą ocenę użytkownika
-            setRatings({
-              driverProfessional: data.rating.driver_professional,
-              driverTasksCompleted: data.rating.driver_tasks_completed,
-              cargoComplete: data.rating.cargo_complete,
-              cargoCorrect: data.rating.cargo_correct,
-              deliveryNotified: data.rating.delivery_notified,
-              deliveryOnTime: data.rating.delivery_on_time
-            })
-            setComment(data.rating.comment || '')
-            setIsEditMode(false) // Tryb tylko do odczytu jeśli już oceniono
+          if (data.success) {
+            // NAPRAWKA: Sprawdź czy są jakiekolwiek oceny w allRatings
+            if (data.allRatings && data.allRatings.length > 0) {
+              const rating = data.allRatings[0]; // Pierwsza ocena
+              console.log('⭐ Znaleziona ocena:', rating)
+              
+              setRatings({
+                driverProfessional: rating.driver_professional,
+                driverTasksCompleted: rating.driver_tasks_completed,
+                cargoComplete: rating.cargo_complete,
+                cargoCorrect: rating.cargo_correct,
+                deliveryNotified: rating.delivery_notified,
+                deliveryOnTime: rating.delivery_on_time
+              })
+              setComment(rating.comment || '')
+              setIsEditMode(false)
+              console.log('✅ Załadowano ocenę do stanu')
+            } else {
+              console.log('❌ Brak ocen w allRatings')
+              setIsEditMode(true)
+            }
           } else {
-            setIsEditMode(true) // Tryb edycji jeśli jeszcze nie oceniono
+            console.log('❌ API zwróciło błąd:', data.error)
+            setIsEditMode(true)
           }
         } catch (error) {
-          console.error('Błąd ładowania oceny:', error)
-          setIsEditMode(true) // Domyślnie tryb edycji
+          console.error('💥 Błąd ładowania oceny:', error)
+          setIsEditMode(true)
         } finally {
           setLoading(false)
         }
