@@ -78,7 +78,7 @@ export async function GET(request) {
     // Pobierz wszystkie oceny dla transportu
     const allDetailedRatings = await db('transport_detailed_ratings')
       .where('transport_id', transportId)
-      .orderBy('rated_at', 'desc')
+      .orderBy('created_at', 'desc')
       .select('*');
     
     const totalRatings = allDetailedRatings.length;
@@ -218,7 +218,7 @@ export async function POST(request) {
         table.increments('id').primary();
         table.integer('transport_id').notNullable();
         table.string('rater_email').notNullable();
-        table.timestamp('rated_at').defaultTo(db.fn.now());
+        table.timestamp('created_at').defaultTo(db.fn.now());
         
         // Kategoria: Kierowca
         table.boolean('driver_professional');
@@ -281,7 +281,7 @@ export async function POST(request) {
       delivery_notified: ratings.deliveryNotified,
       delivery_on_time: ratings.deliveryOnTime,
       comment: comment || '',
-      rated_at: new Date()
+      created_at: new Date()
     };
     
     console.log('Dane do zapisu:', ratingData);
