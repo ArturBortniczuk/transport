@@ -658,16 +658,57 @@ export default function ArchiwumPage() {
     const [isEditMode, setIsEditMode] = useState(false)
     const [loading, setLoading] = useState(true)
     
-    // DODANE BRAKUJĄCE ZMIENNE STANU
+    // KOMENTARZE - NAPRAWIONE ZMIENNE STANU
     const [newComment, setNewComment] = useState('')
     const [addingComment, setAddingComment] = useState(false)
     const [allComments, setAllComments] = useState([])
     const [loadingComments, setLoadingComments] = useState(true)
+    const [commentsLoaded, setCommentsLoaded] = useState(false) // NOWA FLAGA
 
-    // DODANE BRAKUJĄCE ZMIENNE OBLICZENIOWE
     const transportRating = transportRatings[transport.id]
     const hasMainRating = transportRating?.stats.totalRatings > 0
     const userHasRated = transportRating?.hasUserRated
+    
+    // NAPRAWIONY useEffect do pobierania komentarzy - zostanie wywołany tylko raz
+    useEffect(() => {
+      // Sprawdź czy mamy transport.id i czy komentarze nie zostały jeszcze pobrane
+      if (!transport?.id || commentsLoaded) {
+        return
+      }
+
+      const fetchComments = async () => {
+        try {
+          console.log('🔍 Pobieranie komentarzy dla transportu:', transport.id)
+          setLoadingComments(true)
+          
+          const response = await fetch(`/api/transport-comments?transportId=${transport.id}`)
+          const data = await response.json()
+          
+          console.log('📦 Odpowiedź komentarze:', data)
+          
+          if (data.success) {
+            setAllComments(data.comments || [])
+            console.log('✅ Komentarze załadowane:', data.comments?.length || 0)
+          } else {
+            console.error('❌ Błąd API komentarzy:', data.error)
+          }
+        } catch (error) {
+          console.error('❌ Błąd pobierania komentarzy:', error)
+        } finally {
+          setLoadingComments(false)
+          setCommentsLoaded(true) // NOWE: oznacz że komentarze zostały pobrane
+        }
+      }
+      
+      fetchComments()
+    }, [transport?.id, commentsLoaded]) // NOWE: dodano commentsLoaded do dependency
+
+    // Reset stanu komentarzy przy zmianie transportu
+    useEffect(() => {
+      setCommentsLoaded(false)
+      setAllComments([])
+      setLoadingComments(true)
+    }, [transport?.id])
     
     // Ładowanie istniejącej oceny użytkownika
     useEffect(() => {
@@ -697,54 +738,6 @@ export default function ArchiwumPage() {
         } catch (error) {
           console.error('Błąd ładowania oceny:', error)
           setIsEditMode(true) // Domyślnie tryb edycji
-        } finally {
-          setLoading(false)
-        }
-      }
-      
-      loadExistingRating()
-    }, [transport.id])
-
-    // Ładowanie istniejącej oceny użytkownika
-    useEffect(() => {
-      const loadExistingRating = async () => {
-        try {
-          setLoading(true)
-          console.log('🔍 Ładowanie oceny dla transportu:', transport.id); // DEBUG
-          
-          const response = await fetch(`/api/transport-detailed-ratings?transportId=${transport.id}`)
-          const data = await response.json()
-          
-          console.log('📦 Odpowiedź z API:', data); // DEBUG
-          
-          if (data.success) {
-            // Sprawdź czy są jakiekolwiek oceny
-            if (data.allRatings && data.allRatings.length > 0) {
-              const rating = data.allRatings[0]; // Pierwsza ocena
-              console.log('⭐ Znaleziona ocena:', rating); // DEBUG
-              
-              setRatings({
-                driverProfessional: rating.driver_professional,
-                driverTasksCompleted: rating.driver_tasks_completed,
-                cargoComplete: rating.cargo_complete,
-                cargoCorrect: rating.cargo_correct,
-                deliveryNotified: rating.delivery_notified,
-                deliveryOnTime: rating.delivery_on_time
-              })
-              setComment(rating.comment || '')
-              setIsEditMode(false)
-              console.log('✅ Załadowano ocenę do stanu'); // DEBUG
-            } else {
-              console.log('❌ Brak ocen w allRatings'); // DEBUG
-              setIsEditMode(true)
-            }
-          } else {
-            console.log('❌ API zwróciło błąd:', data.error); // DEBUG
-            setIsEditMode(true)
-          }
-        } catch (error) {
-          console.error('💥 Błąd ładowania oceny:', error); // DEBUG
-          setIsEditMode(true)
         } finally {
           setLoading(false)
         }
@@ -852,6 +845,7 @@ export default function ArchiwumPage() {
       }
     }
     
+    // NAPRAWIONA funkcja dodawania komentarza z powiadomieniami
     const handleAddComment = async () => {
       if (!newComment.trim()) return
       
@@ -873,12 +867,14 @@ export default function ArchiwumPage() {
         const result = await response.json()
         
         if (result.success) {
-          setNewComment('')
-          // Odśwież komentarze
+          // NOWE: Po dodaniu komentarza, odśwież listę
           const commentsResponse = await fetch(`/api/transport-comments?transportId=${transport.id}`)
           const commentsData = await commentsResponse.json()
+          
           if (commentsData.success) {
             setAllComments(commentsData.comments || [])
+            setNewComment('') // Wyczyść pole tekstowe
+            console.log('✅ Komentarz dodany i lista odświeżona')
           }
         } else {
           setError(result.error || 'Nie udało się dodać komentarza')
@@ -1141,10 +1137,11 @@ export default function ArchiwumPage() {
                </div>
              </div>
 
-             {/* Lista komentarzy */}
+             {/* Lista komentarzy - NAPRAWIONA */}
              {loadingComments ? (
                <div className="text-center py-4">
                  <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500 mx-auto"></div>
+                 <p className="text-gray-500 mt-2">Ładowanie komentarzy...</p>
                </div>
              ) : allComments.length > 0 ? (
                <div className="space-y-4">
@@ -1717,6 +1714,3 @@ export default function ArchiwumPage() {
     </div>
   )
 }
-
-
-

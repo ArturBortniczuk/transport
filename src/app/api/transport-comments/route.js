@@ -1,6 +1,7 @@
-// src/app/api/transport-comments/route.js
+// src/app/api/transport-comments/route.js - Z powiadomieniami mailowymi używając istniejącej konfiguracji SMTP
 import { NextResponse } from 'next/server'
 import db from '@/database/db'
+import nodemailer from 'nodemailer'
 
 // Funkcja pomocnicza do weryfikacji sesji
 const getUserEmailFromToken = async (authToken) => {
@@ -30,11 +31,207 @@ const tableExists = async (tableName) => {
   }
 };
 
+// Funkcja określania typu użytkownika na podstawie emaila
+const getUserType = (email) => {
+  // Email magazynu lub w domenie magazynowej
+  const magazynEmails = [
+    'magazyn@grupaeltron.pl',
+    'logistyka@grupaeltron.pl',
+    'bialystok@grupaeltron.pl', 
+    'zielonka@grupaeltron.pl'
+  ];
+  
+  // Email zawiera słowa kluczowe związane z magazynem
+  const magazynKeywords = ['magazyn', 'warehouse', 'storage', 'logistyka'];
+  
+  if (magazynEmails.includes(email.toLowerCase()) || 
+      magazynKeywords.some(keyword => email.toLowerCase().includes(keyword))) {
+    return 'magazyn';
+  }
+  
+  return 'handlowiec';
+};
+
+// Funkcja pobierania adresatów powiadomień
+const getNotificationRecipients = async (commenterEmail, transportId) => {
+  const recipients = [];
+  const commenterType = getUserType(commenterEmail);
+  
+  // Zawsze dodaj Mateusza
+  recipients.push('mateusz.klewinowski@grupaeltron.pl');
+  
+  try {
+    // Pobierz dane o transporcie
+    const transport = await db('transports')
+      .where('id', transportId)
+      .select('requester_email', 'source_warehouse')
+      .first();
+    
+    if (transport) {
+      if (commenterType === 'handlowiec') {
+        // Handlowiec komentuje → powiadom magazyn
+        const magazynEmails = {
+          'bialystok': 'magazyn@grupaeltron.pl',  // Używamy główny email magazynu
+          'zielonka': 'magazyn@grupaeltron.pl'
+        };
+        
+        // Dodaj email magazynu
+        recipients.push('magazyn@grupaeltron.pl');
+        recipients.push('logistyka@grupaeltron.pl');
+        
+      } else {
+        // Magazyn komentuje → powiadom handlowca
+        if (transport.requester_email && transport.requester_email !== commenterEmail) {
+          recipients.push(transport.requester_email);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Błąd pobierania adresatów:', error);
+  }
+  
+  // Usuń duplikaty i email komentującego
+  return [...new Set(recipients)].filter(email => email !== commenterEmail);
+};
+
+// Funkcja wysyłania powiadomienia email - UŻYWA ISTNIEJĄCEJ KONFIGURACJI SMTP
+const sendCommentNotification = async (commenterEmail, transport, comment, recipients) => {
+  if (!recipients || recipients.length === 0) {
+    console.log('Brak adresatów powiadomienia');
+    return { success: true, message: 'Brak adresatów' };
+  }
+
+  try {
+    // UŻYWA ISTNIEJĄCEJ KONFIGURACJI SMTP z projektu
+    const transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: parseInt(process.env.SMTP_PORT || '465'),
+      secure: process.env.SMTP_SECURE === 'true',
+      auth: {
+        user: "logistyka@grupaeltron.pl",
+        pass: process.env.SMTP_PASSWORD
+      }
+    });
+    
+    // Sprawdź czy transporter jest skonfigurowany
+    if (!process.env.SMTP_PASSWORD) {
+      console.log('SMTP nie skonfigurowany - symulacja wysyłki emaila');
+      console.log('Do:', recipients.join(', '));
+      console.log('Temat: Nowy komentarz do transportu');
+      console.log('Treść:', comment);
+      return { success: true, message: 'Email wysłany (symulacja)' };
+    }
+
+    const commenterType = getUserType(commenterEmail);
+    const transportInfo = `${transport.destination_city} - ${transport.client_name}`;
+    const transportDate = new Date(transport.delivery_date).toLocaleDateString('pl-PL');
+    
+    const emailSubject = `📝 Nowy komentarz do transportu ${transportInfo}`;
+    
+    const emailHtml = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+            .content { background: white; padding: 20px; border: 1px solid #e9ecef; border-radius: 8px; }
+            .comment-box { background: #f8f9fa; padding: 15px; border-left: 4px solid #007bff; margin: 15px 0; }
+            .footer { margin-top: 20px; padding-top: 20px; border-top: 1px solid #e9ecef; color: #6c757d; }
+            .tag { display: inline-block; background: #007bff; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h2>📝 Nowy komentarz do transportu</h2>
+              <p><strong>Transport:</strong> ${transportInfo}</p>
+              <p><strong>Data dostawy:</strong> ${transportDate}</p>
+              <p><strong>Magazyn:</strong> ${transport.source_warehouse === 'bialystok' ? 'Białystok' : 'Zielonka'}</p>
+            </div>
+            
+            <div class="content">
+              <h3>Szczegóły komentarza</h3>
+              <p><strong>Autor:</strong> ${commenterEmail} 
+                <span class="tag">${commenterType === 'magazyn' ? 'MAGAZYN' : 'HANDLOWIEC'}</span>
+              </p>
+              <p><strong>Data:</strong> ${new Date().toLocaleString('pl-PL')}</p>
+              
+              <div class="comment-box">
+                <h4>💬 Treść komentarza:</h4>
+                <p style="font-style: italic;">"${comment}"</p>
+              </div>
+              
+              <p style="margin-top: 20px;">
+                <strong>Aby odpowiedzieć lub dodać swój komentarz, zaloguj się do systemu zarządzania transportem.</strong>
+              </p>
+            </div>
+            
+            <div class="footer">
+              <p>Powiadomienie wygenerowane automatycznie przez System Zarządzania Transportem</p>
+              <p>Grupa Eltron - ${new Date().getFullYear()}</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    const emailText = `
+      Nowy komentarz do transportu
+
+      Transport: ${transportInfo}
+      Data dostawy: ${transportDate}
+      Magazyn: ${transport.source_warehouse === 'bialystok' ? 'Białystok' : 'Zielonka'}
+      
+      Autor komentarza: ${commenterEmail} (${commenterType === 'magazyn' ? 'MAGAZYN' : 'HANDLOWIEC'})
+      Data: ${new Date().toLocaleString('pl-PL')}
+      
+      Treść komentarza:
+      "${comment}"
+      
+      Aby odpowiedzieć lub dodać swój komentarz, zaloguj się do systemu zarządzania transportem.
+      
+      ---
+      Powiadomienie wygenerowane automatycznie przez System Zarządzania Transportem
+      Grupa Eltron - ${new Date().getFullYear()}
+    `;
+
+    // Wyślij email do wszystkich adresatów
+    for (const recipient of recipients) {
+      await transporter.sendMail({
+        from: `"System Transportowy" <logistyka@grupaeltron.pl>`,
+        to: recipient,
+        subject: emailSubject,
+        text: emailText,
+        html: emailHtml
+      });
+      
+      console.log(`✅ Email wysłany do: ${recipient}`);
+    }
+
+    return { 
+      success: true, 
+      message: `Powiadomienia wysłane do ${recipients.length} adresatów` 
+    };
+
+  } catch (error) {
+    console.error('❌ Błąd wysyłania powiadomienia email:', error);
+    return { 
+      success: false, 
+      message: 'Błąd wysyłania powiadomienia: ' + error.message 
+    };
+  }
+};
+
 // Pobierz komentarze do transportu
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url)
     const transportId = searchParams.get('transportId')
+    
+    console.log('🔍 GET komentarze dla transportu:', transportId);
     
     if (!transportId) {
       return NextResponse.json({ 
@@ -47,6 +244,7 @@ export async function GET(request) {
     const commentsTableExists = await tableExists('transport_comments');
     
     if (!commentsTableExists) {
+      console.log('📝 Tabela transport_comments nie istnieje - zwracam pustą listę');
       return NextResponse.json({
         success: true,
         comments: []
@@ -59,23 +257,27 @@ export async function GET(request) {
       .orderBy('created_at', 'desc')
       .select('*');
 
+    console.log(`📦 Znaleziono ${comments.length} komentarzy`);
+
     return NextResponse.json({
       success: true,
       comments
     })
 
   } catch (error) {
-    console.error('Błąd pobierania komentarzy:', error)
+    console.error('❌ Błąd pobierania komentarzy:', error)
     return NextResponse.json({ 
       success: false, 
-      error: 'Wystąpił błąd serwera' 
+      error: 'Wystąpił błąd serwera: ' + error.message 
     }, { status: 500 })
   }
 }
 
-// Dodaj komentarz do transportu
+// Dodaj komentarz do transportu Z POWIADOMIENIAMI
 export async function POST(request) {
   try {
+    console.log('🔔 Rozpoczynanie dodawania komentarza z powiadomieniami...');
+    
     const authToken = request.cookies.get('authToken')?.value
     
     if (!authToken) {
@@ -102,10 +304,10 @@ export async function POST(request) {
       }, { status: 400 })
     }
 
-    // Sprawdź czy transport istnieje
+    // Sprawdź czy transport istnieje i pobierz jego dane
     const transport = await db('transports')
       .where('id', transportId)
-      .select('status')
+      .select('*')
       .first();
     
     if (!transport) {
@@ -126,6 +328,7 @@ export async function POST(request) {
     const commentsTableExists = await tableExists('transport_comments');
     
     if (!commentsTableExists) {
+      console.log('🗂️ Tworzenie tabeli transport_comments...');
       await db.schema.createTable('transport_comments', (table) => {
         table.increments('id').primary()
         table.integer('transport_id').notNullable()
@@ -136,6 +339,7 @@ export async function POST(request) {
         table.index(['transport_id'])
         table.index(['commenter_email'])
       })
+      console.log('✅ Tabela transport_comments utworzona');
     }
 
     // Dodaj komentarz
@@ -146,19 +350,35 @@ export async function POST(request) {
       created_at: new Date()
     };
 
+    console.log('💾 Zapisywanie komentarza do bazy danych...');
     await db('transport_comments').insert(commentData);
+    console.log('✅ Komentarz zapisany w bazie danych');
+
+    // Pobierz adresatów powiadomień
+    console.log('👥 Pobieranie adresatów powiadomień...');
+    const recipients = await getNotificationRecipients(userEmail, transportId);
+    console.log(`📧 Znaleziono adresatów: ${recipients.join(', ')}`);
+
+    // Wyślij powiadomienia email
+    let emailResult = { success: true, message: 'Brak adresatów do powiadomienia' };
+    if (recipients.length > 0) {
+      console.log('📮 Wysyłanie powiadomień email...');
+      emailResult = await sendCommentNotification(userEmail, transport, comment.trim(), recipients);
+      console.log(`📬 Wynik wysyłki: ${emailResult.message}`);
+    }
 
     return NextResponse.json({
       success: true,
-      message: 'Komentarz został dodany'
+      message: 'Komentarz został dodany',
+      notification: emailResult
     })
 
   } catch (error) {
-    console.error('Błąd dodawania komentarza:', error)
+    console.error('❌ Błąd dodawania komentarza:', error)
     
     return NextResponse.json({ 
       success: false, 
-      error: 'Wystąpił błąd podczas dodawania komentarza' 
+      error: 'Wystąpił błąd podczas dodawania komentarza: ' + error.message 
     }, { status: 500 })
   }
 }
