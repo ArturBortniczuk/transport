@@ -705,25 +705,52 @@ export default function ArchiwumPage() {
       loadExistingRating()
     }, [transport.id])
 
-    // DODANY BRAKUJĄCY useEffect DO POBIERANIA KOMENTARZY
+    // Ładowanie istniejącej oceny użytkownika
     useEffect(() => {
-      const fetchComments = async () => {
+      const loadExistingRating = async () => {
         try {
-          setLoadingComments(true)
-          const response = await fetch(`/api/transport-comments?transportId=${transport.id}`)
+          setLoading(true)
+          console.log('🔍 Ładowanie oceny dla transportu:', transport.id); // DEBUG
+          
+          const response = await fetch(`/api/transport-detailed-ratings?transportId=${transport.id}`)
           const data = await response.json()
           
+          console.log('📦 Odpowiedź z API:', data); // DEBUG
+          
           if (data.success) {
-            setAllComments(data.comments || [])
+            // Sprawdź czy są jakiekolwiek oceny
+            if (data.allRatings && data.allRatings.length > 0) {
+              const rating = data.allRatings[0]; // Pierwsza ocena
+              console.log('⭐ Znaleziona ocena:', rating); // DEBUG
+              
+              setRatings({
+                driverProfessional: rating.driver_professional,
+                driverTasksCompleted: rating.driver_tasks_completed,
+                cargoComplete: rating.cargo_complete,
+                cargoCorrect: rating.cargo_correct,
+                deliveryNotified: rating.delivery_notified,
+                deliveryOnTime: rating.delivery_on_time
+              })
+              setComment(rating.comment || '')
+              setIsEditMode(false)
+              console.log('✅ Załadowano ocenę do stanu'); // DEBUG
+            } else {
+              console.log('❌ Brak ocen w allRatings'); // DEBUG
+              setIsEditMode(true)
+            }
+          } else {
+            console.log('❌ API zwróciło błąd:', data.error); // DEBUG
+            setIsEditMode(true)
           }
         } catch (error) {
-          console.error('Błąd pobierania komentarzy:', error)
+          console.error('💥 Błąd ładowania oceny:', error); // DEBUG
+          setIsEditMode(true)
         } finally {
-          setLoadingComments(false)
+          setLoading(false)
         }
       }
       
-      fetchComments()
+      loadExistingRating()
     }, [transport.id])
   
     const categories = [
