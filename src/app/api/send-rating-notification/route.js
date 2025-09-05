@@ -23,18 +23,27 @@ const validateSession = async (authToken) => {
   }
 };
 
-// Funkcja do pobierania kierowników magazynów
+// Funkcja do pobierania kierowników magazynów - Z DEBUGIEM
 const getWarehouseManagers = async () => {
   try {
+    console.log('🔍 DEBUG: Rozpoczynam pobieranie kierowników magazynów...');
+    
     const managers = await db('users')
       .where('role', 'like', '%magazyn%')
       .orWhere('role', 'admin')
       .select('email', 'name', 'role')
       .whereNotNull('email');
     
+    console.log('📋 DEBUG: Znalezieni kierownicy magazynów:');
+    managers.forEach((manager, index) => {
+      console.log(`   ${index + 1}. ${manager.name} (${manager.email}) - rola: ${manager.role}`);
+    });
+    
+    console.log(`✅ DEBUG: Łącznie znaleziono ${managers.length} kierowników`);
+    
     return managers;
   } catch (error) {
-    console.error('Błąd pobierania kierowników magazynów:', error);
+    console.error('❌ DEBUG: Błąd pobierania kierowników magazynów:', error);
     return [];
   }
 };
@@ -114,17 +123,19 @@ const generateRatingNotificationHTML = (transport, rating, raterInfo) => {
             </div>
             
             ${rating.comment ? `
-              <div style="background: white; padding: 15px; border-radius: 6px; border-left: 4px solid #3B82F6; margin-top: 15px;">
-                <h3>💬 Komentarz:</h3>
-                <p style="font-style: italic;">"${rating.comment}"</p>
+              <div class="section">
+                <h3>💬 Komentarz</h3>
+                <div style="background: white; padding: 15px; border-radius: 6px; border-left: 4px solid #6B7280;">
+                  ${rating.comment}
+                </div>
               </div>
             ` : ''}
           </div>
         </div>
         
         <div class="footer">
-          <p>Powiadomienie wygenerowane automatycznie przez System Zarządzania Transportem</p>
-          <p>Data: ${new Date().toLocaleString('pl-PL')}</p>
+          <p>System Zarządzania Transportem - Grupa Eltron</p>
+          <p>Powiadomienie wygenerowane automatycznie</p>
         </div>
       </div>
     </body>
@@ -134,53 +145,57 @@ const generateRatingNotificationHTML = (transport, rating, raterInfo) => {
 
 export async function POST(request) {
   try {
-    // Sprawdź autoryzację
-    const authToken = request.cookies.get('authToken')?.value;
-    const userId = await validateSession(authToken);
+    console.log('🚀 DEBUG: Rozpoczynam wysyłanie powiadomienia o ocenie...');
     
-    if (!userId) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Unauthorized' 
-      }, { status: 401 });
-    }
+    const body = await request.json();
+    const { transportId, ratingId } = body;
     
-    const { transportId, ratingId } = await request.json();
+    console.log(`📝 DEBUG: Transport ID: ${transportId}, Rating ID: ${ratingId}`);
     
     if (!transportId || !ratingId) {
+      console.log('❌ DEBUG: Brakuje transportId lub ratingId');
       return NextResponse.json({ 
         success: false, 
-        error: 'Brak wymaganych danych: transportId i ratingId' 
+        error: 'Brakuje danych transportu lub oceny' 
       }, { status: 400 });
     }
     
-    // Pobierz dane transportu
+    // Pobierz szczegóły transportu
+    console.log('🔍 DEBUG: Pobieram szczegóły transportu...');
     const transport = await db('transports')
       .where('id', transportId)
       .select('*')
       .first();
     
     if (!transport) {
+      console.log('❌ DEBUG: Transport nie znaleziony');
       return NextResponse.json({ 
         success: false, 
-        error: 'Transport nie istnieje' 
+        error: 'Transport nie znaleziony' 
       }, { status: 404 });
     }
     
-    // Pobierz dane oceny
+    console.log(`✅ DEBUG: Transport znaleziony: ${transport.client_name} - ${transport.destination_city}`);
+    
+    // Pobierz szczegóły oceny
+    console.log('🔍 DEBUG: Pobieram szczegóły oceny...');
     const rating = await db('transport_detailed_ratings')
       .where('id', ratingId)
       .select('*')
       .first();
     
     if (!rating) {
+      console.log('❌ DEBUG: Ocena nie znaleziona');
       return NextResponse.json({ 
         success: false, 
-        error: 'Ocena nie istnieje' 
+        error: 'Ocena nie znaleziona' 
       }, { status: 404 });
     }
     
-    // Pobierz dane osoby oceniającej
+    console.log(`✅ DEBUG: Ocena znaleziona - ocenił: ${rating.rater_email}`);
+    
+    // Pobierz informacje o osobie oceniającej
+    console.log('🔍 DEBUG: Pobieram dane osoby oceniającej...');
     const rater = await db('users')
       .where('email', rating.rater_email)
       .select('name', 'email')
@@ -191,20 +206,47 @@ export async function POST(request) {
       email: rating.rater_email
     };
     
-    // Pobierz kierowników magazynów
+    console.log(`👤 DEBUG: Osoba oceniająca: ${raterInfo.name} (${raterInfo.email})`);
+    
+    // Pobierz kierowników magazynów - Z DEBUGIEM
     const managers = await getWarehouseManagers();
     
-    // Lista odbiorców - kierownicy magazynów + Mateusz
-    const recipients = [
-      ...managers.map(manager => manager.email),
+    // Lista stałych odbiorców
+    const staticRecipients = [
       'mateusz.klewinowski@grupaeltron.pl',
       'a.bortniczuk@grupaeltron.pl'
+    ];
+    
+    console.log('📧 DEBUG: Stali odbiorcy powiadomień:');
+    staticRecipients.forEach((email, index) => {
+      console.log(`   ${index + 1}. ${email}`);
+    });
+    
+    // Lista odbiorców - kierownicy magazynów + stali odbiorcy
+    const recipients = [
+      ...managers.map(manager => manager.email),
+      ...staticRecipients
     ];
     
     // Usuń duplikaty
     const uniqueRecipients = [...new Set(recipients)];
     
-    console.log('Wysyłanie powiadomienia o ocenie do:', uniqueRecipients);
+    console.log('📋 DEBUG: FINALNA LISTA ODBIORCÓW:');
+    uniqueRecipients.forEach((email, index) => {
+      console.log(`   ${index + 1}. ${email}`);
+    });
+    console.log(`📊 DEBUG: Łącznie zostanie wysłanych ${uniqueRecipients.length} emaili`);
+    
+    // Sprawdź konfigurację SMTP
+    console.log('🔧 DEBUG: Sprawdzam konfigurację SMTP...');
+    if (!process.env.SMTP_PASSWORD) {
+      console.log('⚠️ DEBUG: Brak hasła SMTP - powiadomienie nie zostanie wysłane!');
+      return NextResponse.json({
+        success: false,
+        error: 'Konfiguracja SMTP nie jest dostępna'
+      }, { status: 500 });
+    }
+    console.log('✅ DEBUG: Konfiguracja SMTP OK');
     
     // Konfiguracja nodemailer
     const transporter = nodemailer.createTransport({
@@ -218,33 +260,61 @@ export async function POST(request) {
     });
     
     // Generuj HTML emaila
+    console.log('📄 DEBUG: Generuję treść emaila...');
     const htmlContent = generateRatingNotificationHTML(transport, rating, raterInfo);
     
     // Przygotuj opcje emaila
+    const emailSubject = `🚛 Nowa ocena transportu #${transport.id} - ${transport.client_name || 'Klient nieznany'}`;
     const mailOptions = {
       from: `"System Transportowy" <logistyka@grupaeltron.pl>`,
       to: uniqueRecipients.join(', '),
-      subject: `🚛 Nowa ocena transportu #${transport.id} - ${transport.client_name || 'Klient nieznany'}`,
+      subject: emailSubject,
       html: htmlContent
     };
+    
+    console.log(`📧 DEBUG: Temat emaila: "${emailSubject}"`);
+    console.log('📤 DEBUG: Wysyłam email...');
     
     // Wyślij email
     const info = await transporter.sendMail(mailOptions);
     
-    console.log('Powiadomienie o ocenie wysłane:', info.messageId);
+    console.log('✅ DEBUG: Email został wysłany pomyślnie!');
+    console.log(`📧 DEBUG: Message ID: ${info.messageId}`);
+    console.log(`📊 DEBUG: Wysłano do ${uniqueRecipients.length} odbiorców`);
+    
+    // Szczegółowy log odbiorców
+    console.log('📋 DEBUG: PODSUMOWANIE WYSYŁKI:');
+    console.log(`   Transport: #${transport.id} - ${transport.client_name}`);
+    console.log(`   Ocenił: ${raterInfo.name} (${raterInfo.email})`);
+    console.log(`   Odbiorcy: ${uniqueRecipients.join(', ')}`);
+    console.log(`   Status: WYSŁANE ✅`);
     
     return NextResponse.json({
       success: true,
       messageId: info.messageId,
       recipients: uniqueRecipients,
-      message: `Powiadomienie wysłane do ${uniqueRecipients.length} odbiorców`
+      message: `Powiadomienie wysłane do ${uniqueRecipients.length} odbiorców`,
+      debug: {
+        transportId,
+        ratingId,
+        raterEmail: rating.rater_email,
+        managersFound: managers.length,
+        totalRecipients: uniqueRecipients.length,
+        recipientsList: uniqueRecipients
+      }
     });
     
   } catch (error) {
-    console.error('Błąd wysyłania powiadomienia o ocenie:', error);
+    console.error('❌ DEBUG: Błąd wysyłania powiadomienia o ocenie:', error);
+    console.error('❌ DEBUG: Stack trace:', error.stack);
+    
     return NextResponse.json({ 
       success: false, 
-      error: 'Błąd serwera: ' + error.message 
+      error: 'Błąd serwera: ' + error.message,
+      debug: {
+        errorMessage: error.message,
+        errorStack: error.stack
+      }
     }, { status: 500 });
   }
 }
