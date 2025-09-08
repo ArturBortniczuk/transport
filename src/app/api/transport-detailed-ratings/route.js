@@ -1,4 +1,4 @@
-// src/app/api/transport-detailed-ratings/route.js - NAPRAWIONA WERSJA
+// src/app/api/transport-detailed-ratings/route.js - CZYSTA WERSJA Z POPRAWNĄ LOGIKĄ ODBIORCÓW
 import { NextResponse } from 'next/server';
 import db from '@/database/db';
 import nodemailer from 'nodemailer';
@@ -23,42 +23,30 @@ const validateSession = async (authToken) => {
   }
 };
 
-// NAPRAWIONA FUNKCJA - bezpośrednie wysyłanie emaila zamiast fetch
+// Funkcja wysyłania powiadomienia email
 const sendRatingNotification = async (transportId, ratingId) => {
   try {
-    console.log('🚀 DEBUG: Rozpoczynam wysyłanie powiadomienia o ocenie...');
-    console.log(`📝 DEBUG: Transport ID: ${transportId}, Rating ID: ${ratingId}`);
-    
     // Pobierz szczegóły transportu
-    console.log('🔍 DEBUG: Pobieram szczegóły transportu...');
     const transport = await db('transports')
       .where('id', transportId)
       .select('*')
       .first();
     
     if (!transport) {
-      console.log('❌ DEBUG: Transport nie znaleziony');
       return { success: false, error: 'Transport nie znaleziony' };
     }
     
-    console.log(`✅ DEBUG: Transport znaleziony: ${transport.client_name} - ${transport.destination_city}`);
-    
     // Pobierz szczegóły oceny
-    console.log('🔍 DEBUG: Pobieram szczegóły oceny...');
     const rating = await db('transport_detailed_ratings')
       .where('id', ratingId)
       .select('*')
       .first();
     
     if (!rating) {
-      console.log('❌ DEBUG: Ocena nie znaleziona');
       return { success: false, error: 'Ocena nie znaleziona' };
     }
     
-    console.log(`✅ DEBUG: Ocena znaleziona - ocenił: ${rating.rater_email}`);
-    
     // Pobierz informacje o osobie oceniającej
-    console.log('🔍 DEBUG: Pobieram dane osoby oceniającej...');
     const rater = await db('users')
       .where('email', rating.rater_email)
       .select('name', 'email')
@@ -69,55 +57,33 @@ const sendRatingNotification = async (transportId, ratingId) => {
       email: rating.rater_email
     };
     
-    console.log(`👤 DEBUG: Osoba oceniająca: ${raterInfo.name} (${raterInfo.email})`);
+    // Logika odbiorców - tylko odpowiedni magazyn + Mateusz
+    const getEmailRecipients = (transport) => {
+      const recipients = [];
+      
+      // ZAWSZE dodaj Mateusza
+      recipients.push('mateusz.klewinowski@grupaeltron.pl');
+      
+      // Dodaj odpowiedni magazyn na podstawie source_warehouse
+      if (transport.source_warehouse === 'bialystok') {
+        recipients.push('magazynbialystok@grupaeltron.pl');
+      } else if (transport.source_warehouse === 'zielonka') {
+        recipients.push('magazynzielonka@grupaeltron.pl');
+      } else {
+        // Jeśli nie ma source_warehouse lub jest nieznany, dodaj oba magazyny
+        recipients.push('magazynbialystok@grupaeltron.pl');
+        recipients.push('magazynzielonka@grupaeltron.pl');
+      }
+      
+      return recipients;
+    };
     
-    // Pobierz kierowników magazynów
-    console.log('🔍 DEBUG: Rozpoczynam pobieranie kierowników magazynów...');
-    const managers = await db('users')
-      .where('role', 'like', '%magazyn%')
-      .orWhere('role', 'admin')
-      .select('email', 'name', 'role')
-      .whereNotNull('email');
-    
-    console.log('📋 DEBUG: Znalezieni kierownicy magazynów:');
-    managers.forEach((manager, index) => {
-      console.log(`   ${index + 1}. ${manager.name} (${manager.email}) - rola: ${manager.role}`);
-    });
-    console.log(`✅ DEBUG: Łącznie znaleziono ${managers.length} kierowników`);
-    
-    // Lista stałych odbiorców
-    const staticRecipients = [
-      'mateusz.klewinowski@grupaeltron.pl',
-      'a.bortniczuk@grupaeltron.pl'
-    ];
-    
-    console.log('📧 DEBUG: Stali odbiorcy powiadomień:');
-    staticRecipients.forEach((email, index) => {
-      console.log(`   ${index + 1}. ${email}`);
-    });
-    
-    // Lista odbiorców - kierownicy magazynów + stali odbiorcy
-    const recipients = [
-      ...managers.map(manager => manager.email),
-      ...staticRecipients
-    ];
-    
-    // Usuń duplikaty
-    const uniqueRecipients = [...new Set(recipients)];
-    
-    console.log('📋 DEBUG: FINALNA LISTA ODBIORCÓW:');
-    uniqueRecipients.forEach((email, index) => {
-      console.log(`   ${index + 1}. ${email}`);
-    });
-    console.log(`📊 DEBUG: Łącznie zostanie wysłanych ${uniqueRecipients.length} emaili`);
+    const uniqueRecipients = getEmailRecipients(transport);
     
     // Sprawdź konfigurację SMTP
-    console.log('🔧 DEBUG: Sprawdzam konfigurację SMTP...');
     if (!process.env.SMTP_PASSWORD) {
-      console.log('⚠️ DEBUG: Brak hasła SMTP - powiadomienie nie zostanie wysłane!');
       return { success: false, error: 'Konfiguracja SMTP nie jest dostępna' };
     }
-    console.log('✅ DEBUG: Konfiguracja SMTP OK');
     
     // Konfiguracja nodemailer
     const transporter = nodemailer.createTransport({
@@ -148,7 +114,6 @@ const sendRatingNotification = async (transportId, ratingId) => {
     };
     
     // Generuj HTML emaila
-    console.log('📄 DEBUG: Generuję treść emaila...');
     const criteriaFormatted = formatRatingData(rating);
     const ratingDate = new Date(rating.created_at).toLocaleString('pl-PL');
     
@@ -188,6 +153,7 @@ const sendRatingNotification = async (transportId, ratingId) => {
               <p><strong>MPK:</strong> ${transport.mpk || 'Nie podano'}</p>
               <p><strong>Nr WZ:</strong> ${transport.wz_number || 'Nie podano'}</p>
               <p><strong>Data dostawy:</strong> ${transport.delivery_date ? new Date(transport.delivery_date).toLocaleDateString('pl-PL') : 'Nie podano'}</p>
+              <p><strong>Magazyn:</strong> ${transport.source_warehouse === 'bialystok' ? 'Białystok' : transport.source_warehouse === 'zielonka' ? 'Zielonka' : 'Nieznany'}</p>
             </div>
             
             <div class="section">
@@ -233,22 +199,8 @@ const sendRatingNotification = async (transportId, ratingId) => {
       html: htmlContent
     };
     
-    console.log(`📧 DEBUG: Temat emaila: "${emailSubject}"`);
-    console.log('📤 DEBUG: Wysyłam email...');
-    
     // Wyślij email
     const info = await transporter.sendMail(mailOptions);
-    
-    console.log('✅ DEBUG: Email został wysłany pomyślnie!');
-    console.log(`📧 DEBUG: Message ID: ${info.messageId}`);
-    console.log(`📊 DEBUG: Wysłano do ${uniqueRecipients.length} odbiorców`);
-    
-    // Szczegółowy log odbiorców
-    console.log('📋 DEBUG: PODSUMOWANIE WYSYŁKI:');
-    console.log(`   Transport: #${transport.id} - ${transport.client_name}`);
-    console.log(`   Ocenił: ${raterInfo.name} (${raterInfo.email})`);
-    console.log(`   Odbiorcy: ${uniqueRecipients.join(', ')}`);
-    console.log(`   Status: WYSŁANE ✅`);
     
     return {
       success: true,
@@ -258,9 +210,7 @@ const sendRatingNotification = async (transportId, ratingId) => {
     };
     
   } catch (error) {
-    console.error('❌ DEBUG: Błąd wysyłania powiadomienia o ocenie:', error);
-    console.error('❌ DEBUG: Stack trace:', error.stack);
-    
+    console.error('Błąd wysyłania powiadomienia o ocenie:', error);
     return { 
       success: false, 
       error: 'Błąd serwera: ' + error.message 
@@ -367,7 +317,7 @@ export async function GET(request) {
   }
 }
 
-// POST /api/transport-detailed-ratings - NAPRAWIONA WERSJA
+// POST /api/transport-detailed-ratings
 export async function POST(request) {
   try {
     // Sprawdzamy uwierzytelnienie
@@ -382,8 +332,6 @@ export async function POST(request) {
     }
     
     const { transportId, ratings, comment } = await request.json();
-    
-    console.log('Otrzymane dane oceny:', { transportId, ratings, comment });
     
     if (!transportId || !ratings) {
       return NextResponse.json({ 
@@ -453,14 +401,11 @@ export async function POST(request) {
       created_at: new Date()
     };
     
-    console.log('Dane do zapisu:', ratingData);
-    
     let ratingId;
     let isNewRating = false;
     
     if (existingRating) {
       // Aktualizuj istniejącą ocenę
-      console.log('Aktualizowanie szczegółowej oceny dla użytkownika:', userId);
       await db('transport_detailed_ratings')
         .where('id', existingRating.id)
         .update(ratingData);
@@ -468,7 +413,6 @@ export async function POST(request) {
       ratingId = existingRating.id;
     } else {
       // Dodaj nową ocenę
-      console.log('Dodawanie nowej szczegółowej oceny dla użytkownika:', userId);
       const insertResult = await db('transport_detailed_ratings')
         .insert(ratingData)
         .returning('id');
@@ -477,13 +421,10 @@ export async function POST(request) {
       isNewRating = true;
     }
     
-    // NAPRAWIONE: Wyślij powiadomienie email tylko dla nowych ocen - bezpośrednio!
+    // Wyślij powiadomienie email tylko dla nowych ocen
     if (isNewRating && ratingId) {
-      console.log('Wysyłanie powiadomienia email o nowej ocenie...');
       try {
-        // Wywołaj funkcję bezpośrednio (bez fetch)
-        const notificationResult = await sendRatingNotification(transportId, ratingId);
-        console.log('Powiadomienie email wysłane:', notificationResult);
+        await sendRatingNotification(transportId, ratingId);
       } catch (emailError) {
         // Nie przerywaj procesu jeśli email się nie wyśle
         console.error('Błąd wysyłania powiadomienia email (nie przerywa procesu):', emailError);
