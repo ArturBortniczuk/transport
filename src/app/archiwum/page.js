@@ -438,14 +438,13 @@ export default function ArchiwumPage() {
       return
     }
     
-    const calculateTransportCost = (distance) => {
-        if (distance <= 75) {
-          return distance * 13;
-        } else if (distance > 75 && distance <= 150) {
-          return distance * 5.5;
-        } else { // distance > 150
-          return distance * 3;
+    const calculateTransportCost = (distance, connectedTransportId) => {
+        // Jeśli transport był łączony (ma connected_transport_id), stawka 3.5 zł/km
+        if (connectedTransportId) {
+          return distance * 3.5;
         }
+        // Jeśli transport NIE był łączony, stawka 4.5 zł/km
+        return distance * 4.5;
     };
 
     const dataToExport = filteredArchiwum.map(transport => {
@@ -453,7 +452,7 @@ export default function ArchiwumPage() {
       const rating = transportRatings[transport.id]
       const handlowiec = users.find(u => u.email === transport.requester_email);
       const distanceKm = transport.distance || 0;
-      const calculatedCost = calculateTransportCost(distanceKm);
+      const calculatedCost = calculateTransportCost(distanceKm, transport.connected_transport_id);
       
       return {
         'Data transportu': format(new Date(transport.delivery_date), 'dd.MM.yyyy', { locale: pl }),
