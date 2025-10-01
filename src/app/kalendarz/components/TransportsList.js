@@ -317,7 +317,19 @@ export default function TransportsList({
                       <p><strong>Magazyn:</strong> {transport.zrodlo}</p>
                       <p><strong>Odległość:</strong> {transport.odleglosc} km</p>
                       <p><strong>Poziom załadunku:</strong> {transport.poziomZaladunku}</p>
-                      <p><strong>WZ:</strong> {transport.numerWZ}</p>
+                      <div className="mt-2">
+                        <strong>WZ:</strong>
+                        <div className="flex flex-wrap gap-2 mt-1">
+                          {transport.numerWZ && transport.numerWZ.split(',').map((wz, index) => (
+                            <span 
+                              key={index}
+                              className="inline-block px-2 py-1 bg-blue-100 text-blue-800 rounded border border-blue-200 text-xs font-medium"
+                            >
+                              {wz.trim()}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
                       {transport.rynek && (
                         <p><strong>Rynek:</strong> {transport.rynek}</p>
                       )}
@@ -375,3 +387,4 @@ export default function TransportsList({
     </div>
   );
 }
+
