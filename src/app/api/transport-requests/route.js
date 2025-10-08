@@ -1,6 +1,7 @@
-// src/app/api/transport-requests/route.js - KOMPLETNY NAPRAWIONY KOD
+// src/app/api/transport-requests/route.js - Z POWIADOMIENIAMI EMAIL
 import { NextResponse } from 'next/server';
 import db from '@/database/db';
+import nodemailer from 'nodemailer';
 
 const getMarketName = (marketId) => {
   const markets = {
@@ -36,6 +37,217 @@ const validateSession = async (authToken) => {
   }
 };
 
+// Funkcja wysyłania powiadomienia o nowym wniosku transportowym
+const sendNewRequestNotification = async (requestData) => {
+  // Lista kierowników do powiadomienia
+  const recipients = [
+    's.swiderski@grupaeltron.pl',
+    'p.pietrusewicz@grupaeltron.pl'
+  ];
+
+  try {
+    // Sprawdź konfigurację SMTP
+    if (!process.env.SMTP_PASSWORD) {
+      console.log('⚠️ SMTP nie skonfigurowany - powiadomienie nie zostanie wysłane');
+      return { success: false, message: 'SMTP nie skonfigurowany' };
+    }
+
+    // Konfiguracja nodemailer
+    const transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: parseInt(process.env.SMTP_PORT || '465'),
+      secure: process.env.SMTP_SECURE === 'true',
+      auth: {
+        user: "logistyka@grupaeltron.pl",
+        pass: process.env.SMTP_PASSWORD
+      }
+    });
+
+    // Formatowanie daty
+    const deliveryDate = new Date(requestData.delivery_date).toLocaleDateString('pl-PL');
+    
+    // Określ typ wniosku
+    const requestType = requestData.transport_type === 'warehouse' ? 'Przesunięcie międzymagazynowe' : 'Transport standardowy';
+    
+    // Nazwa rynku (jeśli jest)
+    const marketName = requestData.market_id ? getMarketName(requestData.market_id) : 'Nie określono';
+
+    // Przygotuj treść HTML emaila
+    const emailHtml = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background: #4F46E5; color: white; padding: 20px; border-radius: 8px 8px 0 0; }
+            .content { background: white; padding: 20px; border: 1px solid #e9ecef; border-radius: 0 0 8px 8px; }
+            .info-row { margin: 10px 0; padding: 10px; background: #f8f9fa; border-radius: 4px; }
+            .label { font-weight: bold; color: #495057; }
+            .value { color: #212529; }
+            .footer { margin-top: 20px; padding-top: 20px; border-top: 1px solid #e9ecef; color: #6c757d; font-size: 14px; }
+            .alert { background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 15px 0; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h2>🚛 Nowy wniosek transportowy</h2>
+              <p style="margin: 0;">Typ: ${requestType}</p>
+            </div>
+            
+            <div class="content">
+              ${requestData.transport_type === 'warehouse' ? `
+                <div class="alert">
+                  <strong>⚠️ Przesunięcie międzymagazynowe</strong>
+                </div>
+                
+                <div class="info-row">
+                  <span class="label">Kierunek:</span>
+                  <span class="value">${requestData.transport_direction === 'zielonka_bialystok' ? 'Zielonka → Białystok' : 'Białystok → Zielonka'}</span>
+                </div>
+                
+                <div class="info-row">
+                  <span class="label">Opis towaru:</span>
+                  <span class="value">${requestData.goods_description || 'Brak opisu'}</span>
+                </div>
+                
+                ${requestData.document_numbers ? `
+                <div class="info-row">
+                  <span class="label">Numery dokumentów:</span>
+                  <span class="value">${requestData.document_numbers}</span>
+                </div>
+                ` : ''}
+              ` : `
+                <div class="info-row">
+                  <span class="label">Miejsce docelowe:</span>
+                  <span class="value">${requestData.destination_city || 'Nie podano'}</span>
+                </div>
+                
+                ${requestData.postal_code ? `
+                <div class="info-row">
+                  <span class="label">Kod pocztowy:</span>
+                  <span class="value">${requestData.postal_code}</span>
+                </div>
+                ` : ''}
+                
+                ${requestData.street ? `
+                <div class="info-row">
+                  <span class="label">Ulica:</span>
+                  <span class="value">${requestData.street}</span>
+                </div>
+                ` : ''}
+                
+                ${requestData.construction_name ? `
+                <div class="info-row">
+                  <span class="label">Budowa:</span>
+                  <span class="value">${requestData.construction_name}</span>
+                </div>
+                ` : ''}
+                
+                ${requestData.mpk ? `
+                <div class="info-row">
+                  <span class="label">MPK:</span>
+                  <span class="value">${requestData.mpk}</span>
+                </div>
+                ` : ''}
+                
+                ${requestData.client_name ? `
+                <div class="info-row">
+                  <span class="label">Klient:</span>
+                  <span class="value">${requestData.client_name}</span>
+                </div>
+                ` : ''}
+                
+                ${requestData.real_client_name ? `
+                <div class="info-row">
+                  <span class="label">Rzeczywisty klient:</span>
+                  <span class="value">${requestData.real_client_name}</span>
+                </div>
+                ` : ''}
+                
+                ${requestData.wz_numbers ? `
+                <div class="info-row">
+                  <span class="label">Numery WZ:</span>
+                  <span class="value">${requestData.wz_numbers}</span>
+                </div>
+                ` : ''}
+                
+                <div class="info-row">
+                  <span class="label">Rynek:</span>
+                  <span class="value">${marketName}</span>
+                </div>
+                
+                ${requestData.contact_person ? `
+                <div class="info-row">
+                  <span class="label">Osoba kontaktowa:</span>
+                  <span class="value">${requestData.contact_person}${requestData.contact_phone ? ` (tel: ${requestData.contact_phone})` : ''}</span>
+                </div>
+                ` : ''}
+              `}
+              
+              <div class="info-row">
+                <span class="label">Data dostawy:</span>
+                <span class="value">${deliveryDate}</span>
+              </div>
+              
+              <div class="info-row">
+                <span class="label">Zlecający:</span>
+                <span class="value">${requestData.requester_name} (${requestData.requester_email})</span>
+              </div>
+              
+              ${requestData.justification ? `
+              <div class="info-row">
+                <span class="label">Uzasadnienie:</span>
+                <span class="value">${requestData.justification}</span>
+              </div>
+              ` : ''}
+              
+              ${requestData.notes ? `
+              <div class="info-row">
+                <span class="label">Uwagi:</span>
+                <span class="value">${requestData.notes}</span>
+              </div>
+              ` : ''}
+            </div>
+            
+            <div class="footer">
+              <p>To powiadomienie zostało wygenerowane automatycznie przez System Transportowy.</p>
+              <p>Zaloguj się do systemu, aby przejrzeć szczegóły wniosku i podjąć decyzję o jego akceptacji.</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    // Wysłanie emaila
+    const mailOptions = {
+      from: `"System Transportowy" <logistyka@grupaeltron.pl>`,
+      to: recipients.join(', '),
+      subject: `🚛 Nowy wniosek transportowy - ${requestType} - ${deliveryDate}`,
+      html: emailHtml
+    };
+
+    console.log('📧 Wysyłanie powiadomienia o nowym wniosku do:', recipients.join(', '));
+    const info = await transporter.sendMail(mailOptions);
+    
+    console.log('✅ Powiadomienie wysłane:', info.messageId);
+    return { 
+      success: true, 
+      message: `Powiadomienie wysłane do ${recipients.length} kierowników`,
+      messageId: info.messageId 
+    };
+
+  } catch (error) {
+    console.error('❌ Błąd wysyłania powiadomienia o nowym wniosku:', error);
+    return { 
+      success: false, 
+      message: 'Błąd wysyłania powiadomienia: ' + error.message 
+    };
+  }
+};
+
 // Funkcja do tworzenia tabeli transport_requests
 const ensureTableExists = async () => {
   try {
@@ -57,9 +269,9 @@ const ensureTableExists = async () => {
         table.integer('construction_id');
         table.text('justification');
         table.string('client_name');
-        table.string('real_client_name');      // ← NOWE POLE
-        table.string('wz_numbers');            // ← NOWE POLE  
-        table.integer('market_id');            // ← NOWE POLE
+        table.string('real_client_name');
+        table.string('wz_numbers');
+        table.integer('market_id');
         table.string('contact_person');
         table.string('contact_phone');
         table.text('notes');
@@ -67,18 +279,17 @@ const ensureTableExists = async () => {
         table.timestamp('approved_at');
         table.string('rejection_reason');
         table.integer('transport_id');
-        // NOWE POLA DLA PRZESUNIĘĆ MIĘDZYMAGAZYNOWYCH
-        table.string('transport_type').defaultTo('standard'); // 'standard' lub 'warehouse'
-        table.string('transport_direction'); // 'zielonka_bialystok' lub 'bialystok_zielonka'
-        table.text('goods_description');      // opis transportowanych towarów
-        table.string('document_numbers');     // numery dokumentów (opcjonalnie)
+        table.string('transport_type').defaultTo('standard');
+        table.string('transport_direction');
+        table.text('goods_description');
+        table.string('document_numbers');
         table.timestamp('created_at').defaultTo(db.fn.now());
         table.timestamp('updated_at').defaultTo(db.fn.now());
       });
       
       console.log('Tabela transport_requests została utworzona');
     } else {
-      // ISTNIEJĄCE SPRAWDZENIA
+      // Sprawdzenia i dodawanie brakujących kolumn
       const hasConstructionName = await db.schema.hasColumn('transport_requests', 'construction_name');
       if (!hasConstructionName) {
         await db.schema.table('transport_requests', table => {
@@ -95,7 +306,6 @@ const ensureTableExists = async () => {
         console.log('Dodano kolumnę construction_id');
       }
 
-      // ===== NOWE SPRAWDZENIA =====
       const hasRealClientName = await db.schema.hasColumn('transport_requests', 'real_client_name');
       if (!hasRealClientName) {
         await db.schema.table('transport_requests', table => {
@@ -120,7 +330,6 @@ const ensureTableExists = async () => {
         console.log('Dodano kolumnę market_id');
       }
 
-      // ===== NOWE SPRAWDZENIA DLA PRZESUNIĘĆ MIĘDZYMAGAZYNOWYCH =====
       const hasTransportType = await db.schema.hasColumn('transport_requests', 'transport_type');
       if (!hasTransportType) {
         await db.schema.table('transport_requests', table => {
@@ -165,7 +374,6 @@ const ensureTableExists = async () => {
 export async function GET(request) {
   try {
     console.log('=== START GET /api/transport-requests ===');
-    // Sprawdzamy uwierzytelnienie
     const authToken = request.cookies.get('authToken')?.value;
     console.log('AuthToken:', authToken ? 'Present' : 'Missing');
     
@@ -179,7 +387,6 @@ export async function GET(request) {
       }, { status: 401 });
     }
 
-    // Upewnij się, że tabela istnieje
     const tableReady = await ensureTableExists();
     if (!tableReady) {
       return NextResponse.json({ 
@@ -188,7 +395,6 @@ export async function GET(request) {
       }, { status: 500 });
     }
 
-    // Pobierz dane użytkownika
     const user = await db('users')
       .where('email', userId)
       .select('role', 'name', 'permissions')
@@ -203,7 +409,6 @@ export async function GET(request) {
       }, { status: 404 });
     }
 
-    // Parsuj uprawnienia
     let permissions = {};
     try {
       if (user.permissions && typeof user.permissions === 'string') {
@@ -222,23 +427,19 @@ export async function GET(request) {
 
     let query = db('transport_requests');
 
-    // Jeśli nie ma uprawnień do przeglądania wszystkich, pokaż tylko własne wnioski
     if (!canViewAll) {
       query = query.where('requester_email', userId);
     }
 
-    // Parametry filtrowania z URL
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
     const dateFrom = searchParams.get('dateFrom');
     const dateTo = searchParams.get('dateTo');
 
-    // Filtruj po statusie
     if (status && status !== 'all') {
       query = query.where('status', status);
     }
 
-    // Filtruj po datach
     if (dateFrom) {
       query = query.where('delivery_date', '>=', dateFrom);
     }
@@ -246,7 +447,6 @@ export async function GET(request) {
       query = query.where('delivery_date', '<=', dateTo);
     }
 
-    // Sortuj od najnowszych
     query = query.orderBy('created_at', 'desc');
 
     const requests = await query;
@@ -272,7 +472,6 @@ export async function GET(request) {
 export async function POST(request) {
   try {
     console.log('=== START POST /api/transport-requests ===');
-    // Sprawdzamy uwierzytelnienie
     const authToken = request.cookies.get('authToken')?.value;
     const userId = await validateSession(authToken);
     
@@ -283,7 +482,6 @@ export async function POST(request) {
       }, { status: 401 });
     }
 
-    // Upewnij się, że tabela istnieje
     const tableReady = await ensureTableExists();
     if (!tableReady) {
       return NextResponse.json({ 
@@ -292,7 +490,6 @@ export async function POST(request) {
       }, { status: 500 });
     }
 
-    // Pobierz dane użytkownika
     const user = await db('users')
       .where('email', userId)
       .select('role', 'name', 'permissions')
@@ -305,7 +502,6 @@ export async function POST(request) {
       }, { status: 404 });
     }
 
-    // Sprawdź uprawnienia do dodawania wniosków
     let permissions = {};
     try {
       if (user.permissions && typeof user.permissions === 'string') {
@@ -332,12 +528,9 @@ export async function POST(request) {
     const requestData = await request.json();
     console.log('🚀 PEŁNE DANE Z FORMULARZA:', JSON.stringify(requestData, null, 2));
 
-    // Określ typ transportu
     const transportType = requestData.transport_type || 'standard';
     
-    // Walidacja w zależności od typu wniosku
     if (transportType === 'warehouse') {
-      // Walidacja dla przesunięć międzymagazynowych
       const requiredWarehouseFields = ['transport_direction', 'goods_description', 'delivery_date', 'justification'];
       for (const field of requiredWarehouseFields) {
         if (!requestData[field]) {
@@ -348,7 +541,6 @@ export async function POST(request) {
         }
       }
 
-      // Walidacja kierunku transportu
       const validDirections = ['zielonka_bialystok', 'bialystok_zielonka'];
       if (!validDirections.includes(requestData.transport_direction)) {
         return NextResponse.json({ 
@@ -357,7 +549,6 @@ export async function POST(request) {
         }, { status: 400 });
       }
     } else {
-      // Walidacja dla standardowych transportów
       const requiredFields = ['destination_city', 'delivery_date', 'justification'];
       for (const field of requiredFields) {
         if (!requestData[field]) {
@@ -368,7 +559,6 @@ export async function POST(request) {
         }
       }
 
-      // Walidacja budowy/MPK dla standardowych transportów
       if (!requestData.mpk && !requestData.construction_name) {
         return NextResponse.json({ 
           success: false, 
@@ -377,7 +567,6 @@ export async function POST(request) {
       }
     }
 
-    // Sprawdź czy data dostawy nie jest w przeszłości
     const deliveryDate = new Date(requestData.delivery_date);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -389,33 +578,24 @@ export async function POST(request) {
       }, { status: 400 });
     }
 
-    // PRZYGOTOWANIE DANYCH - obsługa różnych typów wniosków
     const newRequest = {
-      // Podstawowe pola
       status: 'pending',
       requester_email: userId,
       requester_name: user.name || userId,
       delivery_date: requestData.delivery_date,
       justification: requestData.justification || '',
       notes: requestData.notes || null,
-      
-      // Typ transportu i pola specyficzne
       transport_type: transportType,
-      
-      // Metadane
       created_at: new Date(),
       updated_at: new Date()
     };
 
     if (transportType === 'warehouse') {
-      // Pola dla przesunięć międzymagazynowych
       newRequest.transport_direction = requestData.transport_direction;
       newRequest.goods_description = requestData.goods_description;
       newRequest.document_numbers = requestData.document_numbers || null;
       newRequest.mpk = requestData.transport_direction === 'bialystok_zielonka' ? '549-03-01' : '549-03-02';
 
-      
-      // Dla przesunięć międzymagazynowych nie używamy lokalizacji ani danych klienta
       if (requestData.transport_direction === 'zielonka_bialystok') {
         newRequest.destination_city = 'Białystok';
         newRequest.postal_code = '15-169';
@@ -435,7 +615,6 @@ export async function POST(request) {
       newRequest.contact_person = null;
       newRequest.contact_phone = null;
     } else {
-      // Pola dla standardowych transportów
       newRequest.destination_city = requestData.destination_city || '';
       newRequest.postal_code = requestData.postal_code || null;
       newRequest.street = requestData.street || null;
@@ -448,8 +627,6 @@ export async function POST(request) {
       newRequest.market_id = requestData.market_id ? parseInt(requestData.market_id) : null;
       newRequest.contact_person = requestData.contact_person || null;
       newRequest.contact_phone = requestData.contact_phone || null;
-      
-      // Dla standardowych transportów nie używamy pól przesunięć międzymagazynowych
       newRequest.transport_direction = null;
       newRequest.goods_description = null;
       newRequest.document_numbers = null;
@@ -457,7 +634,6 @@ export async function POST(request) {
 
     console.log('🚀 DANE DO ZAPISANIA W BAZIE:', JSON.stringify(newRequest, null, 2));
 
-    // Zapisz wniosek do bazy
     const [result] = await db('transport_requests').insert(newRequest).returning('*');
     const insertedRequest = result;
 
@@ -465,10 +641,20 @@ export async function POST(request) {
     console.log(`✅ Utworzono wniosek transportowy ID: ${insertedRequest.id}`);
     console.log(`✅ Z danymi: real_client_name="${insertedRequest.real_client_name}", wz_numbers="${insertedRequest.wz_numbers}", market_id="${insertedRequest.market_id}"`);
 
+    // WYSYŁKA POWIADOMIENIA EMAIL DO KIEROWNIKÓW
+    console.log('📮 Wysyłanie powiadomienia email do kierowników...');
+    const emailResult = await sendNewRequestNotification({
+      ...insertedRequest,
+      requester_name: user.name,
+      requester_email: userId
+    });
+    console.log('📬 Wynik wysyłki emaila:', emailResult.message);
+
     return NextResponse.json({ 
       success: true, 
       message: 'Wniosek transportowy został złożony',
       requestId: insertedRequest.id,
+      emailNotification: emailResult,
       savedData: {
         real_client_name: insertedRequest.real_client_name,
         wz_numbers: insertedRequest.wz_numbers,
@@ -490,7 +676,6 @@ export async function POST(request) {
 export async function PUT(request) {
   try {
     console.log('=== START PUT /api/transport-requests ===');
-    // Sprawdzamy uwierzytelnienie
     const authToken = request.cookies.get('authToken')?.value;
     const userId = await validateSession(authToken);
     
@@ -501,7 +686,6 @@ export async function PUT(request) {
       }, { status: 401 });
     }
 
-    // Upewnij się, że tabela istnieje
     const tableReady = await ensureTableExists();
     if (!tableReady) {
       return NextResponse.json({ 
@@ -510,7 +694,6 @@ export async function PUT(request) {
       }, { status: 500 });
     }
 
-    // Pobierz dane użytkownika
     const user = await db('users')
       .where('email', userId)
       .select('role', 'name', 'permissions')
@@ -535,7 +718,6 @@ export async function PUT(request) {
       }, { status: 400 });
     }
 
-    // Pobierz istniejący wniosek
     const existingRequest = await db('transport_requests')
       .where('id', requestId)
       .first();
@@ -547,7 +729,6 @@ export async function PUT(request) {
       }, { status: 404 });
     }
 
-    // Parsuj uprawnienia
     let permissions = {};
     try {
       if (user.permissions && typeof user.permissions === 'string') {
@@ -563,7 +744,6 @@ export async function PUT(request) {
     const canApprove = isAdmin || isMagazyn || permissions?.transport_requests?.approve === true;
     const isOwner = existingRequest.requester_email === userId;
 
-    // Obsługa różnych akcji
     switch (action) {
       case 'approve':
         if (!canApprove) {
@@ -576,7 +756,6 @@ export async function PUT(request) {
         console.log('Rozpoczynam akceptację wniosku:', requestId);
 
         try {
-          // Sprawdź czy tabela transports istnieje
           const transportsTableExists = await db.schema.hasTable('transports');
           if (!transportsTableExists) {
             return NextResponse.json({ 
@@ -585,28 +764,21 @@ export async function PUT(request) {
             }, { status: 500 });
           }
 
-          // POBIERZ WYBRANY MAGAZYN Z DANYCH ŻĄDANIA (domyślnie białystok)
           const selectedWarehouse = data.source_warehouse || 'bialystok';
           console.log('Wybrany magazyn:', selectedWarehouse);
 
-          // MAPOWANIE DANYCH W ZALEŻNOŚCI OD TYPU TRANSPORTU
           let transportData;
           
           if (existingRequest.transport_type === 'warehouse') {
-            // Przesunięcie międzymagazynowe - logika kalendarza
             const isAcceptedByBialystok = selectedWarehouse === 'bialystok';
-            
-            // Określ docelową lokalizację w kalendarzu (przeciwna do akceptującego magazynu)
             const calendarDestination = isAcceptedByBialystok ? 'Zielonka' : 'Białystok';
-            
-            // Automatyczne MPK na podstawie kierunku
             const autoMpk = existingRequest.transport_direction === 'bialystok_zielonka' ? '549-03-01' : '549-03-02';
             
             transportData = {
               destination_city: calendarDestination,
               delivery_date: existingRequest.delivery_date,
               status: 'active',
-              source_warehouse: selectedWarehouse, // Magazyn akceptujący = kolor kalendarza
+              source_warehouse: selectedWarehouse,
               postal_code: calendarDestination === 'Białystok' ? '15-169' : '05-220',
               street: calendarDestination === 'Białystok' ? 'ul. Wysockiego 69' : 'ul. Krótka 2',
               mpk: autoMpk,
@@ -621,19 +793,18 @@ export async function PUT(request) {
               is_cyclical: false
             };
           } else {
-            // Standardowy transport - używamy wybranego magazynu
             transportData = {
               destination_city: existingRequest.destination_city,
               delivery_date: existingRequest.delivery_date,
               status: 'active',
-              source_warehouse: selectedWarehouse, // UŻYWAMY WYBRANEGO MAGAZYNU
+              source_warehouse: selectedWarehouse,
               postal_code: existingRequest.postal_code || null,
               street: existingRequest.street || null,
               mpk: existingRequest.mpk || null,
               client_name: existingRequest.real_client_name || existingRequest.client_name || null,
               requester_name: existingRequest.client_name || existingRequest.requester_name || null,
               requester_email: existingRequest.requester_email || null,
-              wz_number: existingRequest.wz_numbers || null, // WAŻNE: mapowanie wz_numbers → wz_number
+              wz_number: existingRequest.wz_numbers || null,
               market: getMarketName(existingRequest.market_id) || null,
               distance: existingRequest.distance_km || null,
               notes: `Utworzony z wniosku #${requestId}${existingRequest.construction_name ? ` dla budowy: ${existingRequest.construction_name}` : ''}${existingRequest.notes ? `. ${existingRequest.notes}` : ''}`.trim(),
@@ -646,9 +817,7 @@ export async function PUT(request) {
           console.log('🚀 DEBUGOWANIE: Dane transportu do utworzenia:', transportData);
           console.log('🚀 Magazyn wybrany przez użytkownika:', selectedWarehouse);
 
-          // Rozpocznij transakcję
           const result = await db.transaction(async (trx) => {
-            // 1. Akceptuj wniosek
             const approvedData = {
               status: 'approved',
               approved_by: user.name || userId,
@@ -662,13 +831,11 @@ export async function PUT(request) {
 
             console.log('Wniosek zaktualizowany na approved');
 
-            // 2. Utwórz transport z wszystkimi danymi
             console.log('Tworzenie transportu z danymi:', transportData);
             const [result] = await trx('transports').insert(transportData).returning('id');
             const transportId = result.id;
             console.log('Transport utworzony z ID:', transportId);
 
-            // 3. Zaktualizuj wniosek o ID utworzonego transportu
             await trx('transport_requests')
               .where('id', requestId)
               .update({ transport_id: transportId });
@@ -701,7 +868,6 @@ export async function PUT(request) {
         } catch (approveError) {
           console.error('Błąd podczas akceptacji wniosku:', approveError);
           
-          // Spróbuj cofnąć zmiany jeśli możliwe
           try {
             await db('transport_requests')
               .where('id', requestId)
@@ -750,7 +916,6 @@ export async function PUT(request) {
         });
 
       case 'edit':
-        // Tylko właściciel może edytować swój wniosek (i tylko w statusie pending)
         if (!isOwner) {
           return NextResponse.json({ 
             success: false, 
@@ -765,7 +930,6 @@ export async function PUT(request) {
           }, { status: 400 });
         }
 
-        // Przygotuj dane do aktualizacji - z danymi budowy
         const editData = {
           ...data,
           mpk: data.mpk || null,
@@ -777,7 +941,6 @@ export async function PUT(request) {
           updated_at: new Date()
         };
 
-        // Usuń pola, które nie mogą być edytowane
         delete editData.status;
         delete editData.requester_email;
         delete editData.requester_name;
