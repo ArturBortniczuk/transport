@@ -709,7 +709,10 @@ export async function POST(request) {
       success: true, 
       message: 'Wniosek transportowy został złożony',
       requestId: insertedRequest.id,
-      emailNotification: emailResult
+      emailNotification: {
+        success: emailResult.success,
+        message: emailResult.message
+      }
     });
 
   } catch (error) {
