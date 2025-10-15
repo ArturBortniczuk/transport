@@ -513,6 +513,19 @@ export async function POST(request) {
       }, { status: 404 });
     }
 
+    const safeStringify = (obj) => {
+      const seen = new WeakSet();
+      return JSON.stringify(obj, (key, value) => {
+        if (typeof value === "object" && value !== null) {
+          if (seen.has(value)) {
+            return "[Circular]";
+          }
+          seen.add(value);
+        }
+        return value;
+      }, 2);
+    };
+
     let permissions = {};
     try {
       if (user.permissions && typeof user.permissions === 'string') {
@@ -537,7 +550,8 @@ export async function POST(request) {
     }
 
     const requestData = await request.json();
-    console.log('🚀 PEŁNE DANE Z FORMULARZA:', JSON.stringify(requestData, null, 2));
+    console.log('🚀 PEŁNE DANE Z FORMULARZA:', safeStringify(requestData));
+
 
     const transportType = requestData.transport_type || 'standard';
     
@@ -688,12 +702,14 @@ export async function POST(request) {
       newRequest.document_numbers = null;
     }
 
-    console.log('🚀 DANE DO ZAPISANIA W BAZIE:', JSON.stringify(newRequest, null, 2));
+    console.log('🚀 DANE DO ZAPISANIA W BAZIE:', safeStringify(newRequest));
+
 
     const [result] = await db('transport_requests').insert(newRequest).returning('*');
     const insertedRequest = result;
 
-    console.log('🚀 ZAPISANO W BAZIE (pełny rekord):', JSON.stringify(insertedRequest, null, 2));
+    console.log('🚀 ZAPISANO W BAZIE (pełny rekord):', safeStringify(insertedRequest));
+
     console.log(`✅ Utworzono wniosek transportowy ID: ${insertedRequest.id}`);
 
     // WYSYŁKA POWIADOMIENIA EMAIL DO KIEROWNIKÓW
@@ -712,7 +728,7 @@ export async function POST(request) {
       emailNotification: {
         success: emailResult.success,
         message: emailResult.message
-      }
+    }
     });
 
   } catch (error) {
