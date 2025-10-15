@@ -645,10 +645,10 @@ export async function POST(request) {
       newRequest.justification = requestData.justification;
       newRequest.notes = requestData.notes || null;
       
-      newRequest.destination_city = null;
-      newRequest.postal_code = null;
-      newRequest.street = null;
-      newRequest.client_name = null;
+      newRequest.destination_city = 'Białystok';
+      newRequest.postal_code = '15-169';
+      newRequest.street = 'Wysockiego 69B';
+      newRequest.client_name = 'Magazyn';
       newRequest.mpk = null;
       newRequest.construction_id = null;
       newRequest.construction_name = null;
@@ -665,10 +665,10 @@ export async function POST(request) {
       newRequest.notes = requestData.notes || null;
       newRequest.document_numbers = requestData.document_numbers || null;
       
-      newRequest.destination_city = null;
-      newRequest.postal_code = null;
-      newRequest.street = null;
-      newRequest.client_name = null;
+      newRequest.destination_city = 'Białystok';
+      newRequest.postal_code = '15-169';
+      newRequest.street = 'Wysockiego 69B';
+      newRequest.client_name = 'Objazdówka Centra Elektryczne';
       newRequest.real_client_name = null;
       newRequest.wz_numbers = null;
       newRequest.market_id = null;
