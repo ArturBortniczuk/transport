@@ -1,191 +1,174 @@
-// src/app/api/transport-requests/route.js - Z POWIADOMIENIAMI EMAIL
+// src/app/api/transport-requests/route.js
 import { NextResponse } from 'next/server';
 import db from '@/database/db';
 import nodemailer from 'nodemailer';
 
-const getMarketName = (marketId) => {
-  const markets = {
-    1: 'Podlaski',
-    2: 'Mazowiecki', 
-    3: 'Małopolski',
-    4: 'Wielkopolski',
-    5: 'Dolnośląski',
-    6: 'Śląski',
-    7: 'Lubelski',
-    8: 'Pomorski'
-  };
-  return markets[marketId] || null;
-};
+// Konfiguracja transportera email
+const transporter = nodemailer.createTransport({
+  host: process.env.EMAIL_HOST,
+  port: parseInt(process.env.EMAIL_PORT || '587'),
+  secure: false,
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+});
 
-// Funkcja pomocnicza do weryfikacji sesji
+// Funkcja walidacji sesji
 const validateSession = async (authToken) => {
-  if (!authToken || !db) {
-    return null;
-  }
+  if (!authToken) return null;
   
-  try {
-    const session = await db('sessions')
-      .where('token', authToken)
-      .whereRaw('expires_at > NOW()')
-      .select('user_id')
-      .first();
-    
-    return session?.user_id;
-  } catch (error) {
-    console.error('Błąd walidacji sesji:', error);
-    return null;
-  }
+  const session = await db('sessions')
+    .where('token', authToken)
+    .whereRaw('expires_at > NOW()')
+    .select('user_id')
+    .first();
+  
+  return session?.user_id;
 };
 
-// Funkcja wysyłania powiadomienia o nowym wniosku transportowym
+// Funkcja wysyłająca powiadomienie email
 const sendNewRequestNotification = async (requestData) => {
-  // Lista kierowników do powiadomienia
-  const recipients = [
-    's.swiderski@grupaeltron.pl',
-    'p.pietrusewicz@grupaeltron.pl'
-  ];
-
   try {
-    // Sprawdź konfigurację SMTP
-    if (!process.env.SMTP_PASSWORD) {
-      console.log('⚠️ SMTP nie skonfigurowany - powiadomienie nie zostanie wysłane');
-      return { success: false, message: 'SMTP nie skonfigurowany' };
+    const kierownicy = await db('users')
+      .where('role', 'admin')
+      .orWhere('role', 'like', 'magazyn%')
+      .select('email', 'name');
+
+    if (!kierownicy || kierownicy.length === 0) {
+      console.log('Brak kierowników do powiadomienia');
+      return { success: false, message: 'Brak kierowników' };
     }
 
-    // Konfiguracja nodemailer
-    const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: parseInt(process.env.SMTP_PORT || '465'),
-      secure: process.env.SMTP_SECURE === 'true',
-      auth: {
-        user: "logistyka@grupaeltron.pl",
-        pass: process.env.SMTP_PASSWORD
-      }
-    });
-
-    // Formatowanie daty
+    const recipients = kierownicy.map(k => k.email);
     const deliveryDate = new Date(requestData.delivery_date).toLocaleDateString('pl-PL');
-    
-    // Określ typ wniosku
-    const requestType = requestData.transport_type === 'warehouse' ? 'Przesunięcie międzymagazynowe' : 'Transport standardowy';
-    
-    // Nazwa rynku (jeśli jest)
-    const marketName = requestData.market_id ? getMarketName(requestData.market_id) : 'Nie określono';
 
-    // Przygotuj treść HTML emaila
+    // Mapa nazw centrów
+    const CENTRA_NAZWY = {
+      lapy: 'Łapy',
+      wysokie: 'Wysokie Mazowieckie',
+      bielsk: 'Bielsk Podlaski',
+      bialystok: 'Białystok (centrum elektryczne)'
+    };
+
+    // Określ typ wniosku i szczegóły
+    let requestType = 'Transport standardowy';
+    let requestDetails = '';
+
+    if (requestData.transport_type === 'delivery_route') {
+      requestType = '🚛 OBJAZDÓWKA (Centra elektryczne)';
+      
+      let routeText = 'Błąd odczytu trasy';
+      try {
+        const points = JSON.parse(requestData.route_points);
+        routeText = points.map(p => CENTRA_NAZWY[p] || p).join(' → ');
+      } catch (e) {
+        console.error('Błąd parsowania route_points:', e);
+      }
+      
+      requestDetails = `
+        <div class="info-row">
+          <span class="label">Trasa objazdówki:</span>
+          <span class="value" style="font-weight: bold; color: #7c3aed;">${routeText}</span>
+        </div>
+        <div class="info-row">
+          <span class="label">Dystans:</span>
+          <span class="value">${requestData.route_distance || 0} km</span>
+        </div>
+        <div class="info-row">
+          <span class="label">MPK centrów:</span>
+          <span class="value">${requestData.route_mpks || 'Brak'}</span>
+        </div>
+        ${requestData.document_numbers ? `
+        <div class="info-row">
+          <span class="label">Numery dokumentów:</span>
+          <span class="value">${requestData.document_numbers}</span>
+        </div>
+        ` : ''}
+      `;
+    } else if (requestData.transport_type === 'warehouse') {
+      requestType = 'Przesunięcie międzymagazynowe';
+      
+      const direction = requestData.transport_direction === 'zielonka_bialystok' 
+        ? 'Zielonka → Białystok' 
+        : 'Białystok → Zielonka';
+      
+      requestDetails = `
+        <div class="info-row">
+          <span class="label">Kierunek:</span>
+          <span class="value">${direction}</span>
+        </div>
+        <div class="info-row">
+          <span class="label">Opis towarów:</span>
+          <span class="value">${requestData.goods_description}</span>
+        </div>
+        ${requestData.document_numbers ? `
+        <div class="info-row">
+          <span class="label">Dokumenty:</span>
+          <span class="value">${requestData.document_numbers}</span>
+        </div>
+        ` : ''}
+      `;
+    } else {
+      requestType = 'Transport do budowy/handlowca';
+      
+      requestDetails = `
+        <div class="info-row">
+          <span class="label">Odbiorca:</span>
+          <span class="value">${requestData.construction_name || requestData.client_name || 'Nie podano'}</span>
+        </div>
+        <div class="info-row">
+          <span class="label">MPK:</span>
+          <span class="value">${requestData.mpk || 'Brak'}</span>
+        </div>
+        <div class="info-row">
+          <span class="label">Lokalizacja:</span>
+          <span class="value">${requestData.destination_city}${requestData.postal_code ? `, ${requestData.postal_code}` : ''}${requestData.street ? `, ${requestData.street}` : ''}</span>
+        </div>
+        ${requestData.real_client_name ? `
+        <div class="info-row">
+          <span class="label">Rzeczywisty klient:</span>
+          <span class="value">${requestData.real_client_name}</span>
+        </div>
+        ` : ''}
+        ${requestData.wz_numbers ? `
+        <div class="info-row">
+          <span class="label">Numery WZ:</span>
+          <span class="value">${requestData.wz_numbers}</span>
+        </div>
+        ` : ''}
+        ${requestData.contact_person ? `
+        <div class="info-row">
+          <span class="label">Osoba kontaktowa:</span>
+          <span class="value">${requestData.contact_person}${requestData.contact_phone ? ` (tel: ${requestData.contact_phone})` : ''}</span>
+        </div>
+        ` : ''}
+      `;
+    }
+
     const emailHtml = `
       <!DOCTYPE html>
       <html>
         <head>
-          <meta charset="utf-8">
           <style>
             body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
             .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-            .header { background: #4F46E5; color: white; padding: 20px; border-radius: 8px 8px 0 0; }
-            .content { background: white; padding: 20px; border: 1px solid #e9ecef; border-radius: 0 0 8px 8px; }
-            .info-row { margin: 10px 0; padding: 10px; background: #f8f9fa; border-radius: 4px; }
-            .label { font-weight: bold; color: #495057; }
-            .value { color: #212529; }
-            .footer { margin-top: 20px; padding-top: 20px; border-top: 1px solid #e9ecef; color: #6c757d; font-size: 14px; }
-            .alert { background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 15px 0; }
+            .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+            .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+            .info-row { margin: 15px 0; padding: 10px; background: white; border-left: 4px solid #667eea; }
+            .label { font-weight: bold; color: #555; }
+            .value { color: #333; margin-left: 10px; }
+            .footer { text-align: center; margin-top: 30px; padding: 20px; color: #666; font-size: 12px; }
           </style>
         </head>
         <body>
           <div class="container">
             <div class="header">
-              <h2>🚛 Nowy wniosek transportowy</h2>
-              <p style="margin: 0;">Typ: ${requestType}</p>
+              <h1>🚛 Nowy wniosek transportowy</h1>
+              <p>${requestType}</p>
             </div>
-            
             <div class="content">
-              ${requestData.transport_type === 'warehouse' ? `
-                <div class="alert">
-                  <strong>⚠️ Przesunięcie międzymagazynowe</strong>
-                </div>
-                
-                <div class="info-row">
-                  <span class="label">Kierunek:</span>
-                  <span class="value">${requestData.transport_direction === 'zielonka_bialystok' ? 'Zielonka → Białystok' : 'Białystok → Zielonka'}</span>
-                </div>
-                
-                <div class="info-row">
-                  <span class="label">Opis towaru:</span>
-                  <span class="value">${requestData.goods_description || 'Brak opisu'}</span>
-                </div>
-                
-                ${requestData.document_numbers ? `
-                <div class="info-row">
-                  <span class="label">Numery dokumentów:</span>
-                  <span class="value">${requestData.document_numbers}</span>
-                </div>
-                ` : ''}
-              ` : `
-                <div class="info-row">
-                  <span class="label">Miejsce docelowe:</span>
-                  <span class="value">${requestData.destination_city || 'Nie podano'}</span>
-                </div>
-                
-                ${requestData.postal_code ? `
-                <div class="info-row">
-                  <span class="label">Kod pocztowy:</span>
-                  <span class="value">${requestData.postal_code}</span>
-                </div>
-                ` : ''}
-                
-                ${requestData.street ? `
-                <div class="info-row">
-                  <span class="label">Ulica:</span>
-                  <span class="value">${requestData.street}</span>
-                </div>
-                ` : ''}
-                
-                ${requestData.construction_name ? `
-                <div class="info-row">
-                  <span class="label">Budowa:</span>
-                  <span class="value">${requestData.construction_name}</span>
-                </div>
-                ` : ''}
-                
-                ${requestData.mpk ? `
-                <div class="info-row">
-                  <span class="label">MPK:</span>
-                  <span class="value">${requestData.mpk}</span>
-                </div>
-                ` : ''}
-                
-                ${requestData.client_name ? `
-                <div class="info-row">
-                  <span class="label">Klient:</span>
-                  <span class="value">${requestData.client_name}</span>
-                </div>
-                ` : ''}
-                
-                ${requestData.real_client_name ? `
-                <div class="info-row">
-                  <span class="label">Rzeczywisty klient:</span>
-                  <span class="value">${requestData.real_client_name}</span>
-                </div>
-                ` : ''}
-                
-                ${requestData.wz_numbers ? `
-                <div class="info-row">
-                  <span class="label">Numery WZ:</span>
-                  <span class="value">${requestData.wz_numbers}</span>
-                </div>
-                ` : ''}
-                
-                <div class="info-row">
-                  <span class="label">Rynek:</span>
-                  <span class="value">${marketName}</span>
-                </div>
-                
-                ${requestData.contact_person ? `
-                <div class="info-row">
-                  <span class="label">Osoba kontaktowa:</span>
-                  <span class="value">${requestData.contact_person}${requestData.contact_phone ? ` (tel: ${requestData.contact_phone})` : ''}</span>
-                </div>
-                ` : ''}
-              `}
+              ${requestDetails}
               
               <div class="info-row">
                 <span class="label">Data dostawy:</span>
@@ -221,7 +204,6 @@ const sendNewRequestNotification = async (requestData) => {
       </html>
     `;
 
-    // Wysłanie emaila
     const mailOptions = {
       from: `"System Transportowy" <logistyka@grupaeltron.pl>`,
       to: recipients.join(', '),
@@ -248,7 +230,7 @@ const sendNewRequestNotification = async (requestData) => {
   }
 };
 
-// Funkcja do tworzenia tabeli transport_requests
+// Funkcja zapewniająca istnienie tabeli
 const ensureTableExists = async () => {
   try {
     const tableExists = await db.schema.hasTable('transport_requests');
@@ -283,6 +265,10 @@ const ensureTableExists = async () => {
         table.string('transport_direction');
         table.text('goods_description');
         table.string('document_numbers');
+        // NOWE KOLUMNY DLA OBJAZDÓWEK
+        table.json('route_points');
+        table.integer('route_distance');
+        table.text('route_mpks');
         table.timestamp('created_at').defaultTo(db.fn.now());
         table.timestamp('updated_at').defaultTo(db.fn.now());
       });
@@ -360,6 +346,31 @@ const ensureTableExists = async () => {
           table.string('document_numbers');
         });
         console.log('Dodano kolumnę document_numbers');
+      }
+
+      // NOWE KOLUMNY DLA OBJAZDÓWEK
+      const hasRoutePoints = await db.schema.hasColumn('transport_requests', 'route_points');
+      if (!hasRoutePoints) {
+        await db.schema.table('transport_requests', table => {
+          table.json('route_points');
+        });
+        console.log('Dodano kolumnę route_points');
+      }
+
+      const hasRouteDistance = await db.schema.hasColumn('transport_requests', 'route_distance');
+      if (!hasRouteDistance) {
+        await db.schema.table('transport_requests', table => {
+          table.integer('route_distance');
+        });
+        console.log('Dodano kolumnę route_distance');
+      }
+
+      const hasRouteMpks = await db.schema.hasColumn('transport_requests', 'route_mpks');
+      if (!hasRouteMpks) {
+        await db.schema.table('transport_requests', table => {
+          table.text('route_mpks');
+        });
+        console.log('Dodano kolumnę route_mpks');
       }
     }
     
@@ -530,6 +541,7 @@ export async function POST(request) {
 
     const transportType = requestData.transport_type || 'standard';
     
+    // WALIDACJA DLA PRZESUNIĘĆ MIĘDZYMAGAZYNOWYCH
     if (transportType === 'warehouse') {
       const requiredWarehouseFields = ['transport_direction', 'goods_description', 'delivery_date', 'justification'];
       for (const field of requiredWarehouseFields) {
@@ -548,9 +560,50 @@ export async function POST(request) {
           error: 'Nieprawidłowy kierunek transportu' 
         }, { status: 400 });
       }
-    } else {
-      const requiredFields = ['destination_city', 'delivery_date', 'justification'];
-      for (const field of requiredFields) {
+    }
+
+    // WALIDACJA DLA OBJAZDÓWEK
+    if (transportType === 'delivery_route') {
+      const requiredRouteFields = ['route_points', 'delivery_date'];
+      for (const field of requiredRouteFields) {
+        if (!requestData[field]) {
+          return NextResponse.json({ 
+            success: false, 
+            error: `Pole ${field} jest wymagane dla objazdówek` 
+          }, { status: 400 });
+        }
+      }
+
+      if (!Array.isArray(requestData.route_points) || requestData.route_points.length < 2) {
+        return NextResponse.json({ 
+          success: false, 
+          error: 'Objazdówka musi zawierać minimum 2 punkty' 
+        }, { status: 400 });
+      }
+
+      const firstPoint = requestData.route_points[0];
+      if (firstPoint !== 'lapy' && firstPoint !== 'bielsk') {
+        return NextResponse.json({ 
+          success: false, 
+          error: 'Pierwszy punkt musi być: Łapy lub Bielsk Podlaski' 
+        }, { status: 400 });
+      }
+
+      if (requestData.route_points.includes('bialystok')) {
+        const lastPoint = requestData.route_points[requestData.route_points.length - 1];
+        if (lastPoint !== 'bialystok') {
+          return NextResponse.json({ 
+            success: false, 
+            error: 'Białystok centrum musi być ostatnim punktem' 
+          }, { status: 400 });
+        }
+      }
+    }
+
+    // WALIDACJA DLA STANDARDOWYCH TRANSPORTÓW
+    if (transportType === 'standard') {
+      const requiredStandardFields = ['destination_city', 'delivery_date', 'justification', 'real_client_name'];
+      for (const field of requiredStandardFields) {
         if (!requestData[field]) {
           return NextResponse.json({ 
             success: false, 
@@ -558,69 +611,72 @@ export async function POST(request) {
           }, { status: 400 });
         }
       }
-
-      if (!requestData.mpk && !requestData.construction_name) {
-        return NextResponse.json({ 
-          success: false, 
-          error: 'Wybór budowy/MPK jest wymagany' 
-        }, { status: 400 });
-      }
     }
 
-    const deliveryDate = new Date(requestData.delivery_date);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    if (deliveryDate < today) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Data dostawy nie może być w przeszłości' 
-      }, { status: 400 });
-    }
-
+    // TWORZENIE OBIEKTU ZAPISU
     const newRequest = {
-      status: 'pending',
       requester_email: userId,
-      requester_name: user.name || userId,
+      requester_name: user.name,
       delivery_date: requestData.delivery_date,
-      justification: requestData.justification || '',
-      notes: requestData.notes || null,
-      transport_type: transportType,
-      created_at: new Date(),
-      updated_at: new Date()
+      status: 'pending',
+      created_at: db.fn.now(),
+      updated_at: db.fn.now()
     };
 
     if (transportType === 'warehouse') {
+      newRequest.transport_type = 'warehouse';
       newRequest.transport_direction = requestData.transport_direction;
       newRequest.goods_description = requestData.goods_description;
       newRequest.document_numbers = requestData.document_numbers || null;
-      newRequest.mpk = requestData.transport_direction === 'bialystok_zielonka' ? '549-03-01' : '549-03-02';
-
-      if (requestData.transport_direction === 'zielonka_bialystok') {
-        newRequest.destination_city = 'Białystok';
-        newRequest.postal_code = '15-169';
-        newRequest.street = 'ul. Wysockiego 69';
-      } else {
-        newRequest.destination_city = 'Zielonka';
-        newRequest.postal_code = '05-220';
-        newRequest.street = 'ul. Krótka 2';
-      }
-      newRequest.mpk = null;
-      newRequest.construction_name = null;
-      newRequest.construction_id = null;
+      newRequest.justification = requestData.justification;
+      newRequest.notes = requestData.notes || null;
+      
+      newRequest.destination_city = null;
+      newRequest.postal_code = null;
+      newRequest.street = null;
       newRequest.client_name = null;
+      newRequest.mpk = null;
+      newRequest.construction_id = null;
+      newRequest.construction_name = null;
       newRequest.real_client_name = null;
       newRequest.wz_numbers = null;
       newRequest.market_id = null;
       newRequest.contact_person = null;
       newRequest.contact_phone = null;
+    } else if (transportType === 'delivery_route') {
+      newRequest.transport_type = 'delivery_route';
+      newRequest.route_points = JSON.stringify(requestData.route_points);
+      newRequest.route_distance = requestData.route_distance || null;
+      newRequest.route_mpks = requestData.route_mpks || null;
+      newRequest.notes = requestData.notes || null;
+      newRequest.document_numbers = requestData.document_numbers || null;
+      
+      newRequest.destination_city = null;
+      newRequest.postal_code = null;
+      newRequest.street = null;
+      newRequest.client_name = null;
+      newRequest.real_client_name = null;
+      newRequest.wz_numbers = null;
+      newRequest.market_id = null;
+      newRequest.construction_id = null;
+      newRequest.construction_name = null;
+      newRequest.contact_person = null;
+      newRequest.contact_phone = null;
+      newRequest.transport_direction = null;
+      newRequest.goods_description = null;
+      newRequest.justification = null;
+      newRequest.mpk = null;
     } else {
-      newRequest.destination_city = requestData.destination_city || '';
+      newRequest.transport_type = 'standard';
+      newRequest.destination_city = requestData.destination_city;
       newRequest.postal_code = requestData.postal_code || null;
       newRequest.street = requestData.street || null;
+      newRequest.justification = requestData.justification;
       newRequest.mpk = requestData.mpk || null;
-      newRequest.construction_name = requestData.construction_name || null;
+      newRequest.notes = requestData.notes || null;
+      newRequest.user_id = requestData.user_id || null;
       newRequest.construction_id = requestData.construction_id ? parseInt(requestData.construction_id) : null;
+      newRequest.construction_name = requestData.construction_name || null;
       newRequest.client_name = requestData.client_name || null;
       newRequest.real_client_name = requestData.real_client_name || null;
       newRequest.wz_numbers = requestData.wz_numbers || null;
@@ -639,7 +695,6 @@ export async function POST(request) {
 
     console.log('🚀 ZAPISANO W BAZIE (pełny rekord):', JSON.stringify(insertedRequest, null, 2));
     console.log(`✅ Utworzono wniosek transportowy ID: ${insertedRequest.id}`);
-    console.log(`✅ Z danymi: real_client_name="${insertedRequest.real_client_name}", wz_numbers="${insertedRequest.wz_numbers}", market_id="${insertedRequest.market_id}"`);
 
     // WYSYŁKA POWIADOMIENIA EMAIL DO KIEROWNIKÓW
     console.log('📮 Wysyłanie powiadomienia email do kierowników...');
@@ -654,13 +709,7 @@ export async function POST(request) {
       success: true, 
       message: 'Wniosek transportowy został złożony',
       requestId: insertedRequest.id,
-      emailNotification: emailResult,
-      savedData: {
-        real_client_name: insertedRequest.real_client_name,
-        wz_numbers: insertedRequest.wz_numbers,
-        market_id: insertedRequest.market_id,
-        construction_name: insertedRequest.construction_name
-      }
+      emailNotification: emailResult
     });
 
   } catch (error) {
@@ -709,7 +758,7 @@ export async function PUT(request) {
     const updateData = await request.json();
     const { requestId, action, ...data } = updateData;
     
-    console.log('Update data:', { requestId, action, selectedWarehouse: data.source_warehouse });
+    console.log('Update data:', { requestId, action });
 
     if (!requestId) {
       return NextResponse.json({ 
@@ -725,259 +774,105 @@ export async function PUT(request) {
     if (!existingRequest) {
       return NextResponse.json({ 
         success: false, 
-        error: 'Nie znaleziono wniosku' 
+        error: 'Wniosek nie istnieje' 
       }, { status: 404 });
     }
 
-    let permissions = {};
-    try {
-      if (user.permissions && typeof user.permissions === 'string') {
-        permissions = JSON.parse(user.permissions);
+    // Logika akceptacji/odrzucenia lub edycji
+    if (action === 'approve' || action === 'reject') {
+      let permissions = {};
+      try {
+        if (user.permissions && typeof user.permissions === 'string') {
+          permissions = JSON.parse(user.permissions);
+        }
+      } catch (e) {
+        console.error('Błąd parsowania uprawnień:', e);
       }
-    } catch (e) {
-      console.error('Błąd parsowania uprawnień:', e);
-      permissions = {};
-    }
 
-    const isAdmin = user.role === 'admin';
-    const isMagazyn = user.role === 'magazyn' || user.role?.startsWith('magazyn_');
-    const canApprove = isAdmin || isMagazyn || permissions?.transport_requests?.approve === true;
-    const isOwner = existingRequest.requester_email === userId;
+      const isAdmin = user.role === 'admin';
+      const isMagazyn = user.role === 'magazyn' || user.role?.startsWith('magazyn_');
+      const canApprove = isAdmin || isMagazyn || permissions?.transport_requests?.approve === true;
 
-    switch (action) {
-      case 'approve':
-        if (!canApprove) {
-          return NextResponse.json({ 
-            success: false, 
-            error: 'Brak uprawnień do akceptowania wniosków' 
-          }, { status: 403 });
-        }
-
-        console.log('Rozpoczynam akceptację wniosku:', requestId);
-
-        try {
-          const transportsTableExists = await db.schema.hasTable('transports');
-          if (!transportsTableExists) {
-            return NextResponse.json({ 
-              success: false, 
-              error: 'Tabela transportów nie istnieje' 
-            }, { status: 500 });
-          }
-
-          const selectedWarehouse = data.source_warehouse || 'bialystok';
-          console.log('Wybrany magazyn:', selectedWarehouse);
-
-          let transportData;
-          
-          if (existingRequest.transport_type === 'warehouse') {
-            const isAcceptedByBialystok = selectedWarehouse === 'bialystok';
-            const calendarDestination = isAcceptedByBialystok ? 'Zielonka' : 'Białystok';
-            const autoMpk = existingRequest.transport_direction === 'bialystok_zielonka' ? '549-03-01' : '549-03-02';
-            
-            transportData = {
-              destination_city: calendarDestination,
-              delivery_date: existingRequest.delivery_date,
-              status: 'active',
-              source_warehouse: selectedWarehouse,
-              postal_code: calendarDestination === 'Białystok' ? '15-169' : '05-220',
-              street: calendarDestination === 'Białystok' ? 'ul. Wysockiego 69' : 'ul. Krótka 2',
-              mpk: autoMpk,
-              client_name: 'Przesunięcie międzymagazynowe',
-              requester_name: existingRequest.requester_name || null,
-              requester_email: existingRequest.requester_email || null,
-              wz_number: existingRequest.document_numbers || null,
-              market: null,
-              distance: 183,
-              notes: `Przesunięcie międzymagazynowe z wniosku #${requestId}. Kierunek: ${existingRequest.transport_direction === 'bialystok_zielonka' ? 'Białystok → Zielonka' : 'Zielonka → Białystok'}. Towary: ${existingRequest.goods_description}. Realizuje: Magazyn ${selectedWarehouse === 'bialystok' ? 'Białystok' : 'Zielonka'}.${existingRequest.notes ? ` Uwagi: ${existingRequest.notes}` : ''}`.trim(),
-              loading_level: '100%',
-              is_cyclical: false
-            };
-          } else {
-            transportData = {
-              destination_city: existingRequest.destination_city,
-              delivery_date: existingRequest.delivery_date,
-              status: 'active',
-              source_warehouse: selectedWarehouse,
-              postal_code: existingRequest.postal_code || null,
-              street: existingRequest.street || null,
-              mpk: existingRequest.mpk || null,
-              client_name: existingRequest.real_client_name || existingRequest.client_name || null,
-              requester_name: existingRequest.client_name || existingRequest.requester_name || null,
-              requester_email: existingRequest.requester_email || null,
-              wz_number: existingRequest.wz_numbers || null,
-              market: getMarketName(existingRequest.market_id) || null,
-              distance: existingRequest.distance_km || null,
-              notes: `Utworzony z wniosku #${requestId}${existingRequest.construction_name ? ` dla budowy: ${existingRequest.construction_name}` : ''}${existingRequest.notes ? `. ${existingRequest.notes}` : ''}`.trim(),
-              loading_level: '100%',
-              is_cyclical: false
-            };
-          }
-
-          console.log('🚀 DEBUGOWANIE: Pełne dane wniosku:', existingRequest);
-          console.log('🚀 DEBUGOWANIE: Dane transportu do utworzenia:', transportData);
-          console.log('🚀 Magazyn wybrany przez użytkownika:', selectedWarehouse);
-
-          const result = await db.transaction(async (trx) => {
-            const approvedData = {
-              status: 'approved',
-              approved_by: user.name || userId,
-              approved_at: new Date(),
-              updated_at: new Date()
-            };
-
-            await trx('transport_requests')
-              .where('id', requestId)
-              .update(approvedData);
-
-            console.log('Wniosek zaktualizowany na approved');
-
-            console.log('Tworzenie transportu z danymi:', transportData);
-            const [result] = await trx('transports').insert(transportData).returning('id');
-            const transportId = result.id;
-            console.log('Transport utworzony z ID:', transportId);
-
-            await trx('transport_requests')
-              .where('id', requestId)
-              .update({ transport_id: transportId });
-
-            console.log('Wniosek zaktualizowany z transport_id:', transportId);
-
-            return transportId;
-          });
-
-          const warehouseName = selectedWarehouse === 'bialystok' ? 'Białystok' : 'Zielonka';
-          console.log(`✅ Zaakceptowano wniosek ${requestId} dla magazynu ${warehouseName}, utworzono transport ${result}`);
-          console.log(`✅ WZ Numbers z wniosku: ${existingRequest.wz_numbers} → zapisane jako wz_number w transporcie`);
-          console.log(`✅ Rynek z wniosku: ${existingRequest.market_id} → ${getMarketName(existingRequest.market_id)}`);
-
-          return NextResponse.json({ 
-            success: true, 
-            message: `Wniosek został zaakceptowany i dodany do kalendarza magazynu ${warehouseName}`,
-            transportId: result,
-            warehouse: selectedWarehouse,
-            warehouseName: warehouseName,
-            constructionName: existingRequest.construction_name,
-            mpk: existingRequest.mpk,
-            debugInfo: {
-              wzNumbers: existingRequest.wz_numbers,
-              market: getMarketName(existingRequest.market_id),
-              realClient: existingRequest.real_client_name
-            }
-          });
-
-        } catch (approveError) {
-          console.error('Błąd podczas akceptacji wniosku:', approveError);
-          
-          try {
-            await db('transport_requests')
-              .where('id', requestId)
-              .update({ 
-                status: 'pending',
-                approved_by: null,
-                approved_at: null,
-                transport_id: null
-              });
-            console.log('Cofnięto zmiany w wniosku po błędzie');
-          } catch (rollbackError) {
-            console.error('Nie udało się cofnąć zmian:', rollbackError);
-          }
-
-          return NextResponse.json({ 
-            success: false, 
-            error: 'Błąd podczas akceptacji wniosku: ' + approveError.message 
-          }, { status: 500 });
-        }
-
-      case 'reject':
-        if (!canApprove) {
-          return NextResponse.json({ 
-            success: false, 
-            error: 'Brak uprawnień do odrzucania wniosków' 
-          }, { status: 403 });
-        }
-
-        const rejectedData = {
-          status: 'rejected',
-          approved_by: user.name || userId,
-          approved_at: new Date(),
-          rejection_reason: data.rejection_reason || 'Brak uzasadnienia',
-          updated_at: new Date()
-        };
-
-        await db('transport_requests')
-          .where('id', requestId)
-          .update(rejectedData);
-
-        console.log(`Odrzucono wniosek ${requestId}`);
-
-        return NextResponse.json({ 
-          success: true, 
-          message: 'Wniosek został odrzucony'
-        });
-
-      case 'edit':
-        if (!isOwner) {
-          return NextResponse.json({ 
-            success: false, 
-            error: 'Możesz edytować tylko własne wnioski' 
-          }, { status: 403 });
-        }
-
-        if (existingRequest.status !== 'pending') {
-          return NextResponse.json({ 
-            success: false, 
-            error: 'Można edytować tylko wnioski w statusie oczekiwania' 
-          }, { status: 400 });
-        }
-
-        const editData = {
-          ...data,
-          mpk: data.mpk || null,
-          construction_name: data.construction_name || null,
-          construction_id: data.construction_id || null,
-          real_client_name: data.real_client_name || null,
-          wz_numbers: data.wz_numbers || null,
-          market_id: data.market_id || null,
-          updated_at: new Date()
-        };
-
-        delete editData.status;
-        delete editData.requester_email;
-        delete editData.requester_name;
-        delete editData.approved_by;
-        delete editData.approved_at;
-        delete editData.transport_id;
-        delete editData.action;
-        delete editData.requestId;
-
-        console.log('Aktualizacja wniosku z budową:', {
-          requestId,
-          constructionName: data.construction_name,
-          mpk: data.mpk,
-          wzNumbers: data.wz_numbers,
-          marketId: data.market_id,
-          otherData: Object.keys(editData)
-        });
-
-        await db('transport_requests')
-          .where('id', requestId)
-          .update(editData);
-
-        console.log(`Zaktualizowano wniosek ${requestId} z budową: ${data.construction_name} (MPK: ${data.mpk})`);
-
-        return NextResponse.json({ 
-          success: true, 
-          message: 'Wniosek został zaktualizowany',
-          updatedConstruction: data.construction_name,
-          updatedMpk: data.mpk
-        });
-
-      default:
+      if (!canApprove) {
         return NextResponse.json({ 
           success: false, 
-          error: 'Nieznana akcja' 
+          error: 'Brak uprawnień do akceptacji/odrzucenia wniosków' 
+        }, { status: 403 });
+      }
+
+      const updateFields = {
+        status: action === 'approve' ? 'approved' : 'rejected',
+        approved_by: user.name,
+        approved_at: db.fn.now(),
+        updated_at: db.fn.now()
+      };
+
+      if (action === 'reject' && data.rejection_reason) {
+        updateFields.rejection_reason = data.rejection_reason;
+      }
+
+      await db('transport_requests')
+        .where('id', requestId)
+        .update(updateFields);
+
+      return NextResponse.json({ 
+        success: true, 
+        message: action === 'approve' ? 'Wniosek zaakceptowany' : 'Wniosek odrzucony' 
+      });
+
+    } else if (action === 'edit') {
+      if (existingRequest.requester_email !== userId) {
+        return NextResponse.json({ 
+          success: false, 
+          error: 'Nie możesz edytować cudzych wniosków' 
+        }, { status: 403 });
+      }
+
+      if (existingRequest.status !== 'pending') {
+        return NextResponse.json({ 
+          success: false, 
+          error: 'Można edytować tylko oczekujące wnioski' 
         }, { status: 400 });
+      }
+
+      const allowedFields = [
+        'destination_city', 'postal_code', 'street', 'delivery_date',
+        'justification', 'client_name', 'real_client_name', 'wz_numbers',
+        'market_id', 'contact_person', 'contact_phone', 'notes',
+        'transport_direction', 'goods_description', 'document_numbers',
+        'route_points', 'route_distance', 'route_mpks'
+      ];
+
+      const updateFields = {};
+      for (const field of allowedFields) {
+        if (data[field] !== undefined) {
+          updateFields[field] = data[field];
+        }
+      }
+
+      if (Object.keys(updateFields).length === 0) {
+        return NextResponse.json({ 
+          success: false, 
+          error: 'Brak danych do aktualizacji' 
+        }, { status: 400 });
+      }
+
+      updateFields.updated_at = db.fn.now();
+
+      await db('transport_requests')
+        .where('id', requestId)
+        .update(updateFields);
+
+      return NextResponse.json({ 
+        success: true, 
+        message: 'Wniosek zaktualizowany' 
+      });
     }
+
+    return NextResponse.json({ 
+      success: false, 
+      error: 'Nieprawidłowa akcja' 
+    }, { status: 400 });
 
   } catch (error) {
     console.error('Error in PUT /api/transport-requests:', error);
