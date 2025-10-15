@@ -360,6 +360,8 @@ function UserSelector({ value, onChange, className = '' }) {
   );
 }
 
+// ===== GŁÓWNY KOMPONENT =====
+
 export default function MojeWnioskiPage() {
   const [requests, setRequests] = useState([])
   const [loading, setLoading] = useState(true)
@@ -368,11 +370,10 @@ export default function MojeWnioskiPage() {
   const [editingRequest, setEditingRequest] = useState(null)
   const [userInfo, setUserInfo] = useState(null)
 
-  // STANY DLA RÓŻNYCH TYPÓW TRANSPORTU
-  const [transportType, setTransportType] = useState('standard'); // 'standard' | 'warehouse' | 'delivery_route'
-  const [recipientType, setRecipientType] = useState('construction'); // 'construction' | 'sales'
+  const [transportType, setTransportType] = useState('standard');
+  const [recipientType, setRecipientType] = useState('construction');
   const [selectedEntity, setSelectedEntity] = useState(null);
-  const [routePoints, setRoutePoints] = useState([]); // NOWY STATE DLA OBJAZDÓWEK
+  const [routePoints, setRoutePoints] = useState([]);
 
   const [formData, setFormData] = useState({
     destination_city: '',
@@ -517,8 +518,6 @@ export default function MojeWnioskiPage() {
         dataToSend.user_id = recipientType === 'sales' ? (selectedEntity?.id || null) : null;
         dataToSend.justification = formData.justification || '';
       }
-      
-      console.log('🚀 WYSYŁANIE DANYCH Z FORMULARZA:', JSON.stringify(dataToSend, null, 2));
 
       const body = editingRequest
         ? { ...dataToSend, requestId: editingRequest.id, action: 'edit' }
@@ -708,6 +707,7 @@ export default function MojeWnioskiPage() {
             </button>
           </div>
         )}
+
         {showForm && (
           <div className="bg-white shadow rounded-lg mb-6">
             <div className="px-6 py-4 border-b border-gray-200">
@@ -716,7 +716,6 @@ export default function MojeWnioskiPage() {
               </h2>
             </div>
             <form onSubmit={handleSubmit} className="p-6 space-y-6">
-              {/* WYBÓR TYPU TRANSPORTU */}
               <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
                 <h4 className="text-base font-medium text-gray-800 mb-3">Typ wniosku transportowego</h4>
                 <div className="flex flex-wrap gap-3">
@@ -793,7 +792,6 @@ export default function MojeWnioskiPage() {
                 </div>
               </div>
 
-              {/* FORMULARZ DLA OBJAZDÓWEK */}
               {transportType === 'delivery_route' && (
                 <>
                   <RoutePointSelector
@@ -854,7 +852,6 @@ export default function MojeWnioskiPage() {
                 </>
               )}
 
-              {/* FORMULARZ DLA PRZESUNIĘĆ MIĘDZYMAGAZYNOWYCH */}
               {transportType === 'warehouse' && (
                 <>
                   <div>
@@ -961,10 +958,8 @@ export default function MojeWnioskiPage() {
                 </>
               )}
 
-              {/* FORMULARZ DLA STANDARDOWYCH TRANSPORTÓW */}
               {transportType === 'standard' && (
                 <>
-                  {/* Wybór typu odbiorcy */}
                   <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
                     <h4 className="text-base font-medium text-gray-800 mb-3">Wybierz typ odbiorcy</h4>
                     <div className="flex space-x-4">
@@ -987,7 +982,6 @@ export default function MojeWnioskiPage() {
                     </div>
                   </div>
 
-                  {/* Selektory */}
                   {recipientType === 'construction' ? (
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Wybierz budowę/MPK *</label>
@@ -1015,7 +1009,6 @@ export default function MojeWnioskiPage() {
                   )}
                   {formErrors.entity && (<p className="mt-1 text-sm text-red-600">{formErrors.entity}</p>)}
 
-                  {/* Pola nieedytowalne */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                       <label className="block text-sm font-medium text-gray-700">Handlowiec/budowa</label>
@@ -1027,7 +1020,6 @@ export default function MojeWnioskiPage() {
                     </div>
                   </div>
 
-                  {/* Lokalizacja */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div>
                       <label className="block text-sm font-medium text-gray-700">Miasto *</label>
@@ -1047,7 +1039,6 @@ export default function MojeWnioskiPage() {
                     </div>
                   </div>
 
-                  {/* Kontakt */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                       <label className="block text-sm font-medium text-gray-700">Osoba kontaktowa</label>
@@ -1059,7 +1050,6 @@ export default function MojeWnioskiPage() {
                     </div>
                   </div>
 
-                  {/* Dodatkowe pola */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div>
                       <label className="block text-sm font-medium text-gray-700">Klient *</label>
@@ -1079,7 +1069,6 @@ export default function MojeWnioskiPage() {
                     </div>
                   </div>
 
-                  {/* Data i uzasadnienie */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Data dostawy *</label>
                     <input 
@@ -1110,7 +1099,6 @@ export default function MojeWnioskiPage() {
                 </>
               )}
 
-              {/* Przyciski */}
               <div className="flex justify-end space-x-3">
                 <button type="button" onClick={cancelForm} className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
                   Anuluj
@@ -1122,7 +1110,7 @@ export default function MojeWnioskiPage() {
             </form>
           </div>
         )}
-        {/* Lista wniosków */}
+
         <div className="bg-white shadow rounded-lg">
           <div className="px-6 py-4 border-b border-gray-200">
             <h2 className="text-lg font-medium text-gray-900">Twoje wnioski transportowe</h2>
@@ -1156,7 +1144,6 @@ export default function MojeWnioskiPage() {
                           <h3 className="text-lg font-medium text-gray-900">
                             Wniosek #{request.id}
                           </h3>
-                          {/* Badge typu wniosku */}
                           {request.transport_type === 'delivery_route' ? (
                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
                               Objazdówka (centra elektryczne)
@@ -1174,7 +1161,6 @@ export default function MojeWnioskiPage() {
                         {getStatusBadge(request.status)}
                       </div>
 
-                      {/* WYŚWIETLANIE DLA OBJAZDÓWEK */}
                       {request.transport_type === 'delivery_route' ? (
                         <div className="grid grid-cols-1 gap-4 text-sm text-gray-600 bg-purple-50 p-4 rounded-md">
                           <div className="flex items-start">
@@ -1354,7 +1340,6 @@ export default function MojeWnioskiPage() {
                       </div>
                     </div>
 
-                    {/* Akcje */}
                     {request.status === 'pending' && (
                       <div className="ml-4 flex space-x-2">
                         <button
