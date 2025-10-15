@@ -60,7 +60,15 @@ const sendNewRequestNotification = async (requestData) => {
       
       let routeText = 'Błąd odczytu trasy';
       try {
-        const points = JSON.parse(requestData.route_points);
+        // route_points może być stringiem (JSON) lub array (z bazy Postgres)
+        let points;
+        if (typeof requestData.route_points === 'string') {
+          points = JSON.parse(requestData.route_points);
+        } else if (Array.isArray(requestData.route_points)) {
+          points = requestData.route_points;
+        } else {
+          points = [];
+        }
         routeText = points.map(p => CENTRA_NAZWY[p] || p).join(' → ');
       } catch (e) {
         console.error('Błąd parsowania route_points:', e);
@@ -865,7 +873,12 @@ export async function PUT(request) {
       const updateFields = {};
       for (const field of allowedFields) {
         if (data[field] !== undefined) {
-          updateFields[field] = data[field];
+          // route_points musi być stringify jeśli to array
+          if (field === 'route_points' && Array.isArray(data[field])) {
+            updateFields[field] = JSON.stringify(data[field]);
+          } else {
+            updateFields[field] = data[field];
+          }
         }
       }
 
