@@ -360,11 +360,6 @@ function UserSelector({ value, onChange, className = '' }) {
   );
 }
 
-// src/app/moje-wnioski/page.js (część 2/2 - kontynuacja)
-// Ta część wklej BEZPOŚREDNIO PO części 1
-
-// ===== GŁÓWNY KOMPONENT =====
-
 export default function MojeWnioskiPage() {
   const [requests, setRequests] = useState([])
   const [loading, setLoading] = useState(true)
@@ -713,16 +708,6 @@ export default function MojeWnioskiPage() {
             </button>
           </div>
         )}
-
-        {/* FORMULARZ - kontynuacja w kolejnym artefakcie... */}
-      </div>
-    </div>
-  )
-}
-
-// src/app/moje-wnioski/page.js (część 3/3 - FORMULARZ)
-// To wstawić ZAMIAST komentarza "FORMULARZ - kontynuacja w kolejnym artefakcie..." w części 2
-
         {showForm && (
           <div className="bg-white shadow rounded-lg mb-6">
             <div className="px-6 py-4 border-b border-gray-200">
@@ -1137,10 +1122,6 @@ export default function MojeWnioskiPage() {
             </form>
           </div>
         )}
-
-// src/app/moje-wnioski/page.js (część 4/4 - LISTA WNIOSKÓW)
-// To wstawić ZAMIAST komentarza "LISTA WNIOSKÓW - kontynuacja..." w części 3
-
         {/* Lista wniosków */}
         <div className="bg-white shadow rounded-lg">
           <div className="px-6 py-4 border-b border-gray-200">
@@ -1263,7 +1244,6 @@ export default function MojeWnioskiPage() {
                           )}
                         </div>
                       ) : request.transport_type === 'warehouse' ? (
-                        // WYŚWIETLANIE DLA PRZESUNIĘĆ MIĘDZYMAGAZYNOWYCH
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600 bg-green-50 p-4 rounded-md">
                           <div className="flex items-center">
                             <MapPin className="w-4 h-4 mr-2" />
@@ -1297,7 +1277,6 @@ export default function MojeWnioskiPage() {
                           )}
                         </div>
                       ) : (
-                        // WYŚWIETLANIE DLA STANDARDOWYCH TRANSPORTÓW
                         <div className="space-y-2 text-sm text-gray-600">
                           <div className="flex items-center">
                             <MapPin className="w-4 h-4 mr-2" />
@@ -1397,5 +1376,3 @@ export default function MojeWnioskiPage() {
     </div>
   )
 }
-
-// KONIEC PLIKU src/app/moje-wnioski/page.js
