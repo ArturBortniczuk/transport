@@ -860,10 +860,13 @@ export async function PUT(request) {
           if (existingRequest.transport_type === 'delivery_route') {
             // OBJAZDÓWKA
             transportData.destination_city = 'Białystok';
-            transportData.postal_code = '15-399';
-            transportData.street = 'Produkcyjna 1';
+            transportData.postal_code = '15-169';
+            transportData.street = 'Wysockiego 69B';
             transportData.client_name = 'Objazdówka centra elektryczne';
             transportData.source_warehouse = 'bialystok';
+            
+            // WAŻNE: MPK to cały string ze wszystkimi MPK-ami z trasy
+            transportData.mpk = existingRequest.route_mpks || null;
             
             // Dodaj informacje o trasie do notatek
             let routeInfo = '';
@@ -885,7 +888,7 @@ export async function PUT(request) {
               };
               
               const routeText = points.map(p => CENTRA_NAZWY[p] || p).join(' → ');
-              routeInfo = `\n\n🚛 OBJAZDÓWKA:\nTrasa: ${routeText}\nDystans: ${existingRequest.route_distance || 0} km\nMPK: ${existingRequest.route_mpks || 'Brak'}`;
+              routeInfo = `\n\n🚛 OBJAZDÓWKA:\nTrasa: ${routeText}\nDystans: ${existingRequest.route_distance || 0} km\nMPK centrów: ${existingRequest.route_mpks || 'Brak'}`;
               
               if (existingRequest.document_numbers) {
                 routeInfo += `\nDokumenty: ${existingRequest.document_numbers}`;
@@ -906,8 +909,8 @@ export async function PUT(request) {
             
             transportData.source_warehouse = direction.from;
             transportData.destination_city = direction.to === 'bialystok' ? 'Białystok' : 'Zielonka';
-            transportData.postal_code = direction.to === 'bialystok' ? '15-399' : '16-001';
-            transportData.street = direction.to === 'bialystok' ? 'Produkcyjna 1' : 'ul. Magazynowa 1';
+            transportData.postal_code = direction.to === 'bialystok' ? '15-169' : '05-220';
+            transportData.street = direction.to === 'bialystok' ? 'Wysockiego 69B' : 'Krótka 2';
             transportData.client_name = 'Przesunięcie międzymagazynowe';
             
             const warehouseInfo = `\n\n📦 PRZESUNIĘCIE MIĘDZYMAGAZYNOWE:\nKierunek: ${direction.label}\nTowary: ${existingRequest.goods_description}`;
