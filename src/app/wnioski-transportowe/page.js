@@ -406,7 +406,16 @@ export default function WnioskiTransportowePage() {
                         <div className="ml-6 text-gray-900 font-medium">
                           {(() => {
                             try {
-                              const points = JSON.parse(request.route_points || '[]');
+                              // route_points może być stringiem JSON lub array (z Postgres)
+                              let points;
+                              if (typeof request.route_points === 'string') {
+                                points = JSON.parse(request.route_points);
+                              } else if (Array.isArray(request.route_points)) {
+                                points = request.route_points;
+                              } else {
+                                return 'Błąd odczytu trasy';
+                              }
+                              
                               return points.map((point, idx) => (
                                 <span key={idx} className="inline-flex items-center">
                                   {CENTRA_NAZWY[point]}
@@ -416,6 +425,7 @@ export default function WnioskiTransportowePage() {
                                 </span>
                               ));
                             } catch (e) {
+                              console.error('Błąd parsowania trasy:', e);
                               return 'Błąd odczytu trasy';
                             }
                           })()}
@@ -435,10 +445,10 @@ export default function WnioskiTransportowePage() {
 
                         <div>
                           <div className="flex items-center text-gray-600 mb-1">
-                            <FileText className="w-4 h-4 mr-2" />
+                            <MapPin className="w-4 h-4 mr-2" />
                             <strong>Dystans:</strong>
                           </div>
-                          <div className="ml-6 text-gray-900 font-semibold">
+                          <div className="ml-6 text-gray-900">
                             {request.route_distance || 0} km
                           </div>
                         </div>
@@ -448,30 +458,16 @@ export default function WnioskiTransportowePage() {
                             <Building className="w-4 h-4 mr-2" />
                             <strong>MPK centrów:</strong>
                           </div>
-                          <div className="ml-6 text-gray-900">
+                          <div className="ml-6 text-gray-900 break-words">
                             {request.route_mpks || 'Brak'}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div>
-                        <div className="flex items-center text-gray-600 mb-1">
-                          <User className="w-4 h-4 mr-2" />
-                          <strong>Zlecający:</strong>
-                        </div>
-                        <div className="ml-6 text-gray-900">
-                          {request.requester_name}
-                          <div className="text-gray-600 flex items-center">
-                            <Mail className="w-3 h-3 mr-1" />
-                            {request.requester_email}
                           </div>
                         </div>
                       </div>
 
                       {request.document_numbers && (
                         <div>
-                          <div className="flex items-center text-gray-600 mb-1">
-                            <FileText className="w-4 h-4 mr-2" />
+                          <div className="flex items-start text-gray-600 mb-1">
+                            <FileText className="w-4 h-4 mr-2 mt-0.5" />
                             <strong>Numery dokumentów:</strong>
                           </div>
                           <div className="ml-6 text-gray-900">
@@ -775,4 +771,3 @@ export default function WnioskiTransportowePage() {
   )
 }
 
-// KONIEC PLIKU src/app/wnioski-transportowe/page.js
