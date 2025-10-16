@@ -842,6 +842,126 @@ export async function PUT(request) {
         .where('id', requestId)
         .update(updateFields);
 
+      // NOWE: Automatyczne dodawanie do kalendarza po zaakceptowaniu
+      if (action === 'approve') {
+        console.log('✅ Wniosek zaakceptowany - tworzenie transportu w kalendarzu...');
+        
+        try {
+          let transportData = {
+            requester_name: existingRequest.requester_name,
+            requester_email: existingRequest.requester_email,
+            delivery_date: existingRequest.delivery_date,
+            status: 'active',
+            mpk: existingRequest.mpk || null,
+            notes: existingRequest.notes || null
+          };
+
+          // DANE SPECYFICZNE DLA TYPU TRANSPORTU
+          if (existingRequest.transport_type === 'delivery_route') {
+            // OBJAZDÓWKA
+            transportData.destination_city = 'Białystok';
+            transportData.postal_code = '15-399';
+            transportData.street = 'Produkcyjna 1';
+            transportData.client_name = 'Objazdówka centra elektryczne';
+            transportData.source_warehouse = 'bialystok';
+            
+            // Dodaj informacje o trasie do notatek
+            let routeInfo = '';
+            try {
+              let points;
+              if (typeof existingRequest.route_points === 'string') {
+                points = JSON.parse(existingRequest.route_points);
+              } else if (Array.isArray(existingRequest.route_points)) {
+                points = existingRequest.route_points;
+              } else {
+                points = [];
+              }
+              
+              const CENTRA_NAZWY = {
+                lapy: 'Łapy',
+                wysokie: 'Wysokie Mazowieckie',
+                bielsk: 'Bielsk Podlaski',
+                bialystok: 'Białystok (centrum elektryczne)'
+              };
+              
+              const routeText = points.map(p => CENTRA_NAZWY[p] || p).join(' → ');
+              routeInfo = `\n\n🚛 OBJAZDÓWKA:\nTrasa: ${routeText}\nDystans: ${existingRequest.route_distance || 0} km\nMPK: ${existingRequest.route_mpks || 'Brak'}`;
+              
+              if (existingRequest.document_numbers) {
+                routeInfo += `\nDokumenty: ${existingRequest.document_numbers}`;
+              }
+            } catch (e) {
+              console.error('Błąd parsowania trasy:', e);
+              routeInfo = '\n\n🚛 OBJAZDÓWKA (centra elektryczne)';
+            }
+            
+            transportData.notes = (existingRequest.notes || '') + routeInfo;
+            transportData.wz_number = existingRequest.document_numbers || null;
+            
+          } else if (existingRequest.transport_type === 'warehouse') {
+            // PRZESUNIĘCIE MIĘDZYMAGAZYNOWE
+            const direction = existingRequest.transport_direction === 'zielonka_bialystok' 
+              ? { from: 'zielonka', to: 'bialystok', label: 'Zielonka → Białystok' }
+              : { from: 'bialystok', to: 'zielonka', label: 'Białystok → Zielonka' };
+            
+            transportData.source_warehouse = direction.from;
+            transportData.destination_city = direction.to === 'bialystok' ? 'Białystok' : 'Zielonka';
+            transportData.postal_code = direction.to === 'bialystok' ? '15-399' : '16-001';
+            transportData.street = direction.to === 'bialystok' ? 'Produkcyjna 1' : 'ul. Magazynowa 1';
+            transportData.client_name = 'Przesunięcie międzymagazynowe';
+            
+            const warehouseInfo = `\n\n📦 PRZESUNIĘCIE MIĘDZYMAGAZYNOWE:\nKierunek: ${direction.label}\nTowary: ${existingRequest.goods_description}`;
+            transportData.notes = (existingRequest.notes || '') + warehouseInfo;
+            transportData.wz_number = existingRequest.document_numbers || null;
+            transportData.goods_description = existingRequest.goods_description;
+            
+          } else {
+            // TRANSPORT STANDARDOWY
+            transportData.destination_city = existingRequest.destination_city;
+            transportData.postal_code = existingRequest.postal_code || null;
+            transportData.street = existingRequest.street || null;
+            transportData.client_name = existingRequest.construction_name || existingRequest.client_name || null;
+            transportData.real_client_name = existingRequest.real_client_name || null;
+            transportData.wz_number = existingRequest.wz_numbers || null;
+            transportData.market = existingRequest.market_id || null;
+            transportData.source_warehouse = 'bialystok'; // domyślnie
+            
+            if (existingRequest.contact_person || existingRequest.contact_phone) {
+              const contactInfo = `\n\nKontakt: ${existingRequest.contact_person || ''}${existingRequest.contact_phone ? ` (tel: ${existingRequest.contact_phone})` : ''}`;
+              transportData.notes = (existingRequest.notes || '') + contactInfo;
+            }
+          }
+
+          // Dodaj transport do kalendarza
+          const [transportResult] = await db('transports').insert(transportData).returning('id');
+          const transportId = transportResult?.id;
+          
+          console.log(`✅ Transport utworzony w kalendarzu z ID: ${transportId}`);
+
+          // Aktualizuj wniosek z transport_id
+          await db('transport_requests')
+            .where('id', requestId)
+            .update({ transport_id: transportId });
+
+          console.log(`✅ Zaktualizowano wniosek #${requestId} z transport_id: ${transportId}`);
+
+          return NextResponse.json({ 
+            success: true, 
+            message: 'Wniosek zaakceptowany i dodany do kalendarza',
+            transportId: transportId
+          });
+
+        } catch (transportError) {
+          console.error('❌ Błąd tworzenia transportu w kalendarzu:', transportError);
+          // Wniosek jest zaakceptowany, ale transport się nie utworzył
+          return NextResponse.json({ 
+            success: true, 
+            message: 'Wniosek zaakceptowany, ale wystąpił błąd podczas dodawania do kalendarza',
+            error: transportError.message
+          });
+        }
+      }
+
       return NextResponse.json({ 
         success: true, 
         message: action === 'approve' ? 'Wniosek zaakceptowany' : 'Wniosek odrzucony' 
