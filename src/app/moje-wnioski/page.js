@@ -1170,7 +1170,15 @@ export default function MojeWnioskiPage() {
                               <div className="mt-1">
                                 {(() => {
                                   try {
-                                    const points = JSON.parse(request.route_points || '[]');
+                                    // route_points może być stringiem JSON lub array (z Postgres)
+                                    let points;
+                                    if (typeof request.route_points === 'string') {
+                                      points = JSON.parse(request.route_points);
+                                    } else if (Array.isArray(request.route_points)) {
+                                      points = request.route_points;
+                                    } else {
+                                      return 'Błąd odczytu trasy';
+                                    }
                                     return points.map((point, idx) => (
                                       <span key={idx}>
                                         {CENTRA_NAZWY[point]}
