@@ -1,6 +1,6 @@
 'use client'
 import React, { useState, useEffect, Fragment } from 'react'
-import { format } from 'date-fns'
+import { format, startOfWeek, endOfWeek, eachWeekOfInterval, startOfMonth, endOfMonth } from 'date-fns'
 import { pl } from 'date-fns/locale'
 import * as XLSX from 'xlsx'
 import { generateCMR } from '@/lib/utils/generateCMR'
@@ -21,6 +21,8 @@ export default function ArchiwumSpedycjiPage() {
   // Filtry
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [selectedMonth, setSelectedMonth] = useState('all')
+  const [selectedWeek, setSelectedWeek] = useState('all')
+  const [weeksInMonth, setWeeksInMonth] = useState([])
   const [mpkFilter, setMpkFilter] = useState('')
   const [orderNumberFilter, setOrderNumberFilter] = useState('')
   const [mpkOptions, setMpkOptions] = useState([])
@@ -49,6 +51,30 @@ export default function ArchiwumSpedycjiPage() {
     outline: "px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-100 transition-colors flex items-center gap-2",
     success: "px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors flex items-center gap-2"
   }
+
+  // useEffect do obliczania tygodni w wybranym miesiącu
+  useEffect(() => {
+    if (selectedMonth !== 'all') {
+      const monthDate = new Date(selectedYear, selectedMonth);
+      const firstDayOfMonth = startOfMonth(monthDate);
+      const lastDayOfMonth = endOfMonth(monthDate);
+      const weeks = eachWeekOfInterval({
+        start: firstDayOfMonth,
+        end: lastDayOfMonth,
+      }, { weekStartsOn: 1 }).map(weekStart => {
+        const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
+        return {
+          start: weekStart,
+          end: weekEnd,
+          label: `${format(weekStart, 'dd.MM')} - ${format(weekEnd, 'dd.MM')}`
+        };
+      });
+      setWeeksInMonth(weeks);
+    } else {
+      setWeeksInMonth([]);
+    }
+    setSelectedWeek('all');
+  }, [selectedYear, selectedMonth]);
 
   useEffect(() => {
     // Sprawdź czy użytkownik jest administratorem
@@ -87,7 +113,7 @@ export default function ArchiwumSpedycjiPage() {
           const uniqueMpks = [...new Set(data.spedycje.map(item => item.mpk).filter(Boolean))]
           setMpkOptions(uniqueMpks)
           
-          applyFilters(data.spedycje, selectedYear, selectedMonth, '', '')
+          applyFilters(data.spedycje, selectedYear, selectedMonth, selectedWeek, '', '')
         } else {
           throw new Error(data.error || 'Błąd pobierania danych')
         }
@@ -112,7 +138,7 @@ export default function ArchiwumSpedycjiPage() {
           const uniqueMpks = [...new Set(transporty.map(item => item.mpk).filter(Boolean))]
           setMpkOptions(uniqueMpks)
           
-          applyFilters(transporty, selectedYear, selectedMonth, '', '')
+          applyFilters(transporty, selectedYear, selectedMonth, selectedWeek, '', '')
         }
       } catch (localStorageError) {
         console.error('Błąd fallbacku localStorage:', localStorageError)
@@ -247,7 +273,7 @@ export default function ArchiwumSpedycjiPage() {
   }
 
   // Funkcja filtrująca transporty
-  const applyFilters = (transports, year, month, mpkValue, orderNumberValue) => {
+  const applyFilters = (transports, year, month, week, mpkValue, orderNumberValue) => {
     if (!transports || transports.length === 0) {
       setFilteredArchiwum([])
       return
@@ -268,6 +294,16 @@ export default function ArchiwumSpedycjiPage() {
         const transportMonth = date.getMonth()
         if (transportMonth !== parseInt(month)) {
           return false
+        }
+      }
+
+      // Filtrowanie po tygodniu
+      if (month !== 'all' && week !== 'all') {
+        const selectedWeekObj = JSON.parse(week);
+        const startDate = new Date(selectedWeekObj.start);
+        const endDate = new Date(selectedWeekObj.end);
+        if (date < startDate || date > endDate) {
+          return false;
         }
       }
       
@@ -296,8 +332,8 @@ export default function ArchiwumSpedycjiPage() {
 
   // Obsługa zmiany filtrów
   useEffect(() => {
-    applyFilters(archiwum, selectedYear, selectedMonth, mpkFilter, orderNumberFilter)
-  }, [selectedYear, selectedMonth, mpkFilter, orderNumberFilter, archiwum])
+    applyFilters(archiwum, selectedYear, selectedMonth, selectedWeek, mpkFilter, orderNumberFilter)
+  }, [selectedYear, selectedMonth, selectedWeek, mpkFilter, orderNumberFilter, archiwum])
 
   // Funkcja do usuwania transportu
   const handleDeleteTransport = async (id) => {
@@ -319,7 +355,7 @@ export default function ArchiwumSpedycjiPage() {
         // Usuń transport z lokalnego stanu
         const updatedArchiwum = archiwum.filter(transport => transport.id !== id)
         setArchiwum(updatedArchiwum)
-        applyFilters(updatedArchiwum, selectedYear, selectedMonth, mpkFilter, orderNumberFilter)
+        applyFilters(updatedArchiwum, selectedYear, selectedMonth, selectedWeek, mpkFilter, orderNumberFilter)
         
         setDeleteStatus({ type: 'success', message: 'Transport został usunięty' })
         
@@ -721,7 +757,7 @@ export default function ArchiwumSpedycjiPage() {
 
       {/* Filters Section */}
       <div className="mb-8 bg-white rounded-lg shadow p-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
           {/* Rok */}
           <div>
             <label htmlFor="yearSelect" className="block text-sm font-medium text-gray-700 mb-1">
@@ -752,6 +788,27 @@ export default function ArchiwumSpedycjiPage() {
             >
               {months.map(month => (
                 <option key={month.value} value={month.value}>{month.label}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Tydzień */}
+          <div>
+            <label htmlFor="weekSelect" className="block text-sm font-medium text-gray-700 mb-1">
+              Tydzień
+            </label>
+            <select
+              id="weekSelect"
+              value={selectedWeek}
+              onChange={(e) => setSelectedWeek(e.target.value)}
+              className={selectStyles}
+              disabled={selectedMonth === 'all'}
+            >
+              <option value="all">Wszystkie tygodnie</option>
+              {weeksInMonth.map((week, index) => (
+                <option key={index} value={JSON.stringify(week)}>
+                  {week.label}
+                </option>
               ))}
             </select>
           </div>
@@ -1330,5 +1387,3 @@ export default function ArchiwumSpedycjiPage() {
     </div>
   )
 }
-
-
