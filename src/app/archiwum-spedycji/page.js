@@ -25,7 +25,9 @@ export default function ArchiwumSpedycjiPage() {
   const [weeksInMonth, setWeeksInMonth] = useState([])
   const [mpkFilter, setMpkFilter] = useState('')
   const [orderNumberFilter, setOrderNumberFilter] = useState('')
+  const [marketFilter, setMarketFilter] = useState('')
   const [mpkOptions, setMpkOptions] = useState([])
+  const [marketOptions, setMarketOptions] = useState([])
   
   // Lista dostępnych lat i miesięcy
   const currentYear = new Date().getFullYear()
@@ -99,7 +101,6 @@ export default function ArchiwumSpedycjiPage() {
       setLoading(true)
       setError(null)
       
-      // Pobierz dane z API zamiast localStorage
       const response = await fetch('/api/spedycje?status=completed')
       
       if (response.ok) {
@@ -113,7 +114,11 @@ export default function ArchiwumSpedycjiPage() {
           const uniqueMpks = [...new Set(data.spedycje.map(item => item.mpk).filter(Boolean))]
           setMpkOptions(uniqueMpks)
           
-          applyFilters(data.spedycje, selectedYear, selectedMonth, selectedWeek, '', '')
+          // Zbierz unikalne wartości rynków dla filtra
+          const uniqueMarkets = [...new Set(data.spedycje.map(item => item.market).filter(Boolean))]
+          setMarketOptions(uniqueMarkets.sort())
+          
+          applyFilters(data.spedycje, selectedYear, selectedMonth, selectedWeek, '', '', '')
         } else {
           throw new Error(data.error || 'Błąd pobierania danych')
         }
@@ -134,11 +139,13 @@ export default function ArchiwumSpedycjiPage() {
           
           setArchiwum(transporty)
           
-          // Zbierz unikalne wartości MPK dla filtra
           const uniqueMpks = [...new Set(transporty.map(item => item.mpk).filter(Boolean))]
           setMpkOptions(uniqueMpks)
           
-          applyFilters(transporty, selectedYear, selectedMonth, selectedWeek, '', '')
+          const uniqueMarkets = [...new Set(transporty.map(item => item.market).filter(Boolean))]
+          setMarketOptions(uniqueMarkets.sort())
+          
+          applyFilters(transporty, selectedYear, selectedMonth, selectedWeek, '', '', '')
         }
       } catch (localStorageError) {
         console.error('Błąd fallbacku localStorage:', localStorageError)
@@ -148,7 +155,6 @@ export default function ArchiwumSpedycjiPage() {
     }
   }
 
-  // Funkcja pomocnicza do określania nazwy firmy załadunku
   const getLoadingCompanyName = (transport) => {
     if (transport.location === 'Odbiory własne' && transport.sourceClientName) {
       return transport.sourceClientName;
@@ -160,12 +166,10 @@ export default function ArchiwumSpedycjiPage() {
     return transport.location || 'Nie podano';
   }
 
-  // Funkcja pomocnicza do określania nazwy firmy rozładunku
   const getUnloadingCompanyName = (transport) => {
     return transport.clientName || 'Nie podano';
   }
 
-  // Funkcja pomocnicza do określania miasta załadunku
   const getLoadingCity = (transport) => {
     if (transport.location === 'Odbiory własne' && transport.producerAddress) {
       return transport.producerAddress.city || 'Odbiory własne';
@@ -177,18 +181,14 @@ export default function ArchiwumSpedycjiPage() {
     return transport.location || 'Nie podano';
   }
   
-  // Funkcja pomocnicza do określania miasta dostawy
   const getDeliveryCity = (transport) => {
     return transport.delivery?.city || 'Nie podano';
   }
 
-  // NOWA FUNKCJA: Pobieranie danych towaru z zlecenia transportowego
   const getGoodsDataFromTransportOrder = (transport) => {
-    // 1. Priorytet dla nowej kolumny `goods_description`
     if (transport.goodsDescription) {
       const desc = transport.goodsDescription.description || '';
       const weight = transport.goodsDescription.weight || '';
-      // Zwróć dane, jeśli którekolwiek z pól jest wypełnione
       if (desc || weight) {
           return {
               description: desc,
@@ -197,14 +197,12 @@ export default function ArchiwumSpedycjiPage() {
       }
     }
     
-    // 2. Fallback do starszego pola `order_data`
     if (transport.order_data) {
       try {
         const orderData = typeof transport.order_data === 'string' 
           ? JSON.parse(transport.order_data) 
           : transport.order_data;
         
-        // Zwróć dane, jeśli którekolwiek z pól jest wypełnione
         if (orderData.towar || orderData.waga) {
           return {
             description: orderData.towar || '',
@@ -216,12 +214,10 @@ export default function ArchiwumSpedycjiPage() {
       }
     }
     
-    // 3. Jeśli nigdzie nie ma danych, zwróć puste wartości
     return { description: '', weight: '' };
   }
-  // NOWA FUNKCJA: Pobieranie odpowiedzialnego (osoba lub budowa)
+
   const getResponsibleInfo = (transport) => {
-    // Jeśli są odpowiedzialne budowy, zwróć pierwszą budowę
     if (transport.responsibleConstructions && transport.responsibleConstructions.length > 0) {
       const construction = transport.responsibleConstructions[0];
       return {
@@ -231,7 +227,6 @@ export default function ArchiwumSpedycjiPage() {
       };
     }
     
-    // W przeciwnym razie zwróć osobę odpowiedzialną
     return {
       name: transport.responsiblePerson || transport.createdBy || 'Brak',
       type: 'person',
@@ -239,18 +234,14 @@ export default function ArchiwumSpedycjiPage() {
     };
   }
 
-  // NOWA FUNKCJA: Pobieranie aktualnego MPK (z budowy lub transportu)
   const getCurrentMPK = (transport) => {
-    // Jeśli są odpowiedzialne budowy, użyj MPK z pierwszej budowy
     if (transport.responsibleConstructions && transport.responsibleConstructions.length > 0) {
       return transport.responsibleConstructions[0].mpk || transport.mpk || '';
     }
     
-    // W przeciwnym razie użyj MPK z transportu
     return transport.mpk || '';
   }
 
-  // Funkcja pomocnicza do formatowania adresu
   const formatAddress = (address) => {
     if (!address) return 'Brak danych';
     const parts = [];
@@ -260,7 +251,6 @@ export default function ArchiwumSpedycjiPage() {
     return parts.join(', ') || 'Brak danych';
   }
 
-  // Funkcja pomocnicza do pełnego adresu załadunku
   const getFullLoadingAddress = (transport) => {
     if (transport.location === 'Odbiory własne' && transport.producerAddress) {
       return formatAddress(transport.producerAddress);
@@ -272,24 +262,20 @@ export default function ArchiwumSpedycjiPage() {
     return transport.location || 'Nie podano';
   }
 
-  // Funkcja filtrująca transporty
-  const applyFilters = (transports, year, month, week, mpkValue, orderNumberValue) => {
+  const applyFilters = (transports, year, month, week, mpkValue, orderNumberValue, marketValue) => {
     if (!transports || transports.length === 0) {
       setFilteredArchiwum([])
       return
     }
     
     const filtered = transports.filter(transport => {
-      // Pobierz datę z completed_at lub created_at
       const date = new Date(transport.completedAt || transport.createdAt)
       const transportYear = date.getFullYear()
       
-      // Najpierw sprawdź rok
       if (transportYear !== parseInt(year)) {
         return false
       }
       
-      // Jeśli wybrany "wszystkie miesiące", nie filtruj po miesiącu
       if (month !== 'all') {
         const transportMonth = date.getMonth()
         if (transportMonth !== parseInt(month)) {
@@ -297,7 +283,6 @@ export default function ArchiwumSpedycjiPage() {
         }
       }
 
-      // Filtrowanie po tygodniu
       if (month !== 'all' && week !== 'all') {
         const selectedWeekObj = JSON.parse(week);
         const startDate = new Date(selectedWeekObj.start);
@@ -307,7 +292,6 @@ export default function ArchiwumSpedycjiPage() {
         }
       }
       
-      // Filtrowanie po MPK - użyj funkcji getCurrentMPK
       if (mpkValue) {
         const currentMPK = getCurrentMPK(transport);
         if (!currentMPK.toLowerCase().includes(mpkValue.toLowerCase())) {
@@ -315,7 +299,6 @@ export default function ArchiwumSpedycjiPage() {
         }
       }
       
-      // Filtrowanie po numerze zamówienia
       if (orderNumberValue) {
         const orderNumber = transport.orderNumber || transport.order_number || ''
         if (!orderNumber.toLowerCase().includes(orderNumberValue.toLowerCase())) {
@@ -323,19 +306,24 @@ export default function ArchiwumSpedycjiPage() {
         }
       }
       
+      if (marketValue) {
+        const transportMarket = transport.market || '';
+        if (transportMarket !== marketValue) {
+          return false;
+        }
+      }
+      
       return true
     })
     
     setFilteredArchiwum(filtered)
-    setCurrentPage(1) // Reset to first page when filters change
+    setCurrentPage(1)
   }
 
-  // Obsługa zmiany filtrów
   useEffect(() => {
-    applyFilters(archiwum, selectedYear, selectedMonth, selectedWeek, mpkFilter, orderNumberFilter)
-  }, [selectedYear, selectedMonth, selectedWeek, mpkFilter, orderNumberFilter, archiwum])
+    applyFilters(archiwum, selectedYear, selectedMonth, selectedWeek, mpkFilter, orderNumberFilter, marketFilter)
+  }, [selectedYear, selectedMonth, selectedWeek, mpkFilter, orderNumberFilter, marketFilter, archiwum])
 
-  // Funkcja do usuwania transportu
   const handleDeleteTransport = async (id) => {
     if (!confirm('Czy na pewno chcesz usunąć ten transport?')) {
       return
@@ -344,7 +332,6 @@ export default function ArchiwumSpedycjiPage() {
     try {
       setDeleteStatus({ type: 'loading', message: 'Usuwanie transportu...' })
       
-      // Wywołanie API do usunięcia transportu
       const response = await fetch(`/api/spedycje?id=${id}`, {
         method: 'DELETE'
       })
@@ -352,14 +339,12 @@ export default function ArchiwumSpedycjiPage() {
       const data = await response.json()
       
       if (data.success) {
-        // Usuń transport z lokalnego stanu
         const updatedArchiwum = archiwum.filter(transport => transport.id !== id)
         setArchiwum(updatedArchiwum)
-        applyFilters(updatedArchiwum, selectedYear, selectedMonth, selectedWeek, mpkFilter, orderNumberFilter)
+        applyFilters(updatedArchiwum, selectedYear, selectedMonth, selectedWeek, mpkFilter, orderNumberFilter, marketFilter)
         
         setDeleteStatus({ type: 'success', message: 'Transport został usunięty' })
         
-        // Wyczyść status po 3 sekundach
         setTimeout(() => {
           setDeleteStatus(null)
         }, 3000)
@@ -372,35 +357,29 @@ export default function ArchiwumSpedycjiPage() {
     }
   }
 
-  // Obliczanie ceny za kilometr
   const calculatePricePerKm = (price, distance) => {
     if (!price || !distance || distance === 0) return 0;
     return (price / distance).toFixed(2);
   }
   
-// NOWA ZAAWANSOWANA FUNKCJA EKSPORTU - zastąp obecną funkcję exportData
   const exportData = () => {
     if (filteredArchiwum.length === 0) {
       alert('Brak danych do eksportu')
       return
     }
     
-    // Funkcja obliczania kosztu spedycji (można dostosować własne stawki)
     const calculateSpedycjaCost = (price, distance) => {
-      // Jeśli mamy cenę z odpowiedzi przewoźnika, użyj jej
       if (price && price > 0) return price;
       
-      // W przeciwnym razie użyj standardowych stawek (można je dostosować)
       if (distance <= 100) {
-        return distance * 15; // 15 PLN za km do 100km
+        return distance * 15;
       } else if (distance > 100 && distance <= 200) {
-        return distance * 12; // 12 PLN za km od 100-200km
+        return distance * 12;
       } else {
-        return distance * 10; // 10 PLN za km powyżej 200km
+        return distance * 10;
       }
     };
 
-    // Przygotowanie głównych danych do eksportu
     const dataToExport = filteredArchiwum.map(transport => {
       const distanceKm = transport.response?.distanceKm || transport.distanceKm || 0
       const price = transport.response?.deliveryPrice || 0
@@ -414,6 +393,7 @@ export default function ArchiwumSpedycjiPage() {
         'Data realizacji': transport.completedAt ? formatDate(transport.completedAt) : 'Brak',
         'Numer zamówienia': transport.orderNumber || '',
         'Tydzień': `${format(new Date(transport.completedAt || transport.createdAt), 'yyyy')}-T${format(new Date(transport.completedAt || transport.createdAt), 'I', { locale: pl })}`,
+        'Rynek': transport.market || 'Nie określono',
         'Trasa': `${getLoadingCity(transport)} → ${getDeliveryCity(transport)}`,
         'Załadunek - miasto': getLoadingCity(transport),
         'Załadunek - firma': getLoadingCompanyName(transport),
@@ -442,7 +422,6 @@ export default function ArchiwumSpedycjiPage() {
       }
     })
     
-    // Przygotuj nazwę pliku
     const monthLabel = selectedMonth === 'all' ? 
                       'wszystkie_miesiace' : 
                       months.find(m => m.value === selectedMonth)?.label.toLowerCase() || selectedMonth
@@ -452,9 +431,7 @@ export default function ArchiwumSpedycjiPage() {
     if (exportFormat === 'csv') {
       exportToCSV(dataToExport, fileName)
     } else {
-      // ===== TWORZENIE WIELU ARKUSZY =====
-      
-      // 1. PODSUMOWANIE PO MPK
+      // PODSUMOWANIE PO MPK
       const summaryByMpk = filteredArchiwum.reduce((acc, transport) => {
         const mpk = getCurrentMPK(transport) || 'Brak MPK';
         const distance = transport.response?.distanceKm || transport.distanceKm || 0;
@@ -487,7 +464,7 @@ export default function ArchiwumSpedycjiPage() {
         'Średni koszt za transport (PLN)': (summaryByMpk[mpk].totalCost / summaryByMpk[mpk].count).toFixed(2).replace('.', ',')
       }));
 
-      // 2. PODSUMOWANIE PO TYGODNIACH
+      // PODSUMOWANIE PO TYGODNIACH
       const summaryByWeek = filteredArchiwum.reduce((acc, transport) => {
         const weekKey = `${format(new Date(transport.completedAt || transport.createdAt), 'yyyy')}-T${format(new Date(transport.completedAt || transport.createdAt), 'I', { locale: pl })}`;
         const distance = transport.response?.distanceKm || transport.distanceKm || 0;
@@ -524,7 +501,7 @@ export default function ArchiwumSpedycjiPage() {
           'Średni koszt za transport (PLN)': (summaryByWeek[week].totalCost / summaryByWeek[week].count).toFixed(2).replace('.', ',')
         }));
 
-      // 3. PODSUMOWANIE PO PRZEWOŹNIKACH
+      // PODSUMOWANIE PO PRZEWOŹNIKACH
       const summaryByCarrier = filteredArchiwum.reduce((acc, transport) => {
         const carrierName = ((transport.response?.driverName || '') + ' ' + (transport.response?.driverSurname || '')).trim() || 'Nieznany przewoźnik';
         const distance = transport.response?.distanceKm || transport.distanceKm || 0;
@@ -561,41 +538,45 @@ export default function ArchiwumSpedycjiPage() {
         'Średni koszt za transport (PLN)': (summaryByCarrier[carrier].totalCost / summaryByCarrier[carrier].count).toFixed(2).replace('.', ',')
       }));
 
-      // Eksport do Excel z wieloma arkuszami
-      exportToXLSXWithMultipleSheets(dataToExport, summaryDataMpk, summaryDataWeek, summaryDataCarrier, fileName)
+      exportToXLSXWithMultipleSheets(dataToExport, summaryDataMpk, summaryDataWeek, summaryDataCarrier, fileName, filteredArchiwum)
     }
   }
 
-  // NOWA FUNKCJA - Eksport do Excel z wieloma arkuszami
-  const exportToXLSXWithMultipleSheets = (mainData, summaryMpk, summaryWeek, summaryCarrier, fileName) => {
+  const exportToXLSXWithMultipleSheets = (mainData, summaryMpk, summaryWeek, summaryCarrier, fileName, rawData) => {
     const wb = XLSX.utils.book_new();
     
-    // Arkusz 1: Wszystkie transporty
     const ws_main = XLSX.utils.json_to_sheet(mainData);
     XLSX.utils.book_append_sheet(wb, ws_main, "Wszystkie transporty");
     
-    // Arkusz 2: Podsumowanie po MPK
     const ws_mpk = XLSX.utils.json_to_sheet(summaryMpk);
     XLSX.utils.book_append_sheet(wb, ws_mpk, "Podsumowanie po MPK");
     
-    // Arkusz 3: Podsumowanie po tygodniach
     const ws_week = XLSX.utils.json_to_sheet(summaryWeek);
     XLSX.utils.book_append_sheet(wb, ws_week, "Podsumowanie po tygodniach");
     
-    // Arkusz 4: Podsumowanie po przewoźnikach
     const ws_carrier = XLSX.utils.json_to_sheet(summaryCarrier);
     XLSX.utils.book_append_sheet(wb, ws_carrier, "Podsumowanie po przewoźnikach");
+    
+    // Arkusze z podziałem na rynki
+    const markets = [...new Set(rawData.map(t => t.market).filter(Boolean))].sort();
+    
+    markets.forEach(market => {
+      const marketData = mainData.filter(row => row['Rynek'] === market);
+      
+      if (marketData.length > 0) {
+        const ws_market = XLSX.utils.json_to_sheet(marketData);
+        const sheetName = market.length > 28 ? market.substring(0, 28) + '...' : market;
+        XLSX.utils.book_append_sheet(wb, ws_market, sheetName);
+      }
+    });
     
     XLSX.writeFile(wb, `${fileName}.xlsx`);
   }
 
-  // Funkcja do generowania linku do Google Maps
   const generateGoogleMapsLink = (transport) => {
-    // Pobierz dane źródłowe i docelowe
     let origin = '';
     let destination = '';
     
-    // Ustal miejsce załadunku
     if (transport.location === 'Odbiory własne' && transport.producerAddress) {
       const addr = transport.producerAddress;
       origin = `${addr.city},${addr.postalCode},${addr.street || ''}`;
@@ -605,34 +586,26 @@ export default function ArchiwumSpedycjiPage() {
       origin = 'Zielonka';
     }
     
-    // Ustal miejsce dostawy
     if (transport.delivery) {
       const addr = transport.delivery;
       destination = `${addr.city},${addr.postalCode},${addr.street || ''}`;
     }
     
-    // Jeśli brakuje któregoś z punktów, zwróć pusty string
     if (!origin || !destination) return '';
     
-    // Kodowanie URI komponentów
     origin = encodeURIComponent(origin);
     destination = encodeURIComponent(destination);
     
-    // Zwróć link do Google Maps
     return `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=driving`;
   };
 
-  // Eksport do CSV
   const exportToCSV = (data, fileName) => {
-    // Nagłówki
     const headers = Object.keys(data[0])
     
-    // Convert data to CSV string
     let csvContent = headers.join(';') + '\n'
     data.forEach(item => {
       const row = headers.map(header => {
         let cell = item[header] !== undefined && item[header] !== null ? item[header] : ''
-        // Jeśli komórka zawiera przecinek, średnik lub nowy wiersz, umieść ją w cudzysłowach
         if (cell.toString().includes(',') || cell.toString().includes(';') || cell.toString().includes('\n')) {
           cell = `"${cell}"`
         }
@@ -642,8 +615,6 @@ export default function ArchiwumSpedycjiPage() {
     })
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' })
-    
-    // Tworzenie i kliknięcie tymczasowego linku do pobrania
     const link = document.createElement('a')
     link.href = URL.createObjectURL(blob)
     link.download = `${fileName}.csv`
@@ -652,15 +623,6 @@ export default function ArchiwumSpedycjiPage() {
     document.body.removeChild(link)
   }
 
-  // Eksport do XLSX
-  const exportToXLSX = (data, fileName) => {
-    const ws = XLSX.utils.json_to_sheet(data)
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Spedycja')
-    XLSX.writeFile(wb, `${fileName}.xlsx`)
-  }
-
-  // Formatowanie daty
   const formatDate = (dateString) => {
     if (!dateString) return 'Brak daty';
     try {
@@ -671,7 +633,6 @@ export default function ArchiwumSpedycjiPage() {
     }
   }
 
-  // Formatowanie daty i czasu w jednej linii
   const formatDateTime = (dateString) => {
     if (!dateString) return 'Brak daty';
     try {
@@ -682,14 +643,12 @@ export default function ArchiwumSpedycjiPage() {
     }
   }
 
-  // Funkcja sprawdzająca czy data dostawy została zmieniona
   const isDeliveryDateChanged = (transport) => {
     return transport.response && 
            transport.response.dateChanged === true && 
            transport.response.newDeliveryDate;
   }
 
-  // Funkcja pobierająca aktualną datę dostawy (oryginalną lub zmienioną)
   const getActualDeliveryDate = (transport) => {
     if (isDeliveryDateChanged(transport)) {
       return transport.response.newDeliveryDate;
@@ -697,7 +656,6 @@ export default function ArchiwumSpedycjiPage() {
     return transport.deliveryDate;
   }
 
-  // Renderuje info o odpowiedzialnych budowach
   const renderResponsibleConstructions = (transport) => {
     if (!transport.responsibleConstructions || !transport.responsibleConstructions.length) return null;
     
@@ -720,13 +678,11 @@ export default function ArchiwumSpedycjiPage() {
     );
   };
 
-  // Paginacja
   const indexOfLastItem = currentPage * itemsPerPage
   const indexOfFirstItem = indexOfLastItem - itemsPerPage
   const currentItems = filteredArchiwum.slice(indexOfFirstItem, indexOfLastItem)
   const totalPages = Math.ceil(filteredArchiwum.length / itemsPerPage)
 
-  // Zmiana strony
   const paginate = (pageNumber) => setCurrentPage(pageNumber)
   
   const selectStyles = "block w-full py-2 pl-3 pr-10 text-base border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
@@ -755,10 +711,8 @@ export default function ArchiwumSpedycjiPage() {
         </p>
       </div>
 
-      {/* Filters Section */}
       <div className="mb-8 bg-white rounded-lg shadow p-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-          {/* Rok */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-4">
           <div>
             <label htmlFor="yearSelect" className="block text-sm font-medium text-gray-700 mb-1">
               Rok
@@ -775,7 +729,6 @@ export default function ArchiwumSpedycjiPage() {
             </select>
           </div>
           
-          {/* Miesiąc */}
           <div>
             <label htmlFor="monthSelect" className="block text-sm font-medium text-gray-700 mb-1">
               Miesiąc
@@ -792,7 +745,6 @@ export default function ArchiwumSpedycjiPage() {
             </select>
           </div>
 
-          {/* Tydzień */}
           <div>
             <label htmlFor="weekSelect" className="block text-sm font-medium text-gray-700 mb-1">
               Tydzień
@@ -813,7 +765,23 @@ export default function ArchiwumSpedycjiPage() {
             </select>
           </div>
           
-          {/* MPK Filter */}
+          <div>
+            <label htmlFor="marketFilter" className="block text-sm font-medium text-gray-700 mb-1">
+              Rynek
+            </label>
+            <select
+              id="marketFilter"
+              value={marketFilter}
+              onChange={(e) => setMarketFilter(e.target.value)}
+              className={selectStyles}
+            >
+              <option value="">Wszystkie rynki</option>
+              {marketOptions.map((market, index) => (
+                <option key={index} value={market}>{market}</option>
+              ))}
+            </select>
+          </div>
+          
           <div>
             <label htmlFor="mpkFilter" className="block text-sm font-medium text-gray-700 mb-1">
               MPK
@@ -839,10 +807,9 @@ export default function ArchiwumSpedycjiPage() {
             </div>
           </div>
           
-          {/* Numer zamówienia */}
           <div>
             <label htmlFor="orderNumberFilter" className="block text-sm font-medium text-gray-700 mb-1">
-              Numer zamówienia
+              Nr zamówienia
             </label>
             <div className="relative">
               <input
@@ -859,7 +826,6 @@ export default function ArchiwumSpedycjiPage() {
             </div>
           </div>
           
-          {/* Format eksportu */}
           <div className="flex flex-col justify-end">
             <label htmlFor="exportFormat" className="block text-sm font-medium text-gray-700 mb-1">
               Format
@@ -898,7 +864,6 @@ export default function ArchiwumSpedycjiPage() {
         </div>
       )}
 
-      {/* Lista archiwalnych spedycji */}
       <div className="bg-white rounded-lg shadow">
         {currentItems.length > 0 ? (
           <div className="divide-y divide-gray-200">
@@ -915,7 +880,6 @@ export default function ArchiwumSpedycjiPage() {
                     className="flex justify-between items-start cursor-pointer"
                   >
                     <div className="flex-1">
-                      {/* Główny nagłówek z miejscami załadunku i rozładunku */}
                       <div className="mb-3">
                         <h3 className="text-xl font-bold text-gray-900 flex items-center mb-2">
                           <span className="flex items-center">
@@ -934,7 +898,6 @@ export default function ArchiwumSpedycjiPage() {
                         </h3>
                       </div>
 
-                      {/* Informacje w trzech ramkach */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-center">
                           <Hash size={16} className="mr-2 text-blue-600" />
@@ -967,7 +930,6 @@ export default function ArchiwumSpedycjiPage() {
                         </div>
                       </div>
                       
-                      {/* Wyświetl informacje o budowach jeśli istnieją */}
                       {transport.responsibleConstructions && transport.responsibleConstructions.length > 1 && (
                         <div className="mt-3">
                           {renderResponsibleConstructions(transport)}
@@ -976,7 +938,6 @@ export default function ArchiwumSpedycjiPage() {
                     </div>
                     
                     <div className="flex items-center space-x-3 ml-6">
-                      {/* Przycisk rozwinięcia */}
                       <button 
                         className="p-2 rounded-full hover:bg-gray-200 transition-colors"
                         onClick={(e) => e.stopPropagation()}
@@ -988,7 +949,6 @@ export default function ArchiwumSpedycjiPage() {
                         )}
                       </button>
                       
-                      {/* Przycisk usuwania dla admina */}
                       {isAdmin && (
                         <button 
                           type="button"
@@ -1004,14 +964,9 @@ export default function ArchiwumSpedycjiPage() {
                     </div>
                   </div>
 
-                  {/* Rozwinięty widok szczegółów */}
                   {expandedRowId === transport.id && (
                     <div className="mt-8 border-t border-gray-200 pt-6">
-                      {/* NOWY LAYOUT: Dwa rzędy po trzy panele */}
-                      
-                      {/* PIERWSZY RZĄD: Dane zamówienia, Dane przewoźnika, Dane o towarze */}
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-                        {/* Panel 1: Dane zamówienia */}
                         <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-5 rounded-xl shadow-sm border border-blue-200">
                           <h4 className="font-bold text-blue-700 mb-4 pb-2 border-b border-blue-300 flex items-center text-lg">
                             <FileText size={20} className="mr-2" />
@@ -1039,7 +994,6 @@ export default function ArchiwumSpedycjiPage() {
                           </div>
                         </div>
 
-                        {/* Panel 2: Dane przewoźnika */}
                         <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-5 rounded-xl shadow-sm border border-purple-200">
                           <h4 className="font-bold text-purple-700 mb-4 pb-2 border-b border-purple-300 flex items-center text-lg">
                             <Truck size={20} className="mr-2" />
@@ -1073,7 +1027,6 @@ export default function ArchiwumSpedycjiPage() {
                           )}
                         </div>
 
-                        {/* Panel 3: Dane o towarze */}
                         <div className="bg-gradient-to-br from-amber-50 to-amber-100 p-5 rounded-xl shadow-sm border border-amber-200">
                           <h4 className="font-bold text-amber-700 mb-4 pb-2 border-b border-amber-300 flex items-center text-lg">
                             <ShoppingBag size={20} className="mr-2" />
@@ -1113,9 +1066,7 @@ export default function ArchiwumSpedycjiPage() {
                         </div>
                       </div>
 
-                      {/* DRUGI RZĄD: Osoby odpowiedzialne, Daty i terminy, Informacje finansowe */}
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                        {/* Panel 4: Osoby odpowiedzialne */}
                         <div className="bg-gradient-to-br from-green-50 to-green-100 p-5 rounded-xl shadow-sm border border-green-200">
                           <h4 className="font-bold text-green-700 mb-4 pb-2 border-b border-green-300 flex items-center text-lg">
                             <User size={20} className="mr-2" />
@@ -1155,7 +1106,6 @@ export default function ArchiwumSpedycjiPage() {
                           </div>
                         </div>
 
-                        {/* Panel 5: Daty i terminy */}
                         <div className="bg-gradient-to-br from-orange-50 to-orange-100 p-5 rounded-xl shadow-sm border border-orange-200">
                           <h4 className="font-bold text-orange-700 mb-4 pb-2 border-b border-orange-300 flex items-center text-lg">
                             <Calendar size={20} className="mr-2" />
@@ -1191,7 +1141,6 @@ export default function ArchiwumSpedycjiPage() {
                           </div>
                         </div>
 
-                        {/* Panel 6: Informacje finansowe */}
                         <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 p-5 rounded-xl shadow-sm border border-emerald-200">
                           <h4 className="font-bold text-emerald-700 mb-4 pb-2 border-b border-emerald-300 flex items-center text-lg">
                             <DollarSign size={20} className="mr-2" />
@@ -1223,9 +1172,7 @@ export default function ArchiwumSpedycjiPage() {
                         </div>
                       </div>
 
-                      {/* Panel z miejscami załadunku i rozładunku */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                        {/* Miejsce załadunku */}
                         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
                           <h4 className="font-bold text-blue-700 mb-4 pb-3 border-b border-gray-200 flex items-center text-lg">
                             <MapPin size={20} className="mr-2" />
@@ -1252,7 +1199,6 @@ export default function ArchiwumSpedycjiPage() {
                           </div>
                         </div>
 
-                        {/* Miejsce rozładunku */}
                         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
                           <h4 className="font-bold text-green-700 mb-4 pb-3 border-b border-gray-200 flex items-center text-lg">
                             <MapPin size={20} className="mr-2" />
@@ -1280,7 +1226,6 @@ export default function ArchiwumSpedycjiPage() {
                         </div>
                       </div>
 
-                      {/* Uwagi */}
                       {(transport.notes || transport.response?.adminNotes) && (
                         <div className="mb-6 bg-gray-50 p-4 rounded-lg border border-gray-200">
                           <h4 className="font-bold text-gray-700 mb-3 flex items-center">
@@ -1302,9 +1247,7 @@ export default function ArchiwumSpedycjiPage() {
                         </div>
                       )}
 
-                      {/* Przyciski akcji */}
                       <div className="flex justify-center space-x-4">
-                        {/* Link do Google Maps */}
                         {generateGoogleMapsLink(transport) && (
                           <a 
                             href={generateGoogleMapsLink(transport)} 
@@ -1318,7 +1261,6 @@ export default function ArchiwumSpedycjiPage() {
                           </a>
                         )}
                         
-                        {/* Przycisk CMR */}
                         <button 
                           type="button"
                           className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg flex items-center transition-colors font-medium text-base"
@@ -1343,7 +1285,6 @@ export default function ArchiwumSpedycjiPage() {
           </div>
         )}
 
-        {/* Pagination & Summary */}
         <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex flex-col sm:flex-row justify-between items-center">
           <div className="text-sm text-gray-700 mb-4 sm:mb-0">
             <span className="font-medium">Łącznie:</span> {filteredArchiwum.length} transportów
