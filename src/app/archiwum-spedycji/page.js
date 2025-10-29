@@ -78,6 +78,34 @@ export default function ArchiwumSpedycjiPage() {
     setSelectedWeek('all');
   }, [selectedYear, selectedMonth]);
 
+  // FUNKCJA: Automatyczne określanie rynku na podstawie MPK
+  const getMarketFromMPK = (mpk) => {
+    if (!mpk) return 'Nie określono';
+    
+    // Budowy (format: 501-XX-XX/XXXX)
+    if (mpk.match(/^501-/)) {
+      return 'Budowy';
+    }
+    
+    // Centra elektryczne (522-03-XXX)
+    if (mpk.match(/^522-03-/)) {
+      return 'Centra elektryczne';
+    }
+    
+    // Rynki (format: 522-XX-XXX)
+    if (mpk.match(/^522-02-/)) return 'Rynek Podlaski';
+    if (mpk.match(/^522-04-/)) return 'Rynek Lubelski';
+    if (mpk.match(/^522-05-/)) return 'Rynek Mazowiecki';
+    if (mpk.match(/^522-06-/)) return 'Rynek Pomorski';
+    if (mpk.match(/^522-07-/)) return 'Rynek Małopolski';
+    if (mpk.match(/^522-08-/)) return 'Rynek Dolnośląski';
+    if (mpk.match(/^522-09-/)) return 'Rynek Wielkopolski';
+    if (mpk.match(/^522-11-/)) return 'Rynek Śląski';
+    
+    // Jeśli nie pasuje do żadnego wzorca
+    return 'Inne';
+  }
+
   useEffect(() => {
     // Sprawdź czy użytkownik jest administratorem
     const checkAdmin = async () => {
@@ -114,9 +142,12 @@ export default function ArchiwumSpedycjiPage() {
           const uniqueMpks = [...new Set(data.spedycje.map(item => item.mpk).filter(Boolean))]
           setMpkOptions(uniqueMpks)
           
-          // Zbierz unikalne wartości rynków dla filtra
-          const uniqueMarkets = [...new Set(data.spedycje.map(item => item.market).filter(Boolean))]
-          setMarketOptions(uniqueMarkets.sort())
+          // Zbierz unikalne wartości rynków (na podstawie MPK)
+          const uniqueMarkets = [...new Set(data.spedycje
+            .map(item => getMarketFromMPK(getCurrentMPK(item)))
+            .filter(market => market !== 'Nie określono')
+          )].sort()
+          setMarketOptions(uniqueMarkets)
           
           applyFilters(data.spedycje, selectedYear, selectedMonth, selectedWeek, '', '', '')
         } else {
@@ -142,8 +173,12 @@ export default function ArchiwumSpedycjiPage() {
           const uniqueMpks = [...new Set(transporty.map(item => item.mpk).filter(Boolean))]
           setMpkOptions(uniqueMpks)
           
-          const uniqueMarkets = [...new Set(transporty.map(item => item.market).filter(Boolean))]
-          setMarketOptions(uniqueMarkets.sort())
+          // Zbierz unikalne wartości rynków (na podstawie MPK)
+          const uniqueMarkets = [...new Set(transporty
+            .map(item => getMarketFromMPK(getCurrentMPK(item)))
+            .filter(market => market !== 'Nie określono')
+          )].sort()
+          setMarketOptions(uniqueMarkets)
           
           applyFilters(transporty, selectedYear, selectedMonth, selectedWeek, '', '', '')
         }
@@ -393,7 +428,7 @@ export default function ArchiwumSpedycjiPage() {
         'Data realizacji': transport.completedAt ? formatDate(transport.completedAt) : 'Brak',
         'Numer zamówienia': transport.orderNumber || '',
         'Tydzień': `${format(new Date(transport.completedAt || transport.createdAt), 'yyyy')}-T${format(new Date(transport.completedAt || transport.createdAt), 'I', { locale: pl })}`,
-        'Rynek': transport.market || 'Nie określono',
+        'Rynek': getMarketFromMPK(getCurrentMPK(transport)),
         'Trasa': `${getLoadingCity(transport)} → ${getDeliveryCity(transport)}`,
         'Załadunek - miasto': getLoadingCity(transport),
         'Załadunek - firma': getLoadingCompanyName(transport),
@@ -557,8 +592,8 @@ export default function ArchiwumSpedycjiPage() {
     const ws_carrier = XLSX.utils.json_to_sheet(summaryCarrier);
     XLSX.utils.book_append_sheet(wb, ws_carrier, "Podsumowanie po przewoźnikach");
     
-    // Arkusze z podziałem na rynki
-    const markets = [...new Set(rawData.map(t => t.market).filter(Boolean))].sort();
+    // Arkusze z podziałem na rynki (teraz na podstawie MPK)
+    const markets = [...new Set(rawData.map(t => getMarketFromMPK(getCurrentMPK(t))).filter(m => m !== 'Nie określono'))].sort();
     
     markets.forEach(market => {
       const marketData = mainData.filter(row => row['Rynek'] === market);
