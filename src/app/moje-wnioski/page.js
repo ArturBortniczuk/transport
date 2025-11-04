@@ -293,8 +293,9 @@ function UserSelector({ value, onChange, className = '' }) {
   const [users, setUsers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [search, setSearch] = useState('');
-  const [showDropdown, setShowDropdown] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -309,9 +310,16 @@ function UserSelector({ value, onChange, className = '' }) {
         const data = await response.json();
         // Sprawdź czy data jest tablicą czy obiektem
         const usersArray = Array.isArray(data) ? data : (data.users || []);
-        const handlowcy = usersArray.filter(u => u.role === 'handlowiec');
         
-        setUsers(handlowcy);
+        // Formatuj użytkowników z typem 'user'
+        const formattedUsers = usersArray
+          .filter(u => u.role === 'handlowiec')
+          .map(user => ({
+            ...user,
+            type: 'user'
+          }));
+        
+        setUsers(formattedUsers);
       } catch (err) {
         setError('Nie udało się pobrać listy handlowców');
         console.error('Error fetching users:', err);
@@ -323,85 +331,113 @@ function UserSelector({ value, onChange, className = '' }) {
     fetchUsers();
   }, []);
 
+  // Click outside to close dropdown
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
   // Filtrowanie użytkowników
-  const filteredUsers = search.trim() === ''
-    ? users
-    : users.filter(u =>
-        u.name.toLowerCase().includes(search.toLowerCase()) ||
-        (u.mpk && u.mpk.toLowerCase().includes(search.toLowerCase()))
-      );
+  const filteredUsers = users.filter(user => 
+    user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (user.email && user.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (user.mpk && user.mpk.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
+
+  // Obsługa zmiany w polu wyszukiwania
+  const handleSearchChange = (e) => {
+    setSearchTerm(e.target.value);
+  };
 
   // Obsługa wyboru handlowca
-  const handleSelect = (user) => {
-    onChange(user);  // To przekazuje CAŁY obiekt użytkownika (z name i mpk)
-    setShowDropdown(false);
-    setSearch('');  // Czyścimy pole wyszukiwania
-  };
-
-  // Obsługa zmiany w polu input
-  const handleInputChange = (e) => {
-    const newValue = e.target.value;
-    setSearch(newValue);
-    
-    // Jeśli użytkownik coś wpisuje, otwórz dropdown
-    if (newValue.trim() !== '') {
-      setShowDropdown(true);
-    }
-    
-    // Jeśli użytkownik wyczyści pole, resetuj wybór
-    if (newValue === '' && value) {
-      onChange(null);
-    }
-  };
-
-  // Obsługa czyszczenia pola
-  const handleClear = () => {
-    setSearch('');
-    onChange(null);
-    setShowDropdown(false);
+  const handleSelectUser = (user) => {
+    onChange(user);
+    setSearchTerm(user.name);
+    setIsDropdownOpen(false);
   };
 
   return (
-    <div className={`relative ${className}`}>
-      <div className="relative">
-        <input
-          type="text"
-          value={value ? `${value.name}${value.mpk ? ` (MPK: ${value.mpk})` : ''}` : search}
-          onChange={handleInputChange}
-          onFocus={() => setShowDropdown(true)}
-          onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
-          placeholder="Wyszukaj handlowca..."
-          className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 pr-8"
-        />
-        {/* Przycisk do czyszczenia */}
-        {(value || search) && (
-          <button
-            type="button"
-            onClick={handleClear}
-            className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-          >
-            ✕
-          </button>
+    <div className={className}>
+      <div className="relative" ref={dropdownRef}>
+        <div className="flex items-center relative">
+          <div className="relative flex-grow">
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={handleSearchChange}
+              onClick={() => setIsDropdownOpen(true)}
+              placeholder="Wyszukaj handlowca..."
+              className="w-full p-2 border rounded-md"
+              required
+            />
+          </div>
+          {searchTerm && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearchTerm('');
+                onChange(null);
+              }}
+              className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+        
+        {isDropdownOpen && (
+          <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
+            {isLoading ? (
+              <div className="p-2 text-center text-gray-500">Ładowanie...</div>
+            ) : error ? (
+              <div className="p-2 text-red-500">{error}</div>
+            ) : filteredUsers.length > 0 ? (
+              <>
+                <div className="px-3 py-1 bg-gray-100 text-gray-700 text-xs font-semibold">
+                  Handlowcy
+                </div>
+                {filteredUsers.map((user) => (
+                  <div
+                    key={user.email}
+                    onClick={() => handleSelectUser(user)}
+                    className="p-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100"
+                  >
+                    <div className="font-medium">{user.name}</div>
+                    <div className="text-sm text-gray-600 flex justify-between">
+                      <span>{user.email}</span>
+                      {user.mpk && <span className="text-blue-600">MPK: {user.mpk}</span>}
+                    </div>
+                  </div>
+                ))}
+              </>
+            ) : (
+              <div className="p-2 text-gray-500">Brak wyników</div>
+            )}
+          </div>
         )}
       </div>
       
-      {showDropdown && (
-        <div className="absolute z-10 mt-1 w-full bg-white border rounded-md shadow-lg max-h-60 overflow-auto">
-          {isLoading && <div className="p-2">Ładowanie...</div>}
-          {error && <div className="p-2 text-red-500">{error}</div>}
-          {!isLoading && !error && filteredUsers.length === 0 && (
-            <div className="p-2 text-gray-500">Nie znaleziono handlowców</div>
-          )}
-          {filteredUsers.map(user => (
-            <div 
-              key={user.email} 
-              onClick={() => handleSelect(user)} 
-              className="p-2 hover:bg-gray-100 cursor-pointer"
-            >
-              <div className="font-medium">{user.name}</div>
-              {user.mpk && <div className="text-sm text-gray-500">MPK: {user.mpk}</div>}
+      {/* Wyświetlanie wybranego handlowca */}
+      {value && (
+        <div className="mt-2 p-2 bg-blue-50 rounded-md border border-blue-100">
+          <div className="flex justify-between">
+            <div>
+              <span className="font-medium">Wybrany handlowiec:</span> {value.name}
             </div>
-          ))}
+            {value.mpk && (
+              <div>
+                <span className="font-medium">MPK:</span> {value.mpk}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
