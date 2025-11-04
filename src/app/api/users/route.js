@@ -15,7 +15,7 @@ export async function GET() {
     
     // Pobieranie listy użytkowników - zaktualizowane do Knex
     const users = await db('users')
-      .select('name', 'position', 'email', 'permissions', 'role');
+      .select('name', 'position', 'email', 'permissions', 'role', 'mpk');
 
     if (!users || users.length === 0) {
       throw new Error('Nie znaleziono użytkowników');
