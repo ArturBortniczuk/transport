@@ -307,7 +307,12 @@ function UserSelector({ value, onChange, className = '' }) {
         }
 
         const data = await response.json();
-        const handlowcy = data.users.filter(u => u.role === 'handlowiec');
+        
+        // ⬇️ TUTAJ ZMIANA! API zwraca tablicę, nie obiekt
+        // Sprawdź czy data jest tablicą
+        const usersArray = Array.isArray(data) ? data : (data.users || []);
+        const handlowcy = usersArray.filter(u => u.role === 'handlowiec');
+        
         setUsers(handlowcy);
       } catch (err) {
         setError('Nie udało się pobrać listy handlowców');
@@ -337,7 +342,7 @@ function UserSelector({ value, onChange, className = '' }) {
     <div className={`relative ${className}`}>
       <input
         type="text"
-        value={value ? `${value.name} (MPK: ${value.mpk})` : search}
+        value={value ? `${value.name}${value.mpk ? ` (MPK: ${value.mpk})` : ''}` : search}
         onChange={(e) => setSearch(e.target.value)}
         onFocus={() => setShowDropdown(true)}
         onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
