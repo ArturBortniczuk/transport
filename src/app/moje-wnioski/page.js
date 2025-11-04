@@ -359,6 +359,8 @@ function UserSelector({ value, onChange, className = '' }) {
 
   // Obsługa wyboru handlowca
   const handleSelectUser = (user) => {
+    console.log('🔍 Wybrany handlowiec:', user); // ⬅️ DODAJ TO
+    console.log('🔍 MPK handlowca:', user.mpk); // ⬅️ DODAJ TO
     onChange(user);
     setSearchTerm(user.name);
     setIsDropdownOpen(false);
@@ -1084,8 +1086,18 @@ export default function MojeWnioskiPage() {
                       <UserSelector
                         value={selectedEntity}
                         onChange={(user) => {
+                          console.log('📝 UserSelector onChange - otrzymany user:', user); // ⬅️ DODAJ TO
+                          console.log('📝 MPK z user:', user?.mpk); // ⬅️ DODAJ TO
                           setSelectedEntity(user);
-                          if (user) setFormData(prev => ({ ...prev, client_name: user.name, mpk: user.mpk || '' }));
+                          if (user) {
+                            const mpkValue = user.mpk || '';
+                            console.log('📝 Ustawiam MPK na:', mpkValue); // ⬅️ DODAJ TO
+                            setFormData(prev => ({ 
+                              ...prev, 
+                              client_name: user.name, 
+                              mpk: mpkValue
+                            }));
+                          }
                         }}
                         className={formErrors.entity ? 'border-red-300' : ''}
                       />
