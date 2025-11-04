@@ -337,7 +337,7 @@ function UserSelector({ value, onChange, className = '' }) {
     <div className={`relative ${className}`}>
       <input
         type="text"
-        value={value ? value.name : search}
+        value={value ? `${value.name} (MPK: ${value.mpk})` : search}
         onChange={(e) => setSearch(e.target.value)}
         onFocus={() => setShowDropdown(true)}
         onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
