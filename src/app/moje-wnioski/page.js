@@ -307,9 +307,7 @@ function UserSelector({ value, onChange, className = '' }) {
         }
 
         const data = await response.json();
-        
-        // ⬇️ TUTAJ ZMIANA! API zwraca tablicę, nie obiekt
-        // Sprawdź czy data jest tablicą
+        // Sprawdź czy data jest tablicą czy obiektem
         const usersArray = Array.isArray(data) ? data : (data.users || []);
         const handlowcy = usersArray.filter(u => u.role === 'handlowiec');
         
@@ -325,6 +323,7 @@ function UserSelector({ value, onChange, className = '' }) {
     fetchUsers();
   }, []);
 
+  // Filtrowanie użytkowników
   const filteredUsers = search.trim() === ''
     ? users
     : users.filter(u =>
@@ -332,29 +331,73 @@ function UserSelector({ value, onChange, className = '' }) {
         (u.mpk && u.mpk.toLowerCase().includes(search.toLowerCase()))
       );
 
+  // Obsługa wyboru handlowca
   const handleSelect = (user) => {
-    onChange(user);
+    onChange(user);  // To przekazuje CAŁY obiekt użytkownika (z name i mpk)
     setShowDropdown(false);
+    setSearch('');  // Czyścimy pole wyszukiwania
+  };
+
+  // Obsługa zmiany w polu input
+  const handleInputChange = (e) => {
+    const newValue = e.target.value;
+    setSearch(newValue);
+    
+    // Jeśli użytkownik coś wpisuje, otwórz dropdown
+    if (newValue.trim() !== '') {
+      setShowDropdown(true);
+    }
+    
+    // Jeśli użytkownik wyczyści pole, resetuj wybór
+    if (newValue === '' && value) {
+      onChange(null);
+    }
+  };
+
+  // Obsługa czyszczenia pola
+  const handleClear = () => {
     setSearch('');
+    onChange(null);
+    setShowDropdown(false);
   };
 
   return (
     <div className={`relative ${className}`}>
-      <input
-        type="text"
-        value={value ? `${value.name}${value.mpk ? ` (MPK: ${value.mpk})` : ''}` : search}
-        onChange={(e) => setSearch(e.target.value)}
-        onFocus={() => setShowDropdown(true)}
-        onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
-        placeholder="Wyszukaj handlowca..."
-        className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-      />
+      <div className="relative">
+        <input
+          type="text"
+          value={value ? `${value.name}${value.mpk ? ` (MPK: ${value.mpk})` : ''}` : search}
+          onChange={handleInputChange}
+          onFocus={() => setShowDropdown(true)}
+          onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
+          placeholder="Wyszukaj handlowca..."
+          className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 pr-8"
+        />
+        {/* Przycisk do czyszczenia */}
+        {(value || search) && (
+          <button
+            type="button"
+            onClick={handleClear}
+            className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+          >
+            ✕
+          </button>
+        )}
+      </div>
+      
       {showDropdown && (
         <div className="absolute z-10 mt-1 w-full bg-white border rounded-md shadow-lg max-h-60 overflow-auto">
           {isLoading && <div className="p-2">Ładowanie...</div>}
           {error && <div className="p-2 text-red-500">{error}</div>}
+          {!isLoading && !error && filteredUsers.length === 0 && (
+            <div className="p-2 text-gray-500">Nie znaleziono handlowców</div>
+          )}
           {filteredUsers.map(user => (
-            <div key={user.id} onClick={() => handleSelect(user)} className="p-2 hover:bg-gray-100 cursor-pointer">
+            <div 
+              key={user.email} 
+              onClick={() => handleSelect(user)} 
+              className="p-2 hover:bg-gray-100 cursor-pointer"
+            >
               <div className="font-medium">{user.name}</div>
               {user.mpk && <div className="text-sm text-gray-500">MPK: {user.mpk}</div>}
             </div>
