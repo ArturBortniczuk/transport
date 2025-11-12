@@ -696,12 +696,28 @@ export async function POST(request) {
       newRequest.justification = requestData.justification;
       newRequest.mpk = requestData.mpk || null;
       newRequest.notes = requestData.notes || null;
-      newRequest.construction_id = requestData.construction_id ? parseInt(requestData.construction_id) : null;
+      
+      // ✅ Bezpieczne parsowanie construction_id
+      if (requestData.construction_id) {
+        const constructionId = parseInt(requestData.construction_id);
+        newRequest.construction_id = !isNaN(constructionId) ? constructionId : null;
+      } else {
+        newRequest.construction_id = null;
+      }
+      
       newRequest.construction_name = requestData.construction_name || null;
       newRequest.client_name = requestData.client_name || null;
       newRequest.real_client_name = requestData.real_client_name || null;
       newRequest.wz_numbers = requestData.wz_numbers || null;
-      newRequest.market_id = requestData.market_id ? parseInt(requestData.market_id) : null;
+      
+      // ✅ Bezpieczne parsowanie market_id
+      if (requestData.market_id) {
+        const marketId = parseInt(requestData.market_id);
+        newRequest.market_id = !isNaN(marketId) ? marketId : null;
+      } else {
+        newRequest.market_id = null;
+      }
+      
       newRequest.contact_person = requestData.contact_person || null;
       newRequest.contact_phone = requestData.contact_phone || null;
       newRequest.transport_direction = null;
