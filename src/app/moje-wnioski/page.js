@@ -596,12 +596,12 @@ export default function MojeWnioskiPage() {
         dataToSend.mpk = formData.mpk || '';
         dataToSend.real_client_name = formData.real_client_name || '';
         dataToSend.wz_numbers = formData.wz_numbers || '';
-        dataToSend.market_id = formData.market_id || '';
+        dataToSend.market_id = formData.market_id || null;  // ✅ Zmienione z '' na null
         dataToSend.contact_person = formData.contact_person || '';
         dataToSend.contact_phone = formData.contact_phone || '';
         dataToSend.construction_id = recipientType === 'construction' ? (selectedEntity?.id || null) : null;
         dataToSend.construction_name = recipientType === 'construction' ? (selectedEntity?.name || null) : null;
-        dataToSend.user_id = recipientType === 'sales' ? (selectedEntity?.id || null) : null;
+        // ✅ Usunięto linię z user_id
         dataToSend.justification = formData.justification || '';
       }
 
