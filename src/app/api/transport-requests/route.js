@@ -696,7 +696,6 @@ export async function POST(request) {
       newRequest.justification = requestData.justification;
       newRequest.mpk = requestData.mpk || null;
       newRequest.notes = requestData.notes || null;
-      newRequest.user_id = requestData.user_id || null;
       newRequest.construction_id = requestData.construction_id ? parseInt(requestData.construction_id) : null;
       newRequest.construction_name = requestData.construction_name || null;
       newRequest.client_name = requestData.client_name || null;
