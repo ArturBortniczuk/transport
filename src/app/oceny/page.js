@@ -88,12 +88,14 @@ export default function OcenyPage() {
     try {
       const response = await fetch('/api/users')
       const data = await response.json()
+      console.log('📥 Pobrani użytkownicy:', data)
       if (data.success) {
         // Dodaj rynek do każdego użytkownika na podstawie MPK
         const usersWithMarkets = data.users.map(user => ({
           ...user,
           market: getMarketFromMPK(user.mpk)
         }))
+        console.log('👥 Użytkownicy z rynkami:', usersWithMarkets)
         setUsers(usersWithMarkets)
       }
     } catch (error) {
@@ -112,16 +114,22 @@ export default function OcenyPage() {
         endDate
       })
       
+      console.log('🚚 Pobieranie transportów:', { activeTab, startDate, endDate })
+      
       const response = await fetch(`/api/oceny-transportow?${params}`)
       const data = await response.json()
       
+      console.log('📦 Odpowiedź API:', data)
+      
       if (data.success) {
+        console.log('✅ Transporty:', data.transports)
         setTransports(data.transports)
       } else {
+        console.error('❌ Błąd API:', data.error)
         setError(data.error)
       }
     } catch (error) {
-      console.error('Błąd pobierania transportów:', error)
+      console.error('❌ Błąd pobierania transportów:', error)
       setError('Wystąpił błąd podczas pobierania danych')
     } finally {
       setLoading(false)
@@ -130,6 +138,9 @@ export default function OcenyPage() {
 
   // Pobierz unikalne rynki z użytkowników
   const uniqueMarkets = [...new Set(users.map(u => u.market).filter(Boolean))].sort()
+  
+  console.log('🏢 Unikalne rynki:', uniqueMarkets)
+  console.log('👥 Liczba użytkowników:', users.length)
 
   // Filtrowanie transportów
   const filteredTransports = transports.filter(transport => {
@@ -138,6 +149,7 @@ export default function OcenyPage() {
       const email = activeTab === 'wlasny' 
         ? transport.requester_email 
         : transport.responsible_email
+      console.log('🔍 Filtr osoby - transport:', transport.id, 'email:', email, 'wybrany:', selectedRequester)
       if (email !== selectedRequester) {
         return false
       }
@@ -149,6 +161,7 @@ export default function OcenyPage() {
         ? transport.requester_email 
         : transport.responsible_email
       const user = users.find(u => u.email === email)
+      console.log('🏢 Filtr rynku - transport:', transport.id, 'user:', user, 'wybrany rynek:', selectedMarket)
       if (!user || user.market !== selectedMarket) {
         return false
       }
@@ -536,6 +549,19 @@ export default function OcenyPage() {
 
 // Komponent tabeli dla transportu własnego
 function TransportWlasnyTable({ transports, onRate, getMagazynName, getDriverName }) {
+  // Bezpieczne parsowanie daty
+  const safeFormatDate = (dateString) => {
+    if (!dateString) return '-'
+    try {
+      const date = new Date(dateString)
+      if (isNaN(date.getTime())) return '-'
+      return format(date, 'dd.MM.yyyy', { locale: pl })
+    } catch (error) {
+      console.error('Błąd parsowania daty:', dateString, error)
+      return '-'
+    }
+  }
+
   return (
     <table className="min-w-full divide-y divide-gray-200">
       <thead className="bg-gray-50">
@@ -560,7 +586,7 @@ function TransportWlasnyTable({ transports, onRate, getMagazynName, getDriverNam
         {transports.map((transport) => (
           <tr key={transport.id} className="hover:bg-gray-50">
             <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-              {format(new Date(transport.delivery_date), 'dd.MM.yyyy', { locale: pl })}
+              {safeFormatDate(transport.delivery_date)}
             </td>
             <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
               {getMagazynName(transport.source_warehouse)}
@@ -631,6 +657,19 @@ function TransportWlasnyTable({ transports, onRate, getMagazynName, getDriverNam
 
 // Komponent tabeli dla transportu spedycyjnego
 function TransportSpedycyjnyTable({ transports, onRate, getMagazynName }) {
+  // Bezpieczne parsowanie daty
+  const safeFormatDate = (dateString) => {
+    if (!dateString) return '-'
+    try {
+      const date = new Date(dateString)
+      if (isNaN(date.getTime())) return '-'
+      return format(date, 'dd.MM.yyyy', { locale: pl })
+    } catch (error) {
+      console.error('Błąd parsowania daty:', dateString, error)
+      return '-'
+    }
+  }
+
   return (
     <table className="min-w-full divide-y divide-gray-200">
       <thead className="bg-gray-50">
@@ -660,7 +699,7 @@ function TransportSpedycyjnyTable({ transports, onRate, getMagazynName }) {
           return (
             <tr key={transport.id} className="hover:bg-gray-50">
               <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                {format(new Date(transport.created_at), 'dd.MM.yyyy', { locale: pl })}
+                {safeFormatDate(transport.created_at)}
               </td>
               <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                 {transport.order_number || '-'}
@@ -671,7 +710,7 @@ function TransportSpedycyjnyTable({ transports, onRate, getMagazynName }) {
                 </div>
               </td>
               <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                {transport.delivery_date ? format(new Date(transport.delivery_date), 'dd.MM.yyyy', { locale: pl }) : '-'}
+                {safeFormatDate(transport.delivery_date)}
               </td>
               <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                 {transport.location === 'Magazyn Białystok' ? 'Białystok' : 
