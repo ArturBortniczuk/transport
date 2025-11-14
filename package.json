@@ -21,6 +21,7 @@
       "fast-xml-parser": "^4.3.2",
       "jspdf": "^2.5.2",
       "jspdf-font": "^1.0.7",
+      "jszip": "^3.10.1",
       "knex": "^2.5.1",
       "leaflet": "^1.9.4",
       "lucide-react": "^0.471.1",
