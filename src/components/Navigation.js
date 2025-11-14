@@ -1,4 +1,4 @@
-// src/components/Navigation.js - ZAKTUALIZOWANY Z ROZWIJANYMI KATEGORIAMI
+// src/components/Navigation.js - ZAKTUALIZOWANY Z LINKIEM "OCENY"
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
@@ -19,7 +19,8 @@ import {
   Lock,
   LogOut,
   Menu,
-  X
+  X,
+  Star // NOWA IKONA dla Ocen
 } from 'lucide-react'
 
 export default function Navigation() {
@@ -64,7 +65,6 @@ export default function Navigation() {
       setIsLoggedIn(data.isAuthenticated);
       if (data.isAuthenticated && data.user) {
         const role = data.user.role;
-        // Normalizacja roli dla zachowania wstecznej kompatybilności
         let normalizedRole = role;
         if (role === 'magazyn_bialystok') normalizedRole = 'magazyn';
         if (role === 'magazyn_zielonka') normalizedRole = 'magazyn';
@@ -72,7 +72,6 @@ export default function Navigation() {
         setUserRole(normalizedRole || null);
         setUserName(data.user.name || '');
         
-        // Poprawiona obsługa wartości isAdmin
         const adminStatus = 
           data.user.isAdmin === true || 
           data.user.isAdmin === 1 || 
@@ -83,62 +82,36 @@ export default function Navigation() {
         
         setIsAdmin(adminStatus);
 
-        // Sprawdź uprawnienia administracyjne
         const permissions = data.user.permissions || {};
-        const hasPackagingsAccess = permissions.admin?.packagings === true;
-        const hasConstructionsAccess = permissions.admin?.constructions === true;
-        
+        const hasPackagingsAccess = permissions.admin?.packagings === true || 
+                                     permissions.admin?.packagings === 1 ||
+                                     permissions.admin?.packagings === 't' ||
+                                     adminStatus;
+        const hasConstructionsAccess = permissions.admin?.constructions === true || 
+                                       permissions.admin?.constructions === 1 ||
+                                       permissions.admin?.constructions === 't' ||
+                                       adminStatus;
+
         setAdminAccess({
           isFullAdmin: adminStatus,
-          packagings: adminStatus || hasPackagingsAccess,
-          constructions: adminStatus || hasConstructionsAccess
-        });
-
-        console.log('Stan użytkownika ustawiony:', {
-          role: normalizedRole,
-          isAdmin: adminStatus,
-          adminAccess: {
-            isFullAdmin: adminStatus,
-            packagings: adminStatus || hasPackagingsAccess,
-            constructions: adminStatus || hasConstructionsAccess
-          }
-        });
-      } else {
-        // Reset state gdy użytkownik nie jest zalogowany
-        setUserRole(null);
-        setUserName('');
-        setIsAdmin(false);
-        setAdminAccess({
-          isFullAdmin: false,
-          packagings: false,
-          constructions: false
+          packagings: hasPackagingsAccess,
+          constructions: hasConstructionsAccess
         });
       }
     } catch (error) {
-      console.error('Error fetching user info:', error);
-      setIsLoggedIn(false);
-      setUserRole(null);
-      setUserName('');
-      setIsAdmin(false);
-      setAdminAccess({
-        isFullAdmin: false,
-        packagings: false,
-        constructions: false
-      });
+      console.error('Błąd pobierania danych użytkownika:', error);
     }
   };
 
   useEffect(() => {
     fetchUserInfo();
     
-    // Odświeżaj co minutę tylko jeśli użytkownik jest zalogowany
-    const intervalId = isLoggedIn ? 
-      setInterval(() => {
+    const intervalId = isLoggedIn 
+      ? setInterval(() => {
         fetchUserInfo();
       }, 60000)
     : null;
       
-    // Własne zdarzenie do odświeżania po zalogowaniu
     const handleAuthChange = () => {
       console.log('Wykryto zmianę stanu uwierzytelnienia');
       fetchUserInfo();
@@ -152,7 +125,6 @@ export default function Navigation() {
     };
   }, [pathname]);
 
-  // Obsługa kliknięć poza dropdown
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (openDropdown && dropdownRefs.current[openDropdown]) {
@@ -174,7 +146,6 @@ export default function Navigation() {
         method: 'POST',
       });
       
-      // Odśwież stan komponentu
       setIsLoggedIn(false);
       setUserRole(null);
       setUserName('');
@@ -185,26 +156,21 @@ export default function Navigation() {
         constructions: false
       });
       
-      // Emituj zdarzenie zmiany stanu uwierzytelnienia
       window.dispatchEvent(new Event('auth-state-changed'));
-      
-      // Przekieruj do strony logowania
       router.push('/login');
     } catch (error) {
       console.error('Błąd wylogowania:', error);
     }
   };
 
-  // Funkcja do przełączania dropdown
   const toggleDropdown = (dropdownName) => {
     setOpenDropdown(openDropdown === dropdownName ? null : dropdownName);
   };
 
-  // Funkcja sprawdzająca czy ścieżka jest aktywna
   const isActive = (path) => pathname === path;
   const isDropdownActive = (paths) => paths.some(path => pathname.startsWith(path));
 
-  // Struktura menu - definiujemy wszystkie kategorie
+  // Struktura menu
   const menuStructure = {
     'transport-wlasny': {
       title: 'Transport własny',
@@ -213,7 +179,6 @@ export default function Navigation() {
         { name: 'Kalendarz', path: '/kalendarz', icon: Calendar },
         { name: 'Archiwum', path: '/archiwum', icon: Archive },
         { name: 'Mapa', path: '/mapa', icon: Map },
-        // Warunkowo dodajemy wnioski
         ...(userRole === 'handlowiec' 
           ? [{ name: 'Moje wnioski', path: '/moje-wnioski', icon: FileText }]
           : []
@@ -236,7 +201,6 @@ export default function Navigation() {
     }
   };
 
-  // Dodaj Panel Administratora jeśli ma uprawnienia
   if (adminAccess.isFullAdmin || adminAccess.packagings || adminAccess.constructions) {
     menuStructure['panel-admin'] = {
       title: 'Panel Administratora',
@@ -270,7 +234,6 @@ export default function Navigation() {
                   alt="Logo TRANSPORT" 
                   className="h-10 w-auto"
                   onError={(e) => {
-                    // Fallback do ikony SVG jeśli logo nie zostanie znalezione
                     e.target.style.display = 'none';
                     e.target.nextElementSibling.style.display = 'block';
                   }}
@@ -311,7 +274,6 @@ export default function Navigation() {
                 alt="Logo TransportSystem" 
                 className="h-10 w-auto"
                 onError={(e) => {
-                  // Fallback do ikony SVG jeśli logo nie zostanie znalezione
                   e.target.style.display = 'none';
                   e.target.nextElementSibling.style.display = 'block';
                 }}
@@ -331,6 +293,7 @@ export default function Navigation() {
 
           {/* Desktop Navigation */}
           <div className="hidden lg:flex items-center space-x-4">
+            {/* Dropdown categories */}
             {Object.entries(menuStructure).map(([key, category]) => (
               <div key={key} className="relative" ref={el => dropdownRefs.current[key] = el}>
                 <button
@@ -346,7 +309,6 @@ export default function Navigation() {
                   <ChevronDown className={`w-4 h-4 transition-transform ${openDropdown === key ? 'rotate-180' : ''}`} />
                 </button>
 
-                {/* Dropdown Menu */}
                 {openDropdown === key && (
                   <div className="absolute top-full left-0 mt-1 w-56 bg-white rounded-md shadow-lg ring-1 ring-black ring-opacity-5 z-50">
                     <div className="py-1">
@@ -371,6 +333,19 @@ export default function Navigation() {
               </div>
             ))}
 
+            {/* NOWY LINK - OCENY (bez dropdown, bezpośredni link) */}
+            <Link
+              href="/oceny"
+              className={`${
+                isActive('/oceny')
+                  ? 'text-white bg-blue-800'
+                  : 'text-blue-100 hover:text-white hover:bg-blue-800'
+              } px-3 py-2 rounded-md text-sm font-medium transition-custom flex items-center space-x-1`}
+            >
+              <Star className="w-4 h-4" />
+              <span>Oceny</span>
+            </Link>
+
             {/* User Menu */}
             <div className="relative ml-6" ref={el => dropdownRefs.current['user-menu'] = el}>
               <button
@@ -381,7 +356,6 @@ export default function Navigation() {
                 <ChevronDown className={`w-4 h-4 transition-transform ${openDropdown === 'user-menu' ? 'rotate-180' : ''}`} />
               </button>
 
-              {/* User Dropdown */}
               {openDropdown === 'user-menu' && (
                 <div className="absolute top-full right-0 mt-1 w-48 bg-white rounded-md shadow-lg ring-1 ring-black ring-opacity-5 z-50">
                   <div className="py-1">
@@ -455,6 +429,20 @@ export default function Navigation() {
                   </div>
                 </div>
               ))}
+              
+              {/* NOWY LINK - OCENY (mobile) */}
+              <Link
+                href="/oceny"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className={`${
+                  isActive('/oceny')
+                    ? 'bg-blue-700 text-white'
+                    : 'text-blue-100 hover:bg-blue-700 hover:text-white'
+                } group flex items-center px-3 py-2 rounded-md text-sm font-medium transition-custom`}
+              >
+                <Star className="w-4 h-4 mr-2" />
+                Oceny
+              </Link>
               
               {/* Mobile User Menu */}
               <div className="border-t border-blue-700 pt-2 mt-2">

@@ -90,12 +90,13 @@ export default function OcenyPage() {
       const data = await response.json()
       console.log('📥 Pobrani użytkownicy:', data)
       if (data.success) {
-        // Dodaj rynek do każdego użytkownika na podstawie MPK
+        // Dodaj rynek do każdego użytkownika na podstawie MPK (jeśli istnieje)
         const usersWithMarkets = data.users.map(user => ({
           ...user,
-          market: getMarketFromMPK(user.mpk)
+          market: user.mpk ? getMarketFromMPK(user.mpk) : null
         }))
         console.log('👥 Użytkownicy z rynkami:', usersWithMarkets)
+        console.log('🔍 Przykładowy użytkownik:', usersWithMarkets[0])
         setUsers(usersWithMarkets)
       }
     } catch (error) {
@@ -369,32 +370,33 @@ export default function OcenyPage() {
                     <optgroup label={selectedMarket}>
                       {getUsersByMarket(selectedMarket).map(user => (
                         <option key={user.email} value={user.email}>
-                          {user.name} ({user.market})
+                          {user.name}
                         </option>
                       ))}
                     </optgroup>
                   </>
                 ) : (
-                  // Pokaż wszystkie osoby pogrupowane według rynków
-                  uniqueMarkets.map(market => (
-                    <optgroup key={market} label={market}>
-                      {getUsersByMarket(market).map(user => (
-                        <option key={user.email} value={user.email}>
-                          {user.name}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))
-                )}
-                {/* Osoby bez przypisanego rynku */}
-                {users.filter(u => !u.market).length > 0 && (
-                  <optgroup label="Bez przypisanego rynku">
-                    {users.filter(u => !u.market).map(user => (
-                      <option key={user.email} value={user.email}>
-                        {user.name}
-                      </option>
+                  // Pokaż wszystkie osoby - NAJPIERW bez przypisanego rynku, potem pogrupowane
+                  <>
+                    {users.filter(u => !u.market).length > 0 && (
+                      <optgroup label="Wszyscy użytkownicy">
+                        {users.filter(u => !u.market).map(user => (
+                          <option key={user.email} value={user.email}>
+                            {user.name || user.email}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                    {uniqueMarkets.map(market => (
+                      <optgroup key={market} label={market}>
+                        {getUsersByMarket(market).map(user => (
+                          <option key={user.email} value={user.email}>
+                            {user.name}
+                          </option>
+                        ))}
+                      </optgroup>
                     ))}
-                  </optgroup>
+                  </>
                 )}
               </select>
             </div>
