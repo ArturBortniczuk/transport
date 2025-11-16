@@ -212,8 +212,10 @@ export default function OcenyPage() {
       if (ratingFilter === 'rated' && !transport.has_rating) {
         return false
       }
-      if (ratingFilter === 'negative' && (!transport.has_rating || !transport.is_negative)) {
-        return false
+      // NEGATYWNE = wszystko poniżej 100%
+      if (ratingFilter === 'negative') {
+        if (!transport.has_rating) return false
+        if (transport.rating_percentage === null || transport.rating_percentage === 100) return false
       }
     }
     

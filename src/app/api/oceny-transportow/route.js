@@ -1,8 +1,7 @@
-// src/app/api/oceny-transportow/route.js - API DO POBIERANIA TRANSPORTÓW DO OCENY (POPRAWIONE)
+// src/app/api/oceny-transportow/route.js - API DO POBIERANIA TRANSPORTÓW DO OCENY
 import { NextResponse } from 'next/server'
 import db from '@/database/db'
 
-// Funkcja pomocnicza do weryfikacji sesji
 const validateSession = async (authToken) => {
   if (!authToken) {
     return null
@@ -24,7 +23,6 @@ const validateSession = async (authToken) => {
 
 export async function GET(request) {
   try {
-    // Sprawdź uwierzytelnienie
     const authToken = request.cookies.get('authToken')?.value
     const userId = await validateSession(authToken)
     
@@ -35,9 +33,8 @@ export async function GET(request) {
       }, { status: 401 })
     }
 
-    // Pobierz parametry
     const { searchParams } = new URL(request.url)
-    const type = searchParams.get('type') // 'wlasny' lub 'spedycyjny'
+    const type = searchParams.get('type')
     const startDate = searchParams.get('startDate')
     const endDate = searchParams.get('endDate')
 
@@ -51,37 +48,74 @@ export async function GET(request) {
     let transports = []
 
     if (type === 'wlasny') {
-      // Pobierz transporty własne
       transports = await db('transports')
         .where('status', 'completed')
         .whereBetween('delivery_date', [startDate, endDate])
         .orderBy('delivery_date', 'desc')
         .select('*')
 
-      // Sprawdź które transporty mają ocenę
       const transportIds = transports.map(t => t.id)
       
       if (transportIds.length > 0) {
-        const ratings = await db('transport_detailed_ratings')
+        // Pobierz wszystkie szczegółowe oceny
+        const allRatings = await db('transport_detailed_ratings')
           .whereIn('transport_id', transportIds)
-          .select('transport_id')
-          .groupBy('transport_id')
+          .select('*')
 
-        const ratedTransportIds = new Set(ratings.map(r => r.transport_id))
+        // Grupuj oceny według transport_id i oblicz procenty
+        const ratingsByTransport = {}
+        allRatings.forEach(rating => {
+          if (!ratingsByTransport[rating.transport_id]) {
+            ratingsByTransport[rating.transport_id] = []
+          }
+          ratingsByTransport[rating.transport_id].push(rating)
+        })
 
-        // Dodaj flagę has_rating do każdego transportu
+        // Oblicz procent dla każdego transportu
+        const percentagesByTransport = {}
+        Object.keys(ratingsByTransport).forEach(transportId => {
+          const ratings = ratingsByTransport[transportId]
+          let totalCriteria = 0
+          let positiveCriteria = 0
+          
+          ratings.forEach(rating => {
+            const criteria = [
+              rating.driver_professional,
+              rating.driver_tasks_completed,
+              rating.cargo_complete,
+              rating.cargo_correct,
+              rating.delivery_notified,
+              rating.delivery_on_time
+            ]
+            
+            criteria.forEach(criterion => {
+              if (criterion !== null) {
+                totalCriteria++
+                if (criterion === true || criterion === 1) positiveCriteria++
+              }
+            })
+          })
+          
+          percentagesByTransport[transportId] = totalCriteria > 0 
+            ? Math.round((positiveCriteria / totalCriteria) * 100) 
+            : null
+        })
+
+        // Dodaj flagę has_rating i rating_percentage do każdego transportu
         transports = transports.map(transport => ({
           ...transport,
-          has_rating: ratedTransportIds.has(transport.id)
+          has_rating: !!ratingsByTransport[transport.id],
+          rating_percentage: percentagesByTransport[transport.id] || null
         }))
       } else {
         transports = transports.map(transport => ({
           ...transport,
-          has_rating: false
+          has_rating: false,
+          rating_percentage: null
         }))
       }
 
-      // Pobierz nazwy użytkowników (osób odpowiedzialnych)
+      // Pobierz nazwy użytkowników
       const emails = [...new Set(transports.map(t => t.requester_email).filter(Boolean))]
       let users = []
       if (emails.length > 0) {
@@ -90,58 +124,94 @@ export async function GET(request) {
           .select('email', 'name')
       }
 
-      // Dodaj nazwy użytkowników do transportów (NIE pobieramy kierowców z bazy!)
       transports = transports.map(transport => {
         const user = users.find(u => u.email === transport.requester_email)
         
         return {
           ...transport,
           requester_name: user ? user.name : null
-          // driver_id pozostaje jako ID - mapowanie na nazwę będzie w komponencie
         }
       })
 
     } else if (type === 'spedycyjny') {
-      // Pobierz transporty spedycyjne (POPRAWIONA NAZWA TABELI: spedycje)
       transports = await db('spedycje')
         .where('status', 'completed')
-        .whereBetween('delivery_date', [startDate, endDate]) // UŻYWAMY delivery_date zamiast created_at
+        .whereBetween('delivery_date', [startDate, endDate])
         .orderBy('delivery_date', 'desc')
         .select('*')
 
-      // Sprawdź które transporty mają ocenę
       const transportIds = transports.map(t => t.id)
       
       if (transportIds.length > 0) {
-        // Sprawdź w tabeli spedition_ratings (jeśli istnieje)
         try {
-          const ratings = await db('spedition_detailed_ratings')
+          // Pobierz wszystkie szczegółowe oceny spedycji
+          const allRatings = await db('spedition_detailed_ratings')
             .whereIn('spedition_id', transportIds)
-            .select('spedition_id')
-            .groupBy('spedition_id')
+            .select('*')
 
-          const ratedTransportIds = new Set(ratings.map(r => r.spedition_id))
+          // Grupuj oceny według spedition_id i oblicz procenty
+          const ratingsByTransport = {}
+          allRatings.forEach(rating => {
+            if (!ratingsByTransport[rating.spedition_id]) {
+              ratingsByTransport[rating.spedition_id] = []
+            }
+            ratingsByTransport[rating.spedition_id].push(rating)
+          })
+
+          // Oblicz procent dla każdego transportu
+          const percentagesByTransport = {}
+          Object.keys(ratingsByTransport).forEach(transportId => {
+            const ratings = ratingsByTransport[transportId]
+            let totalCriteria = 0
+            let positiveCriteria = 0
+            
+            ratings.forEach(rating => {
+              const criteria = [
+                rating.carrier_professional,
+                rating.loading_on_time,
+                rating.cargo_complete,
+                rating.cargo_undamaged,
+                rating.delivery_notified,
+                rating.delivery_on_time,
+                rating.documents_complete,
+                rating.documents_correct
+              ]
+              
+              criteria.forEach(criterion => {
+                if (criterion !== null) {
+                  totalCriteria++
+                  if (criterion === true || criterion === 1) positiveCriteria++
+                }
+              })
+            })
+            
+            percentagesByTransport[transportId] = totalCriteria > 0 
+              ? Math.round((positiveCriteria / totalCriteria) * 100) 
+              : null
+          })
 
           transports = transports.map(transport => ({
             ...transport,
-            has_rating: ratedTransportIds.has(transport.id)
+            has_rating: !!ratingsByTransport[transport.id],
+            rating_percentage: percentagesByTransport[transport.id] || null
           }))
         } catch (error) {
-          // Tabela nie istnieje - oznacz wszystkie jako nieocenione
           console.log('Tabela spedition_detailed_ratings nie istnieje:', error.message)
           transports = transports.map(transport => ({
             ...transport,
-            has_rating: false
+            has_rating: false,
+            rating_percentage: null
           }))
         }
       } else {
         transports = transports.map(transport => ({
           ...transport,
-          has_rating: false
+          has_rating: false,
+          rating_percentage: null
         }))
       }
 
-      // Pobierz nazwy użytkowników (osób odpowiedzialnych)
+      // Pobierz nazwy użytkowników
       const emails = [...new Set(transports.map(t => t.responsible_email).filter(Boolean))]
       let users = []
       if (emails.length > 0) {
@@ -150,11 +220,10 @@ export async function GET(request) {
           .select('email', 'name')
       }
 
-      // Dodaj nazwy do transportów
       transports = transports.map(transport => {
         const user = users.find(u => u.email === transport.responsible_email)
         
-        // Parsuj response_data jeśli istnieje
+        // Parsuj dane JSON
         let response = null
         if (transport.response_data) {
           try {
@@ -164,7 +233,6 @@ export async function GET(request) {
           }
         }
 
-        // Parsuj delivery_data
         let delivery = null
         if (transport.delivery_data) {
           try {
@@ -174,7 +242,6 @@ export async function GET(request) {
           }
         }
 
-        // Parsuj location_data
         let producerAddress = null
         if (transport.location_data) {
           try {
@@ -186,8 +253,7 @@ export async function GET(request) {
         
         return {
           ...transport,
-          requester_name: user ? user.name : null,
-          requester_email: transport.responsible_email,
+          responsible_name: user ? user.name : null,
           response,
           delivery,
           producerAddress
