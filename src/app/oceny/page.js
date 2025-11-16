@@ -1,4 +1,4 @@
-// src/app/oceny/page.js - POPRAWIONA WERSJA z rynkami i filtrami
+// src/app/oceny/page.js - POPRAWIONA WERSJA z wszystkimi filtrami
 'use client'
 import { useState, useEffect, useMemo } from 'react'
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear } from 'date-fns'
@@ -42,6 +42,7 @@ export default function OcenyPage() {
   const [selectedWarehouse, setSelectedWarehouse] = useState('')
   const [selectedCity, setSelectedCity] = useState('')
   const [transportTypeFilter, setTransportTypeFilter] = useState('all')
+  const [ratingFilter, setRatingFilter] = useState('all')
   const [showFilters, setShowFilters] = useState(false)
   
   // Modal
@@ -86,31 +87,25 @@ export default function OcenyPage() {
 
   const fetchUsers = async () => {
     try {
-      console.log('🔄 Pobieranie użytkowników...')
       const response = await fetch('/api/users')
       const data = await response.json()
       
-      console.log('📥 Pełna odpowiedź API:', data)
-      
       let usersData = []
       
-      // NAPRAWIONA LOGIKA: API zwraca bezpośrednio tablicę, NIE obiekt z polem users
       if (Array.isArray(data)) {
         usersData = data
       } else if (data.success && Array.isArray(data.users)) {
         usersData = data.users
       } else {
-        console.error('❌ Nieprawidłowy format danych')
+        console.error('❌ Nieprawidłowy format danych użytkowników')
         return
       }
       
-      // DODAJ POLE MARKET dla każdego użytkownika na podstawie MPK
       const usersWithMarket = usersData.map(user => ({
         ...user,
         market: getMarketFromMPK(user.mpk)
       }))
       
-      console.log('✅ Użytkownicy z rynkami:', usersWithMarket)
       setUsers(usersWithMarket)
       
     } catch (error) {
@@ -129,18 +124,12 @@ export default function OcenyPage() {
         endDate
       })
       
-      console.log('🚚 Pobieranie transportów:', { activeTab, startDate, endDate })
-      
       const response = await fetch(`/api/oceny-transportow?${params}`)
       const data = await response.json()
       
-      console.log('📦 Odpowiedź API:', data)
-      
       if (data.success) {
-        console.log('✅ Transporty:', data.transports)
         setTransports(data.transports)
       } else {
-        console.error('❌ Błąd API:', data.error)
         setError(data.error)
       }
     } catch (error) {
@@ -151,33 +140,28 @@ export default function OcenyPage() {
     }
   }
 
-  // Pobierz unikalne rynki z użytkowników - UŻYWAMY useMemo żeby przeliczało się gdy users się zmieni
   const uniqueMarkets = useMemo(() => {
     const markets = [...new Set(users.map(u => u.market).filter(Boolean))].sort()
-    console.log('🏢 Przeliczam unikalne rynki:', markets)
     return markets
   }, [users])
 
-  // Filtrowanie transportów
   const filteredTransports = transports.filter(transport => {
     // Filtr osoby odpowiedzialnej
     if (selectedRequester) {
       const email = activeTab === 'wlasny' 
         ? transport.requester_email 
         : transport.responsible_email
-      console.log('🔍 Filtr osoby - transport:', transport.id, 'email:', email, 'wybrany:', selectedRequester)
       if (email !== selectedRequester) {
         return false
       }
     }
     
-    // Filtr rynku - na podstawie osoby odpowiedzialnej
+    // Filtr rynku
     if (selectedMarket) {
       const email = activeTab === 'wlasny' 
         ? transport.requester_email 
         : transport.responsible_email
       const user = users.find(u => u.email === email)
-      console.log('🏢 Filtr rynku - transport:', transport.id, 'user:', user, 'wybrany rynek:', selectedMarket)
       if (!user || user.market !== selectedMarket) {
         return false
       }
@@ -209,15 +193,26 @@ export default function OcenyPage() {
       }
     }
     
-    // Filtr typu transportu (handel/budownictwo)
-    if (transportTypeFilter !== 'all' && activeTab === 'wlasny') {
+    // Filtr typu transportu - DZIAŁA DLA OBU TYPÓW
+    if (transportTypeFilter !== 'all') {
       const constructionRegex = /^\d{3}-\d{2}-\d{2}\/\d{4}$/
-      const isConstruction = constructionRegex.test(transport.mpk)
+      const mpkToCheck = activeTab === 'wlasny' ? transport.mpk : transport.construction_mpk
+      const isConstruction = constructionRegex.test(mpkToCheck)
       
       if (transportTypeFilter === 'budownictwo' && !isConstruction) {
         return false
       }
       if (transportTypeFilter === 'handel' && isConstruction) {
+        return false
+      }
+    }
+    
+    // Filtr ocen
+    if (ratingFilter !== 'all') {
+      if (ratingFilter === 'rated' && !transport.has_rating) {
+        return false
+      }
+      if (ratingFilter === 'negative' && (!transport.has_rating || !transport.is_negative)) {
         return false
       }
     }
@@ -233,8 +228,7 @@ export default function OcenyPage() {
   const handleCloseRatingModal = () => {
     setShowRatingModal(false)
     setSelectedTransport(null)
-    setRefreshBadges(prev => prev + 1) // Odśwież badge'e ocen
-    // Małe opóźnienie żeby API miało czas zapisać ocenę
+    setRefreshBadges(prev => prev + 1)
     setTimeout(() => {
       fetchTransports()
     }, 500)
@@ -269,7 +263,6 @@ export default function OcenyPage() {
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-lg shadow-lg p-6">
-        {/* Header */}
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold text-gray-900 flex items-center">
             <Star className="w-6 h-6 mr-2 text-yellow-500" />
@@ -285,7 +278,6 @@ export default function OcenyPage() {
           </button>
         </div>
 
-        {/* Zakładki */}
         <div className="flex space-x-2 mb-6 border-b border-gray-200">
           <button
             onClick={() => setActiveTab('wlasny')}
@@ -309,10 +301,8 @@ export default function OcenyPage() {
           </button>
         </div>
 
-        {/* Filtry */}
         {showFilters && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6 p-4 bg-gray-50 rounded-lg">
-            {/* Zakres dat */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 <Calendar className="inline w-4 h-4 mr-1" />
@@ -330,7 +320,6 @@ export default function OcenyPage() {
               </select>
             </div>
 
-            {/* Daty niestandardowe */}
             {dateRange === 'custom' && (
               <>
                 <div>
@@ -354,7 +343,6 @@ export default function OcenyPage() {
               </>
             )}
 
-            {/* Filtr rynku */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Rynek</label>
               <select
@@ -372,7 +360,6 @@ export default function OcenyPage() {
               </select>
             </div>
 
-            {/* Filtr osoby odpowiedzialnej */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Osoba odpowiedzialna</label>
               <select
@@ -401,7 +388,6 @@ export default function OcenyPage() {
               </select>
             </div>
 
-            {/* Filtr magazynu */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Magazyn</label>
               <select
@@ -415,7 +401,6 @@ export default function OcenyPage() {
               </select>
             </div>
 
-            {/* Filtr miasta */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Miasto</label>
               <input
@@ -427,7 +412,6 @@ export default function OcenyPage() {
               />
             </div>
 
-            {/* Filtr klienta */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Klient</label>
               <input
@@ -439,23 +423,32 @@ export default function OcenyPage() {
               />
             </div>
 
-            {/* Filtr typ transportu (tylko dla własnych) */}
-            {activeTab === 'wlasny' && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Typ transportu</label>
-                <select
-                  value={transportTypeFilter}
-                  onChange={(e) => setTransportTypeFilter(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="all">Wszystkie</option>
-                  <option value="handel">Handel</option>
-                  <option value="budownictwo">Budownictwo</option>
-                </select>
-              </div>
-            )}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Typ transportu</label>
+              <select
+                value={transportTypeFilter}
+                onChange={(e) => setTransportTypeFilter(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="all">Wszystkie</option>
+                <option value="handel">Handel</option>
+                <option value="budownictwo">Budownictwo</option>
+              </select>
+            </div>
 
-            {/* Przycisk resetowania filtrów */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Status oceny</label>
+              <select
+                value={ratingFilter}
+                onChange={(e) => setRatingFilter(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="all">Wszystkie</option>
+                <option value="rated">Tylko ocenione</option>
+                <option value="negative">Tylko negatywne</option>
+              </select>
+            </div>
+
             <div className="flex items-end">
               <button
                 onClick={() => {
@@ -465,6 +458,7 @@ export default function OcenyPage() {
                   setSelectedWarehouse('')
                   setSelectedCity('')
                   setTransportTypeFilter('all')
+                  setRatingFilter('all')
                 }}
                 className="w-full px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors"
               >
@@ -474,7 +468,6 @@ export default function OcenyPage() {
           </div>
         )}
 
-        {/* Statystyki */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <div className="bg-blue-50 p-4 rounded-lg">
             <div className="text-sm text-blue-600 font-medium">Znaleziono transportów</div>
@@ -494,7 +487,6 @@ export default function OcenyPage() {
           </div>
         </div>
 
-        {/* Tabela */}
         {error && (
           <div className="mb-4 p-4 bg-red-50 text-red-700 rounded-md flex items-center">
             <AlertCircle size={20} className="mr-2" />
@@ -530,7 +522,6 @@ export default function OcenyPage() {
         )}
       </div>
 
-      {/* Modal oceny */}
       {showRatingModal && selectedTransport && (
         activeTab === 'wlasny' ? (
           <CompleteRatingModal
@@ -551,7 +542,6 @@ export default function OcenyPage() {
   )
 }
 
-// Komponent tabeli dla transportu własnego
 function TransportWlasnyTable({ transports, onRate, getMagazynName, getDriverName, refreshBadges }) {
   const safeFormatDate = (dateString) => {
     if (!dateString) return '-'
@@ -560,7 +550,6 @@ function TransportWlasnyTable({ transports, onRate, getMagazynName, getDriverNam
       if (isNaN(date.getTime())) return '-'
       return format(date, 'dd.MM.yyyy', { locale: pl })
     } catch (error) {
-      console.error('Błąd parsowania daty:', dateString, error)
       return '-'
     }
   }
@@ -662,7 +651,6 @@ function TransportWlasnyTable({ transports, onRate, getMagazynName, getDriverNam
   )
 }
 
-// Komponent tabeli dla transportu spedycyjnego
 function TransportSpedycyjnyTable({ transports, onRate, getMagazynName, refreshBadges }) {
   const safeFormatDate = (dateString) => {
     if (!dateString) return '-'
@@ -671,7 +659,6 @@ function TransportSpedycyjnyTable({ transports, onRate, getMagazynName, refreshB
       if (isNaN(date.getTime())) return '-'
       return format(date, 'dd.MM.yyyy', { locale: pl })
     } catch (error) {
-      console.error('Błąd parsowania daty:', dateString, error)
       return '-'
     }
   }
@@ -693,6 +680,7 @@ function TransportSpedycyjnyTable({ transports, onRate, getMagazynName, refreshB
           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">PLN/km</th>
           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Towar</th>
           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Opis towaru</th>
+          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ocena</th>
           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Akcje</th>
         </tr>
       </thead>
@@ -752,6 +740,13 @@ function TransportSpedycyjnyTable({ transports, onRate, getMagazynName, refreshB
                 <div className="max-w-xs truncate" title={transport.goods_description || '-'}>
                   {transport.goods_description || '-'}
                 </div>
+              </td>
+              <td className="px-4 py-3 whitespace-nowrap text-sm">
+                <TransportDetailedRatingBadge 
+                  key={`rating-${transport.id}-${refreshBadges}`}
+                  transportId={transport.id} 
+                  refreshTrigger={refreshBadges} 
+                />
               </td>
               <td className="px-4 py-3 whitespace-nowrap text-sm">
                 {transport.has_rating ? (

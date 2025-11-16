@@ -1,117 +1,89 @@
-// src/components/TransportRatingBadge.js - zmodyfikowana wersja
+// src/components/TransportRatingBadge.js - NAPRAWIONA WERSJA
 'use client'
-import { useState, useEffect, useRef } from 'react'
-import { ThumbsUp, ThumbsDown } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Star, StarOff } from 'lucide-react'
 
-export default function TransportRatingBadge({ transportId, refreshTrigger = 0, onCanBeRatedChange }) {
+export default function TransportDetailedRatingBadge({ transportId, refreshTrigger = 0 }) {
   const [rating, setRating] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [canBeRated, setCanBeRated] = useState(false)
-  // Dodajmy ref do śledzenia, czy komponent jest zamontowany
-  const isMounted = useRef(true)
-  // Dodajmy ref do śledzenia, czy dane zostały już pobrane
-  const dataFetched = useRef(false)
   
   useEffect(() => {
-    // Ustaw flagę montowania przy tworzeniu komponentu
-    isMounted.current = true
-    
-    return () => {
-      // Wyczyść flagę przy odmontowywaniu komponentu
-      isMounted.current = false
-    }
-  }, [])
-  
-  useEffect(() => {
-    // Jeśli nie mamy ID transportu lub dane już zostały pobrane, nie rób nic
-    if (!transportId || (dataFetched.current && !refreshTrigger)) return
-    
     const fetchRating = async () => {
       try {
         setLoading(true)
-        const response = await fetch(`/api/transport-ratings?transportId=${transportId}`)
+        console.log(`🔍 Badge: Pobieranie oceny dla transportu ${transportId}, refreshTrigger: ${refreshTrigger}`)
+        
+        const response = await fetch(`/api/transport-detailed-ratings?transportId=${transportId}`, {
+          cache: 'no-store', // Wymuś pobieranie bez cache
+          headers: {
+            'Cache-Control': 'no-cache'
+          }
+        })
         const data = await response.json()
         
-        // Sprawdź, czy komponent nadal jest zamontowany przed aktualizacją stanu
-        if (!isMounted.current) return
+        console.log(`📊 Badge: Odpowiedź API dla transportu ${transportId}:`, data)
         
         if (data.success) {
-          if (data.ratings && data.ratings.length > 0) {
-            setRating({
-              isPositive: data.isPositive
-            })
-          } else {
-            setRating(null) // Brak oceny
+          const ratingData = {
+            totalRatings: data.stats?.totalRatings || 0,
+            overallPercentage: data.stats?.overallRatingPercentage || null,
+            canBeRated: data.canBeRated,
+            hasUserRated: data.hasUserRated
           }
           
-          setCanBeRated(data.canBeRated)
-          
-          // Oznacz, że dane zostały pobrane
-          dataFetched.current = true
-          
-          // Przekaż informację o możliwości oceny i typie oceny na zewnątrz
-          if (onCanBeRatedChange) {
-            onCanBeRatedChange(data.canBeRated, data.ratings && data.ratings.length > 0 ? data.isPositive : null)
-          }
-          
-          // Zapisujemy w localStorage, aby inne komponenty mogły to odczytać
-          if (typeof window !== 'undefined') {
-            localStorage.setItem(`transport-${transportId}-ratable`, data.canBeRated)
-            if (data.ratings && data.ratings.length > 0) {
-              localStorage.setItem(`transport-${transportId}-rating`, data.isPositive ? 'positive' : 'negative')
-            }
-          }
+          console.log(`✅ Badge: Ustawiam rating dla ${transportId}:`, ratingData)
+          setRating(ratingData)
+        } else {
+          console.error(`❌ Badge: Błąd API dla ${transportId}:`, data.error)
+          setRating(null)
         }
       } catch (error) {
-        console.error('Błąd pobierania oceny:', error)
+        console.error(`❌ Badge: Błąd pobierania oceny dla ${transportId}:`, error)
+        setRating(null)
       } finally {
-        // Sprawdź, czy komponent nadal jest zamontowany przed aktualizacją stanu
-        if (isMounted.current) {
-          setLoading(false)
-        }
+        setLoading(false)
       }
     }
     
-    fetchRating()
-  }, [transportId, refreshTrigger, onCanBeRatedChange])
+    if (transportId) {
+      fetchRating()
+    }
+  }, [transportId, refreshTrigger])
   
-  // Dodajmy opóźnienie dla stanu ładowania, aby uniknąć migotania
-  useEffect(() => {
-    if (!loading || !dataFetched.current) return
-    
-    // Jeśli dane są już załadowane, ale migocze, dodajmy małe opóźnienie
-    const timer = setTimeout(() => {
-      if (isMounted.current) {
-        setLoading(false)
-      }
-    }, 300)
-    
-    return () => clearTimeout(timer)
-  }, [loading])
-  
-  if (loading && !dataFetched.current) {
+  if (loading) {
     return (
-      <div className="w-24 h-5 bg-gray-100 rounded animate-pulse"></div>
+      <div className="w-20 h-5 bg-gray-100 rounded animate-pulse"></div>
     )
   }
   
-  if (!rating) {
+  console.log(`🎨 Badge: Renderowanie dla ${transportId}, rating:`, rating)
+  
+  if (!rating || rating.totalRatings === 0) {
     return (
       <span className="text-gray-400 text-sm flex items-center">
+        <StarOff size={14} className="mr-1" />
         Brak oceny
       </span>
     )
   }
   
+  // Określ kolor na podstawie procentu
+  const getColorClass = (percentage) => {
+    if (percentage >= 80) return 'bg-green-500 text-white'
+    if (percentage >= 60) return 'bg-yellow-500 text-white'
+    if (percentage >= 40) return 'bg-orange-500 text-white'
+    return 'bg-red-500 text-white'
+  }
+  
   return (
     <div className="flex items-center">
-      <div className={`flex items-center px-2 py-1 rounded-md ${rating.isPositive ? 'bg-green-500' : 'bg-red-500'}`}>
-        {rating.isPositive ? (
-          <ThumbsUp size={16} className="text-white" />
-        ) : (
-          <ThumbsDown size={16} className="text-white" />
-        )}
+      <div className={`flex items-center px-2 py-1 rounded-md text-sm font-medium ${getColorClass(rating.overallPercentage)}`}>
+        <Star size={14} className="mr-1 fill-current" />
+        {rating.overallPercentage}%
       </div>
+      <span className="text-xs text-gray-500 ml-1">
+        ({rating.totalRatings})
+      </span>
     </div>
   )
 }
