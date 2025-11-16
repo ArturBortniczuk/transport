@@ -250,13 +250,27 @@ export async function GET(request) {
             console.error('Błąd parsowania location_data:', e)
           }
         }
+
+        // Parsuj goods_description
+        let goodsDescription = null
+        if (transport.goods_description) {
+          try {
+            goodsDescription = typeof transport.goods_description === 'string'
+              ? JSON.parse(transport.goods_description)
+              : transport.goods_description
+          } catch (e) {
+            console.error('Błąd parsowania goods_description:', e)
+            goodsDescription = transport.goods_description
+          }
+        }
         
         return {
           ...transport,
           responsible_name: user ? user.name : null,
           response,
           delivery,
-          producerAddress
+          producerAddress,
+          goods_description: goodsDescription
         }
       })
     }

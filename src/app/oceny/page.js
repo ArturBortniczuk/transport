@@ -739,8 +739,14 @@ function TransportSpedycyjnyTable({ transports, onRate, getMagazynName, refreshB
                 </div>
               </td>
               <td className="px-4 py-3 text-sm text-gray-900">
-                <div className="max-w-xs truncate" title={transport.goods_description || '-'}>
-                  {transport.goods_description || '-'}
+                <div className="max-w-xs truncate" title={
+                  typeof transport.goods_description === 'object' 
+                    ? transport.goods_description?.description || '-'
+                    : transport.goods_description || '-'
+                }>
+                  {typeof transport.goods_description === 'object' 
+                    ? transport.goods_description?.description || '-'
+                    : transport.goods_description || '-'}
                 </div>
               </td>
               <td className="px-4 py-3 whitespace-nowrap text-sm">
