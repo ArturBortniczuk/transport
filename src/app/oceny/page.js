@@ -86,33 +86,29 @@ export default function OcenyPage() {
 
   const fetchUsers = async () => {
     try {
+      console.log('🔄 Pobieranie użytkowników...')
       const response = await fetch('/api/users')
       const data = await response.json()
+      
       console.log('📥 Pełna odpowiedź API:', data)
       console.log('📥 data.success:', data.success)
       console.log('📥 data.users:', data.users)
       console.log('📥 Czy data.users jest tablicą?', Array.isArray(data.users))
       
-      if (data.success && data.users) {
-        console.log('✅ Warunek spełniony, przetwarzam użytkowników...')
-        // Dodaj rynek do każdego użytkownika na podstawie MPK (jeśli istnieje)
-        const usersWithMarkets = data.users.map(user => {
-          const market = user.mpk ? getMarketFromMPK(user.mpk) : null
-          console.log(`  User ${user.name}: mpk=${user.mpk}, market=${market}`)
-          return {
-            ...user,
-            market: market
-          }
-        })
-        console.log('👥 Użytkownicy po przetworzeniu:', usersWithMarkets.length, usersWithMarkets)
-        console.log('🔍 Przykładowy użytkownik:', usersWithMarkets[0])
-        setUsers(usersWithMarkets)
-        console.log('💾 setUsers wywołane z:', usersWithMarkets.length, 'użytkownikami')
+      // NAPRAWIONA LOGIKA: API zwraca bezpośrednio tablicę, NIE obiekt z polem users
+      if (Array.isArray(data)) {
+        console.log('✅ Warunek spełniony! Ustawianie users:', data.length)
+        setUsers(data)
+      } else if (data.success && Array.isArray(data.users)) {
+        console.log('✅ Warunek spełniony! Ustawianie users:', data.users.length)
+        setUsers(data.users)
       } else {
-        console.error('❌ Warunek NIE spełniony!', { success: data.success, hasUsers: !!data.users })
+        console.error('❌ Warunek NIE spełniony!', { success: data.success, hasUsers: Array.isArray(data.users) })
       }
+      
+      console.log('🔄 State users zmienił się! Nowa wartość:', users.length, users)
     } catch (error) {
-      console.error('❌ Błąd pobierania użytkowników:', error)
+      console.error('Błąd pobierania użytkowników:', error)
     }
   }
 
