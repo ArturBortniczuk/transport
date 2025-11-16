@@ -47,6 +47,7 @@ export default function OcenyPage() {
   // Modal
   const [selectedTransport, setSelectedTransport] = useState(null)
   const [showRatingModal, setShowRatingModal] = useState(false)
+  const [refreshBadges, setRefreshBadges] = useState(0)
 
   useEffect(() => {
     fetchUsers()
@@ -232,7 +233,11 @@ export default function OcenyPage() {
   const handleCloseRatingModal = () => {
     setShowRatingModal(false)
     setSelectedTransport(null)
-    fetchTransports()
+    setRefreshBadges(prev => prev + 1) // Odśwież badge'e ocen
+    // Małe opóźnienie żeby API miało czas zapisać ocenę
+    setTimeout(() => {
+      fetchTransports()
+    }, 500)
   }
 
   const getMagazynName = (warehouse) => {
@@ -511,12 +516,14 @@ export default function OcenyPage() {
                 onRate={handleOpenRatingModal}
                 getMagazynName={getMagazynName}
                 getDriverName={getDriverName}
+                refreshBadges={refreshBadges}
               />
             ) : (
               <TransportSpedycyjnyTable 
                 transports={filteredTransports}
                 onRate={handleOpenRatingModal}
                 getMagazynName={getMagazynName}
+                refreshBadges={refreshBadges}
               />
             )}
           </div>
@@ -545,7 +552,7 @@ export default function OcenyPage() {
 }
 
 // Komponent tabeli dla transportu własnego
-function TransportWlasnyTable({ transports, onRate, getMagazynName, getDriverName }) {
+function TransportWlasnyTable({ transports, onRate, getMagazynName, getDriverName, refreshBadges }) {
   const safeFormatDate = (dateString) => {
     if (!dateString) return '-'
     try {
@@ -624,7 +631,11 @@ function TransportWlasnyTable({ transports, onRate, getMagazynName, getDriverNam
               {getDriverName(transport.driver_id)}
             </td>
             <td className="px-4 py-3 whitespace-nowrap text-sm">
-              <TransportDetailedRatingBadge transportId={transport.id} />
+              <TransportDetailedRatingBadge 
+                key={`rating-${transport.id}-${refreshBadges}`}
+                transportId={transport.id} 
+                refreshTrigger={refreshBadges} 
+              />
             </td>
             <td className="px-4 py-3 whitespace-nowrap text-sm">
               {transport.has_rating ? (
@@ -652,7 +663,7 @@ function TransportWlasnyTable({ transports, onRate, getMagazynName, getDriverNam
 }
 
 // Komponent tabeli dla transportu spedycyjnego
-function TransportSpedycyjnyTable({ transports, onRate, getMagazynName }) {
+function TransportSpedycyjnyTable({ transports, onRate, getMagazynName, refreshBadges }) {
   const safeFormatDate = (dateString) => {
     if (!dateString) return '-'
     try {
