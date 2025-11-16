@@ -1,6 +1,6 @@
 // src/app/oceny/page.js - POPRAWIONA WERSJA z rynkami i filtrami
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear } from 'date-fns'
 import { pl } from 'date-fns/locale'
 import { Star, Filter, ChevronDown, Calendar, AlertCircle } from 'lucide-react'
@@ -150,13 +150,11 @@ export default function OcenyPage() {
     }
   }
 
-  // Pobierz unikalne rynki z użytkowników
-  const uniqueMarkets = [...new Set(users.map(u => u.market).filter(Boolean))].sort()
-  
-  // Debug po każdej zmianie users
-  useEffect(() => {
-    console.log('🔄 State users zmienił się! Nowa wartość:', users.length, users)
-    console.log('🏢 Unikalne rynki:', uniqueMarkets)
+  // Pobierz unikalne rynki z użytkowników - UŻYWAMY useMemo żeby przeliczało się gdy users się zmieni
+  const uniqueMarkets = useMemo(() => {
+    const markets = [...new Set(users.map(u => u.market).filter(Boolean))].sort()
+    console.log('🏢 Przeliczam unikalne rynki:', markets)
+    return markets
   }, [users])
 
   // Filtrowanie transportów
