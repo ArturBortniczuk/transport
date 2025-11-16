@@ -370,33 +370,32 @@ export default function OcenyPage() {
                     <optgroup label={selectedMarket}>
                       {getUsersByMarket(selectedMarket).map(user => (
                         <option key={user.email} value={user.email}>
-                          {user.name}
+                          {user.name} ({user.market})
                         </option>
                       ))}
                     </optgroup>
                   </>
                 ) : (
-                  // Pokaż wszystkie osoby - NAJPIERW bez przypisanego rynku, potem pogrupowane
-                  <>
-                    {users.filter(u => !u.market).length > 0 && (
-                      <optgroup label="Wszyscy użytkownicy">
-                        {users.filter(u => !u.market).map(user => (
-                          <option key={user.email} value={user.email}>
-                            {user.name || user.email}
-                          </option>
-                        ))}
-                      </optgroup>
-                    )}
-                    {uniqueMarkets.map(market => (
-                      <optgroup key={market} label={market}>
-                        {getUsersByMarket(market).map(user => (
-                          <option key={user.email} value={user.email}>
-                            {user.name}
-                          </option>
-                        ))}
-                      </optgroup>
+                  // Pokaż wszystkie osoby pogrupowane według rynków
+                  uniqueMarkets.map(market => (
+                    <optgroup key={market} label={market}>
+                      {getUsersByMarket(market).map(user => (
+                        <option key={user.email} value={user.email}>
+                          {user.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))
+                )}
+                {/* Osoby bez przypisanego rynku */}
+                {users.filter(u => !u.market).length > 0 && (
+                  <optgroup label="Bez przypisanego rynku">
+                    {users.filter(u => !u.market).map(user => (
+                      <option key={user.email} value={user.email}>
+                        {user.name}
+                      </option>
                     ))}
-                  </>
+                  </optgroup>
                 )}
               </select>
             </div>
