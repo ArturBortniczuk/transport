@@ -26,22 +26,22 @@ const getMarketFromMPK = (mpk) => {
 }
 
 export default function OcenyPage() {
-  const [activeTab, setActiveTab] = useState('wlasny') // 'wlasny' lub 'spedycyjny'
+  const [activeTab, setActiveTab] = useState('wlasny')
   const [transports, setTransports] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [users, setUsers] = useState([])
   
   // Filtry
-  const [dateRange, setDateRange] = useState('week') // 'week', 'month', 'year', 'custom'
+  const [dateRange, setDateRange] = useState('week')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [selectedRequester, setSelectedRequester] = useState('')
-  const [selectedMarket, setSelectedMarket] = useState('') // NOWY FILTR RYNKU
+  const [selectedMarket, setSelectedMarket] = useState('')
   const [selectedClient, setSelectedClient] = useState('')
   const [selectedWarehouse, setSelectedWarehouse] = useState('')
   const [selectedCity, setSelectedCity] = useState('')
-  const [transportTypeFilter, setTransportTypeFilter] = useState('all') // 'all', 'handel', 'budownictwo'
+  const [transportTypeFilter, setTransportTypeFilter] = useState('all')
   const [showFilters, setShowFilters] = useState(false)
   
   // Modal
@@ -53,7 +53,6 @@ export default function OcenyPage() {
   }, [])
 
   useEffect(() => {
-    // Ustaw domyślne daty na podstawie wybranego zakresu
     const today = new Date()
     let start, end
     
@@ -91,22 +90,28 @@ export default function OcenyPage() {
       const data = await response.json()
       
       console.log('📥 Pełna odpowiedź API:', data)
-      console.log('📥 data.success:', data.success)
-      console.log('📥 data.users:', data.users)
-      console.log('📥 Czy data.users jest tablicą?', Array.isArray(data.users))
+      
+      let usersData = []
       
       // NAPRAWIONA LOGIKA: API zwraca bezpośrednio tablicę, NIE obiekt z polem users
       if (Array.isArray(data)) {
-        console.log('✅ Warunek spełniony! Ustawianie users:', data.length)
-        setUsers(data)
+        usersData = data
       } else if (data.success && Array.isArray(data.users)) {
-        console.log('✅ Warunek spełniony! Ustawianie users:', data.users.length)
-        setUsers(data.users)
+        usersData = data.users
       } else {
-        console.error('❌ Warunek NIE spełniony!', { success: data.success, hasUsers: Array.isArray(data.users) })
+        console.error('❌ Nieprawidłowy format danych')
+        return
       }
       
-      console.log('🔄 State users zmienił się! Nowa wartość:', users.length, users)
+      // DODAJ POLE MARKET dla każdego użytkownika na podstawie MPK
+      const usersWithMarket = usersData.map(user => ({
+        ...user,
+        market: getMarketFromMPK(user.mpk)
+      }))
+      
+      console.log('✅ Użytkownicy z rynkami:', usersWithMarket)
+      setUsers(usersWithMarket)
+      
     } catch (error) {
       console.error('Błąd pobierania użytkowników:', error)
     }
@@ -207,7 +212,7 @@ export default function OcenyPage() {
     
     // Filtr typu transportu (handel/budownictwo)
     if (transportTypeFilter !== 'all' && activeTab === 'wlasny') {
-      const constructionRegex = /^\d{3}-\d{2}-\d{2}\/\d{4}$/ // Format MPK budowy: 000-00-00/0000
+      const constructionRegex = /^\d{3}-\d{2}-\d{2}\/\d{4}$/
       const isConstruction = constructionRegex.test(transport.mpk)
       
       if (transportTypeFilter === 'budownictwo' && !isConstruction) {
@@ -229,7 +234,7 @@ export default function OcenyPage() {
   const handleCloseRatingModal = () => {
     setShowRatingModal(false)
     setSelectedTransport(null)
-    fetchTransports() // Odśwież listę po zapisaniu oceny
+    fetchTransports()
   }
 
   const getMagazynName = (warehouse) => {
@@ -240,14 +245,12 @@ export default function OcenyPage() {
     }
   }
 
-  // Funkcja do pobierania nazwy kierowcy z ID
   const getDriverName = (driverId) => {
     if (!driverId) return 'Brak kierowcy'
     const driver = KIEROWCY.find(k => k.id === parseInt(driverId))
     return driver ? driver.imie : 'Nieznany kierowca'
   }
 
-  // Pobierz użytkowników pogrupowanych według rynków
   const getUsersByMarket = (marketName) => {
     return users.filter(u => u.market === marketName)
   }
@@ -355,7 +358,7 @@ export default function OcenyPage() {
                 value={selectedMarket}
                 onChange={(e) => {
                   setSelectedMarket(e.target.value)
-                  setSelectedRequester('') // Reset osoby po zmianie rynku
+                  setSelectedRequester('')
                 }}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
               >
@@ -376,38 +379,21 @@ export default function OcenyPage() {
               >
                 <option value="">Wszystkie osoby</option>
                 {selectedMarket ? (
-                  // Pokaż tylko osoby z wybranego rynku
-                  <>
-                    <optgroup label={selectedMarket}>
-                      {getUsersByMarket(selectedMarket).map(user => (
+                  getUsersByMarket(selectedMarket).map(user => (
+                    <option key={user.email} value={user.email}>
+                      {user.name}
+                    </option>
+                  ))
+                ) : (
+                  uniqueMarkets.map(market => (
+                    <optgroup key={market} label={market}>
+                      {getUsersByMarket(market).map(user => (
                         <option key={user.email} value={user.email}>
                           {user.name}
                         </option>
                       ))}
                     </optgroup>
-                  </>
-                ) : (
-                  // Pokaż wszystkie osoby - NAJPIERW bez przypisanego rynku, potem pogrupowane
-                  <>
-                    {users.filter(u => !u.market).length > 0 && (
-                      <optgroup label="Wszyscy użytkownicy">
-                        {users.filter(u => !u.market).map(user => (
-                          <option key={user.email} value={user.email}>
-                            {user.name || user.email}
-                          </option>
-                        ))}
-                      </optgroup>
-                    )}
-                    {uniqueMarkets.map(market => (
-                      <optgroup key={market} label={market}>
-                        {getUsersByMarket(market).map(user => (
-                          <option key={user.email} value={user.email}>
-                            {user.name}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ))}
-                  </>
+                  ))
                 )}
               </select>
             </div>
@@ -539,7 +525,7 @@ export default function OcenyPage() {
         )}
       </div>
 
-      {/* Modal oceny - odpowiedni dla typu transportu */}
+      {/* Modal oceny */}
       {showRatingModal && selectedTransport && (
         activeTab === 'wlasny' ? (
           <CompleteRatingModal
@@ -562,7 +548,6 @@ export default function OcenyPage() {
 
 // Komponent tabeli dla transportu własnego
 function TransportWlasnyTable({ transports, onRate, getMagazynName, getDriverName }) {
-  // Bezpieczne parsowanie daty
   const safeFormatDate = (dateString) => {
     if (!dateString) return '-'
     try {
@@ -670,7 +655,6 @@ function TransportWlasnyTable({ transports, onRate, getMagazynName, getDriverNam
 
 // Komponent tabeli dla transportu spedycyjnego
 function TransportSpedycyjnyTable({ transports, onRate, getMagazynName }) {
-  // Bezpieczne parsowanie daty
   const safeFormatDate = (dateString) => {
     if (!dateString) return '-'
     try {
