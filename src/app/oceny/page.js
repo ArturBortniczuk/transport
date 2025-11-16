@@ -88,19 +88,31 @@ export default function OcenyPage() {
     try {
       const response = await fetch('/api/users')
       const data = await response.json()
-      console.log('📥 Pobrani użytkownicy:', data)
-      if (data.success) {
+      console.log('📥 Pełna odpowiedź API:', data)
+      console.log('📥 data.success:', data.success)
+      console.log('📥 data.users:', data.users)
+      console.log('📥 Czy data.users jest tablicą?', Array.isArray(data.users))
+      
+      if (data.success && data.users) {
+        console.log('✅ Warunek spełniony, przetwarzam użytkowników...')
         // Dodaj rynek do każdego użytkownika na podstawie MPK (jeśli istnieje)
-        const usersWithMarkets = data.users.map(user => ({
-          ...user,
-          market: user.mpk ? getMarketFromMPK(user.mpk) : null
-        }))
-        console.log('👥 Użytkownicy z rynkami:', usersWithMarkets)
+        const usersWithMarkets = data.users.map(user => {
+          const market = user.mpk ? getMarketFromMPK(user.mpk) : null
+          console.log(`  User ${user.name}: mpk=${user.mpk}, market=${market}`)
+          return {
+            ...user,
+            market: market
+          }
+        })
+        console.log('👥 Użytkownicy po przetworzeniu:', usersWithMarkets.length, usersWithMarkets)
         console.log('🔍 Przykładowy użytkownik:', usersWithMarkets[0])
         setUsers(usersWithMarkets)
+        console.log('💾 setUsers wywołane z:', usersWithMarkets.length, 'użytkownikami')
+      } else {
+        console.error('❌ Warunek NIE spełniony!', { success: data.success, hasUsers: !!data.users })
       }
     } catch (error) {
-      console.error('Błąd pobierania użytkowników:', error)
+      console.error('❌ Błąd pobierania użytkowników:', error)
     }
   }
 
@@ -140,8 +152,11 @@ export default function OcenyPage() {
   // Pobierz unikalne rynki z użytkowników
   const uniqueMarkets = [...new Set(users.map(u => u.market).filter(Boolean))].sort()
   
-  console.log('🏢 Unikalne rynki:', uniqueMarkets)
-  console.log('👥 Liczba użytkowników:', users.length)
+  // Debug po każdej zmianie users
+  useEffect(() => {
+    console.log('🔄 State users zmienił się! Nowa wartość:', users.length, users)
+    console.log('🏢 Unikalne rynki:', uniqueMarkets)
+  }, [users])
 
   // Filtrowanie transportów
   const filteredTransports = transports.filter(transport => {
@@ -370,32 +385,33 @@ export default function OcenyPage() {
                     <optgroup label={selectedMarket}>
                       {getUsersByMarket(selectedMarket).map(user => (
                         <option key={user.email} value={user.email}>
-                          {user.name} ({user.market})
+                          {user.name}
                         </option>
                       ))}
                     </optgroup>
                   </>
                 ) : (
-                  // Pokaż wszystkie osoby pogrupowane według rynków
-                  uniqueMarkets.map(market => (
-                    <optgroup key={market} label={market}>
-                      {getUsersByMarket(market).map(user => (
-                        <option key={user.email} value={user.email}>
-                          {user.name}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))
-                )}
-                {/* Osoby bez przypisanego rynku */}
-                {users.filter(u => !u.market).length > 0 && (
-                  <optgroup label="Bez przypisanego rynku">
-                    {users.filter(u => !u.market).map(user => (
-                      <option key={user.email} value={user.email}>
-                        {user.name}
-                      </option>
+                  // Pokaż wszystkie osoby - NAJPIERW bez przypisanego rynku, potem pogrupowane
+                  <>
+                    {users.filter(u => !u.market).length > 0 && (
+                      <optgroup label="Wszyscy użytkownicy">
+                        {users.filter(u => !u.market).map(user => (
+                          <option key={user.email} value={user.email}>
+                            {user.name || user.email}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                    {uniqueMarkets.map(market => (
+                      <optgroup key={market} label={market}>
+                        {getUsersByMarket(market).map(user => (
+                          <option key={user.email} value={user.email}>
+                            {user.name}
+                          </option>
+                        ))}
+                      </optgroup>
                     ))}
-                  </optgroup>
+                  </>
                 )}
               </select>
             </div>
