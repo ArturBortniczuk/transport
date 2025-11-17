@@ -124,8 +124,24 @@ export default function OcenyPage() {
         endDate
       })
       
-      const response = await fetch(`/api/oceny-transportow?${params}`)
+      console.log('🚀 OCENY: Pobieranie transportów')
+      
+      const response = await fetch(`/api/oceny-transportow?${params}`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache'
+        }
+      })
       const data = await response.json()
+      
+      console.log('📦 OCENY: Transportów:', data.transports?.length)
+      if (data.transports?.[0]) {
+        console.log('📄 OCENY: Przykład:', {
+          id: data.transports[0].id,
+          wz_number: data.transports[0].wz_number,
+          client: data.transports[0].client_name
+        })
+      }
       
       if (data.success) {
         setTransports(data.transports)
@@ -133,7 +149,7 @@ export default function OcenyPage() {
         setError(data.error)
       }
     } catch (error) {
-      console.error('❌ Błąd pobierania transportów:', error)
+      console.error('❌ OCENY: Błąd:', error)
       setError('Wystąpił błąd podczas pobierania danych')
     } finally {
       setLoading(false)
