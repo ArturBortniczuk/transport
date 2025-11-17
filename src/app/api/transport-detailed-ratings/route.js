@@ -348,13 +348,19 @@ export async function POST(request) {
           error: 'Przy wyborze "Inny problem" komentarz jest wymagany' 
         }, { status: 400 });
       }
-    } else {
-      if (!ratings || Object.values(ratings).some(r => r === null || r === undefined)) {
+    } else {
+      // START POPRAWKI WALIDACJI
+      // Sprawdź, czy obiekt 'ratings' istnieje i ma 6 zdefiniowanych kluczy
+      const ratingKeys = ratings ? Object.values(ratings) : [];
+      const allRated = ratingKeys.length === 6 && ratingKeys.every(r => r !== null && r !== undefined);
+      
+      if (!allRated) {
         return NextResponse.json({ 
           success: false, 
-          error: 'Wszystkie kryteria muszą być ocenione' 
+          error: 'Wszystkie 6 kryteriów musi być ocenionych (ani "null", ani "undefined")' 
         }, { status: 400 });
       }
+      // KONIEC POPRAWKI WALIDACJI
     }
 
     const transport = await db('transports')
