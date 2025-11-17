@@ -107,8 +107,7 @@ const sendRatingNotification = async (transportId, ratingId) => {
     
     const criteriaFormatted = formatRatingData(rating);
     // ZMIANA: 'created_at' -> 'rated_at' (z Wersji 2)
-    const ratingDate = new Date(rating.rated_at).toLocaleString('pl-PL');
-    
+    const ratingDate = new Date(rating.created_at).toLocaleString('pl-PL');    
     // ZMIANA: Zaktualizowany HTML
     const htmlContent = `
       <!DOCTYPE html>
@@ -244,7 +243,7 @@ export async function GET(request) {
     // ZMIANA: 'created_at' -> 'rated_at' (z Wersji 2)
     const allDetailedRatings = await db('transport_detailed_ratings')
       .where('transport_id', transportId)
-      .orderBy('rated_at', 'desc')
+      .orderBy('created_at', 'desc')
       .select('*');
     
     const totalRatings = allDetailedRatings.length;
@@ -398,7 +397,7 @@ export async function POST(request) {
         table.boolean('delivery_on_time');
         table.boolean('other_problem').defaultTo(false); // Dodane z Wersji 2
         table.text('comment');
-        table.timestamp('rated_at').defaultTo(db.fn.now()); // Zmieniona nazwa z 'created_at'
+        table.timestamp('created_at').defaultTo(db.fn.now()); // Zmieniona nazwa z 'created_at'
         
         table.index(['transport_id']);
         table.unique(['transport_id', 'rater_email']);
@@ -429,7 +428,7 @@ export async function POST(request) {
       delivery_on_time: otherProblem ? null : ratings.deliveryOnTime,
       other_problem: otherProblem || false,
       comment: comment || '',
-      rated_at: new Date() // Zmieniona nazwa z 'created_at'
+      created_at: new Date() // Zmieniona nazwa z 'created_at'
     };
     
     let ratingId;
