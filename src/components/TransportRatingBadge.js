@@ -1,40 +1,39 @@
-// src/components/TransportRatingBadge.js - NAPRAWIONA WERSJA
+// src/components/TransportRatingBadge.js - NAPRAWIONA WERSJA z obsługą spedycji
 'use client'
 import { useState, useEffect } from 'react'
 import { Star, StarOff } from 'lucide-react'
 
-export default function TransportDetailedRatingBadge({ transportId, refreshTrigger = 0 }) {
+export default function TransportDetailedRatingBadge({ 
+  transportId, 
+  refreshTrigger = 0, 
+  type = 'transport' // 'transport' lub 'spedition'
+}) {
   const [rating, setRating] = useState(null)
   const [loading, setLoading] = useState(true)
   
   useEffect(() => {
     const fetchRating = async () => {
       try {
-        setLoading(true)        
-        const response = await fetch(`/api/transport-detailed-ratings?transportId=${transportId}`, {
-          cache: 'no-store', // Wymuś pobieranie bez cache
-          headers: {
-            'Cache-Control': 'no-cache'
-          }
-        })
+        setLoading(true)
+        
+        // Wybierz właściwe API w zależności od typu
+        const apiUrl = type === 'spedition' 
+          ? `/api/spedition-detailed-ratings?speditionId=${transportId}`
+          : `/api/transport-detailed-ratings?transportId=${transportId}`
+        
+        const response = await fetch(apiUrl)
         const data = await response.json()
-                
+        
         if (data.success) {
-          const ratingData = {
-            totalRatings: data.stats?.totalRatings || 0,
-            overallPercentage: data.stats?.overallRatingPercentage || null,
+          setRating({
+            totalRatings: data.stats.totalRatings,
+            overallPercentage: data.stats.overallRatingPercentage,
             canBeRated: data.canBeRated,
             hasUserRated: data.hasUserRated
-          }
-          
-          setRating(ratingData)
-        } else {
-          console.error(`❌ Badge: Błąd API dla ${transportId}:`, data.error)
-          setRating(null)
+          })
         }
       } catch (error) {
-        console.error(`❌ Badge: Błąd pobierania oceny dla ${transportId}:`, error)
-        setRating(null)
+        console.error('Błąd pobierania oceny:', error)
       } finally {
         setLoading(false)
       }
@@ -43,14 +42,13 @@ export default function TransportDetailedRatingBadge({ transportId, refreshTrigg
     if (transportId) {
       fetchRating()
     }
-  }, [transportId, refreshTrigger])
+  }, [transportId, refreshTrigger, type])
   
   if (loading) {
     return (
       <div className="w-20 h-5 bg-gray-100 rounded animate-pulse"></div>
     )
   }
-  
   
   if (!rating || rating.totalRatings === 0) {
     return (

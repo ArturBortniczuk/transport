@@ -1,4 +1,4 @@
-// src/app/oceny/page.js - NAPRAWIONA WERSJA z właściwą nazwą kolumny wz_number
+// src/app/oceny/page.js - NAPRAWIONA WERSJA z właściwym Badge dla spedycji
 'use client'
 import { useState, useEffect, useMemo } from 'react'
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear } from 'date-fns'
@@ -124,8 +124,6 @@ export default function OcenyPage() {
         endDate
       })
       
-      console.log('🚀 OCENY: Pobieranie transportów')
-      
       const response = await fetch(`/api/oceny-transportow?${params}`, {
         cache: 'no-store',
         headers: {
@@ -133,15 +131,6 @@ export default function OcenyPage() {
         }
       })
       const data = await response.json()
-      
-      console.log('📦 OCENY: Transportów:', data.transports?.length)
-      if (data.transports?.[0]) {
-        console.log('📄 OCENY: Przykład:', {
-          id: data.transports[0].id,
-          wz_number: data.transports[0].wz_number,
-          client: data.transports[0].client_name
-        })
-      }
       
       if (data.success) {
         setTransports(data.transports)
@@ -639,7 +628,8 @@ function TransportWlasnyTable({ transports, onRate, getMagazynName, getDriverNam
             <td className="px-4 py-3 whitespace-nowrap text-sm">
               <TransportDetailedRatingBadge 
                 key={`rating-${transport.id}-${refreshBadges}`}
-                transportId={transport.id} 
+                transportId={transport.id}
+                type="transport"
                 refreshTrigger={refreshBadges} 
               />
             </td>
@@ -767,7 +757,8 @@ function TransportSpedycyjnyTable({ transports, onRate, getMagazynName, refreshB
               <td className="px-4 py-3 whitespace-nowrap text-sm">
                 <TransportDetailedRatingBadge 
                   key={`rating-${transport.id}-${refreshBadges}`}
-                  transportId={transport.id} 
+                  transportId={transport.id}
+                  type="spedition"
                   refreshTrigger={refreshBadges} 
                 />
               </td>
