@@ -10,9 +10,7 @@ export default function TransportDetailedRatingBadge({ transportId, refreshTrigg
   useEffect(() => {
     const fetchRating = async () => {
       try {
-        setLoading(true)
-        console.log(`🔍 Badge: Pobieranie oceny dla transportu ${transportId}, refreshTrigger: ${refreshTrigger}`)
-        
+        setLoading(true)        
         const response = await fetch(`/api/transport-detailed-ratings?transportId=${transportId}`, {
           cache: 'no-store', // Wymuś pobieranie bez cache
           headers: {
@@ -20,9 +18,7 @@ export default function TransportDetailedRatingBadge({ transportId, refreshTrigg
           }
         })
         const data = await response.json()
-        
-        console.log(`📊 Badge: Odpowiedź API dla transportu ${transportId}:`, data)
-        
+                
         if (data.success) {
           const ratingData = {
             totalRatings: data.stats?.totalRatings || 0,
@@ -31,7 +27,6 @@ export default function TransportDetailedRatingBadge({ transportId, refreshTrigg
             hasUserRated: data.hasUserRated
           }
           
-          console.log(`✅ Badge: Ustawiam rating dla ${transportId}:`, ratingData)
           setRating(ratingData)
         } else {
           console.error(`❌ Badge: Błąd API dla ${transportId}:`, data.error)
@@ -56,7 +51,6 @@ export default function TransportDetailedRatingBadge({ transportId, refreshTrigg
     )
   }
   
-  console.log(`🎨 Badge: Renderowanie dla ${transportId}, rating:`, rating)
   
   if (!rating || rating.totalRatings === 0) {
     return (
