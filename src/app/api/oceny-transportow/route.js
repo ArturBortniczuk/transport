@@ -1,4 +1,4 @@
-// src/app/api/oceny-transportow/route.js - API DO POBIERANIA TRANSPORTÓW DO OCENY
+// src/app/api/oceny-transportow/route.js - KOMPLETNA NAPRAWIONA WERSJA
 import { NextResponse } from 'next/server'
 import db from '@/database/db'
 
@@ -48,11 +48,51 @@ export async function GET(request) {
     let transports = []
 
     if (type === 'wlasny') {
+      // POPRAWKA: Jawne wymienienie kolumn zamiast select('*')
       transports = await db('transports')
         .where('status', 'completed')
         .whereBetween('delivery_date', [startDate, endDate])
         .orderBy('delivery_date', 'desc')
-        .select('*')
+        .select(
+          'id',
+          'source_warehouse',
+          'destination_city',
+          'postal_code',
+          'street',
+          'distance',
+          'driver_id',
+          'vehicle_id',
+          'status',
+          'wz_number',  // ← KRYTYCZNE: Jawnie wymienione
+          'client_name',
+          'market',
+          'loading_level',
+          'notes',
+          'is_cyclical',
+          'delivery_date',
+          'completed_at',
+          'requester_name',
+          'requester_email',
+          'mpk',
+          'goods_description',
+          'responsible_constructions',
+          'real_client_name',
+          'latitude',
+          'longitude',
+          'connected_transport_id'
+        )
+
+      console.log(`📋 Pobrano ${transports.length} transportów własnych`)
+      
+      // DEBUG: Sprawdź pierwszy transport
+      if (transports.length > 0) {
+        console.log('🔍 Przykładowy transport:', {
+          id: transports[0].id,
+          wz_number: transports[0].wz_number,
+          client_name: transports[0].client_name,
+          delivery_date: transports[0].delivery_date
+        })
+      }
 
       const transportIds = transports.map(t => t.id)
       
@@ -275,9 +315,16 @@ export async function GET(request) {
       })
     }
 
+    // POPRAWKA: Dodaj nagłówki wyłączające cache
     return NextResponse.json({ 
       success: true, 
       transports 
+    }, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      }
     })
 
   } catch (error) {
@@ -285,6 +332,11 @@ export async function GET(request) {
     return NextResponse.json({ 
       success: false, 
       error: 'Błąd serwera: ' + error.message 
-    }, { status: 500 })
+    }, { 
+      status: 500,
+      headers: {
+        'Cache-Control': 'no-store'
+      }
+    })
   }
 }
