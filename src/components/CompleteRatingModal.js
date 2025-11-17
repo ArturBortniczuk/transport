@@ -1,4 +1,4 @@
-// src/components/CompleteRatingModal.js - PEŁNY MODAL Z KOMENTARZAMI (jak w archiwum)
+// src/components/CompleteRatingModal.js - PEŁNY MODAL Z OPCJĄ "INNY PROBLEM"
 'use client'
 import { useState, useEffect } from 'react'
 import { X, ThumbsUp, ThumbsDown, CheckCircle, AlertCircle, MessageSquare, Edit, Send } from 'lucide-react'
@@ -20,6 +20,7 @@ export default function CompleteRatingModal({ transport, onClose, onSuccess, get
   const [success, setSuccess] = useState(false)
   const [isEditMode, setIsEditMode] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [otherProblem, setOtherProblem] = useState(false) // NOWE: Opcja "Inny problem"
   
   // Stan ocen
   const [hasMainRating, setHasMainRating] = useState(false)
@@ -46,15 +47,15 @@ export default function CompleteRatingModal({ transport, onClose, onSuccess, get
       id: 'cargo',
       title: '📦 Towar',
       criteria: [
-        { key: 'cargoComplete', text: 'Towar kompletny' },
-        { key: 'cargoCorrect', text: 'Towar prawidłowy' }
+        { key: 'cargoComplete', text: 'Pełna ilość' },
+        { key: 'cargoCorrect', text: 'Odpowiedni asortyment' }
       ]
     },
     {
       id: 'delivery',
       title: '🚚 Organizacja dostawy',
       criteria: [
-        { key: 'deliveryNotified', text: 'Dostawa zgłoszona' },
+        { key: 'deliveryNotified', text: 'Zgłoszenie dostawy' },
         { key: 'deliveryOnTime', text: 'Dostawa na czas' }
       ]
     }
@@ -96,6 +97,7 @@ export default function CompleteRatingModal({ transport, onClose, onSuccess, get
             deliveryOnTime: ratingToLoad.delivery_on_time
           })
           setComment(ratingToLoad.comment || '')
+          setOtherProblem(ratingToLoad.other_problem || false) // NOWE: Ładuj other_problem
         }
       }
     } catch (error) {
@@ -124,10 +126,19 @@ export default function CompleteRatingModal({ transport, onClose, onSuccess, get
   const handleSubmit = async (e) => {
     e.preventDefault()
     
-    const allRated = Object.values(ratings).every(rating => rating !== null)
-    if (!allRated) {
-      setError('Proszę ocenić wszystkie kryteria')
-      return
+    // NOWA WALIDACJA: Sprawdź czy zaznaczono "Inny problem"
+    if (otherProblem) {
+      if (!comment || comment.trim() === '') {
+        setError('Przy wyborze "Inny problem" komentarz jest wymagany')
+        return
+      }
+    } else {
+      // Jeśli nie zaznaczono "Inny problem", wszystkie kategorie muszą być ocenione
+      const allRated = Object.values(ratings).every(rating => rating !== null)
+      if (!allRated) {
+        setError('Proszę ocenić wszystkie kryteria lub zaznaczyć "Inny problem"')
+        return
+      }
     }
 
     setSubmitting(true)
@@ -140,8 +151,9 @@ export default function CompleteRatingModal({ transport, onClose, onSuccess, get
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           transportId: transport.id,
-          ratings,
-          comment
+          ratings: otherProblem ? {} : ratings, // NOWE: Jeśli "Inny problem", wysyłamy puste oceny
+          comment,
+          otherProblem // NOWE: Wysyłamy informację o "Innym problemie"
         })
       })
 
@@ -291,37 +303,47 @@ export default function CompleteRatingModal({ transport, onClose, onSuccess, get
                 ⭐ Ocena transportu: {overallPercentage}%
               </h3>
               
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                {categories.map(category => (
-                  <div key={category.id} className="bg-white p-4 rounded-lg border border-gray-200">
-                    <h4 className="font-medium text-sm mb-3 text-gray-800">{category.title}</h4>
-                    {category.criteria.map(criteria => {
-                      const ratingValue = ratings[criteria.key]
-                      
-                      return (
-                        <div key={criteria.key} className={`flex items-center justify-between text-sm mb-2 p-2 rounded ${
-                          ratingValue ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
-                        }`}>
-                          <span className="text-gray-700 text-xs flex-1 mr-2">{criteria.text}</span>
-                          <div className="flex items-center">
-                            {ratingValue ? (
-                              <>
-                                <ThumbsUp size={14} className="text-green-600 mr-1" />
-                                <span className="text-green-700 text-xs font-medium">TAK</span>
-                              </>
-                            ) : (
-                              <>
-                                <ThumbsDown size={14} className="text-red-600 mr-1" />
-                                <span className="text-red-700 text-xs font-medium">NIE</span>
-                              </>
-                            )}
+              {/* Pokaż czy to był "Inny problem" */}
+              {otherProblem && (
+                <div className="mb-4 p-3 bg-yellow-100 border border-yellow-300 rounded-lg">
+                  <p className="text-sm font-medium text-yellow-800">⚠️ Zaznaczono: Inny problem</p>
+                </div>
+              )}
+              
+              {/* Kategorie - pokaż tylko jeśli NIE był to "Inny problem" */}
+              {!otherProblem && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                  {categories.map(category => (
+                    <div key={category.id} className="bg-white p-4 rounded-lg border border-gray-200">
+                      <h4 className="font-medium text-sm mb-3 text-gray-800">{category.title}</h4>
+                      {category.criteria.map(criteria => {
+                        const ratingValue = ratings[criteria.key]
+                        
+                        return (
+                          <div key={criteria.key} className={`flex items-center justify-between text-sm mb-2 p-2 rounded ${
+                            ratingValue ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
+                          }`}>
+                            <span className="text-gray-700 text-xs flex-1 mr-2">{criteria.text}</span>
+                            <div className="flex items-center">
+                              {ratingValue ? (
+                                <>
+                                  <ThumbsUp size={14} className="text-green-600 mr-1" />
+                                  <span className="text-green-700 text-xs font-medium">TAK</span>
+                                </>
+                              ) : (
+                                <>
+                                  <ThumbsDown size={14} className="text-red-600 mr-1" />
+                                  <span className="text-red-700 text-xs font-medium">NIE</span>
+                                </>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                ))}
-              </div>
+                        )
+                      })}
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {comment && (
                 <div className="mt-4 p-4 bg-white rounded-lg border border-blue-200">
@@ -349,36 +371,71 @@ export default function CompleteRatingModal({ transport, onClose, onSuccess, get
                 <h3 className="text-lg font-semibold mb-4">
                   {userHasRated ? 'Edytuj swoją ocenę' : 'Oceń transport według kryteriów'}
                 </h3>
-                
-                <div className="space-y-6">
-                  {categories.map(category => (
-                    <div key={category.id} className="border border-gray-200 rounded-lg p-4">
-                      <h4 className="font-medium mb-3 text-gray-800">{category.title}</h4>
-                      
-                      {category.criteria.map(criteria => (
-                        <div key={criteria.key} className="mb-3 last:mb-0">
-                          <p className="text-sm text-gray-700 mb-2">{criteria.text}</p>
-                          <div className="flex space-x-2">
-                            <RatingButton criteriaKey={criteria.key} value={true} label="TAK" />
-                            <RatingButton criteriaKey={criteria.key} value={false} label="NIE" />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ))}
+
+                {/* NOWE: Opcja "Inny problem" */}
+                <div className="mb-6 p-4 bg-yellow-50 border-2 border-yellow-200 rounded-lg">
+                  <label className="flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={otherProblem}
+                      onChange={(e) => {
+                        setOtherProblem(e.target.checked)
+                        if (e.target.checked) {
+                          setRatings({
+                            driverProfessional: null,
+                            driverTasksCompleted: null,
+                            cargoComplete: null,
+                            cargoCorrect: null,
+                            deliveryNotified: null,
+                            deliveryOnTime: null
+                          })
+                        }
+                      }}
+                      className="w-5 h-5 text-yellow-600 border-gray-300 rounded focus:ring-yellow-500"
+                    />
+                    <span className="ml-3 text-sm font-medium text-gray-900">
+                      ⚠️ Inny problem (nie wymaga oceny wszystkich kategorii)
+                    </span>
+                  </label>
+                  <p className="mt-2 ml-8 text-xs text-gray-600">
+                    Zaznacz tę opcję jeśli problem nie mieści się w standardowych kategoriach. 
+                    W takim przypadku komentarz jest wymagany.
+                  </p>
                 </div>
+                
+                {/* Kategorie - pokazuj tylko gdy NIE zaznaczono "Inny problem" */}
+                {!otherProblem && (
+                  <div className="space-y-6">
+                    {categories.map(category => (
+                      <div key={category.id} className="border border-gray-200 rounded-lg p-4">
+                        <h4 className="font-medium mb-3 text-gray-800">{category.title}</h4>
+                        
+                        {category.criteria.map(criteria => (
+                          <div key={criteria.key} className="mb-3 last:mb-0">
+                            <p className="text-sm text-gray-700 mb-2">{criteria.text}</p>
+                            <div className="flex space-x-2">
+                              <RatingButton criteriaKey={criteria.key} value={true} label="TAK" />
+                              <RatingButton criteriaKey={criteria.key} value={false} label="NIE" />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 <div className="mt-6">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     <MessageSquare className="inline w-4 h-4 mr-1" />
-                    Komentarz (opcjonalnie)
+                    Komentarz {otherProblem && <span className="text-red-600">*</span>}
+                    {otherProblem ? ' (wymagany)' : ' (opcjonalnie)'}
                   </label>
                   <textarea
                     value={comment}
                     onChange={(e) => setComment(e.target.value)}
                     rows={4}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 focus:ring-2 focus:ring-blue-500"
-                    placeholder="Dodaj komentarz do oceny..."
+                    placeholder={otherProblem ? "Opisz problem..." : "Dodaj komentarz do oceny..."}
                   />
                 </div>
 

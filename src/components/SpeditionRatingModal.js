@@ -1,4 +1,4 @@
-// src/components/SpeditionRatingModal.js - PEŁNY MODAL Z KOMENTARZAMI dla spedycji
+// src/components/SpeditionRatingModal.js - PEŁNA WERSJA DLA SPEDYCJI Z OPCJĄ "INNY PROBLEM"
 'use client'
 import { useState, useEffect } from 'react'
 import { X, ThumbsUp, ThumbsDown, CheckCircle, AlertCircle, MessageSquare, Edit, Send } from 'lucide-react'
@@ -22,6 +22,7 @@ export default function SpeditionRatingModal({ transport, onClose, onSuccess }) 
   const [success, setSuccess] = useState(false)
   const [isEditMode, setIsEditMode] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [otherProblem, setOtherProblem] = useState(false) // NOWE: Opcja "Inny problem"
   
   // Stan ocen
   const [hasMainRating, setHasMainRating] = useState(false)
@@ -41,14 +42,14 @@ export default function SpeditionRatingModal({ transport, onClose, onSuccess }) 
       title: '🚛 Przewoźnik/Kierowca',
       criteria: [
         { key: 'carrierProfessional', text: 'Profesjonalne zachowanie' },
-        { key: 'loadingOnTime', text: 'Punktualny załadunek' }
+        { key: 'loadingOnTime', text: 'Załadunek na czas' }
       ]
     },
     {
       id: 'cargo',
       title: '📦 Towar',
       criteria: [
-        { key: 'cargoComplete', text: 'Towar kompletny' },
+        { key: 'cargoComplete', text: 'Kompletność przesyłki' },
         { key: 'cargoUndamaged', text: 'Towar nieuszkodzony' }
       ]
     },
@@ -56,16 +57,16 @@ export default function SpeditionRatingModal({ transport, onClose, onSuccess }) 
       id: 'delivery',
       title: '🚚 Dostawa',
       criteria: [
-        { key: 'deliveryNotified', text: 'Dostawa zgłoszona' },
+        { key: 'deliveryNotified', text: 'Zgłoszenie dostawy' },
         { key: 'deliveryOnTime', text: 'Dostawa na czas' }
       ]
     },
     {
       id: 'documents',
-      title: '📄 Dokumentacja',
+      title: '📄 Dokumenty',
       criteria: [
-        { key: 'documentsComplete', text: 'Dokumenty kompletne' },
-        { key: 'documentsCorrect', text: 'Dokumenty poprawne' }
+        { key: 'documentsComplete', text: 'Kompletność dokumentów' },
+        { key: 'documentsCorrect', text: 'Poprawność dokumentów' }
       ]
     }
   ]
@@ -81,13 +82,20 @@ export default function SpeditionRatingModal({ transport, onClose, onSuccess }) 
       const response = await fetch(`/api/spedition-detailed-ratings?speditionId=${transport.id}`)
       const data = await response.json()
       
+      console.log('📊 Dane oceny spedycji z API:', data)
+      
       if (data.success) {
         const hasRating = data.stats.totalRatings > 0
+        console.log('📈 hasRating:', hasRating, 'totalRatings:', data.stats.totalRatings)
+        
         setHasMainRating(hasRating)
         setUserHasRated(data.hasUserRated)
         setOverallPercentage(data.stats.overallRatingPercentage)
         
+        // Załaduj ocenę - najpierw szukaj oceny użytkownika, potem pierwszej dostępnej
         const ratingToLoad = data.rating || (data.allRatings && data.allRatings[0])
+        
+        console.log('🎯 Ocena do załadowania:', ratingToLoad)
         
         if (ratingToLoad) {
           setRatings({
@@ -101,12 +109,11 @@ export default function SpeditionRatingModal({ transport, onClose, onSuccess }) 
             documentsCorrect: ratingToLoad.documents_correct
           })
           setComment(ratingToLoad.comment || '')
+          setOtherProblem(ratingToLoad.other_problem || false) // NOWE: Ładuj other_problem
         }
       }
     } catch (error) {
-      console.error('Błąd pobierania oceny spedycji:', error)
-      setHasMainRating(false)
-      setUserHasRated(false)
+      console.error('❌ Błąd pobierania oceny spedycji:', error)
     } finally {
       setLoading(false)
     }
@@ -131,10 +138,19 @@ export default function SpeditionRatingModal({ transport, onClose, onSuccess }) 
   const handleSubmit = async (e) => {
     e.preventDefault()
     
-    const allRated = Object.values(ratings).every(rating => rating !== null)
-    if (!allRated) {
-      setError('Proszę ocenić wszystkie kryteria')
-      return
+    // NOWA WALIDACJA: Sprawdź czy zaznaczono "Inny problem"
+    if (otherProblem) {
+      if (!comment || comment.trim() === '') {
+        setError('Przy wyborze "Inny problem" komentarz jest wymagany')
+        return
+      }
+    } else {
+      // Jeśli nie zaznaczono "Inny problem", wszystkie kategorie muszą być ocenione
+      const allRated = Object.values(ratings).every(rating => rating !== null)
+      if (!allRated) {
+        setError('Proszę ocenić wszystkie kryteria lub zaznaczyć "Inny problem"')
+        return
+      }
     }
 
     setSubmitting(true)
@@ -147,8 +163,9 @@ export default function SpeditionRatingModal({ transport, onClose, onSuccess }) 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           speditionId: transport.id,
-          ratings,
-          comment
+          ratings: otherProblem ? {} : ratings, // NOWE: Jeśli "Inny problem", wysyłamy puste oceny
+          comment,
+          otherProblem // NOWE: Wysyłamy informację o "Innym problemie"
         })
       })
 
@@ -156,7 +173,7 @@ export default function SpeditionRatingModal({ transport, onClose, onSuccess }) 
 
       if (data.success) {
         setSuccess(true)
-        await loadExistingRating()
+        await loadExistingRating() // Odśwież ocenę
         setIsEditMode(false)
         
         setTimeout(() => {
@@ -166,7 +183,7 @@ export default function SpeditionRatingModal({ transport, onClose, onSuccess }) 
         setError(data.error || 'Wystąpił błąd podczas zapisywania oceny')
       }
     } catch (error) {
-      console.error('Błąd zapisywania oceny spedycji:', error)
+      console.error('Błąd zapisywania oceny:', error)
       setError('Wystąpił błąd podczas zapisywania oceny')
     } finally {
       setSubmitting(false)
@@ -241,6 +258,14 @@ export default function SpeditionRatingModal({ transport, onClose, onSuccess }) 
     )
   }
 
+  const getMagazynName = (warehouse) => {
+    switch(warehouse) {
+      case 'bialystok': return 'Białystok'
+      case 'zielonka': return 'Zielonka'
+      default: return warehouse || 'Nieznany'
+    }
+  }
+
   if (loading) {
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -267,8 +292,8 @@ export default function SpeditionRatingModal({ transport, onClose, onSuccess }) 
                 }
               </h2>
               <p className="text-gray-600 mt-1">
-                {transport.delivery?.city || transport.client_name || 'Transport spedycyjny'} 
-                {transport.response?.driverName && ` - ${transport.response.driverName}`}
+                {getMagazynName(transport.source_warehouse)} → {transport.delivery?.city || 'Nieznane miasto'}
+                {transport.delivery_date && ` • ${format(new Date(transport.delivery_date), 'dd.MM.yyyy', { locale: pl })}`}
               </p>
             </div>
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
@@ -298,37 +323,47 @@ export default function SpeditionRatingModal({ transport, onClose, onSuccess }) 
                 ⭐ Ocena transportu: {overallPercentage}%
               </h3>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                {categories.map(category => (
-                  <div key={category.id} className="bg-white p-4 rounded-lg border border-gray-200">
-                    <h4 className="font-medium text-sm mb-3 text-gray-800">{category.title}</h4>
-                    {category.criteria.map(criteria => {
-                      const ratingValue = ratings[criteria.key]
-                      
-                      return (
-                        <div key={criteria.key} className={`flex items-center justify-between text-sm mb-2 p-2 rounded ${
-                          ratingValue ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
-                        }`}>
-                          <span className="text-gray-700 text-xs flex-1 mr-2">{criteria.text}</span>
-                          <div className="flex items-center">
-                            {ratingValue ? (
-                              <>
-                                <ThumbsUp size={14} className="text-green-600 mr-1" />
-                                <span className="text-green-700 text-xs font-medium">TAK</span>
-                              </>
-                            ) : (
-                              <>
-                                <ThumbsDown size={14} className="text-red-600 mr-1" />
-                                <span className="text-red-700 text-xs font-medium">NIE</span>
-                              </>
-                            )}
+              {/* Pokaż czy to był "Inny problem" */}
+              {otherProblem && (
+                <div className="mb-4 p-3 bg-yellow-100 border border-yellow-300 rounded-lg">
+                  <p className="text-sm font-medium text-yellow-800">⚠️ Zaznaczono: Inny problem</p>
+                </div>
+              )}
+              
+              {/* Kategorie - pokaż tylko jeśli NIE był to "Inny problem" */}
+              {!otherProblem && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                  {categories.map(category => (
+                    <div key={category.id} className="bg-white p-4 rounded-lg border border-gray-200">
+                      <h4 className="font-medium text-sm mb-3 text-gray-800">{category.title}</h4>
+                      {category.criteria.map(criteria => {
+                        const ratingValue = ratings[criteria.key]
+                        
+                        return (
+                          <div key={criteria.key} className={`flex items-center justify-between text-sm mb-2 p-2 rounded ${
+                            ratingValue ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
+                          }`}>
+                            <span className="text-gray-700 text-xs flex-1 mr-2">{criteria.text}</span>
+                            <div className="flex items-center">
+                              {ratingValue ? (
+                                <>
+                                  <ThumbsUp size={14} className="text-green-600 mr-1" />
+                                  <span className="text-green-700 text-xs font-medium">TAK</span>
+                                </>
+                              ) : (
+                                <>
+                                  <ThumbsDown size={14} className="text-red-600 mr-1" />
+                                  <span className="text-red-700 text-xs font-medium">NIE</span>
+                                </>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                ))}
-              </div>
+                        )
+                      })}
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {comment && (
                 <div className="mt-4 p-4 bg-white rounded-lg border border-blue-200">
@@ -356,36 +391,73 @@ export default function SpeditionRatingModal({ transport, onClose, onSuccess }) 
                 <h3 className="text-lg font-semibold mb-4">
                   {userHasRated ? 'Edytuj swoją ocenę' : 'Oceń transport według kryteriów'}
                 </h3>
-                
-                <div className="space-y-6">
-                  {categories.map(category => (
-                    <div key={category.id} className="border border-gray-200 rounded-lg p-4">
-                      <h4 className="font-medium mb-3 text-gray-800">{category.title}</h4>
-                      
-                      {category.criteria.map(criteria => (
-                        <div key={criteria.key} className="mb-3 last:mb-0">
-                          <p className="text-sm text-gray-700 mb-2">{criteria.text}</p>
-                          <div className="flex space-x-2">
-                            <RatingButton criteriaKey={criteria.key} value={true} label="TAK" />
-                            <RatingButton criteriaKey={criteria.key} value={false} label="NIE" />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ))}
+
+                {/* NOWE: Opcja "Inny problem" */}
+                <div className="mb-6 p-4 bg-yellow-50 border-2 border-yellow-200 rounded-lg">
+                  <label className="flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={otherProblem}
+                      onChange={(e) => {
+                        setOtherProblem(e.target.checked)
+                        if (e.target.checked) {
+                          setRatings({
+                            carrierProfessional: null,
+                            loadingOnTime: null,
+                            cargoComplete: null,
+                            cargoUndamaged: null,
+                            deliveryNotified: null,
+                            deliveryOnTime: null,
+                            documentsComplete: null,
+                            documentsCorrect: null
+                          })
+                        }
+                      }}
+                      className="w-5 h-5 text-yellow-600 border-gray-300 rounded focus:ring-yellow-500"
+                    />
+                    <span className="ml-3 text-sm font-medium text-gray-900">
+                      ⚠️ Inny problem (nie wymaga oceny wszystkich kategorii)
+                    </span>
+                  </label>
+                  <p className="mt-2 ml-8 text-xs text-gray-600">
+                    Zaznacz tę opcję jeśli problem nie mieści się w standardowych kategoriach. 
+                    W takim przypadku komentarz jest wymagany.
+                  </p>
                 </div>
+                
+                {/* Kategorie - pokazuj tylko gdy NIE zaznaczono "Inny problem" */}
+                {!otherProblem && (
+                  <div className="space-y-6">
+                    {categories.map(category => (
+                      <div key={category.id} className="border border-gray-200 rounded-lg p-4">
+                        <h4 className="font-medium mb-3 text-gray-800">{category.title}</h4>
+                        
+                        {category.criteria.map(criteria => (
+                          <div key={criteria.key} className="mb-3 last:mb-0">
+                            <p className="text-sm text-gray-700 mb-2">{criteria.text}</p>
+                            <div className="flex space-x-2">
+                              <RatingButton criteriaKey={criteria.key} value={true} label="TAK" />
+                              <RatingButton criteriaKey={criteria.key} value={false} label="NIE" />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 <div className="mt-6">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     <MessageSquare className="inline w-4 h-4 mr-1" />
-                    Komentarz (opcjonalnie)
+                    Komentarz {otherProblem && <span className="text-red-600">*</span>}
+                    {otherProblem ? ' (wymagany)' : ' (opcjonalnie)'}
                   </label>
                   <textarea
                     value={comment}
                     onChange={(e) => setComment(e.target.value)}
                     rows={4}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 focus:ring-2 focus:ring-blue-500"
-                    placeholder="Dodaj komentarz do oceny (np. uwagi o przewoźniku, problemach)..."
+                    placeholder={otherProblem ? "Opisz problem..." : "Dodaj komentarz do oceny..."}
                   />
                 </div>
 
@@ -425,7 +497,7 @@ export default function SpeditionRatingModal({ transport, onClose, onSuccess }) 
                 onChange={(e) => setNewComment(e.target.value)}
                 rows={3}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 focus:ring-2 focus:ring-blue-500"
-                placeholder="Dodaj komentarz do tego transportu spedycyjnego..."
+                placeholder="Dodaj komentarz do tego transportu..."
               />
               <div className="flex justify-end mt-2">
                 <button

@@ -1,4 +1,4 @@
-// src/app/api/spedition-detailed-ratings/route.js - API dla szczegółowych ocen spedycji
+// src/app/api/spedition-detailed-ratings/route.js - API DLA SPEDYCJI z obsługą "Inny problem"
 import { NextResponse } from 'next/server'
 import db from '@/database/db'
 
@@ -57,11 +57,10 @@ export async function GET(request) {
     try {
       allDetailedRatings = await db('spedition_detailed_ratings')
         .where('spedition_id', speditionId)
-        .orderBy('id', 'desc')  // POPRAWKA: używamy 'id' zamiast 'rated_at'
+        .orderBy('id', 'desc')
         .select('*')
     } catch (error) {
       console.error('Błąd pobierania ocen spedycji:', error)
-      // Jeśli błąd, zwróć puste dane
       allDetailedRatings = []
     }
     
@@ -74,6 +73,13 @@ export async function GET(request) {
       let positiveCriteria = 0
       
       allDetailedRatings.forEach(rating => {
+        // Jeśli zaznaczono "Inny problem", uznajemy ocenę za negatywną
+        if (rating.other_problem === true) {
+          totalCriteria += 8 // 8 kryteriów dla spedycji
+          positiveCriteria += 0 // żadne punkty pozytywne
+          return // pomijamy dalsze sprawdzanie
+        }
+        
         const criteria = [
           rating.carrier_professional,
           rating.loading_on_time,
@@ -93,7 +99,7 @@ export async function GET(request) {
         })
       })
       
-      overallRatingPercentage = totalCriteria > 0 ? 
+      overallRatingPercentage = totalCriteria > 0 ?
         Math.round((positiveCriteria / totalCriteria) * 100) : null
     }
     
@@ -144,13 +150,30 @@ export async function POST(request) {
       }, { status: 401 })
     }
     
-    const { speditionId, ratings, comment } = await request.json()
+    const { speditionId, ratings, comment, otherProblem } = await request.json()
     
-    if (!speditionId || !ratings) {
+    if (!speditionId) {
       return NextResponse.json({ 
         success: false, 
-        error: 'Brakujące dane: wymagane spedition ID i oceny' 
+        error: 'Brakujące dane: wymagane spedition ID' 
       }, { status: 400 })
+    }
+    
+    // Walidacja: albo wszystkie oceny, albo "inny problem" z komentarzem
+    if (otherProblem) {
+      if (!comment || comment.trim() === '') {
+        return NextResponse.json({ 
+          success: false, 
+          error: 'Przy wyborze "Inny problem" komentarz jest wymagany' 
+        }, { status: 400 })
+      }
+    } else {
+      if (!ratings || Object.values(ratings).some(r => r === null || r === undefined)) {
+        return NextResponse.json({ 
+          success: false, 
+          error: 'Wszystkie kryteria muszą być ocenione' 
+        }, { status: 400 })
+      }
     }
     
     // Sprawdź czy transport spedycyjny istnieje i można go ocenić
@@ -190,6 +213,7 @@ export async function POST(request) {
         table.boolean('delivery_on_time')
         table.boolean('documents_complete')
         table.boolean('documents_correct')
+        table.boolean('other_problem').defaultTo(false)
         table.text('comment')
         table.timestamp('rated_at').defaultTo(db.fn.now())
         
@@ -214,14 +238,15 @@ export async function POST(request) {
       spedition_id: speditionId,
       rater_email: userId,
       rater_name: user?.name || userId,
-      carrier_professional: ratings.carrierProfessional,
-      loading_on_time: ratings.loadingOnTime,
-      cargo_complete: ratings.cargoComplete,
-      cargo_undamaged: ratings.cargoUndamaged,
-      delivery_notified: ratings.deliveryNotified,
-      delivery_on_time: ratings.deliveryOnTime,
-      documents_complete: ratings.documentsComplete,
-      documents_correct: ratings.documentsCorrect,
+      carrier_professional: otherProblem ? null : ratings.carrierProfessional,
+      loading_on_time: otherProblem ? null : ratings.loadingOnTime,
+      cargo_complete: otherProblem ? null : ratings.cargoComplete,
+      cargo_undamaged: otherProblem ? null : ratings.cargoUndamaged,
+      delivery_notified: otherProblem ? null : ratings.deliveryNotified,
+      delivery_on_time: otherProblem ? null : ratings.deliveryOnTime,
+      documents_complete: otherProblem ? null : ratings.documentsComplete,
+      documents_correct: otherProblem ? null : ratings.documentsCorrect,
+      other_problem: otherProblem || false,
       comment: comment || ''
     }
     
