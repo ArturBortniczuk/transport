@@ -1,4 +1,4 @@
-// src/app/oceny/page.js - POPRAWIONA WERSJA z wszystkimi filtrami
+// src/app/oceny/page.js - NAPRAWIONA WERSJA z właściwą nazwą kolumny wz_number
 'use client'
 import { useState, useEffect, useMemo } from 'react'
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear } from 'date-fns'
@@ -209,7 +209,7 @@ export default function OcenyPage() {
       }
     }
     
-    // Filtr typu transportu - DZIAŁA DLA OBU TYPÓW
+    // Filtr typu transportu
     if (transportTypeFilter !== 'all') {
       const constructionRegex = /^\d{3}-\d{2}-\d{2}\/\d{4}$/
       const mpkToCheck = activeTab === 'wlasny' ? transport.mpk : transport.construction_mpk
@@ -228,7 +228,6 @@ export default function OcenyPage() {
       if (ratingFilter === 'rated' && !transport.has_rating) {
         return false
       }
-      // NEGATYWNE = wszystko poniżej 100%
       if (ratingFilter === 'negative') {
         if (!transport.has_rating) return false
         if (transport.rating_percentage === null || transport.rating_percentage === 100) return false
@@ -614,8 +613,8 @@ function TransportWlasnyTable({ transports, onRate, getMagazynName, getDriverNam
               {transport.distance ? `${transport.distance} km` : '-'}
             </td>
             <td className="px-4 py-3 text-sm text-gray-900">
-              <div className="max-w-[150px] truncate" title={transport.document_numbers || '-'}>
-                {transport.document_numbers || '-'}
+              <div className="max-w-[150px] truncate" title={transport.wz_number || '-'}>
+                {transport.wz_number || '-'}
               </div>
             </td>
             <td className="px-4 py-3 text-sm text-gray-900">
