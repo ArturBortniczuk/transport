@@ -1,4 +1,4 @@
-// src/app/api/spedition-detailed-ratings/route.js - API DLA SPEDYCJI z obsługą "Inny problem"
+// src/app/api/spedition-detailed-ratings/route.js - ROZSZERZONE O ROZWIĄZANIE PROBLEMU
 import { NextResponse } from 'next/server'
 import db from '@/database/db'
 
@@ -22,7 +22,34 @@ const validateSession = async (authToken) => {
   }
 }
 
-// GET - Pobierz oceny transportu spedycyjnego
+// NOWA FUNKCJA: Sprawdzanie czy użytkownik jest adminem
+const checkAdminStatus = async (userId) => {
+  if (!userId) {
+    return false
+  }
+  
+  try {
+    const user = await db('users')
+      .where('email', userId)
+      .select('is_admin', 'role')
+      .first()
+    
+    const isAdmin = 
+      user?.is_admin === true || 
+      user?.is_admin === 1 || 
+      user?.is_admin === 't' || 
+      user?.is_admin === 'TRUE' || 
+      user?.is_admin === 'true' ||
+      user?.role === 'admin'
+    
+    return isAdmin
+  } catch (error) {
+    console.error('Error checking admin status:', error)
+    return false
+  }
+}
+
+// GET - Pobierz oceny transportu spedycyjnego - ROZSZERZONE O INFORMACJĘ O ROZWIĄZANIU
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url)
@@ -39,7 +66,6 @@ export async function GET(request) {
       }, { status: 400 })
     }
     
-    // Sprawdź czy tabela istnieje
     const tableExists = await db.schema.hasTable('spedition_detailed_ratings')
     if (!tableExists) {
       return NextResponse.json({ 
@@ -48,11 +74,11 @@ export async function GET(request) {
         stats: { totalRatings: 0, overallRatingPercentage: null },
         canBeRated: userId ? true : false,
         hasUserRated: false,
-        allRatings: []
+        allRatings: [],
+        hasResolution: false  // DODANE
       })
     }
     
-    // Pobierz wszystkie oceny dla transportu spedycyjnego
     let allDetailedRatings = []
     try {
       allDetailedRatings = await db('spedition_detailed_ratings')
@@ -66,18 +92,16 @@ export async function GET(request) {
     
     const totalRatings = allDetailedRatings.length
     
-    // Oblicz ogólny procent pozytywnych ocen
     let overallRatingPercentage = null
     if (totalRatings > 0) {
       let totalCriteria = 0
       let positiveCriteria = 0
       
       allDetailedRatings.forEach(rating => {
-        // Jeśli zaznaczono "Inny problem", uznajemy ocenę za negatywną
         if (rating.other_problem === true) {
-          totalCriteria += 8 // 8 kryteriów dla spedycji
-          positiveCriteria += 0 // żadne punkty pozytywne
-          return // pomijamy dalsze sprawdzanie
+          totalCriteria += 8  // 8 kryteriów dla spedycji
+          positiveCriteria += 0
+          return
         }
         
         const criteria = [
@@ -103,18 +127,26 @@ export async function GET(request) {
         Math.round((positiveCriteria / totalCriteria) * 100) : null
     }
     
-    // Sprawdź czy użytkownik może ocenić i czy już ocenił
-    const canBeRated = userId ? totalRatings === 0 : false
+    // ZMIENIONE: Sprawdzanie czy można ocenić lub edytować - blokada gdy jest rozwiązanie
+    const firstRating = allDetailedRatings[0]
+    const hasResolution = firstRating?.admin_resolution ? true : false
+    const canBeRated = userId ? (totalRatings === 0 && !hasResolution) : false
     const hasUserRated = userId ? 
       allDetailedRatings.some(r => r.rater_email === userId) : false
     
-    // Pobierz konkretną ocenę użytkownika jeśli podano raterEmail
     let rating = null
     if (raterEmail) {
       rating = allDetailedRatings.find(r => r.rater_email === raterEmail)
     } else if (userId) {
       rating = allDetailedRatings.find(r => r.rater_email === userId)
     }
+    
+    // DODANE: Informacje o rozwiązaniu
+    const resolutionInfo = hasResolution ? {
+      text: firstRating.admin_resolution,
+      addedBy: firstRating.resolution_added_by,
+      addedAt: firstRating.resolution_added_at
+    } : null
     
     return NextResponse.json({ 
       success: true, 
@@ -125,7 +157,9 @@ export async function GET(request) {
       },
       canBeRated,
       hasUserRated,
-      allRatings: allDetailedRatings
+      allRatings: allDetailedRatings,
+      hasResolution,        // DODANE
+      resolutionInfo        // DODANE
     })
   } catch (error) {
     console.error('Error fetching spedition rating:', error)
@@ -136,10 +170,9 @@ export async function GET(request) {
   }
 }
 
-// POST - Dodaj/aktualizuj ocenę transportu spedycyjnego
+// POST - Dodaj/aktualizuj ocenę transportu spedycyjnego - BEZ ZMIAN
 export async function POST(request) {
   try {
-    // Sprawdzamy uwierzytelnienie
     const authToken = request.cookies.get('authToken')?.value
     const userId = await validateSession(authToken)
     
@@ -176,7 +209,6 @@ export async function POST(request) {
       }
     }
     
-    // Sprawdź czy transport spedycyjny istnieje i można go ocenić
     const spedition = await db('spedycje')
       .where('id', speditionId)
       .select('status')
@@ -196,7 +228,19 @@ export async function POST(request) {
       }, { status: 400 })
     }
 
-    // Sprawdź czy tabela szczegółowych ocen istnieje, jeśli nie - utwórz ją
+    // DODANE: Sprawdzenie czy istnieje rozwiązanie - blokada edycji
+    const existingRating = await db('spedition_detailed_ratings')
+      .where('spedition_id', speditionId)
+      .where('rater_email', userId)
+      .first()
+
+    if (existingRating?.admin_resolution) {
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Nie można edytować oceny - administrator dodał już rozwiązanie problemu' 
+      }, { status: 403 })
+    }
+
     const detailedRatingsExist = await db.schema.hasTable('spedition_detailed_ratings')
     
     if (!detailedRatingsExist) {
@@ -222,13 +266,6 @@ export async function POST(request) {
       })
     }
 
-    // Sprawdź czy użytkownik już ocenił ten transport
-    const existingRating = await db('spedition_detailed_ratings')
-      .where('spedition_id', speditionId)
-      .where('rater_email', userId)
-      .first()
-
-    // Pobierz dane użytkownika
     const user = await db('users')
       .where('email', userId)
       .select('name')
@@ -254,14 +291,12 @@ export async function POST(request) {
     let isNewRating = false
     
     if (existingRating) {
-      // Aktualizuj istniejącą ocenę
       await db('spedition_detailed_ratings')
         .where('id', existingRating.id)
         .update(ratingData)
       
       ratingId = existingRating.id
     } else {
-      // Dodaj nową ocenę
       const insertResult = await db('spedition_detailed_ratings')
         .insert(ratingData)
         .returning('id')
@@ -279,7 +314,6 @@ export async function POST(request) {
   } catch (error) {
     console.error('Error adding spedition rating:', error)
     
-    // Sprawdź czy błąd to duplikat klucza
     if (error.code === 'ER_DUP_ENTRY' || error.message.includes('UNIQUE constraint')) {
       return NextResponse.json({ 
         success: false, 
@@ -290,6 +324,80 @@ export async function POST(request) {
     return NextResponse.json({ 
       success: false, 
       error: 'Wystąpił błąd podczas zapisywania oceny: ' + error.message 
+    }, { status: 500 })
+  }
+}
+
+// NOWY ENDPOINT PUT - Dodanie rozwiązania problemu przez administratora
+export async function PUT(request) {
+  try {
+    const authToken = request.cookies.get('authToken')?.value
+    const userId = await validateSession(authToken)
+    
+    if (!userId) {
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Unauthorized' 
+      }, { status: 401 })
+    }
+    
+    // Sprawdzenie czy użytkownik jest adminem
+    const isAdmin = await checkAdminStatus(userId)
+    if (!isAdmin) {
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Tylko administrator może dodać rozwiązanie problemu' 
+      }, { status: 403 })
+    }
+    
+    const { speditionId, resolution } = await request.json()
+    
+    if (!speditionId || !resolution || resolution.trim() === '') {
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Spedition ID i treść rozwiązania są wymagane' 
+      }, { status: 400 })
+    }
+    
+    // Sprawdź czy ocena istnieje
+    const rating = await db('spedition_detailed_ratings')
+      .where('spedition_id', speditionId)
+      .first()
+    
+    if (!rating) {
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Nie znaleziono oceny dla tego transportu spedycyjnego' 
+      }, { status: 404 })
+    }
+    
+    // Sprawdź czy rozwiązanie już istnieje
+    if (rating.admin_resolution) {
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Rozwiązanie zostało już dodane dla tego transportu' 
+      }, { status: 409 })
+    }
+    
+    // Zapisz rozwiązanie
+    await db('spedition_detailed_ratings')
+      .where('spedition_id', speditionId)
+      .update({
+        admin_resolution: resolution,
+        resolution_added_by: userId,
+        resolution_added_at: new Date()
+      })
+    
+    return NextResponse.json({ 
+      success: true, 
+      message: 'Rozwiązanie problemu zostało dodane. Ocena jest teraz zablokowana.'
+    })
+    
+  } catch (error) {
+    console.error('Error adding resolution:', error)
+    return NextResponse.json({ 
+      success: false, 
+      error: 'Wystąpił błąd podczas zapisywania rozwiązania: ' + error.message 
     }, { status: 500 })
   }
 }

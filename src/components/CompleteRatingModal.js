@@ -1,7 +1,7 @@
-// src/components/CompleteRatingModal.js - PEŁNY MODAL Z OPCJĄ "INNY PROBLEM"
+// src/components/CompleteRatingModal.js - Z FUNKCJĄ ROZWIĄZANIA PROBLEMU
 'use client'
 import { useState, useEffect } from 'react'
-import { X, ThumbsUp, ThumbsDown, CheckCircle, AlertCircle, MessageSquare, Edit, Send } from 'lucide-react'
+import { X, ThumbsUp, ThumbsDown, CheckCircle, AlertCircle, MessageSquare, Edit, Send, Shield, Lock } from 'lucide-react'
 import { format } from 'date-fns'
 import { pl } from 'date-fns/locale'
 
@@ -20,7 +20,7 @@ export default function CompleteRatingModal({ transport, onClose, onSuccess, get
   const [success, setSuccess] = useState(false)
   const [isEditMode, setIsEditMode] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [otherProblem, setOtherProblem] = useState(false) // NOWE: Opcja "Inny problem"
+  const [otherProblem, setOtherProblem] = useState(false)
   
   // Stan ocen
   const [hasMainRating, setHasMainRating] = useState(false)
@@ -32,6 +32,13 @@ export default function CompleteRatingModal({ transport, onClose, onSuccess, get
   const [addingComment, setAddingComment] = useState(false)
   const [allComments, setAllComments] = useState([])
   const [loadingComments, setLoadingComments] = useState(true)
+
+  // NOWE: Stan rozwiązania problemu
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [hasResolution, setHasResolution] = useState(false)
+  const [resolutionInfo, setResolutionInfo] = useState(null)
+  const [resolutionText, setResolutionText] = useState('')
+  const [submittingResolution, setSubmittingResolution] = useState(false)
 
   // Kategorie oceny
   const categories = [
@@ -62,9 +69,22 @@ export default function CompleteRatingModal({ transport, onClose, onSuccess, get
   ]
 
   useEffect(() => {
+    checkAdminStatus()
     loadExistingRating()
     fetchComments()
   }, [transport.id])
+
+  // NOWA FUNKCJA: Sprawdzenie czy użytkownik jest adminem
+  const checkAdminStatus = async () => {
+    try {
+      const response = await fetch('/api/check-admin')
+      const data = await response.json()
+      setIsAdmin(data.isAdmin || false)
+    } catch (error) {
+      console.error('Błąd sprawdzania statusu admina:', error)
+      setIsAdmin(false)
+    }
+  }
 
   const loadExistingRating = async () => {
     try {
@@ -72,20 +92,18 @@ export default function CompleteRatingModal({ transport, onClose, onSuccess, get
       const response = await fetch(`/api/transport-detailed-ratings?transportId=${transport.id}`)
       const data = await response.json()
       
-      console.log('📊 Dane oceny z API:', data)
-      
       if (data.success) {
         const hasRating = data.stats.totalRatings > 0
-        console.log('📈 hasRating:', hasRating, 'totalRatings:', data.stats.totalRatings)
         
         setHasMainRating(hasRating)
         setUserHasRated(data.hasUserRated)
         setOverallPercentage(data.stats.overallRatingPercentage)
         
-        // Załaduj ocenę - najpierw szukaj oceny użytkownika, potem pierwszej dostępnej
-        const ratingToLoad = data.rating || (data.allRatings && data.allRatings[0])
+        // NOWE: Załaduj informacje o rozwiązaniu
+        setHasResolution(data.hasResolution || false)
+        setResolutionInfo(data.resolutionInfo || null)
         
-        console.log('🎯 Ocena do załadowania:', ratingToLoad)
+        const ratingToLoad = data.rating || (data.allRatings && data.allRatings[0])
         
         if (ratingToLoad) {
           setRatings({
@@ -97,11 +115,11 @@ export default function CompleteRatingModal({ transport, onClose, onSuccess, get
             deliveryOnTime: ratingToLoad.delivery_on_time
           })
           setComment(ratingToLoad.comment || '')
-          setOtherProblem(ratingToLoad.other_problem || false) // NOWE: Ładuj other_problem
+          setOtherProblem(ratingToLoad.other_problem || false)
         }
       }
     } catch (error) {
-      console.error('❌ Błąd pobierania oceny:', error)
+      console.error('Błąd pobierania oceny:', error)
     } finally {
       setLoading(false)
     }
@@ -126,14 +144,18 @@ export default function CompleteRatingModal({ transport, onClose, onSuccess, get
   const handleSubmit = async (e) => {
     e.preventDefault()
     
-    // NOWA WALIDACJA: Sprawdź czy zaznaczono "Inny problem"
+    // ZMIENIONE: Sprawdź czy rozwiązanie już istnieje
+    if (hasResolution) {
+      setError('Nie można edytować oceny - administrator dodał już rozwiązanie problemu')
+      return
+    }
+    
     if (otherProblem) {
       if (!comment || comment.trim() === '') {
         setError('Przy wyborze "Inny problem" komentarz jest wymagany')
         return
       }
     } else {
-      // Jeśli nie zaznaczono "Inny problem", wszystkie kategorie muszą być ocenione
       const allRated = Object.values(ratings).every(rating => rating !== null)
       if (!allRated) {
         setError('Proszę ocenić wszystkie kryteria lub zaznaczyć "Inny problem"')
@@ -151,9 +173,9 @@ export default function CompleteRatingModal({ transport, onClose, onSuccess, get
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           transportId: transport.id,
-          ratings: otherProblem ? {} : ratings, // NOWE: Jeśli "Inny problem", wysyłamy puste oceny
+          ratings: otherProblem ? {} : ratings,
           comment,
-          otherProblem // NOWE: Wysyłamy informację o "Innym problemie"
+          otherProblem
         })
       })
 
@@ -161,7 +183,7 @@ export default function CompleteRatingModal({ transport, onClose, onSuccess, get
 
       if (data.success) {
         setSuccess(true)
-        await loadExistingRating() // Odśwież ocenę
+        await loadExistingRating()
         setIsEditMode(false)
         
         setTimeout(() => {
@@ -175,6 +197,49 @@ export default function CompleteRatingModal({ transport, onClose, onSuccess, get
       setError('Wystąpił błąd podczas zapisywania oceny')
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  // NOWA FUNKCJA: Dodanie rozwiązania problemu przez admina
+  const handleSubmitResolution = async (e) => {
+    e.preventDefault()
+    
+    if (!resolutionText.trim()) {
+      setError('Treść rozwiązania jest wymagana')
+      return
+    }
+
+    setSubmittingResolution(true)
+    setError('')
+
+    try {
+      const response = await fetch('/api/transport-detailed-ratings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transportId: transport.id,
+          resolution: resolutionText.trim()
+        })
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        setSuccess(true)
+        setResolutionText('')
+        await loadExistingRating() // Odśwież dane
+        
+        setTimeout(() => {
+          setSuccess(false)
+        }, 3000)
+      } else {
+        setError(data.error || 'Wystąpił błąd podczas zapisywania rozwiązania')
+      }
+    } catch (error) {
+      console.error('Błąd zapisywania rozwiązania:', error)
+      setError('Wystąpił błąd podczas zapisywania rozwiązania')
+    } finally {
+      setSubmittingResolution(false)
     }
   }
 
@@ -198,7 +263,7 @@ export default function CompleteRatingModal({ transport, onClose, onSuccess, get
       
       if (result.success) {
         setNewComment('')
-        await fetchComments() // Odśwież listę komentarzy
+        await fetchComments()
       } else {
         setError(result.error || 'Nie udało się dodać komentarza')
       }
@@ -212,7 +277,7 @@ export default function CompleteRatingModal({ transport, onClose, onSuccess, get
 
   const RatingButton = ({ criteriaKey, value, label }) => {
     const isSelected = ratings[criteriaKey] === value
-    const disabled = hasMainRating && !isEditMode
+    const disabled = (hasMainRating && !isEditMode) || hasResolution // ZMIENIONE: Dodano hasResolution
     
     const baseClasses = "flex items-center px-3 py-2 rounded-md border text-sm font-medium transition-colors"
     
@@ -281,11 +346,27 @@ export default function CompleteRatingModal({ transport, onClose, onSuccess, get
             </button>
           </div>
 
+          {/* NOWE: Informacja o blokadzie gdy istnieje rozwiązanie */}
+          {hasResolution && (
+            <div className="mb-6 p-4 bg-purple-50 border border-purple-200 rounded-lg flex items-start">
+              <Lock size={20} className="text-purple-600 mr-3 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-purple-900 font-medium">Transport rozwiązany</p>
+                <p className="text-purple-700 text-sm mt-1">
+                  Administrator dodał rozwiązanie problemu. Ocena i komentarze zostały zablokowane.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Komunikaty */}
           {success && (
             <div className="mb-6 p-4 bg-green-50 text-green-700 rounded-md flex items-center">
               <CheckCircle size={16} className="mr-2" />
-              {userHasRated ? 'Ocena została zaktualizowana!' : 'Ocena została zapisana!'}
+              {submittingResolution 
+                ? 'Rozwiązanie zostało dodane!' 
+                : (userHasRated ? 'Ocena została zaktualizowana!' : 'Ocena została zapisana!')
+              }
             </div>
           )}
 
@@ -303,14 +384,12 @@ export default function CompleteRatingModal({ transport, onClose, onSuccess, get
                 ⭐ Ocena transportu: {overallPercentage}%
               </h3>
               
-              {/* Pokaż czy to był "Inny problem" */}
               {otherProblem && (
                 <div className="mb-4 p-3 bg-yellow-100 border border-yellow-300 rounded-lg">
                   <p className="text-sm font-medium text-yellow-800">⚠️ Zaznaczono: Inny problem</p>
                 </div>
               )}
               
-              {/* Kategorie - pokaż tylko jeśli NIE był to "Inny problem" */}
               {!otherProblem && (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                   {categories.map(category => (
@@ -352,7 +431,7 @@ export default function CompleteRatingModal({ transport, onClose, onSuccess, get
                 </div>
               )}
 
-              {userHasRated && (
+              {userHasRated && !hasResolution && (
                 <button
                   onClick={() => setIsEditMode(true)}
                   className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors mt-4"
@@ -365,45 +444,31 @@ export default function CompleteRatingModal({ transport, onClose, onSuccess, get
           )}
 
           {/* Formularz oceny */}
-          {(!hasMainRating || isEditMode) && (
+          {(!hasMainRating || isEditMode) && !hasResolution && (
             <form onSubmit={handleSubmit} className="mb-8">
               <div className="p-6 border border-gray-200 rounded-lg">
                 <h3 className="text-lg font-semibold mb-4">
-                  {userHasRated ? 'Edytuj swoją ocenę' : 'Oceń transport według kryteriów'}
+                  {userHasRated ? 'Edytuj ocenę' : 'Dodaj ocenę'}
                 </h3>
 
-                {/* NOWE: Opcja "Inny problem" */}
-                <div className="mb-6 p-4 bg-yellow-50 border-2 border-yellow-200 rounded-lg">
-                  <label className="flex items-center cursor-pointer">
+                <div className="mb-6">
+                  <label className="flex items-center space-x-2 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={otherProblem}
-                      onChange={(e) => {
-                        setOtherProblem(e.target.checked)
-                        if (e.target.checked) {
-                          setRatings({
-                            driverProfessional: null,
-                            driverTasksCompleted: null,
-                            cargoComplete: null,
-                            cargoCorrect: null,
-                            deliveryNotified: null,
-                            deliveryOnTime: null
-                          })
-                        }
-                      }}
-                      className="w-5 h-5 text-yellow-600 border-gray-300 rounded focus:ring-yellow-500"
+                      onChange={(e) => setOtherProblem(e.target.checked)}
+                      className="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
                     />
-                    <span className="ml-3 text-sm font-medium text-gray-900">
-                      ⚠️ Inny problem (nie wymaga oceny wszystkich kategorii)
+                    <span className="text-sm font-medium text-gray-700">
+                      🚨 Inny problem (wymaga komentarza)
                     </span>
                   </label>
-                  <p className="mt-2 ml-8 text-xs text-gray-600">
-                    Zaznacz tę opcję jeśli problem nie mieści się w standardowych kategoriach. 
+                  <p className="text-xs text-gray-500 mt-1 ml-6">
+                    Zaznacz jeśli wystąpił problem nieujęty w poniższych kategoriach.
                     W takim przypadku komentarz jest wymagany.
                   </p>
                 </div>
                 
-                {/* Kategorie - pokazuj tylko gdy NIE zaznaczono "Inny problem" */}
                 {!otherProblem && (
                   <div className="space-y-6">
                     {categories.map(category => (
@@ -468,26 +533,28 @@ export default function CompleteRatingModal({ transport, onClose, onSuccess, get
               Komentarze i dyskusja
             </h3>
 
-            {/* Formularz dodawania komentarza */}
-            <div className="mb-6">
-              <textarea
-                value={newComment}
-                onChange={(e) => setNewComment(e.target.value)}
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 focus:ring-2 focus:ring-blue-500"
-                placeholder="Dodaj komentarz do tego transportu..."
-              />
-              <div className="flex justify-end mt-2">
-                <button
-                  onClick={handleAddComment}
-                  disabled={addingComment || !newComment.trim()}
-                  className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50"
-                >
-                  <Send size={16} className="mr-2" />
-                  {addingComment ? 'Wysyłanie...' : 'Dodaj komentarz'}
-                </button>
+            {/* Formularz dodawania komentarza - tylko gdy nie ma rozwiązania */}
+            {!hasResolution && (
+              <div className="mb-6">
+                <textarea
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 focus:ring-2 focus:ring-blue-500"
+                  placeholder="Dodaj komentarz do tego transportu..."
+                />
+                <div className="flex justify-end mt-2">
+                  <button
+                    onClick={handleAddComment}
+                    disabled={addingComment || !newComment.trim()}
+                    className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50"
+                  >
+                    <Send size={16} className="mr-2" />
+                    {addingComment ? 'Wysyłanie...' : 'Dodaj komentarz'}
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Lista komentarzy */}
             <div className="space-y-4">
@@ -516,6 +583,76 @@ export default function CompleteRatingModal({ transport, onClose, onSuccess, get
               )}
             </div>
           </div>
+
+          {/* NOWA SEKCJA: Rozwiązanie problemu przez admina */}
+          {hasMainRating && isAdmin && (
+            <div className="border-t border-gray-200 pt-6 mt-6">
+              <h3 className="text-lg font-semibold mb-4 flex items-center">
+                <Shield className="w-5 h-5 mr-2 text-purple-600" />
+                Rozwiązanie problemu (Administrator)
+              </h3>
+
+              {hasResolution ? (
+                // Wyświetl istniejące rozwiązanie
+                <div className="bg-purple-50 border border-purple-200 rounded-lg p-6">
+                  <div className="flex items-start mb-4">
+                    <CheckCircle className="w-6 h-6 text-purple-600 mr-3 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <h4 className="font-semibold text-purple-900 mb-2">Rozwiązanie dodane</h4>
+                      <p className="text-gray-700 text-sm mb-3">{resolutionInfo.text}</p>
+                      <div className="flex items-center text-xs text-purple-700">
+                        <span className="font-medium mr-2">Dodane przez:</span>
+                        <span>{resolutionInfo.addedBy}</span>
+                        <span className="mx-2">•</span>
+                        <span>{format(new Date(resolutionInfo.addedAt), 'dd.MM.yyyy HH:mm', { locale: pl })}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="bg-purple-100 rounded-lg p-3">
+                    <p className="text-sm text-purple-800 flex items-center">
+                      <Lock size={14} className="mr-2" />
+                      Ocena i komentarze zostały zablokowane po dodaniu rozwiązania
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                // Formularz dodawania rozwiązania
+                <form onSubmit={handleSubmitResolution}>
+                  <div className="bg-purple-50 border border-purple-200 rounded-lg p-6">
+                    <p className="text-sm text-purple-800 mb-4 flex items-start">
+                      <AlertCircle size={16} className="mr-2 flex-shrink-0 mt-0.5" />
+                      <span>
+                        Dodanie rozwiązania <strong>trwale zablokuje</strong> możliwość edycji oceny i dodawania komentarzy do tego transportu.
+                      </span>
+                    </p>
+                    
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Opis rozwiązania problemu
+                    </label>
+                    <textarea
+                      value={resolutionText}
+                      onChange={(e) => setResolutionText(e.target.value)}
+                      rows={4}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 focus:ring-2 focus:ring-purple-500"
+                      placeholder="Opisz jak problem został rozwiązany..."
+                      required
+                    />
+                    
+                    <div className="flex justify-end mt-4">
+                      <button
+                        type="submit"
+                        disabled={submittingResolution || !resolutionText.trim()}
+                        className="flex items-center px-6 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors disabled:opacity-50"
+                      >
+                        <Shield size={16} className="mr-2" />
+                        {submittingResolution ? 'Zapisywanie...' : 'Dodaj rozwiązanie i zablokuj'}
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
