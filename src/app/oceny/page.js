@@ -201,9 +201,9 @@ export default function OcenyPage() {
     // Filtr typu transportu
     if (transportTypeFilter !== 'all') {
       const constructionRegex = /^\d{3}-\d{2}-\d{2}\/\d{4}$/
-      const mpkToCheck = activeTab === 'wlasny' ? transport.mpk : transport.construction_mpk
+      const mpkToCheck = transport.mpk
       const isConstruction = constructionRegex.test(mpkToCheck)
-      
+
       if (transportTypeFilter === 'budownictwo' && !isConstruction) {
         return false
       }
