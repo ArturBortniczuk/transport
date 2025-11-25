@@ -201,8 +201,28 @@ export default function OcenyPage() {
     // Filtr typu transportu
     if (transportTypeFilter !== 'all') {
       const constructionRegex = /^\d{3}-\d{2}-\d{2}\/\d{4}$/
-      const mpkToCheck = transport.mpk
-      const isConstruction = constructionRegex.test(mpkToCheck)
+      let isConstruction = false
+
+      if (activeTab === 'wlasny') {
+        // Dla transportu własnego sprawdź pole mpk
+        isConstruction = constructionRegex.test(transport.mpk)
+      } else {
+        // Dla transportu spedycyjnego sprawdź responsible_constructions
+        if (transport.responsible_constructions) {
+          try {
+            const constructions = typeof transport.responsible_constructions === 'string'
+              ? JSON.parse(transport.responsible_constructions)
+              : transport.responsible_constructions
+
+            if (Array.isArray(constructions) && constructions.length > 0) {
+              // Jeśli jest chociaż jedna budowa, to jest transport budownictwa
+              isConstruction = constructions.some(c => c.type === 'construction' && c.mpk && constructionRegex.test(c.mpk))
+            }
+          } catch (e) {
+            console.error('Błąd parsowania responsible_constructions:', e)
+          }
+        }
+      }
 
       if (transportTypeFilter === 'budownictwo' && !isConstruction) {
         return false
