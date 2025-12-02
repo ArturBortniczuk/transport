@@ -49,7 +49,7 @@ const checkAdminStatus = async (userId) => {
   }
 }
 
-// GET - Pobierz oceny transportu spedycyjnego - ROZSZERZONE O INFORMACJĘ O ROZWIĄZANIU
+// GET - Pobierz oceny transportu spedycyjnego - POPRAWIONE SPRAWDZANIE RESOLUTION
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url)
@@ -75,7 +75,7 @@ export async function GET(request) {
         canBeRated: userId ? true : false,
         hasUserRated: false,
         allRatings: [],
-        hasResolution: false  // DODANE
+        hasResolution: false
       })
     }
     
@@ -99,7 +99,7 @@ export async function GET(request) {
       
       allDetailedRatings.forEach(rating => {
         if (rating.other_problem === true) {
-          totalCriteria += 8  // 8 kryteriów dla spedycji
+          totalCriteria += 8 
           positiveCriteria += 0
           return
         }
@@ -127,9 +127,20 @@ export async function GET(request) {
         Math.round((positiveCriteria / totalCriteria) * 100) : null
     }
     
-    // ZMIENIONE: Sprawdzanie czy można ocenić lub edytować - blokada gdy jest rozwiązanie
-    const firstRating = allDetailedRatings[0]
-    const hasResolution = firstRating?.admin_resolution ? true : false
+    // =================================================================
+    // POPRAWIONA LOGIKA SPRAWDZANIA RESOLUTION
+    // Sprawdzamy w bazie, czy istnieje jakikolwiek wpis z rozwiązaniem.
+    // =================================================================
+    const resolutionCheck = await db('spedition_detailed_ratings')
+      .where('spedition_id', speditionId)
+      .whereNotNull('admin_resolution') // Szukamy wpisu, gdzie resolution nie jest puste
+      .orderBy('resolution_added_at', 'desc')
+      .select('admin_resolution', 'resolution_added_by', 'resolution_added_at')
+      .first();
+
+    const hasResolution = resolutionCheck ? true : false;
+    
+    // ZMIENIONE: Sprawdzanie czy można ocenić lub edytować - używa hasResolution
     const canBeRated = userId ? (totalRatings === 0 && !hasResolution) : false
     const hasUserRated = userId ? 
       allDetailedRatings.some(r => r.rater_email === userId) : false
@@ -141,11 +152,11 @@ export async function GET(request) {
       rating = allDetailedRatings.find(r => r.rater_email === userId)
     }
     
-    // DODANE: Informacje o rozwiązaniu
+    // DODANE: Informacje o rozwiązaniu (używa resolutionCheck)
     const resolutionInfo = hasResolution ? {
-      text: firstRating.admin_resolution,
-      addedBy: firstRating.resolution_added_by,
-      addedAt: firstRating.resolution_added_at
+      text: resolutionCheck.admin_resolution,
+      addedBy: resolutionCheck.resolution_added_by,
+      addedAt: resolutionCheck.resolution_added_at
     } : null
     
     return NextResponse.json({ 
@@ -158,8 +169,8 @@ export async function GET(request) {
       canBeRated,
       hasUserRated,
       allRatings: allDetailedRatings,
-      hasResolution,        // DODANE
-      resolutionInfo        // DODANE
+      hasResolution,        // PRAWIDŁOWA FLAGA
+      resolutionInfo        // PRAWIDŁOWY OBIEKT
     })
   } catch (error) {
     console.error('Error fetching spedition rating:', error)

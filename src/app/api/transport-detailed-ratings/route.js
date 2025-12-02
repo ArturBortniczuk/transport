@@ -218,7 +218,7 @@ const sendRatingNotification = async (transportId, ratingId) => {
   }
 };
 
-// GET /api/transport-detailed-ratings - ROZSZERZONE O INFORMACJĘ O ROZWIĄZANIU
+// GET /api/transport-detailed-ratings - POPRAWIONE SPRAWDZANIE RESOLUTION
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -244,7 +244,7 @@ export async function GET(request) {
         canBeRated: userId ? true : false,
         hasUserRated: false,
         allRatings: [],
-        hasResolution: false  // DODANE
+        hasResolution: false
       });
     }
     
@@ -288,9 +288,18 @@ export async function GET(request) {
         Math.round((positiveCriteria / totalCriteria) * 100) : null;
     }
     
+    // =================================================================
+    // POPRAWIONA LOGIKA SPRAWDZANIA RESOLUTION (działa dla 0 ocen)
+    // =================================================================
+    const resolutionCheck = await db('transport_detailed_ratings')
+      .where('transport_id', transportId)
+      .whereNotNull('admin_resolution') // Szukamy wpisu, gdzie resolution nie jest puste
+      .orderBy('resolution_added_at', 'desc') 
+      .select('admin_resolution', 'resolution_added_by', 'resolution_added_at')
+      .first();
+
+    const hasResolution = resolutionCheck ? true : false;
     // ZMIENIONE: Sprawdzanie czy można ocenić lub edytować - blokada gdy jest rozwiązanie
-    const firstRating = allDetailedRatings[0];
-    const hasResolution = firstRating?.admin_resolution ? true : false;
     const canBeRated = userId ? (totalRatings === 0 && !hasResolution) : false;
     const hasUserRated = userId ? 
       allDetailedRatings.some(r => r.rater_email === userId) : false;
@@ -304,9 +313,9 @@ export async function GET(request) {
     
     // DODANE: Informacje o rozwiązaniu
     const resolutionInfo = hasResolution ? {
-      text: firstRating.admin_resolution,
-      addedBy: firstRating.resolution_added_by,
-      addedAt: firstRating.resolution_added_at
+      text: resolutionCheck.admin_resolution,
+      addedBy: resolutionCheck.resolution_added_by,
+      addedAt: resolutionCheck.resolution_added_at
     } : null;
     
     return NextResponse.json({ 
@@ -319,8 +328,8 @@ export async function GET(request) {
       canBeRated,
       hasUserRated,
       allRatings: allDetailedRatings,
-      hasResolution,        // DODANE
-      resolutionInfo        // DODANE
+      hasResolution,        // PRAWIDŁOWA FLAGA
+      resolutionInfo        // PRAWIDŁOWY OBIEKT
     });
   } catch (error) {
     console.error('Error fetching detailed rating:', error);
