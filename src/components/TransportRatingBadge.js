@@ -1,4 +1,4 @@
-// src/components/TransportRatingBadge.js - POPRAWIONA WERSJA z priorytetową flagą 'Rozwiązane'
+// src/components/TransportRatingBadge.js - OSTATECZNA POPRAWKA: Powrót do logiki API z bezwzględnym priorytetem "R"
 'use client'
 import { useState, useEffect } from 'react'
 import { Star, StarOff } from 'lucide-react'
@@ -8,6 +8,7 @@ export default function TransportDetailedRatingBadge({
   refreshTrigger = 0, 
   type = 'transport' // 'transport' lub 'spedition'
 }) {
+  // UWAGA: Stan isResolved jest pobierany asynchronicznie przez API.
   const [rating, setRating] = useState(null)
   const [loading, setLoading] = useState(true)
   
@@ -30,7 +31,7 @@ export default function TransportDetailedRatingBadge({
             overallPercentage: data.stats.overallRatingPercentage,
             canBeRated: data.canBeRated,
             hasUserRated: data.hasUserRated,
-            // Flaga 'isResolved' pobierana dla obu typów
+            // Kluczowe: Flaga 'isResolved' z API jest pobierana dla obu typów
             isResolved: data.isResolved || false 
           })
         }
@@ -47,14 +48,15 @@ export default function TransportDetailedRatingBadge({
   }, [transportId, refreshTrigger, type])
   
   if (loading) {
+    // Widok ładowania, gdy czekamy na dane (w tym isResolved)
     return (
       <div className="w-20 h-5 bg-gray-100 rounded animate-pulse"></div>
     )
   }
   
   // =================================================================
-  // NOWA LOGIKA PRIORYTETU "ROZWIĄZANE" - MUSI BYĆ NA GÓRZE!
-  // Sprawdzamy, czy rating jest dostępny i czy isResolved jest TRUE.
+  // LOGIKA PRIORYTETU "ROZWIĄZANE"
+  // Wykonywana natychmiast po załadowaniu danych (loading === false).
   // =================================================================
   if (rating?.isResolved) {
     return (
@@ -70,7 +72,8 @@ export default function TransportDetailedRatingBadge({
   }
 
   // =================================================================
-  // LOGIKA BRAKU OCENY (wyświetlana tylko, gdy nie jest 'Rozwiązane')
+  // LOGIKA BRAKU OCENY I STANDARDOWA OCENA PROCENTOWA
+  // Wykonywana tylko, gdy transport/spedycja NIE JEST rozwiązany.
   // =================================================================
   if (!rating || rating.totalRatings === 0) {
     return (
@@ -81,7 +84,7 @@ export default function TransportDetailedRatingBadge({
     )
   }
   
-  // Określ kolor na podstawie procentu (dla standardowych ocen)
+  // Określ kolor na podstawie procentu
   const getColorClass = (percentage) => {
     if (percentage >= 80) return 'bg-green-500 text-white'
     if (percentage >= 60) return 'bg-yellow-500 text-white'
@@ -89,7 +92,7 @@ export default function TransportDetailedRatingBadge({
     return 'bg-red-500 text-white'
   }
   
-  // Standardowe wyświetlanie oceny procentowej (wyświetlane tylko, gdy nie jest 'Rozwiązane' i ma oceny)
+  // Standardowe wyświetlanie oceny procentowej
   return (
     <div className="flex items-center">
       <div className={`flex items-center px-2 py-1 rounded-md text-sm font-medium ${getColorClass(rating.overallPercentage)}`}>
