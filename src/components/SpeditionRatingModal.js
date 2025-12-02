@@ -28,6 +28,8 @@ export default function SpeditionRatingModal({ transport, onClose, onSuccess }) 
   const [hasMainRating, setHasMainRating] = useState(false)
   const [userHasRated, setUserHasRated] = useState(false)
   const [overallPercentage, setOverallPercentage] = useState(null)
+  const [ratingToLoad, setRatingToLoad] = useState(null);
+
   
   // Komentarze
   const [newComment, setNewComment] = useState('')
