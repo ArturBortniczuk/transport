@@ -114,6 +114,8 @@ export default function SpeditionRatingModal({ transport, onClose, onSuccess }) 
         // NOWE: Załaduj informacje o rozwiązaniu
         setHasResolution(data.hasResolution || false)
         setResolutionInfo(data.resolutionInfo || null)
+        setRatingToLoad(data.latestRating || null) // <-- TYLKO TO!
+
         
         const ratingToLoad = data.rating || (data.allRatings && data.allRatings[0])
         
