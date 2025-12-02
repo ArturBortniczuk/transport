@@ -32,7 +32,7 @@ export default function TransportDetailedRatingBadge({
             canBeRated: data.canBeRated,
             hasUserRated: data.hasUserRated,
             // Kluczowe: Flaga 'isResolved' z API jest pobierana dla obu typów
-            isResolved: data.isResolved || false 
+            isResolved: data.hasResolution || false
           })
         }
       } catch (error) {
