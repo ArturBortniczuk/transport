@@ -26,6 +26,8 @@ export default function CompleteRatingModal({ transport, onClose, onSuccess, get
   const [hasMainRating, setHasMainRating] = useState(false)
   const [userHasRated, setUserHasRated] = useState(false)
   const [overallPercentage, setOverallPercentage] = useState(null)
+  const [ratingToLoad, setRatingToLoad] = useState(null);
+
   
   // Komentarze
   const [newComment, setNewComment] = useState('')
