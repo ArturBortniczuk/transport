@@ -1,4 +1,4 @@
-// src/components/TransportRatingBadge.js - NAPRAWIONA WERSJA z obsługą spedycji
+// src/components/TransportRatingBadge.js - NAPRAWIONA WERSJA z obsługą spedycji i priorytetową flagą 'Rozwiązane'
 'use client'
 import { useState, useEffect } from 'react'
 import { Star, StarOff } from 'lucide-react'
@@ -29,7 +29,9 @@ export default function TransportDetailedRatingBadge({
             totalRatings: data.stats.totalRatings,
             overallPercentage: data.stats.overallRatingPercentage,
             canBeRated: data.canBeRated,
-            hasUserRated: data.hasUserRated
+            hasUserRated: data.hasUserRated,
+            // Nowa flaga 'isResolved' jest pobierana dla obu typów
+            isResolved: data.isResolved || false 
           })
         }
       } catch (error) {
@@ -50,6 +52,22 @@ export default function TransportDetailedRatingBadge({
     )
   }
   
+  // LOGIKA "ROZWIĄZANE" - PRIORYTET
+  // Jeśli ma flagę isResolved: true, wyświetlamy "R" na fioletowym tle.
+  if (rating?.isResolved) {
+    return (
+      <div className="flex items-center">
+        <div className="flex items-center px-2 py-1 rounded-md text-sm font-bold bg-purple-600 text-white">
+          R
+        </div>
+        <span className="text-xs text-gray-500 ml-1">
+          (Rozwiązane)
+        </span>
+      </div>
+    )
+  }
+  
+  // LOGIKA BRAKU OCENY
   if (!rating || rating.totalRatings === 0) {
     return (
       <span className="text-gray-400 text-sm flex items-center">
@@ -59,7 +77,7 @@ export default function TransportDetailedRatingBadge({
     )
   }
   
-  // Określ kolor na podstawie procentu
+  // Określ kolor na podstawie procentu (dla standardowych ocen)
   const getColorClass = (percentage) => {
     if (percentage >= 80) return 'bg-green-500 text-white'
     if (percentage >= 60) return 'bg-yellow-500 text-white'
@@ -67,6 +85,7 @@ export default function TransportDetailedRatingBadge({
     return 'bg-red-500 text-white'
   }
   
+  // Standardowe wyświetlanie oceny procentowej
   return (
     <div className="flex items-center">
       <div className={`flex items-center px-2 py-1 rounded-md text-sm font-medium ${getColorClass(rating.overallPercentage)}`}>
