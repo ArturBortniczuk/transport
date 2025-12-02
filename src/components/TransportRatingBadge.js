@@ -64,9 +64,6 @@ export default function TransportDetailedRatingBadge({
         <div className="flex items-center px-2 py-1 rounded-md text-sm font-bold bg-purple-600 text-white">
           R
         </div>
-        <span className="text-xs text-gray-500 ml-1">
-          (Rozwiązane)
-        </span>
       </div>
     )
   }
@@ -99,9 +96,6 @@ export default function TransportDetailedRatingBadge({
         <Star size={14} className="mr-1 fill-current" />
         {rating.overallPercentage}%
       </div>
-      <span className="text-xs text-gray-500 ml-1">
-        ({rating.totalRatings})
-      </span>
     </div>
   )
 }
