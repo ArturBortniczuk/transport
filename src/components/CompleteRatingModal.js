@@ -389,7 +389,7 @@ export default function CompleteRatingModal({ transport, onClose, onSuccess, get
               </h3>
               {ratingToLoad && (
                 <div className="text-sm text-gray-600 mt-1">
-                  Oceniający: {ratingToLoad.rater_name || ratingToLoad.rater_email}, {ratingToLoad.rated_at && format(new Date(ratingToLoad.rated_at), 'dd.MM.yyyy, HH:mm', { locale: pl })}
+                  Oceniający: {ratingToLoad.rater_name || ratingToLoad.rater_email}, {ratingToLoad.created_at && format(new Date(ratingToLoad.created_at), 'dd.MM.yyyy, HH:mm', { locale: pl })}
                 </div>
               )}
               
