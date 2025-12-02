@@ -318,9 +318,14 @@ export async function GET(request) {
       addedAt: resolutionCheck.resolution_added_at
     } : null;
     
+    const latestRating = allDetailedRatings.length > 0 ? allDetailedRatings[0] : null;
+
+
     return NextResponse.json({ 
       success: true, 
       rating,
+      latestRating, // <-- dodaj!
+
       stats: {
         totalRatings,
         overallRatingPercentage

@@ -102,6 +102,8 @@ export default function CompleteRatingModal({ transport, onClose, onSuccess, get
         // NOWE: Załaduj informacje o rozwiązaniu
         setHasResolution(data.hasResolution || false)
         setResolutionInfo(data.resolutionInfo || null)
+        setRatingToLoad(data.latestRating || null);
+
         
         const ratingToLoad = data.rating || (data.allRatings && data.allRatings[0])
         
@@ -383,6 +385,11 @@ export default function CompleteRatingModal({ transport, onClose, onSuccess, get
               <h3 className="text-lg font-semibold mb-4 text-blue-900">
                 ⭐ Ocena transportu: {overallPercentage}%
               </h3>
+              {ratingToLoad && (
+                <div className="text-sm text-gray-600 mt-1">
+                  Oceniający: {ratingToLoad.rater_name || ratingToLoad.rater_email}, {ratingToLoad.rated_at && format(new Date(ratingToLoad.rated_at), 'dd.MM.yyyy, HH:mm', { locale: pl })}
+                </div>
+              )}
               
               {otherProblem && (
                 <div className="mb-4 p-3 bg-yellow-100 border border-yellow-300 rounded-lg">
