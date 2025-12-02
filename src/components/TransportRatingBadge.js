@@ -1,4 +1,4 @@
-// src/components/TransportRatingBadge.js - NAPRAWIONA WERSJA z obsługą spedycji i priorytetową flagą 'Rozwiązane'
+// src/components/TransportRatingBadge.js - POPRAWIONA WERSJA z priorytetową flagą 'Rozwiązane'
 'use client'
 import { useState, useEffect } from 'react'
 import { Star, StarOff } from 'lucide-react'
@@ -30,7 +30,7 @@ export default function TransportDetailedRatingBadge({
             overallPercentage: data.stats.overallRatingPercentage,
             canBeRated: data.canBeRated,
             hasUserRated: data.hasUserRated,
-            // Nowa flaga 'isResolved' jest pobierana dla obu typów
+            // Flaga 'isResolved' pobierana dla obu typów
             isResolved: data.isResolved || false 
           })
         }
@@ -52,8 +52,10 @@ export default function TransportDetailedRatingBadge({
     )
   }
   
-  // LOGIKA "ROZWIĄZANE" - PRIORYTET
-  // Jeśli ma flagę isResolved: true, wyświetlamy "R" na fioletowym tle.
+  // =================================================================
+  // NOWA LOGIKA PRIORYTETU "ROZWIĄZANE" - MUSI BYĆ NA GÓRZE!
+  // Sprawdzamy, czy rating jest dostępny i czy isResolved jest TRUE.
+  // =================================================================
   if (rating?.isResolved) {
     return (
       <div className="flex items-center">
@@ -66,8 +68,10 @@ export default function TransportDetailedRatingBadge({
       </div>
     )
   }
-  
-  // LOGIKA BRAKU OCENY
+
+  // =================================================================
+  // LOGIKA BRAKU OCENY (wyświetlana tylko, gdy nie jest 'Rozwiązane')
+  // =================================================================
   if (!rating || rating.totalRatings === 0) {
     return (
       <span className="text-gray-400 text-sm flex items-center">
@@ -85,7 +89,7 @@ export default function TransportDetailedRatingBadge({
     return 'bg-red-500 text-white'
   }
   
-  // Standardowe wyświetlanie oceny procentowej
+  // Standardowe wyświetlanie oceny procentowej (wyświetlane tylko, gdy nie jest 'Rozwiązane' i ma oceny)
   return (
     <div className="flex items-center">
       <div className={`flex items-center px-2 py-1 rounded-md text-sm font-medium ${getColorClass(rating.overallPercentage)}`}>
