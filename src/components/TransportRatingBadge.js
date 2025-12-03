@@ -62,7 +62,7 @@ export default function TransportDetailedRatingBadge({
     return (
       <div className="flex items-center">
         <div className="flex items-center px-2 py-1 rounded-md text-sm font-bold bg-purple-600 text-white">
-          R
+          R&nbsp;{rating.overallPercentage}%
         </div>
       </div>
     )
