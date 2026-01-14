@@ -6,14 +6,14 @@ import nodemailer from 'nodemailer'
 // Funkcja pomocnicza do weryfikacji sesji
 const getUserEmailFromToken = async (authToken) => {
   if (!authToken) return null;
-  
+
   try {
     const session = await db('sessions')
       .where('token', authToken)
       .whereRaw('expires_at > NOW()')
       .select('user_id')
       .first();
-    
+
     return session?.user_id || null;
   } catch (error) {
     console.error('Błąd walidacji sesji:', error)
@@ -37,61 +37,77 @@ const getUserType = (email) => {
   const magazynEmails = [
     'magazyn@grupaeltron.pl',
     'logistyka@grupaeltron.pl',
-    'bialystok@grupaeltron.pl', 
+    'bialystok@grupaeltron.pl',
     'zielonka@grupaeltron.pl'
   ];
-  
+
   // Email zawiera słowa kluczowe związane z magazynem
   const magazynKeywords = ['magazyn', 'warehouse', 'storage', 'logistyka'];
-  
-  if (magazynEmails.includes(email.toLowerCase()) || 
-      magazynKeywords.some(keyword => email.toLowerCase().includes(keyword))) {
+
+  if (magazynEmails.includes(email.toLowerCase()) ||
+    magazynKeywords.some(keyword => email.toLowerCase().includes(keyword))) {
     return 'magazyn';
   }
-  
+
   return 'handlowiec';
 };
 
 // Funkcja pobierania adresatów powiadomień
 const getNotificationRecipients = async (commenterEmail, transportId) => {
   const recipients = [];
-  const commenterType = getUserType(commenterEmail);
-  
-  // Zawsze dodaj Mateusza
+
+  // Zawsze dodaj stałych odbiorców
   recipients.push('mateusz.klewinowski@grupaeltron.pl');
-  
+
   try {
-    // Pobierz dane o transporcie
+    // 1. Pobierz dane o ocenie (kto oceniał - czyli "Handlowiec")
+    const rating = await db('transport_detailed_ratings')
+      .where('transport_id', transportId)
+      .select('rater_email')
+      .first();
+
+    const raterEmail = rating?.rater_email;
+
+    // 2. Pobierz dane o transporcie
     const transport = await db('transports')
       .where('id', transportId)
       .select('requester_email', 'source_warehouse')
       .first();
-    
-    if (transport) {
-      if (commenterType === 'handlowiec') {
-        // Handlowiec komentuje → powiadom magazyn
-        const magazynEmails = {
-          'bialystok': 'magazyn@grupaeltron.pl',  // Używamy główny email magazynu
-          'zielonka': 'magazyn@grupaeltron.pl'
-        };
-        
-        // Dodaj email magazynu
-        recipients.push('magazyn@grupaeltron.pl');
-        recipients.push('logistyka@grupaeltron.pl');
-        
-      } else {
-        // Magazyn komentuje → powiadom handlowca
-        if (transport.requester_email && transport.requester_email !== commenterEmail) {
-          recipients.push(transport.requester_email);
-        }
-      }
+
+    // Stała lista dla logistyki/magazynu
+    const logisticsEmails = ['logistyka@grupaeltron.pl']; // Spedycja zawsze
+
+    // Dodatkowi odbiorcy dla Zielonki
+    if (transport && transport.source_warehouse === 'zielonka') {
+      logisticsEmails.push('s.swiderski@grupaeltron.pl');
+      logisticsEmails.push('k.gryka@grupaeltron.pl');
     }
+
+    // LOGIKA KONWERSACJI:
+
+    // Sytuacja A: Komentuje RATER -> Wysyłamy do Logistyki
+    if (raterEmail && commenterEmail === raterEmail) {
+      console.log('💬 Komentarz od twórcy oceny -> Powiadamiam Logistykę');
+      logisticsEmails.forEach(email => recipients.push(email));
+    }
+    // Sytuacja B: Komentuje Logistyka (lub ktoś inny) -> Wysyłamy do RATERA
+    else if (raterEmail && commenterEmail !== raterEmail) {
+      console.log('💬 Komentarz od obsługi -> Powiadamiam Twórcę Oceny');
+      recipients.push(raterEmail);
+    }
+
+    // Fallback: Jeśli nie ma oceny, a mamy email zlecającego i nie on komentuje
+    if (!raterEmail && transport && transport.requester_email && transport.requester_email !== commenterEmail) {
+      recipients.push(transport.requester_email);
+    }
+
   } catch (error) {
-    console.error('Błąd pobierania adresatów:', error);
+    console.error('❌ Błąd pobierania adresatów:', error);
   }
-  
+
   // Usuń duplikaty i email komentującego
-  return [...new Set(recipients)].filter(email => email !== commenterEmail);
+  const finalRecipients = [...new Set(recipients)].filter(email => email !== commenterEmail);
+  return finalRecipients;
 };
 
 // Funkcja wysyłania powiadomienia email - UŻYWA ISTNIEJĄCEJ KONFIGURACJI SMTP
@@ -112,7 +128,7 @@ const sendCommentNotification = async (commenterEmail, transport, comment, recip
         pass: process.env.SMTP_PASSWORD
       }
     });
-    
+
     // Sprawdź czy transporter jest skonfigurowany
     if (!process.env.SMTP_PASSWORD) {
       console.log('SMTP nie skonfigurowany - symulacja wysyłki emaila');
@@ -125,9 +141,9 @@ const sendCommentNotification = async (commenterEmail, transport, comment, recip
     const commenterType = getUserType(commenterEmail);
     const transportInfo = `${transport.destination_city} - ${transport.client_name}`;
     const transportDate = new Date(transport.delivery_date).toLocaleDateString('pl-PL');
-    
+
     const emailSubject = `📝 Nowy komentarz do transportu ${transportInfo}`;
-    
+
     const emailHtml = `
       <!DOCTYPE html>
       <html>
@@ -207,20 +223,20 @@ const sendCommentNotification = async (commenterEmail, transport, comment, recip
         text: emailText,
         html: emailHtml
       });
-      
+
       console.log(`✅ Email wysłany do: ${recipient}`);
     }
 
-    return { 
-      success: true, 
-      message: `Powiadomienia wysłane do ${recipients.length} adresatów` 
+    return {
+      success: true,
+      message: `Powiadomienia wysłane do ${recipients.length} adresatów`
     };
 
   } catch (error) {
     console.error('❌ Błąd wysyłania powiadomienia email:', error);
-    return { 
-      success: false, 
-      message: 'Błąd wysyłania powiadomienia: ' + error.message 
+    return {
+      success: false,
+      message: 'Błąd wysyłania powiadomienia: ' + error.message
     };
   }
 };
@@ -230,19 +246,19 @@ export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url)
     const transportId = searchParams.get('transportId')
-    
+
     console.log('🔍 GET komentarze dla transportu:', transportId);
-    
+
     if (!transportId) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Brak ID transportu' 
+      return NextResponse.json({
+        success: false,
+        error: 'Brak ID transportu'
       }, { status: 400 })
     }
 
     // Sprawdź czy tabela komentarzy istnieje
     const commentsTableExists = await tableExists('transport_comments');
-    
+
     if (!commentsTableExists) {
       console.log('📝 Tabela transport_comments nie istnieje - zwracam pustą listę');
       return NextResponse.json({
@@ -266,9 +282,9 @@ export async function GET(request) {
 
   } catch (error) {
     console.error('❌ Błąd pobierania komentarzy:', error)
-    return NextResponse.json({ 
-      success: false, 
-      error: 'Wystąpił błąd serwera: ' + error.message 
+    return NextResponse.json({
+      success: false,
+      error: 'Wystąpił błąd serwera: ' + error.message
     }, { status: 500 })
   }
 }
@@ -277,30 +293,30 @@ export async function GET(request) {
 export async function POST(request) {
   try {
     console.log('🔔 Rozpoczynanie dodawania komentarza z powiadomieniami...');
-    
+
     const authToken = request.cookies.get('authToken')?.value
-    
+
     if (!authToken) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Brak autoryzacji' 
+      return NextResponse.json({
+        success: false,
+        error: 'Brak autoryzacji'
       }, { status: 401 })
     }
 
     const userEmail = await getUserEmailFromToken(authToken);
     if (!userEmail) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Nieprawidłowa sesja' 
+      return NextResponse.json({
+        success: false,
+        error: 'Nieprawidłowa sesja'
       }, { status: 401 })
     }
 
     const { transportId, comment } = await request.json()
-    
+
     if (!transportId || !comment || !comment.trim()) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Brak wymaganych danych' 
+      return NextResponse.json({
+        success: false,
+        error: 'Brak wymaganych danych'
       }, { status: 400 })
     }
 
@@ -309,24 +325,24 @@ export async function POST(request) {
       .where('id', transportId)
       .select('*')
       .first();
-    
+
     if (!transport) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Transport nie istnieje' 
+      return NextResponse.json({
+        success: false,
+        error: 'Transport nie istnieje'
       }, { status: 404 })
     }
 
     if (transport.status !== 'completed') {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Można komentować tylko ukończone transporty' 
+      return NextResponse.json({
+        success: false,
+        error: 'Można komentować tylko ukończone transporty'
       }, { status: 400 })
     }
 
     // Sprawdź czy tabela komentarzy istnieje, jeśli nie - utwórz ją
     const commentsTableExists = await tableExists('transport_comments');
-    
+
     if (!commentsTableExists) {
       console.log('🗂️ Tworzenie tabeli transport_comments...');
       await db.schema.createTable('transport_comments', (table) => {
@@ -335,7 +351,7 @@ export async function POST(request) {
         table.string('commenter_email').notNullable()
         table.text('comment').notNullable()
         table.timestamp('created_at').defaultTo(db.fn.now())
-        
+
         table.index(['transport_id'])
         table.index(['commenter_email'])
       })
@@ -375,10 +391,10 @@ export async function POST(request) {
 
   } catch (error) {
     console.error('❌ Błąd dodawania komentarza:', error)
-    
-    return NextResponse.json({ 
-      success: false, 
-      error: 'Wystąpił błąd podczas dodawania komentarza: ' + error.message 
+
+    return NextResponse.json({
+      success: false,
+      error: 'Wystąpił błąd podczas dodawania komentarza: ' + error.message
     }, { status: 500 })
   }
 }
