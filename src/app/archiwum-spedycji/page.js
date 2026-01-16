@@ -838,6 +838,25 @@ export default function ArchiwumSpedycjiPage() {
     );
   };
 
+  // FUNKCJA POMOCNICZA: Pobiera trasę dla wyświetlenia w nagłówku
+  const getDisplayRoute = (transport) => {
+    const connectedRoute = calculateConnectedRoute(transport);
+
+    if (connectedRoute) {
+      return {
+        text: connectedRoute.route,
+        distance: connectedRoute.totalDistance,
+        isConnected: true
+      };
+    }
+
+    // Dla normalnych transportów
+    return {
+      text: `${getLoadingCity(transport)} → ${getDeliveryCity(transport)}`,
+      distance: transport.distanceKm || transport.response?.distanceKm || 0,
+      isConnected: false
+    };
+  };
 
   const renderResponsibleConstructions = (transport) => {
     if (!transport.responsibleConstructions || !transport.responsibleConstructions.length) return null;
@@ -1054,6 +1073,7 @@ export default function ArchiwumSpedycjiPage() {
               const displayDate = getActualDeliveryDate(transport);
               const responsibleInfo = getResponsibleInfo(transport);
               const currentMPK = getCurrentMPK(transport);
+              const displayRoute = getDisplayRoute(transport);
 
               return (
                 <div key={transport.id} className="p-6 hover:bg-gray-50 transition-colors">
@@ -1064,20 +1084,25 @@ export default function ArchiwumSpedycjiPage() {
                     <div className="flex-1">
                       <div className="mb-3">
                         <h3 className="text-xl font-bold text-gray-900 flex items-center mb-2">
-                          <span className="flex items-center">
-                            {getLoadingCity(transport).toUpperCase()}
-                            <span className="ml-2 text-sm font-medium text-gray-600">
-                              ({getLoadingCompanyName(transport)})
-                            </span>
+                          <span className={`flex items-center ${displayRoute.isConnected ? "text-blue-700" : ""}`}>
+                            {displayRoute.text.toUpperCase()}
                           </span>
-                          <ArrowRight size={20} className="mx-3 text-gray-500" />
-                          <span className="flex items-center">
-                            {getDeliveryCity(transport).toUpperCase()}
-                            <span className="ml-2 text-sm font-medium text-gray-600">
-                              ({getUnloadingCompanyName(transport)})
+
+                          {displayRoute.isConnected && (
+                            <span className="ml-3 bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-sm font-medium flex items-center">
+                              <LinkIcon size={14} className="mr-1" />
+                              Połączone
                             </span>
-                          </span>
+                          )}
                         </h3>
+                        {/* Wyświetlanie firm pod spodem jeśli to nie jest trasa połączona, albo w uproszczonej formie */}
+                        {!displayRoute.isConnected && (
+                          <div className="flex items-center text-sm text-gray-500 mb-2">
+                            <span>{getLoadingCompanyName(transport)}</span>
+                            <ArrowRight size={14} className="mx-2" />
+                            <span>{getUnloadingCompanyName(transport)}</span>
+                          </div>
+                        )}
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
