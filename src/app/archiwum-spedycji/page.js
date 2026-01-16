@@ -4,7 +4,7 @@ import { format, startOfWeek, endOfWeek, eachWeekOfInterval, startOfMonth, endOf
 import { pl } from 'date-fns/locale'
 import * as XLSX from 'xlsx'
 import { generateCMR } from '@/lib/utils/generateCMR'
-import { ChevronLeft, ChevronRight, FileText, Download, Search, Truck, Package, MapPin, Phone, Calendar, DollarSign, User, Clipboard, ArrowRight, ChevronDown, ChevronUp, AlertCircle, Building, ShoppingBag, Weight, Mail, Hash, Clock, CheckCircle, Printer } from 'lucide-react'
+import { ChevronLeft, ChevronRight, FileText, Download, Search, Truck, Package, MapPin, Phone, Calendar, DollarSign, User, Clipboard, ArrowRight, ChevronDown, ChevronUp, AlertCircle, Building, ShoppingBag, Weight, Mail, Hash, Clock, CheckCircle, Printer, Link as LinkIcon, Bot } from 'lucide-react'
 
 export default function ArchiwumSpedycjiPage() {
   const [archiwum, setArchiwum] = useState([])
@@ -17,7 +17,7 @@ export default function ArchiwumSpedycjiPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage] = useState(10)
   const [expandedRowId, setExpandedRowId] = useState(null)
-  
+
   // Filtry
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [selectedMonth, setSelectedMonth] = useState('all')
@@ -28,7 +28,7 @@ export default function ArchiwumSpedycjiPage() {
   const [marketFilter, setMarketFilter] = useState('')
   const [mpkOptions, setMpkOptions] = useState([])
   const [marketOptions, setMarketOptions] = useState([])
-  
+
   // Lista dostępnych lat i miesięcy
   const currentYear = new Date().getFullYear()
   const years = Array.from({ length: 5 }, (_, i) => currentYear - i)
@@ -81,17 +81,17 @@ export default function ArchiwumSpedycjiPage() {
   // FUNKCJA: Automatyczne określanie rynku na podstawie MPK
   const getMarketFromMPK = (mpk) => {
     if (!mpk) return 'Nie określono';
-    
+
     // Budowy (format: 501-XX-XX/XXXX)
     if (mpk.match(/^501-/)) {
       return 'Budowy';
     }
-    
+
     // Centra elektryczne (522-03-XXX)
     if (mpk.match(/^522-03-/)) {
       return 'Centra elektryczne';
     }
-    
+
     // Rynki (format: 522-XX-XXX)
     if (mpk.match(/^522-02-/)) return 'Rynek Podlaski';
     if (mpk.match(/^522-04-/)) return 'Rynek Lubelski';
@@ -101,7 +101,7 @@ export default function ArchiwumSpedycjiPage() {
     if (mpk.match(/^522-08-/)) return 'Rynek Dolnośląski';
     if (mpk.match(/^522-09-/)) return 'Rynek Wielkopolski';
     if (mpk.match(/^522-11-/)) return 'Rynek Śląski';
-    
+
     // Jeśli nie pasuje do żadnego wzorca
     return 'Inne';
   }
@@ -128,27 +128,27 @@ export default function ArchiwumSpedycjiPage() {
     try {
       setLoading(true)
       setError(null)
-      
+
       const response = await fetch('/api/spedycje?status=completed')
-      
+
       if (response.ok) {
         const data = await response.json()
-        
+
         if (data.success) {
           console.log('Pobrane dane z API:', data.spedycje)
           setArchiwum(data.spedycje)
-          
+
           // Zbierz unikalne wartości MPK dla filtra
           const uniqueMpks = [...new Set(data.spedycje.map(item => item.mpk).filter(Boolean))]
           setMpkOptions(uniqueMpks)
-          
+
           // Zbierz unikalne wartości rynków (na podstawie MPK)
           const uniqueMarkets = [...new Set(data.spedycje
             .map(item => getMarketFromMPK(getCurrentMPK(item)))
             .filter(market => market !== 'Nie określono')
           )].sort()
           setMarketOptions(uniqueMarkets)
-          
+
           applyFilters(data.spedycje, selectedYear, selectedMonth, selectedWeek, '', '', '')
         } else {
           throw new Error(data.error || 'Błąd pobierania danych')
@@ -159,7 +159,7 @@ export default function ArchiwumSpedycjiPage() {
     } catch (error) {
       console.error('Błąd pobierania archiwum:', error)
       setError('Wystąpił błąd podczas pobierania danych')
-      
+
       // Fallback do localStorage jako ostateczność
       try {
         const savedData = localStorage.getItem('zamowieniaSpedycja')
@@ -167,19 +167,19 @@ export default function ArchiwumSpedycjiPage() {
           const transporty = JSON.parse(savedData)
             .filter(transport => transport.status === 'completed')
             .sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt))
-          
+
           setArchiwum(transporty)
-          
+
           const uniqueMpks = [...new Set(transporty.map(item => item.mpk).filter(Boolean))]
           setMpkOptions(uniqueMpks)
-          
+
           // Zbierz unikalne wartości rynków (na podstawie MPK)
           const uniqueMarkets = [...new Set(transporty
             .map(item => getMarketFromMPK(getCurrentMPK(item)))
             .filter(market => market !== 'Nie określono')
           )].sort()
           setMarketOptions(uniqueMarkets)
-          
+
           applyFilters(transporty, selectedYear, selectedMonth, selectedWeek, '', '', '')
         }
       } catch (localStorageError) {
@@ -215,7 +215,7 @@ export default function ArchiwumSpedycjiPage() {
     }
     return transport.location || 'Nie podano';
   }
-  
+
   const getDeliveryCity = (transport) => {
     return transport.delivery?.city || 'Nie podano';
   }
@@ -225,19 +225,19 @@ export default function ArchiwumSpedycjiPage() {
       const desc = transport.goodsDescription.description || '';
       const weight = transport.goodsDescription.weight || '';
       if (desc || weight) {
-          return {
-              description: desc,
-              weight: weight
-          };
+        return {
+          description: desc,
+          weight: weight
+        };
       }
     }
-    
+
     if (transport.order_data) {
       try {
-        const orderData = typeof transport.order_data === 'string' 
-          ? JSON.parse(transport.order_data) 
+        const orderData = typeof transport.order_data === 'string'
+          ? JSON.parse(transport.order_data)
           : transport.order_data;
-        
+
         if (orderData.towar || orderData.waga) {
           return {
             description: orderData.towar || '',
@@ -248,7 +248,7 @@ export default function ArchiwumSpedycjiPage() {
         console.error('Błąd parsowania order_data:', error);
       }
     }
-    
+
     return { description: '', weight: '' };
   }
 
@@ -261,7 +261,7 @@ export default function ArchiwumSpedycjiPage() {
         mpk: construction.mpk || ''
       };
     }
-    
+
     return {
       name: transport.responsiblePerson || transport.createdBy || 'Brak',
       type: 'person',
@@ -273,7 +273,7 @@ export default function ArchiwumSpedycjiPage() {
     if (transport.responsibleConstructions && transport.responsibleConstructions.length > 0) {
       return transport.responsibleConstructions[0].mpk || transport.mpk || '';
     }
-    
+
     return transport.mpk || '';
   }
 
@@ -302,15 +302,15 @@ export default function ArchiwumSpedycjiPage() {
       setFilteredArchiwum([])
       return
     }
-    
+
     const filtered = transports.filter(transport => {
       const date = new Date(transport.completedAt || transport.createdAt)
       const transportYear = date.getFullYear()
-      
+
       if (transportYear !== parseInt(year)) {
         return false
       }
-      
+
       if (month !== 'all') {
         const transportMonth = date.getMonth()
         if (transportMonth !== parseInt(month)) {
@@ -326,31 +326,31 @@ export default function ArchiwumSpedycjiPage() {
           return false;
         }
       }
-      
+
       if (mpkValue) {
         const currentMPK = getCurrentMPK(transport);
         if (!currentMPK.toLowerCase().includes(mpkValue.toLowerCase())) {
           return false;
         }
       }
-      
+
       if (orderNumberValue) {
         const orderNumber = transport.orderNumber || transport.order_number || ''
         if (!orderNumber.toLowerCase().includes(orderNumberValue.toLowerCase())) {
           return false
         }
       }
-      
+
       if (marketValue) {
         const transportMarket = transport.market || '';
         if (transportMarket !== marketValue) {
           return false;
         }
       }
-      
+
       return true
     })
-    
+
     setFilteredArchiwum(filtered)
     setCurrentPage(1)
   }
@@ -363,23 +363,23 @@ export default function ArchiwumSpedycjiPage() {
     if (!confirm('Czy na pewno chcesz usunąć ten transport?')) {
       return
     }
-    
+
     try {
       setDeleteStatus({ type: 'loading', message: 'Usuwanie transportu...' })
-      
+
       const response = await fetch(`/api/spedycje?id=${id}`, {
         method: 'DELETE'
       })
-      
+
       const data = await response.json()
-      
+
       if (data.success) {
         const updatedArchiwum = archiwum.filter(transport => transport.id !== id)
         setArchiwum(updatedArchiwum)
         applyFilters(updatedArchiwum, selectedYear, selectedMonth, selectedWeek, mpkFilter, orderNumberFilter, marketFilter)
-        
+
         setDeleteStatus({ type: 'success', message: 'Transport został usunięty' })
-        
+
         setTimeout(() => {
           setDeleteStatus(null)
         }, 3000)
@@ -396,16 +396,16 @@ export default function ArchiwumSpedycjiPage() {
     if (!price || !distance || distance === 0) return 0;
     return (price / distance).toFixed(2);
   }
-  
+
   const exportData = () => {
     if (filteredArchiwum.length === 0) {
       alert('Brak danych do eksportu')
       return
     }
-    
+
     const calculateSpedycjaCost = (price, distance) => {
       if (price && price > 0) return price;
-      
+
       if (distance <= 100) {
         return distance * 15;
       } else if (distance > 100 && distance <= 200) {
@@ -422,7 +422,7 @@ export default function ArchiwumSpedycjiPage() {
       const pricePerKm = calculatePricePerKm(price || calculatedCost, distanceKm)
       const responsibleInfo = getResponsibleInfo(transport)
       const goodsData = getGoodsDataFromTransportOrder(transport)
-      
+
       return {
         'Data zlecenia': formatDate(transport.createdAt),
         'Data realizacji': transport.completedAt ? formatDate(transport.completedAt) : 'Brak',
@@ -456,13 +456,13 @@ export default function ArchiwumSpedycjiPage() {
         'Status': transport.status === 'completed' ? 'Zakończony' : transport.status
       }
     })
-    
-    const monthLabel = selectedMonth === 'all' ? 
-                      'wszystkie_miesiace' : 
-                      months.find(m => m.value === selectedMonth)?.label.toLowerCase() || selectedMonth
-    
+
+    const monthLabel = selectedMonth === 'all' ?
+      'wszystkie_miesiace' :
+      months.find(m => m.value === selectedMonth)?.label.toLowerCase() || selectedMonth
+
     const fileName = `spedycja_${selectedYear}_${monthLabel}_${format(new Date(), 'yyyy-MM-dd')}`
-    
+
     if (exportFormat === 'csv') {
       exportToCSV(dataToExport, fileName)
     } else {
@@ -472,21 +472,21 @@ export default function ArchiwumSpedycjiPage() {
         const distance = transport.response?.distanceKm || transport.distanceKm || 0;
         const price = transport.response?.deliveryPrice || 0;
         const cost = calculateSpedycjaCost(price, distance);
-        
+
         if (!acc[mpk]) {
-          acc[mpk] = { 
-            totalCost: 0, 
-            totalDistance: 0, 
+          acc[mpk] = {
+            totalCost: 0,
+            totalDistance: 0,
             count: 0,
             totalRealPrice: 0
           };
         }
-        
+
         acc[mpk].totalCost += cost;
         acc[mpk].totalDistance += distance;
         acc[mpk].count += 1;
         acc[mpk].totalRealPrice += (price || 0);
-        
+
         return acc;
       }, {});
 
@@ -505,22 +505,22 @@ export default function ArchiwumSpedycjiPage() {
         const distance = transport.response?.distanceKm || transport.distanceKm || 0;
         const price = transport.response?.deliveryPrice || 0;
         const cost = calculateSpedycjaCost(price, distance);
-        
+
         if (!acc[weekKey]) {
-          acc[weekKey] = { 
-            totalCost: 0, 
-            totalDistance: 0, 
+          acc[weekKey] = {
+            totalCost: 0,
+            totalDistance: 0,
             count: 0,
             totalRealPrice: 0,
             weekStart: format(new Date(transport.completedAt || transport.createdAt), 'dd.MM.yyyy', { locale: pl })
           };
         }
-        
+
         acc[weekKey].totalCost += cost;
         acc[weekKey].totalDistance += distance;
         acc[weekKey].count += 1;
         acc[weekKey].totalRealPrice += (price || 0);
-        
+
         return acc;
       }, {});
 
@@ -542,23 +542,23 @@ export default function ArchiwumSpedycjiPage() {
         const distance = transport.response?.distanceKm || transport.distanceKm || 0;
         const price = transport.response?.deliveryPrice || 0;
         const cost = calculateSpedycjaCost(price, distance);
-        
+
         if (!acc[carrierName]) {
-          acc[carrierName] = { 
-            totalCost: 0, 
-            totalDistance: 0, 
+          acc[carrierName] = {
+            totalCost: 0,
+            totalDistance: 0,
             count: 0,
             totalRealPrice: 0,
             phone: transport.response?.driverPhone || '',
             vehicle: transport.response?.vehicleNumber || ''
           };
         }
-        
+
         acc[carrierName].totalCost += cost;
         acc[carrierName].totalDistance += distance;
         acc[carrierName].count += 1;
         acc[carrierName].totalRealPrice += (price || 0);
-        
+
         return acc;
       }, {});
 
@@ -579,39 +579,39 @@ export default function ArchiwumSpedycjiPage() {
 
   const exportToXLSXWithMultipleSheets = (mainData, summaryMpk, summaryWeek, summaryCarrier, fileName, rawData) => {
     const wb = XLSX.utils.book_new();
-    
+
     const ws_main = XLSX.utils.json_to_sheet(mainData);
     XLSX.utils.book_append_sheet(wb, ws_main, "Wszystkie transporty");
-    
+
     const ws_mpk = XLSX.utils.json_to_sheet(summaryMpk);
     XLSX.utils.book_append_sheet(wb, ws_mpk, "Podsumowanie po MPK");
-    
+
     const ws_week = XLSX.utils.json_to_sheet(summaryWeek);
     XLSX.utils.book_append_sheet(wb, ws_week, "Podsumowanie po tygodniach");
-    
+
     const ws_carrier = XLSX.utils.json_to_sheet(summaryCarrier);
     XLSX.utils.book_append_sheet(wb, ws_carrier, "Podsumowanie po przewoźnikach");
-    
+
     // Arkusze z podziałem na rynki (teraz na podstawie MPK)
     const markets = [...new Set(rawData.map(t => getMarketFromMPK(getCurrentMPK(t))).filter(m => m !== 'Nie określono'))].sort();
-    
+
     markets.forEach(market => {
       const marketData = mainData.filter(row => row['Rynek'] === market);
-      
+
       if (marketData.length > 0) {
         const ws_market = XLSX.utils.json_to_sheet(marketData);
         const sheetName = market.length > 28 ? market.substring(0, 28) + '...' : market;
         XLSX.utils.book_append_sheet(wb, ws_market, sheetName);
       }
     });
-    
+
     XLSX.writeFile(wb, `${fileName}.xlsx`);
   }
 
   const generateGoogleMapsLink = (transport) => {
     let origin = '';
     let destination = '';
-    
+
     if (transport.location === 'Odbiory własne' && transport.producerAddress) {
       const addr = transport.producerAddress;
       origin = `${addr.city},${addr.postalCode},${addr.street || ''}`;
@@ -620,23 +620,23 @@ export default function ArchiwumSpedycjiPage() {
     } else if (transport.location === 'Magazyn Zielonka') {
       origin = 'Zielonka';
     }
-    
+
     if (transport.delivery) {
       const addr = transport.delivery;
       destination = `${addr.city},${addr.postalCode},${addr.street || ''}`;
     }
-    
+
     if (!origin || !destination) return '';
-    
+
     origin = encodeURIComponent(origin);
     destination = encodeURIComponent(destination);
-    
+
     return `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=driving`;
   };
 
   const exportToCSV = (data, fileName) => {
     const headers = Object.keys(data[0])
-    
+
     let csvContent = headers.join(';') + '\n'
     data.forEach(item => {
       const row = headers.map(header => {
@@ -679,9 +679,9 @@ export default function ArchiwumSpedycjiPage() {
   }
 
   const isDeliveryDateChanged = (transport) => {
-    return transport.response && 
-           transport.response.dateChanged === true && 
-           transport.response.newDeliveryDate;
+    return transport.response &&
+      transport.response.dateChanged === true &&
+      transport.response.newDeliveryDate;
   }
 
   const getActualDeliveryDate = (transport) => {
@@ -691,9 +691,157 @@ export default function ArchiwumSpedycjiPage() {
     return transport.deliveryDate;
   }
 
+  // FUNKCJA: Sprawdza czy odpowiedź została wygenerowana automatycznie
+  const isAutoGeneratedResponse = (transport) => {
+    return transport.response && transport.response.autoGenerated === true;
+  };
+
+  // NOWA FUNKCJA: Oblicza całkowitą trasę dla połączonych transportów
+  const calculateConnectedRoute = (mainTransport) => {
+    if (!isAutoGeneratedResponse(mainTransport)) {
+      return null;
+    }
+
+    const connectedTransports = mainTransport.response?.connectedTransports || [];
+    if (connectedTransports.length === 0) {
+      return null;
+    }
+
+    // Zbierz wszystkie punkty trasy w odpowiedniej kolejności
+    const routePoints = [];
+
+    // Posortuj połączone transporty według kolejności
+    const sortedTransports = [...connectedTransports].sort((a, b) => (a.order || 0) - (b.order || 0));
+
+    // Dodaj punkty z połączonych transportów
+    sortedTransports.forEach(ct => {
+      if (ct.route) {
+        const [start, end] = ct.route.split(' → ');
+        // Dodaj punkt startowy jeśli jeszcze go nie ma
+        if (start && !routePoints.includes(start)) {
+          routePoints.push(start);
+        }
+      }
+    });
+
+    // Dodaj punkt głównego transportu (załadunek) jeśli jeszcze go nie ma
+    const mainStart = getLoadingCity(mainTransport);
+    if (mainStart && !routePoints.includes(mainStart)) {
+      routePoints.push(mainStart);
+    }
+
+    // Dodaj punkt docelowy (zawsze na końcu)
+    const mainEnd = getDeliveryCity(mainTransport);
+    if (mainEnd && !routePoints.includes(mainEnd)) {
+      routePoints.push(mainEnd);
+    }
+
+    // Oblicz całkowitą odległość
+    let totalDistance = 0;
+
+    // Dodaj odległość głównego transportu
+    totalDistance += mainTransport.distanceKm || 0;
+
+    // Dodaj odległości z połączonych transportów
+    sortedTransports.forEach(ct => {
+      const originalTransportDistance = ct.distanceKm || 50;
+      totalDistance += originalTransportDistance;
+    });
+
+    return {
+      route: routePoints.join(' → '),
+      totalDistance: totalDistance,
+      connectedCount: connectedTransports.length
+    };
+  };
+
+  // Renderuje info o powiązanych transportach
+  const renderConnectedTransports = (transport) => {
+    if (!transport.response || !transport.response.connectedTransports ||
+      !transport.response.connectedTransports.length) return null;
+
+    const connectedTransports = transport.response.connectedTransports;
+    const connectedRoute = calculateConnectedRoute(transport);
+
+    return (
+      <div className="mt-6 mb-6">
+        <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-5">
+          <h4 className="font-medium text-indigo-700 mb-4 flex items-center text-lg">
+            <LinkIcon size={20} className="mr-2" />
+            Transport połączony
+          </h4>
+
+          {/* Pokaż pełną trasę */}
+          {connectedRoute && (
+            <div className="mb-4 p-3 bg-white rounded-lg border border-indigo-200 shadow-sm">
+              <div className="text-base font-medium text-indigo-800 break-words">
+                Trasa połączona: {connectedRoute.route}
+              </div>
+              <div className="text-sm text-indigo-600 mt-2 flex items-center">
+                <span className="font-medium mr-1">Łączna odległość:</span> {connectedRoute.totalDistance} km
+                <span className="mx-2">•</span>
+                <span className="font-medium mr-1">Liczba transportów:</span> {connectedRoute.connectedCount + 1}
+              </div>
+            </div>
+          )}
+
+          <div className="text-sm font-medium text-indigo-700 mb-3">Transporty w tej trasie:</div>
+          <div className="space-y-3">
+            {connectedTransports.map((ct, index) => (
+              <div key={ct.id} className="bg-white p-3 rounded-md border border-indigo-100 flex flex-col sm:flex-row justify-between items-start sm:items-center">
+                <div className="flex-1">
+                  <div className="font-medium text-gray-900">
+                    {index + 1}. {ct.orderNumber || ct.id} {ct.route && `(${ct.route})`}
+                  </div>
+                  <div className="text-xs text-indigo-600 mt-1">
+                    {ct.type === 'loading' ? 'Załadunek' : 'Rozładunek'} •
+                    <span className="ml-1">MPK: {ct.mpk}</span> •
+                    <span className="ml-1">{ct.responsiblePerson || 'Brak'}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {/* Pokaż główny transport */}
+            <div className="bg-indigo-100 p-3 rounded-md border border-indigo-200 flex flex-col sm:flex-row justify-between items-start sm:items-center">
+              <div className="flex-1">
+                <div className="font-medium text-indigo-900">
+                  {connectedTransports.length + 1}. {transport.orderNumber || transport.id} (główny transport)
+                </div>
+                <div className="text-xs text-indigo-700 mt-1">
+                  {getLoadingCity(transport)} → {getDeliveryCity(transport)} •
+                  <span className="ml-1">MPK: {getCurrentMPK(transport)}</span>
+                </div>
+              </div>
+              <div className="mt-2 sm:mt-0 text-xs font-semibold px-2 py-1 bg-indigo-200 text-indigo-800 rounded">
+                Główny
+              </div>
+            </div>
+          </div>
+
+          {transport.response.deliveryPrice && (
+            <div className="mt-4 pt-4 border-t border-indigo-200 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <div className="text-sm text-indigo-800 font-medium mb-1">Całkowity koszt transportu:</div>
+                <div className="text-lg font-bold text-indigo-900">{transport.response.deliveryPrice} PLN</div>
+              </div>
+              {transport.response.costPerTransport && (
+                <div>
+                  <div className="text-sm text-indigo-800 font-medium mb-1">Koszt na transport:</div>
+                  <div className="text-lg font-bold text-indigo-900">{transport.response.costPerTransport} PLN</div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+
   const renderResponsibleConstructions = (transport) => {
     if (!transport.responsibleConstructions || !transport.responsibleConstructions.length) return null;
-    
+
     return (
       <div className="mt-3">
         <div className="font-medium text-sm text-green-700 mb-2 flex items-center">
@@ -719,7 +867,7 @@ export default function ArchiwumSpedycjiPage() {
   const totalPages = Math.ceil(filteredArchiwum.length / itemsPerPage)
 
   const paginate = (pageNumber) => setCurrentPage(pageNumber)
-  
+
   const selectStyles = "block w-full py-2 pl-3 pr-10 text-base border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
   const inputStyles = "block w-full py-2 pl-3 pr-10 text-base border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
 
@@ -763,7 +911,7 @@ export default function ArchiwumSpedycjiPage() {
               ))}
             </select>
           </div>
-          
+
           <div>
             <label htmlFor="monthSelect" className="block text-sm font-medium text-gray-700 mb-1">
               Miesiąc
@@ -799,7 +947,7 @@ export default function ArchiwumSpedycjiPage() {
               ))}
             </select>
           </div>
-          
+
           <div>
             <label htmlFor="marketFilter" className="block text-sm font-medium text-gray-700 mb-1">
               Rynek
@@ -816,7 +964,7 @@ export default function ArchiwumSpedycjiPage() {
               ))}
             </select>
           </div>
-          
+
           <div>
             <label htmlFor="mpkFilter" className="block text-sm font-medium text-gray-700 mb-1">
               MPK
@@ -841,7 +989,7 @@ export default function ArchiwumSpedycjiPage() {
               </div>
             </div>
           </div>
-          
+
           <div>
             <label htmlFor="orderNumberFilter" className="block text-sm font-medium text-gray-700 mb-1">
               Nr zamówienia
@@ -860,7 +1008,7 @@ export default function ArchiwumSpedycjiPage() {
               </div>
             </div>
           </div>
-          
+
           <div className="flex flex-col justify-end">
             <label htmlFor="exportFormat" className="block text-sm font-medium text-gray-700 mb-1">
               Format
@@ -890,11 +1038,10 @@ export default function ArchiwumSpedycjiPage() {
       </div>
 
       {deleteStatus && (
-        <div className={`mb-4 p-4 rounded-lg ${
-          deleteStatus.type === 'success' ? 'bg-green-100 text-green-800' : 
+        <div className={`mb-4 p-4 rounded-lg ${deleteStatus.type === 'success' ? 'bg-green-100 text-green-800' :
           deleteStatus.type === 'error' ? 'bg-red-100 text-red-800' :
-          'bg-blue-100 text-blue-800'
-        }`}>
+            'bg-blue-100 text-blue-800'
+          }`}>
           {deleteStatus.message}
         </div>
       )}
@@ -907,10 +1054,10 @@ export default function ArchiwumSpedycjiPage() {
               const displayDate = getActualDeliveryDate(transport);
               const responsibleInfo = getResponsibleInfo(transport);
               const currentMPK = getCurrentMPK(transport);
-              
+
               return (
                 <div key={transport.id} className="p-6 hover:bg-gray-50 transition-colors">
-                  <div 
+                  <div
                     onClick={() => setExpandedRowId(expandedRowId === transport.id ? null : transport.id)}
                     className="flex justify-between items-start cursor-pointer"
                   >
@@ -923,7 +1070,7 @@ export default function ArchiwumSpedycjiPage() {
                               ({getLoadingCompanyName(transport)})
                             </span>
                           </span>
-                          <ArrowRight size={20} className="mx-3 text-gray-500" /> 
+                          <ArrowRight size={20} className="mx-3 text-gray-500" />
                           <span className="flex items-center">
                             {getDeliveryCity(transport).toUpperCase()}
                             <span className="ml-2 text-sm font-medium text-gray-600">
@@ -941,7 +1088,7 @@ export default function ArchiwumSpedycjiPage() {
                             <span className="font-semibold text-gray-900">{transport.orderNumber || '-'}</span>
                           </div>
                         </div>
-                        
+
                         <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 flex items-center">
                           <FileText size={16} className="mr-2 text-purple-600" />
                           <div>
@@ -949,7 +1096,7 @@ export default function ArchiwumSpedycjiPage() {
                             <span className="font-semibold text-gray-900">{currentMPK}</span>
                           </div>
                         </div>
-                        
+
                         <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 flex items-center">
                           {responsibleInfo.type === 'construction' ? (
                             <Building size={16} className="mr-2 text-orange-600" />
@@ -964,16 +1111,16 @@ export default function ArchiwumSpedycjiPage() {
                           </div>
                         </div>
                       </div>
-                      
+
                       {transport.responsibleConstructions && transport.responsibleConstructions.length > 1 && (
                         <div className="mt-3">
                           {renderResponsibleConstructions(transport)}
                         </div>
                       )}
                     </div>
-                    
+
                     <div className="flex items-center space-x-3 ml-6">
-                      <button 
+                      <button
                         className="p-2 rounded-full hover:bg-gray-200 transition-colors"
                         onClick={(e) => e.stopPropagation()}
                       >
@@ -983,9 +1130,9 @@ export default function ArchiwumSpedycjiPage() {
                           <ChevronDown size={24} className="text-gray-600" />
                         )}
                       </button>
-                      
+
                       {isAdmin && (
-                        <button 
+                        <button
                           type="button"
                           className="px-3 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
                           onClick={(e) => {
@@ -1001,6 +1148,9 @@ export default function ArchiwumSpedycjiPage() {
 
                   {expandedRowId === transport.id && (
                     <div className="mt-8 border-t border-gray-200 pt-6">
+                      {/* Renderuj informacje o powiązanych transportach na samej górze */}
+                      {renderConnectedTransports(transport)}
+
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                         <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-5 rounded-xl shadow-sm border border-blue-200">
                           <h4 className="font-bold text-blue-700 mb-4 pb-2 border-b border-blue-300 flex items-center text-lg">
@@ -1069,7 +1219,7 @@ export default function ArchiwumSpedycjiPage() {
                           </h4>
                           {(() => {
                             const goodsData = getGoodsDataFromTransportOrder(transport);
-                            
+
                             if (!goodsData.description && !goodsData.weight) {
                               return (
                                 <div className="text-sm text-gray-500 italic">
@@ -1077,7 +1227,7 @@ export default function ArchiwumSpedycjiPage() {
                                 </div>
                               );
                             }
-                            
+
                             return (
                               <div className="space-y-3 text-sm">
                                 {goodsData.description && (
@@ -1197,8 +1347,8 @@ export default function ArchiwumSpedycjiPage() {
                             <div>
                               <span className="font-medium text-gray-700">Cena za kilometr:</span>
                               <div className="font-semibold text-gray-900">
-                                {transport.response?.deliveryPrice ? 
-                                  `${calculatePricePerKm(transport.response.deliveryPrice, transport.distanceKm || transport.response?.distanceKm)} PLN/km` : 
+                                {transport.response?.deliveryPrice ?
+                                  `${calculatePricePerKm(transport.response.deliveryPrice, transport.distanceKm || transport.response?.distanceKm)} PLN/km` :
                                   'Brak danych'
                                 }
                               </div>
@@ -1284,10 +1434,10 @@ export default function ArchiwumSpedycjiPage() {
 
                       <div className="flex justify-center space-x-4">
                         {generateGoogleMapsLink(transport) && (
-                          <a 
-                            href={generateGoogleMapsLink(transport)} 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
+                          <a
+                            href={generateGoogleMapsLink(transport)}
+                            target="_blank"
+                            rel="noopener noreferrer"
                             className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg flex items-center transition-colors font-medium text-base"
                             onClick={(e) => e.stopPropagation()}
                           >
@@ -1295,8 +1445,8 @@ export default function ArchiwumSpedycjiPage() {
                             Zobacz trasę na Google Maps
                           </a>
                         )}
-                        
-                        <button 
+
+                        <button
                           type="button"
                           className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg flex items-center transition-colors font-medium text-base"
                           onClick={() => generateCMR(transport)}
@@ -1334,7 +1484,7 @@ export default function ArchiwumSpedycjiPage() {
               </>
             )}
           </div>
-          
+
           {totalPages > 1 && (
             <div className="flex justify-center items-center space-x-2">
               <button
@@ -1344,11 +1494,11 @@ export default function ArchiwumSpedycjiPage() {
               >
                 <ChevronLeft size={20} />
               </button>
-              
+
               <div className="text-sm text-gray-700">
                 Strona {currentPage} z {totalPages}
               </div>
-              
+
               <button
                 onClick={() => paginate(Math.min(totalPages, currentPage + 1))}
                 disabled={currentPage === totalPages}
