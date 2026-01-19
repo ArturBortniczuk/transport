@@ -142,6 +142,12 @@ export default function ArchiwumSpedycjiPage() {
           const uniqueMpks = [...new Set(data.spedycje.map(item => item.mpk).filter(Boolean))]
           setMpkOptions(uniqueMpks)
 
+          // PROPAGACJA INFORMACJI O POŁĄCZONYCH TRANSPORTACH
+          // Znajdź transporty, które mają informację o połączeniu i przekaż ją do pozostałych
+          const processedSpedycje = processConnectedTransports(data.spedycje);
+
+          setArchiwum(processedSpedycje)
+
           // Zbierz unikalne wartości rynków (na podstawie MPK)
           const uniqueMarkets = [...new Set(data.spedycje
             .map(item => getMarketFromMPK(getCurrentMPK(item)))
@@ -189,6 +195,46 @@ export default function ArchiwumSpedycjiPage() {
       setLoading(false)
     }
   }
+
+  // FUNKCJA POMOCNICZA: Propaguje informację o połączonych transportach do wszystkich zainteresowanych
+  const processConnectedTransports = (transports) => {
+    if (!transports || !transports.length) return [];
+
+    // Mapa ID -> Transport (używamy String ID dla bezpieczeństwa)
+    const transportMap = new Map();
+    transports.forEach(t => transportMap.set(String(t.id), { ...t }));
+
+    // Znajdź grupy połączonych transportów
+    transports.forEach(t => {
+      // Sprawdź czy transport ma zdefiniowane połączone transporty
+      if (t.response && t.response.connectedTransports && t.response.connectedTransports.length > 0) {
+        const connectedGroup = t.response.connectedTransports;
+
+        // Dla każdego transportu z grupy (również tego głównego)
+        connectedGroup.forEach(connectedItem => {
+          const targetId = String(connectedItem.id);
+
+          // Jeśli transport istnieje w naszym zestawie danych
+          if (transportMap.has(targetId)) {
+            const targetTransport = transportMap.get(targetId);
+
+            // Jeśli transport nie ma jeszcze tej informacji (np. jest "drugorzędny"), dodaj ją
+            if (!targetTransport.response) {
+              targetTransport.response = {};
+            }
+
+            // Jeśli nie ma listy połączonych transportów lub jest pusta, skopiuj ją
+            if (!targetTransport.response.connectedTransports || targetTransport.response.connectedTransports.length === 0) {
+              targetTransport.response.connectedTransports = connectedGroup;
+              targetTransport.response._connectedInfoPropagated = true;
+            }
+          }
+        });
+      }
+    });
+
+    return Array.from(transportMap.values());
+  };
 
   const getLoadingCompanyName = (transport) => {
     if (transport.location === 'Odbiory własne' && transport.sourceClientName) {
