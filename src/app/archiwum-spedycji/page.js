@@ -210,8 +210,16 @@ export default function ArchiwumSpedycjiPage() {
       if (t.response && t.response.connectedTransports && t.response.connectedTransports.length > 0) {
         const connectedGroup = t.response.connectedTransports;
 
-        // Pobierz całkowitą cenę z transportu głównego (źródłowego)
-        const totalRoutePrice = t.response.totalDeliveryPrice;
+        // KROK 1: Znajdź "prawdziwą" cenę całkowitą dla tej grupy.
+        // Szukamy w transporcie źródłowym (t) lub w którymkolwiek z grupy, jeśli tam jest dostępna.
+        let groupTotalPrice = t.response.totalDeliveryPrice;
+
+        if (!groupTotalPrice) {
+          // Jeśli źródło nie ma ceny całkowitej, sprawdźmy członków grupy
+          // (to rzadka sytuacja, ale możliwa przy dwustronnych relacjach)
+          const memberWithTotal = connectedGroup.find(m => m.totalDeliveryPrice);
+          if (memberWithTotal) groupTotalPrice = memberWithTotal.totalDeliveryPrice;
+        }
 
         // Dla każdego transportu z grupy (również tego głównego)
         connectedGroup.forEach(connectedItem => {
@@ -226,19 +234,37 @@ export default function ArchiwumSpedycjiPage() {
               targetTransport.response = {};
             }
 
+            // Szukamy ceny całkowitej też w załadowanych transportach docelowych, jeśli jeszcze jej nie mamy
+            if (!groupTotalPrice && targetTransport.response.totalDeliveryPrice) {
+              groupTotalPrice = targetTransport.response.totalDeliveryPrice;
+            }
+
             // Jeśli nie ma listy połączonych transportów lub jest pusta, skopiuj ją
             if (!targetTransport.response.connectedTransports || targetTransport.response.connectedTransports.length === 0) {
               targetTransport.response.connectedTransports = connectedGroup;
               targetTransport.response._connectedInfoPropagated = true;
             }
-
-            // PROPAGACJA CENY CAŁKOWITEJ
-            // Jeśli mamy cenę całkowitą w źródle, a cel jej nie ma, to kopiujemy
-            if (totalRoutePrice && !targetTransport.response.totalDeliveryPrice) {
-              targetTransport.response.totalDeliveryPrice = totalRoutePrice;
-            }
           }
         });
+
+        // KROK 2: Jeśli znaleźliśmy cenę całkowitą, zaaplikujmy ją do wszystkich członków grupy
+        if (groupTotalPrice) {
+          // Aplikuj do źródła (t)
+          if (!t.response.totalDeliveryPrice) {
+            t.response.totalDeliveryPrice = groupTotalPrice;
+          }
+
+          // Aplikuj do wszystkich w grupie
+          connectedGroup.forEach(connectedItem => {
+            const targetId = String(connectedItem.id);
+            if (transportMap.has(targetId)) {
+              const targetTransport = transportMap.get(targetId);
+              // Nadpisz/ustaw cenę całkowitą, aby była spójna w całej grupie
+              // (zakładamy, że groupTotalPrice jest tą właściwą, "dużą" kwotą)
+              targetTransport.response.totalDeliveryPrice = groupTotalPrice;
+            }
+          });
+        }
       }
     });
 
