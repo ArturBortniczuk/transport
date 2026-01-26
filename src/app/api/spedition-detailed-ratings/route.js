@@ -1,6 +1,7 @@
-// src/app/api/spedition-detailed-ratings/route.js - ROZSZERZONE O ROZWIĄZANIE PROBLEMU
+// src/app/api/spedition-detailed-ratings/route.js - ROZSZERZONE O ROZWIĄZANIE PROBLEMU I POWIADOMIENIA
 import { NextResponse } from 'next/server'
 import db from '@/database/db'
+import nodemailer from 'nodemailer'
 
 // Funkcja pomocnicza do weryfikacji sesji
 const validateSession = async (authToken) => {
@@ -48,6 +49,315 @@ const checkAdminStatus = async (userId) => {
     return false
   }
 }
+
+// Funkcja do formatowania danych oceny (Dopasowana do spedycji)
+const formatRatingData = (rating) => {
+  const criteria = [
+    { key: 'carrier_professional', label: 'Przewoźnik profesjonalny' },
+    { key: 'loading_on_time', label: 'Załadunek na czas' },
+    { key: 'cargo_complete', label: 'Towar kompletny' },
+    { key: 'cargo_undamaged', label: 'Towar nieuszkodzony' },
+    { key: 'delivery_notified', label: 'Powiadomienie o dostawie' },
+    { key: 'delivery_on_time', label: 'Dostawa na czas' },
+    { key: 'documents_complete', label: 'Dokumenty kompletne' },
+    { key: 'documents_correct', label: 'Dokumenty poprawne' }
+  ];
+
+  return criteria.map(criterion => ({
+    label: criterion.label,
+    value: rating[criterion.key] ? '✅ TAK' : '❌ NIE'
+  }));
+};
+
+// Funkcja do tworzenia HTML emaila
+const generateRatingNotificationHTML = (spedition, rating, raterInfo) => {
+  const criteriaFormatted = formatRatingData(rating);
+  const ratingDate = new Date(rating.rated_at).toLocaleString('pl-PL');
+
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: #4F46E5; color: white; padding: 20px; border-radius: 8px 8px 0 0; }
+        .content { background: #f9fafb; padding: 20px; border: 1px solid #e5e7eb; }
+        .section { margin-bottom: 20px; }
+        .transport-info { background: white; padding: 15px; border-radius: 6px; border-left: 4px solid #10B981; }
+        .rating-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 15px 0; }
+        .rating-item { background: white; padding: 10px; border-radius: 4px; border: 1px solid #e5e7eb; }
+        .positive { border-left: 3px solid #10B981; }
+        .negative { border-left: 3px solid #EF4444; }
+        .problem-box { background: #FFFBEB; border-left: 4px solid #F59E0B; padding: 10px; margin-bottom: 15px; border-radius: 4px; }
+        .footer { background: #6B7280; color: white; padding: 15px; border-radius: 0 0 8px 8px; text-align: center; font-size: 14px; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>🚛 Nowa Ocena Spedycji</h1>
+          <p>Transport spedycyjny został oceniony w systemie</p>
+        </div>
+        
+        <div class="content">
+          <div class="section transport-info">
+            <h2>📋 Informacje o spedycji</h2>
+            <p><strong>ID Spedycji:</strong> #${spedition.id}</p>
+            <p><strong>Klient:</strong> ${spedition.client_name || 'Nie podano'}</p>
+            <p><strong>Miejscowość:</strong> ${spedition.destination_city || 'Nie podano'}</p>
+            <p><strong>Kod pocztowy:</strong> ${spedition.destination_zip || 'Nie podano'}</p>
+            <p><strong>Ulica:</strong> ${spedition.street || 'Nie podano'}</p>
+            <p><strong>Data załadunku:</strong> ${spedition.loading_date ? new Date(spedition.loading_date).toLocaleDateString('pl-PL') : 'Nie podano'}</p>
+            <p><strong>Data dostawy:</strong> ${spedition.delivery_date ? new Date(spedition.delivery_date).toLocaleDateString('pl-PL') : 'Nie podano'}</p>
+            <p><strong>Rejestracja:</strong> ${spedition.plate_numbers || 'Nie podano'}</p>
+          </div>
+          
+          <div class="section">
+            <h2>⭐ Szczegóły oceny</h2>
+            <p><strong>Ocenione przez:</strong> ${raterInfo.name} (${rating.rater_email})</p>
+            <p><strong>Data oceny:</strong> ${ratingDate}</p>
+            
+            ${rating.other_problem ? `
+              <div class="problem-box">
+                <strong>Typ oceny:</strong> 🚨 Zgłoszono "Inny problem"
+              </div>
+            ` : `
+              <div class="rating-grid">
+                ${criteriaFormatted.map(item => `
+                  <div class="rating-item ${item.value.includes('✅') ? 'positive' : 'negative'}">
+                    <strong>${item.label}:</strong><br>
+                    ${item.value}
+                  </div>
+                `).join('')}
+              </div>
+            `}
+            
+            ${rating.comment ? `
+              <div class="section">
+                <h3>💬 Komentarz</h3>
+                <div style="background: white; padding: 15px; border-radius: 6px; border-left: 4px solid #6B7280;">
+                  ${rating.comment}
+                </div>
+              </div>
+            ` : ''}
+          </div>
+        </div>
+        
+        <div class="footer">
+          <p>System Zarządzania Transportem - Grupa Eltron</p>
+          <p>Powiadomienie wygenerowane automatycznie</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `
+}
+
+// Funkcja wysyłania powiadomienia email
+const sendRatingNotification = async (speditionId, ratingId) => {
+  try {
+    const spedition = await db('spedycje')
+      .where('id', speditionId)
+      .select('*')
+      .first();
+
+    if (!spedition) {
+      console.log('❌ Spedycja nie znaleziona');
+      return { success: false, error: 'Spedycja nie znaleziona' };
+    }
+
+    const rating = await db('spedition_detailed_ratings')
+      .where('id', ratingId)
+      .select('*')
+      .first();
+
+    if (!rating) {
+      console.log('❌ Ocena nie znaleziona');
+      return { success: false, error: 'Ocena nie znaleziona' };
+    }
+
+    // Pobierz informacje o osobie oceniającej
+    const rater = await db('users')
+      .where('email', rating.rater_email)
+      .select('name', 'email')
+      .first();
+
+    const raterInfo = {
+      name: rater ? rater.name : 'Nieznany użytkownik',
+      email: rating.rater_email
+    };
+
+    // Definiowanie stałych odbiorców
+    const recipients = [
+        'mateusz.klewinowski@grupaeltron.pl',
+        'logistyka@grupaeltron.pl'
+    ];
+
+    // Dodatkowi odbiorcy dla Zielonki - dla spedycji zazwyczaj logistyka wystarczy, 
+    // ale zachowujemy spójność z transportem własnym jeśli to istotne.
+    // W przypadku spedycji pole source_warehouse może nie być używane tak samo,
+    // ale jeśli jest, to warto to obsłużyć.
+    // Sprawdzamy czy spedycja ma source_warehouse (w strukturze bazy powinno być, ale upewnijmy się)
+    if (spedition.source_warehouse === 'zielonka') {
+        recipients.push('s.swiderski@grupaeltron.pl');
+        recipients.push('k.gryka@grupaeltron.pl');
+    }
+
+    // Dodaj zgłaszającego (jeśli jest taki odpowiednik w spedycji, często requester_email)
+    if (spedition.order_added_by_email) { // W spedycji często order_added_by_email
+        recipients.push(spedition.order_added_by_email);
+    }
+
+    // Usuń duplikaty
+    const uniqueRecipients = [...new Set(recipients)];
+
+    if (!process.env.SMTP_PASSWORD) {
+      console.log('⚠️ Brak hasła SMTP - powiadomienie nie zostanie wysłane!');
+      return {
+        success: false,
+        error: 'Konfiguracja SMTP nie jest dostępna'
+      };
+    }
+
+    const transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: parseInt(process.env.SMTP_PORT || '465'),
+      secure: process.env.SMTP_SECURE === 'true',
+      auth: {
+        user: "logistyka@grupaeltron.pl",
+        pass: process.env.SMTP_PASSWORD
+      }
+    });
+
+    const htmlContent = generateRatingNotificationHTML(spedition, rating, raterInfo);
+    
+    const clientName = spedition.client_name || 'Klient nieznany';
+    const emailSubject = `🚛 Nowa ocena spedycji #${spedition.id} - ${clientName}`;
+
+    const mailOptions = {
+      from: `"System Transportowy" <logistyka@grupaeltron.pl>`,
+      to: uniqueRecipients.join(', '),
+      subject: emailSubject,
+      html: htmlContent
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+
+    console.log(`✅ Email wysłany do ${uniqueRecipients.length} odbiorców`);
+
+    return {
+      success: true,
+      messageId: info.messageId,
+      recipients: uniqueRecipients,
+      message: `Powiadomienie wysłane do ${uniqueRecipients.length} odbiorców`
+    };
+
+  } catch (error) {
+    console.error('❌ Błąd wysyłania powiadomienia o ocenie:', error);
+    return {
+      success: false,
+      error: 'Błąd serwera: ' + error.message
+    };
+  }
+};
+
+// Funkcja wysyłania powiadomienia o rozwiązaniu problemu (Spedycja)
+const sendResolutionNotification = async (spedition, rating, resolution) => {
+  try {
+    if (!process.env.SMTP_PASSWORD) {
+      console.log('⚠️ Brak hasła SMTP - powiadomienie o rozwiązaniu nie zostanie wysłane!');
+      return { success: false, error: 'Brak konfiguracji SMTP' };
+    }
+
+    // Odbiorca to osoba zgłaszająca problem (rater_email)
+    const recipients = [rating.rater_email];
+
+    // Dodaj stałych odbiorców do DW
+    recipients.push('mateusz.klewinowski@grupaeltron.pl');
+
+    const uniqueRecipients = [...new Set(recipients)];
+
+    const transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: parseInt(process.env.SMTP_PORT || '465'),
+      secure: process.env.SMTP_SECURE === 'true',
+      auth: {
+        user: "logistyka@grupaeltron.pl",
+        pass: process.env.SMTP_PASSWORD
+      }
+    });
+
+    const emailSubject = `✅ Rozwiązano problem: Spedycja #${spedition.id} - ${spedition.client_name || 'Klient'}`;
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: #7C3AED; color: white; padding: 20px; border-radius: 8px 8px 0 0; }
+          .content { background: #f9fafb; padding: 20px; border: 1px solid #e5e7eb; }
+          .section { margin-bottom: 20px; }
+          .transport-info { background: white; padding: 15px; border-radius: 6px; border-left: 4px solid #7C3AED; }
+          .resolution-box { background: #F3E8FF; border-left: 4px solid #7C3AED; padding: 15px; margin: 15px 0; border-radius: 4px; }
+          .footer { background: #6B7280; color: white; padding: 15px; border-radius: 0 0 8px 8px; text-align: center; font-size: 14px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>✅ Rozwiązanie Problemu</h1>
+            <p>Administrator dodał rozwiązanie do zgłoszonego problemu (Spedycja)</p>
+          </div>
+          
+          <div class="content">
+            <div class="section transport-info">
+              <h2>📋 Informacje o spedycji</h2>
+              <p><strong>ID Spedycji:</strong> #${spedition.id}</p>
+              <p><strong>Klient:</strong> ${spedition.client_name || 'Nie podano'}</p>
+              <p><strong>Miejscowość:</strong> ${spedition.destination_city || 'Nie podano'}</p>
+            </div>
+            
+            <div class="section">
+              <h2>🛡️ Rozwiązanie (Administrator)</h2>
+              <div class="resolution-box">
+                <p><strong>Treść rozwiązania:</strong></p>
+                <p style="white-space: pre-wrap;">${resolution}</p>
+                <p style="font-size: 12px; color: #6B7280; margin-top: 10px;">Data dodania: ${new Date().toLocaleString('pl-PL')}</p>
+              </div>
+              
+              <p>Twoja ocena została zablokowana i uznana za rozwiązaną.</p>
+            </div>
+          </div>
+          
+          <div class="footer">
+            <p>System Zarządzania Transportem - Grupa Eltron</p>
+            <p>Powiadomienie wygenerowane automatycznie</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    await transporter.sendMail({
+      from: `"System Transportowy" <logistyka@grupaeltron.pl>`,
+      to: uniqueRecipients.join(', '),
+      subject: emailSubject,
+      html: htmlContent
+    });
+
+    console.log(`✅ Email o rozwiązaniu wysłany do ${uniqueRecipients.join(', ')}`);
+    return { success: true };
+
+  } catch (error) {
+    console.error('❌ Błąd wysyłania powiadomienia o rozwiązaniu:', error);
+    return { success: false, error: error.message };
+  }
+};
 
 // GET - Pobierz oceny transportu spedycyjnego - POPRAWIONE SPRAWDZANIE RESOLUTION
 export async function GET(request) {
@@ -184,7 +494,7 @@ export async function GET(request) {
   }
 }
 
-// POST - Dodaj/aktualizuj ocenę transportu spedycyjnego - BEZ ZMIAN
+// POST - Dodaj/aktualizuj ocenę transportu spedycyjnego
 export async function POST(request) {
   try {
     const authToken = request.cookies.get('authToken')?.value
@@ -225,7 +535,8 @@ export async function POST(request) {
     
     const spedition = await db('spedycje')
       .where('id', speditionId)
-      .select('status')
+      // Pobieramy więcej pól do maila
+      .select('status', 'source_warehouse', 'order_added_by_email', 'client_name', 'destination_city', 'destination_zip', 'street', 'loading_date', 'delivery_date', 'plate_numbers')
       .first()
     
     if (!spedition) {
@@ -319,9 +630,19 @@ export async function POST(request) {
       isNewRating = true
     }
     
+    // WYŚLIJ POWIADOMIENIE (tylko dla nowej oceny, lub zawsze? Zwykle przy nowej lub edycji)
+    // Bezpieczniej wysłać zawsze żeby logistyka widziała zmianę, albo chociaż przy nowej
+    if (ratingId) {
+      try {
+        await sendRatingNotification(speditionId, ratingId);
+      } catch (emailError) {
+        console.error('Błąd wysyłania powiadomienia email (nie przerywa procesu):', emailError);
+      }
+    }
+
     return NextResponse.json({ 
       success: true, 
-      message: existingRating ? 'Ocena spedycji została zaktualizowana' : 'Ocena spedycji została dodana',
+      message: existingRating ? 'Ocena spedycji została zaktualizowana i wysłana' : 'Ocena spedycji została dodana i wysłana',
       ratingId: ratingId
     })
     
@@ -402,6 +723,17 @@ export async function PUT(request) {
         resolution_added_at: new Date()
       })
     
+    // Pobierz dane transportu do maila
+    const spedition = await db('spedycje')
+      .where('id', speditionId)
+      .select('*')
+      .first()
+
+    // Wyślij powiadomienie mailowe o rozwiązaniu
+    if (spedition) {
+      sendResolutionNotification(spedition, rating, resolution).catch(e => console.error(e));
+    }
+
     return NextResponse.json({ 
       success: true, 
       message: 'Rozwiązanie problemu zostało dodane. Ocena jest teraz zablokowana.'
