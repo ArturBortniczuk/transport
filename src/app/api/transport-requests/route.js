@@ -17,13 +17,13 @@ const transporter = nodemailer.createTransport({
 // Funkcja walidacji sesji
 const validateSession = async (authToken) => {
   if (!authToken) return null;
-  
+
   const session = await db('sessions')
     .where('token', authToken)
     .whereRaw('expires_at > NOW()')
     .select('user_id')
     .first();
-  
+
   return session?.user_id;
 };
 
@@ -32,6 +32,7 @@ const sendNewRequestNotification = async (requestData) => {
   try {
     const kierownicy = await db('users')
       .where('role', 'admin')
+      .orWhere('role', 'like', 'test%')
       .orWhere('role', 'like', 'magazyn%')
       .select('email', 'name');
 
@@ -57,7 +58,7 @@ const sendNewRequestNotification = async (requestData) => {
 
     if (requestData.transport_type === 'delivery_route') {
       requestType = '🚛 OBJAZDÓWKA (Centra elektryczne)';
-      
+
       let routeText = 'Błąd odczytu trasy';
       try {
         // route_points może być stringiem (JSON) lub array (z bazy Postgres)
@@ -73,7 +74,7 @@ const sendNewRequestNotification = async (requestData) => {
       } catch (e) {
         console.error('Błąd parsowania route_points:', e);
       }
-      
+
       requestDetails = `
         <div class="info-row">
           <span class="label">Trasa objazdówki:</span>
@@ -96,11 +97,11 @@ const sendNewRequestNotification = async (requestData) => {
       `;
     } else if (requestData.transport_type === 'warehouse') {
       requestType = 'Przesunięcie międzymagazynowe';
-      
-      const direction = requestData.transport_direction === 'zielonka_bialystok' 
-        ? 'Zielonka → Białystok' 
+
+      const direction = requestData.transport_direction === 'zielonka_bialystok'
+        ? 'Zielonka → Białystok'
         : 'Białystok → Zielonka';
-      
+
       requestDetails = `
         <div class="info-row">
           <span class="label">Kierunek:</span>
@@ -119,7 +120,7 @@ const sendNewRequestNotification = async (requestData) => {
       `;
     } else {
       requestType = 'Transport do budowy/handlowca';
-      
+
       requestDetails = `
         <div class="info-row">
           <span class="label">Odbiorca:</span>
@@ -221,19 +222,19 @@ const sendNewRequestNotification = async (requestData) => {
 
     console.log('📧 Wysyłanie powiadomienia o nowym wniosku do:', recipients.join(', '));
     const info = await transporter.sendMail(mailOptions);
-    
+
     console.log('✅ Powiadomienie wysłane:', info.messageId);
-    return { 
-      success: true, 
+    return {
+      success: true,
       message: `Powiadomienie wysłane do ${recipients.length} kierowników`,
-      messageId: info.messageId 
+      messageId: info.messageId
     };
 
   } catch (error) {
     console.error('❌ Błąd wysyłania powiadomienia o nowym wniosku:', error);
-    return { 
-      success: false, 
-      message: 'Błąd wysyłania powiadomienia: ' + error.message 
+    return {
+      success: false,
+      message: 'Błąd wysyłania powiadomienia: ' + error.message
     };
   }
 };
@@ -244,7 +245,7 @@ const ensureTableExists = async () => {
     const tableExists = await db.schema.hasTable('transport_requests');
     if (!tableExists) {
       console.log('Tworzenie tabeli transport_requests...');
-      
+
       await db.schema.createTable('transport_requests', table => {
         table.increments('id').primary();
         table.string('status').defaultTo('pending');
@@ -280,7 +281,7 @@ const ensureTableExists = async () => {
         table.timestamp('created_at').defaultTo(db.fn.now());
         table.timestamp('updated_at').defaultTo(db.fn.now());
       });
-      
+
       console.log('Tabela transport_requests została utworzona');
     } else {
       // Sprawdzenia i dodawanie brakujących kolumn
@@ -381,7 +382,7 @@ const ensureTableExists = async () => {
         console.log('Dodano kolumnę route_mpks');
       }
     }
-    
+
     return true;
   } catch (error) {
     console.error('Błąd tworzenia tabeli transport_requests:', error);
@@ -395,22 +396,22 @@ export async function GET(request) {
     console.log('=== START GET /api/transport-requests ===');
     const authToken = request.cookies.get('authToken')?.value;
     console.log('AuthToken:', authToken ? 'Present' : 'Missing');
-    
+
     const userId = await validateSession(authToken);
     console.log('UserId:', userId);
-    
+
     if (!userId) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Unauthorized' 
+      return NextResponse.json({
+        success: false,
+        error: 'Unauthorized'
       }, { status: 401 });
     }
 
     const tableReady = await ensureTableExists();
     if (!tableReady) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Błąd inicjalizacji tabeli' 
+      return NextResponse.json({
+        success: false,
+        error: 'Błąd inicjalizacji tabeli'
       }, { status: 500 });
     }
 
@@ -422,9 +423,9 @@ export async function GET(request) {
     console.log('User data:', user);
 
     if (!user) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'User not found' 
+      return NextResponse.json({
+        success: false,
+        error: 'User not found'
       }, { status: 404 });
     }
 
@@ -471,8 +472,8 @@ export async function GET(request) {
     const requests = await query;
     console.log('Pobrano wniosków:', requests.length);
 
-    return NextResponse.json({ 
-      success: true, 
+    return NextResponse.json({
+      success: true,
       requests: requests || [],
       canViewAll,
       userRole: user.role
@@ -480,9 +481,9 @@ export async function GET(request) {
 
   } catch (error) {
     console.error('Error in GET /api/transport-requests:', error);
-    return NextResponse.json({ 
-      success: false, 
-      error: 'Błąd serwera: ' + error.message 
+    return NextResponse.json({
+      success: false,
+      error: 'Błąd serwera: ' + error.message
     }, { status: 500 });
   }
 }
@@ -493,19 +494,19 @@ export async function POST(request) {
     console.log('=== START POST /api/transport-requests ===');
     const authToken = request.cookies.get('authToken')?.value;
     const userId = await validateSession(authToken);
-    
+
     if (!userId) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Unauthorized' 
+      return NextResponse.json({
+        success: false,
+        error: 'Unauthorized'
       }, { status: 401 });
     }
 
     const tableReady = await ensureTableExists();
     if (!tableReady) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Błąd inicjalizacji tabeli' 
+      return NextResponse.json({
+        success: false,
+        error: 'Błąd inicjalizacji tabeli'
       }, { status: 500 });
     }
 
@@ -515,9 +516,9 @@ export async function POST(request) {
       .first();
 
     if (!user) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'User not found' 
+      return NextResponse.json({
+        success: false,
+        error: 'User not found'
       }, { status: 404 });
     }
 
@@ -551,9 +552,9 @@ export async function POST(request) {
     console.log('Permission check:', { isAdmin, isHandlowiec, canAddRequests });
 
     if (!canAddRequests) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Brak uprawnień do składania wniosków transportowych' 
+      return NextResponse.json({
+        success: false,
+        error: 'Brak uprawnień do składania wniosków transportowych'
       }, { status: 403 });
     }
 
@@ -562,24 +563,24 @@ export async function POST(request) {
 
 
     const transportType = requestData.transport_type || 'standard';
-    
+
     // WALIDACJA DLA PRZESUNIĘĆ MIĘDZYMAGAZYNOWYCH
     if (transportType === 'warehouse') {
       const requiredWarehouseFields = ['transport_direction', 'goods_description', 'delivery_date', 'justification'];
       for (const field of requiredWarehouseFields) {
         if (!requestData[field]) {
-          return NextResponse.json({ 
-            success: false, 
-            error: `Pole ${field} jest wymagane dla przesunięć międzymagazynowych` 
+          return NextResponse.json({
+            success: false,
+            error: `Pole ${field} jest wymagane dla przesunięć międzymagazynowych`
           }, { status: 400 });
         }
       }
 
       const validDirections = ['zielonka_bialystok', 'bialystok_zielonka'];
       if (!validDirections.includes(requestData.transport_direction)) {
-        return NextResponse.json({ 
-          success: false, 
-          error: 'Nieprawidłowy kierunek transportu' 
+        return NextResponse.json({
+          success: false,
+          error: 'Nieprawidłowy kierunek transportu'
         }, { status: 400 });
       }
     }
@@ -589,34 +590,34 @@ export async function POST(request) {
       const requiredRouteFields = ['route_points', 'delivery_date'];
       for (const field of requiredRouteFields) {
         if (!requestData[field]) {
-          return NextResponse.json({ 
-            success: false, 
-            error: `Pole ${field} jest wymagane dla objazdówek` 
+          return NextResponse.json({
+            success: false,
+            error: `Pole ${field} jest wymagane dla objazdówek`
           }, { status: 400 });
         }
       }
 
       if (!Array.isArray(requestData.route_points) || requestData.route_points.length < 2) {
-        return NextResponse.json({ 
-          success: false, 
-          error: 'Objazdówka musi zawierać minimum 2 punkty' 
+        return NextResponse.json({
+          success: false,
+          error: 'Objazdówka musi zawierać minimum 2 punkty'
         }, { status: 400 });
       }
 
       const firstPoint = requestData.route_points[0];
       if (firstPoint !== 'lapy' && firstPoint !== 'bielsk') {
-        return NextResponse.json({ 
-          success: false, 
-          error: 'Pierwszy punkt musi być: Łapy lub Bielsk Podlaski' 
+        return NextResponse.json({
+          success: false,
+          error: 'Pierwszy punkt musi być: Łapy lub Bielsk Podlaski'
         }, { status: 400 });
       }
 
       if (requestData.route_points.includes('bialystok')) {
         const lastPoint = requestData.route_points[requestData.route_points.length - 1];
         if (lastPoint !== 'bialystok') {
-          return NextResponse.json({ 
-            success: false, 
-            error: 'Białystok centrum musi być ostatnim punktem' 
+          return NextResponse.json({
+            success: false,
+            error: 'Białystok centrum musi być ostatnim punktem'
           }, { status: 400 });
         }
       }
@@ -627,9 +628,9 @@ export async function POST(request) {
       const requiredStandardFields = ['destination_city', 'delivery_date', 'justification', 'real_client_name'];
       for (const field of requiredStandardFields) {
         if (!requestData[field]) {
-          return NextResponse.json({ 
-            success: false, 
-            error: `Pole ${field} jest wymagane` 
+          return NextResponse.json({
+            success: false,
+            error: `Pole ${field} jest wymagane`
           }, { status: 400 });
         }
       }
@@ -652,7 +653,7 @@ export async function POST(request) {
       newRequest.document_numbers = requestData.document_numbers || null;
       newRequest.justification = requestData.justification;
       newRequest.notes = requestData.notes || null;
-      
+
       newRequest.destination_city = 'Białystok';
       newRequest.postal_code = '15-169';
       newRequest.street = 'Wysockiego 69B';
@@ -672,7 +673,7 @@ export async function POST(request) {
       newRequest.route_mpks = requestData.route_mpks || null;
       newRequest.notes = requestData.notes || null;
       newRequest.document_numbers = requestData.document_numbers || null;
-      
+
       newRequest.destination_city = 'Białystok';
       newRequest.postal_code = '15-169';
       newRequest.street = 'Wysockiego 69B';
@@ -696,7 +697,7 @@ export async function POST(request) {
       newRequest.justification = requestData.justification;
       newRequest.mpk = requestData.mpk || null;
       newRequest.notes = requestData.notes || null;
-      
+
       // ✅ Bezpieczne parsowanie construction_id
       if (requestData.construction_id) {
         const constructionId = parseInt(requestData.construction_id);
@@ -704,12 +705,12 @@ export async function POST(request) {
       } else {
         newRequest.construction_id = null;
       }
-      
+
       newRequest.construction_name = requestData.construction_name || null;
       newRequest.client_name = requestData.client_name || null;
       newRequest.real_client_name = requestData.real_client_name || null;
       newRequest.wz_numbers = requestData.wz_numbers || null;
-      
+
       // ✅ Bezpieczne parsowanie market_id
       if (requestData.market_id) {
         const marketId = parseInt(requestData.market_id);
@@ -717,7 +718,7 @@ export async function POST(request) {
       } else {
         newRequest.market_id = null;
       }
-      
+
       newRequest.contact_person = requestData.contact_person || null;
       newRequest.contact_phone = requestData.contact_phone || null;
       newRequest.transport_direction = null;
@@ -744,21 +745,21 @@ export async function POST(request) {
     });
     console.log('📬 Wynik wysyłki emaila:', emailResult.message);
 
-    return NextResponse.json({ 
-      success: true, 
+    return NextResponse.json({
+      success: true,
       message: 'Wniosek transportowy został złożony',
       requestId: insertedRequest.id,
       emailNotification: {
         success: emailResult.success,
         message: emailResult.message
-    }
+      }
     });
 
   } catch (error) {
     console.error('❌ Error in POST /api/transport-requests:', error);
-    return NextResponse.json({ 
-      success: false, 
-      error: 'Błąd serwera: ' + error.message 
+    return NextResponse.json({
+      success: false,
+      error: 'Błąd serwera: ' + error.message
     }, { status: 500 });
   }
 }
@@ -769,19 +770,19 @@ export async function PUT(request) {
     console.log('=== START PUT /api/transport-requests ===');
     const authToken = request.cookies.get('authToken')?.value;
     const userId = await validateSession(authToken);
-    
+
     if (!userId) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Unauthorized' 
+      return NextResponse.json({
+        success: false,
+        error: 'Unauthorized'
       }, { status: 401 });
     }
 
     const tableReady = await ensureTableExists();
     if (!tableReady) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Błąd inicjalizacji tabeli' 
+      return NextResponse.json({
+        success: false,
+        error: 'Błąd inicjalizacji tabeli'
       }, { status: 500 });
     }
 
@@ -791,21 +792,21 @@ export async function PUT(request) {
       .first();
 
     if (!user) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'User not found' 
+      return NextResponse.json({
+        success: false,
+        error: 'User not found'
       }, { status: 404 });
     }
 
     const updateData = await request.json();
     const { requestId, action, ...data } = updateData;
-    
+
     console.log('Update data:', { requestId, action });
 
     if (!requestId) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'ID wniosku jest wymagane' 
+      return NextResponse.json({
+        success: false,
+        error: 'ID wniosku jest wymagane'
       }, { status: 400 });
     }
 
@@ -814,9 +815,9 @@ export async function PUT(request) {
       .first();
 
     if (!existingRequest) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Wniosek nie istnieje' 
+      return NextResponse.json({
+        success: false,
+        error: 'Wniosek nie istnieje'
       }, { status: 404 });
     }
 
@@ -836,9 +837,9 @@ export async function PUT(request) {
       const canApprove = isAdmin || isMagazyn || permissions?.transport_requests?.approve === true;
 
       if (!canApprove) {
-        return NextResponse.json({ 
-          success: false, 
-          error: 'Brak uprawnień do akceptacji/odrzucenia wniosków' 
+        return NextResponse.json({
+          success: false,
+          error: 'Brak uprawnień do akceptacji/odrzucenia wniosków'
         }, { status: 403 });
       }
 
@@ -860,7 +861,7 @@ export async function PUT(request) {
       // NOWE: Automatyczne dodawanie do kalendarza po zaakceptowaniu
       if (action === 'approve') {
         console.log('✅ Wniosek zaakceptowany - tworzenie transportu w kalendarzu...');
-        
+
         try {
           let transportData = {
             requester_name: existingRequest.requester_name,
@@ -879,10 +880,10 @@ export async function PUT(request) {
             transportData.street = 'Wysockiego 69B';
             transportData.client_name = 'Objazdówka centra elektryczne';
             transportData.source_warehouse = 'bialystok';
-            
+
             // WAŻNE: MPK to cały string ze wszystkimi MPK-ami z trasy
             transportData.mpk = existingRequest.route_mpks || null;
-            
+
             // Dodaj informacje o trasie do notatek
             let routeInfo = '';
             try {
@@ -894,17 +895,17 @@ export async function PUT(request) {
               } else {
                 points = [];
               }
-              
+
               const CENTRA_NAZWY = {
                 lapy: 'Łapy',
                 wysokie: 'Wysokie Mazowieckie',
                 bielsk: 'Bielsk Podlaski',
                 bialystok: 'Białystok (centrum elektryczne)'
               };
-              
+
               const routeText = points.map(p => CENTRA_NAZWY[p] || p).join(' → ');
               routeInfo = `\n\n🚛 OBJAZDÓWKA:\nTrasa: ${routeText}\nDystans: ${existingRequest.route_distance || 0} km\nMPK centrów: ${existingRequest.route_mpks || 'Brak'}`;
-              
+
               if (existingRequest.document_numbers) {
                 routeInfo += `\nDokumenty: ${existingRequest.document_numbers}`;
               }
@@ -912,27 +913,27 @@ export async function PUT(request) {
               console.error('Błąd parsowania trasy:', e);
               routeInfo = '\n\n🚛 OBJAZDÓWKA (centra elektryczne)';
             }
-            
+
             transportData.notes = (existingRequest.notes || '') + routeInfo;
             transportData.wz_number = existingRequest.document_numbers || null;
-            
+
           } else if (existingRequest.transport_type === 'warehouse') {
             // PRZESUNIĘCIE MIĘDZYMAGAZYNOWE
-            const direction = existingRequest.transport_direction === 'zielonka_bialystok' 
+            const direction = existingRequest.transport_direction === 'zielonka_bialystok'
               ? { from: 'zielonka', to: 'bialystok', label: 'Zielonka → Białystok' }
               : { from: 'bialystok', to: 'zielonka', label: 'Białystok → Zielonka' };
-            
+
             transportData.source_warehouse = direction.from;
             transportData.destination_city = direction.to === 'bialystok' ? 'Białystok' : 'Zielonka';
             transportData.postal_code = direction.to === 'bialystok' ? '15-169' : '05-220';
             transportData.street = direction.to === 'bialystok' ? 'Wysockiego 69B' : 'Krótka 2';
             transportData.client_name = 'Przesunięcie międzymagazynowe';
-            
+
             const warehouseInfo = `\n\n📦 PRZESUNIĘCIE MIĘDZYMAGAZYNOWE:\nKierunek: ${direction.label}\nTowary: ${existingRequest.goods_description}`;
             transportData.notes = (existingRequest.notes || '') + warehouseInfo;
             transportData.wz_number = existingRequest.document_numbers || null;
             transportData.goods_description = existingRequest.goods_description;
-            
+
           } else {
             // TRANSPORT STANDARDOWY
             transportData.destination_city = existingRequest.destination_city;
@@ -943,7 +944,7 @@ export async function PUT(request) {
             transportData.wz_number = existingRequest.wz_numbers || null;
             transportData.market = existingRequest.market_id || null;
             transportData.source_warehouse = 'bialystok'; // domyślnie
-            
+
             if (existingRequest.contact_person || existingRequest.contact_phone) {
               const contactInfo = `\n\nKontakt: ${existingRequest.contact_person || ''}${existingRequest.contact_phone ? ` (tel: ${existingRequest.contact_phone})` : ''}`;
               transportData.notes = (existingRequest.notes || '') + contactInfo;
@@ -953,7 +954,7 @@ export async function PUT(request) {
           // Dodaj transport do kalendarza
           const [transportResult] = await db('transports').insert(transportData).returning('id');
           const transportId = transportResult?.id;
-          
+
           console.log(`✅ Transport utworzony w kalendarzu z ID: ${transportId}`);
 
           // Aktualizuj wniosek z transport_id
@@ -963,8 +964,8 @@ export async function PUT(request) {
 
           console.log(`✅ Zaktualizowano wniosek #${requestId} z transport_id: ${transportId}`);
 
-          return NextResponse.json({ 
-            success: true, 
+          return NextResponse.json({
+            success: true,
             message: 'Wniosek zaakceptowany i dodany do kalendarza',
             transportId: transportId
           });
@@ -972,31 +973,31 @@ export async function PUT(request) {
         } catch (transportError) {
           console.error('❌ Błąd tworzenia transportu w kalendarzu:', transportError);
           // Wniosek jest zaakceptowany, ale transport się nie utworzył
-          return NextResponse.json({ 
-            success: true, 
+          return NextResponse.json({
+            success: true,
             message: 'Wniosek zaakceptowany, ale wystąpił błąd podczas dodawania do kalendarza',
             error: transportError.message
           });
         }
       }
 
-      return NextResponse.json({ 
-        success: true, 
-        message: action === 'approve' ? 'Wniosek zaakceptowany' : 'Wniosek odrzucony' 
+      return NextResponse.json({
+        success: true,
+        message: action === 'approve' ? 'Wniosek zaakceptowany' : 'Wniosek odrzucony'
       });
 
     } else if (action === 'edit') {
       if (existingRequest.requester_email !== userId) {
-        return NextResponse.json({ 
-          success: false, 
-          error: 'Nie możesz edytować cudzych wniosków' 
+        return NextResponse.json({
+          success: false,
+          error: 'Nie możesz edytować cudzych wniosków'
         }, { status: 403 });
       }
 
       if (existingRequest.status !== 'pending') {
-        return NextResponse.json({ 
-          success: false, 
-          error: 'Można edytować tylko oczekujące wnioski' 
+        return NextResponse.json({
+          success: false,
+          error: 'Można edytować tylko oczekujące wnioski'
         }, { status: 400 });
       }
 
@@ -1021,9 +1022,9 @@ export async function PUT(request) {
       }
 
       if (Object.keys(updateFields).length === 0) {
-        return NextResponse.json({ 
-          success: false, 
-          error: 'Brak danych do aktualizacji' 
+        return NextResponse.json({
+          success: false,
+          error: 'Brak danych do aktualizacji'
         }, { status: 400 });
       }
 
@@ -1033,22 +1034,22 @@ export async function PUT(request) {
         .where('id', requestId)
         .update(updateFields);
 
-      return NextResponse.json({ 
-        success: true, 
-        message: 'Wniosek zaktualizowany' 
+      return NextResponse.json({
+        success: true,
+        message: 'Wniosek zaktualizowany'
       });
     }
 
-    return NextResponse.json({ 
-      success: false, 
-      error: 'Nieprawidłowa akcja' 
+    return NextResponse.json({
+      success: false,
+      error: 'Nieprawidłowa akcja'
     }, { status: 400 });
 
   } catch (error) {
     console.error('Error in PUT /api/transport-requests:', error);
-    return NextResponse.json({ 
-      success: false, 
-      error: 'Błąd serwera: ' + error.message 
+    return NextResponse.json({
+      success: false,
+      error: 'Błąd serwera: ' + error.message
     }, { status: 500 });
   }
 }
