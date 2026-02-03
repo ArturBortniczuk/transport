@@ -79,12 +79,11 @@ const getNotificationRecipients = async (commenterEmail, transportId) => {
     const warehouse = transport && transport.source_warehouse ? transport.source_warehouse.toLowerCase() : '';
 
     if (warehouse === 'zielonka') {
-      logisticsEmails.push('s.swiderski@grupaeltron.pl');
-      logisticsEmails.push('k.gryka@grupaeltron.pl');
+      logisticsEmails.push('m.pawlak@grupaeltron.pl');
       logisticsEmails.push('magazynzielonka@grupaeltron.pl');
     } else if (warehouse === 'bialystok') {
+      logisticsEmails.push('k.gryka@grupaeltron.pl');
       logisticsEmails.push('magazynbialystok@grupaeltron.pl');
-      logisticsEmails.push('p.pietrusewicz@grupaeltron.pl');
     } else {
       // Fallback dla innych lokalizacji lub braku
       logisticsEmails.push('logistyka@grupaeltron.pl');

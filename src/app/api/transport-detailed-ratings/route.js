@@ -210,12 +210,11 @@ const sendRatingNotification = async (transportId, ratingId) => {
 
     // Logika odbiorców na podstawie magazynu
     if (warehouse === 'zielonka') {
-      recipients.push('s.swiderski@grupaeltron.pl');
-      recipients.push('k.gryka@grupaeltron.pl');
+      recipients.push('m.pawlak@grupaeltron.pl');
       recipients.push('magazynzielonka@grupaeltron.pl');
     } else if (warehouse === 'bialystok') {
+      recipients.push('k.gryka@grupaeltron.pl');
       recipients.push('magazynbialystok@grupaeltron.pl');
-      recipients.push('p.pietrusewicz@grupaeltron.pl');
     }
 
     // Dodaj zgłaszającego transport (jeśli jest)
