@@ -191,23 +191,14 @@ const sendRatingNotification = async (speditionId, ratingId) => {
 
     // Definiowanie stałych odbiorców
     const recipients = [
-      'mateusz.klewinowski@grupaeltron.pl',
-      'logistyka@grupaeltron.pl'
+      'mateusz.klewinowski@grupaeltron.pl'
     ];
 
-    // Dodatkowi odbiorcy dla Zielonki - dla spedycji zazwyczaj logistyka wystarczy, 
-    // ale zachowujemy spójność z transportem własnym jeśli to istotne.
-    // W przypadku spedycji pole source_warehouse może nie być używane tak samo,
-    // ale jeśli jest, to warto to obsłużyć.
-    // Sprawdzamy czy spedycja ma source_warehouse (w strukturze bazy powinno być, ale upewnijmy się)
-    // Sprawdzamy czy spedycja jest z Zielonki (na podstawie lokalizacji)
-    if (spedition.location && spedition.location.toLowerCase().includes('zielonka')) {
-      recipients.push('s.swiderski@grupaeltron.pl');
-      recipients.push('k.gryka@grupaeltron.pl');
-    }
+    // Logika dla spedycji (zazwyczaj oddział logistyki/handlowy, ale user prosił o t.kozlowski)
+    recipients.push('t.kozlowski@grupaeltron.pl');
 
-    // Dodaj zgłaszającego (jeśli jest taki odpowiednik w spedycji, często requester_email)
-    if (spedition.order_added_by_email) { // W spedycji często order_added_by_email
+    // Dodaj zgłaszającego (często handlowiec)
+    if (spedition.order_added_by_email) {
       recipients.push(spedition.order_added_by_email);
     }
 
@@ -227,7 +218,7 @@ const sendRatingNotification = async (speditionId, ratingId) => {
       port: parseInt(process.env.SMTP_PORT || '465'),
       secure: process.env.SMTP_SECURE === 'true',
       auth: {
-        user: "logistyka@grupaeltron.pl",
+        user: process.env.SMTP_USER || "logistyka@grupaeltron.pl",
         pass: process.env.SMTP_PASSWORD
       }
     });

@@ -74,18 +74,25 @@ const getNotificationRecipients = async (commenterEmail, transportId) => {
       .select('requester_email', 'source_warehouse')
       .first();
 
-    // Stała lista dla logistyki/magazynu
-    const logisticsEmails = ['logistyka@grupaeltron.pl']; // Spedycja zawsze
+    // Adresy "magazynowe"
+    const logisticsEmails = [];
+    const warehouse = transport && transport.source_warehouse ? transport.source_warehouse.toLowerCase() : '';
 
-    // Dodatkowi odbiorcy dla Zielonki
-    if (transport && transport.source_warehouse === 'zielonka') {
+    if (warehouse === 'zielonka') {
       logisticsEmails.push('s.swiderski@grupaeltron.pl');
       logisticsEmails.push('k.gryka@grupaeltron.pl');
+      logisticsEmails.push('magazynzielonka@grupaeltron.pl');
+    } else if (warehouse === 'bialystok') {
+      logisticsEmails.push('magazynbialystok@grupaeltron.pl');
+      logisticsEmails.push('p.pietrusewicz@grupaeltron.pl');
+    } else {
+      // Fallback dla innych lokalizacji lub braku
+      logisticsEmails.push('logistyka@grupaeltron.pl');
     }
 
     // LOGIKA KONWERSACJI:
 
-    // Sytuacja A: Komentuje RATER -> Wysyłamy do Logistyki
+    // Sytuacja A: Komentuje RATER (twórca oceny) -> Wysyłamy do Logistyki
     if (raterEmail && commenterEmail === raterEmail) {
       console.log('💬 Komentarz od twórcy oceny -> Powiadamiam Logistykę');
       logisticsEmails.forEach(email => recipients.push(email));
@@ -124,7 +131,7 @@ const sendCommentNotification = async (commenterEmail, transport, comment, recip
       port: parseInt(process.env.SMTP_PORT || '465'),
       secure: process.env.SMTP_SECURE === 'true',
       auth: {
-        user: "logistyka@grupaeltron.pl",
+        user: process.env.SMTP_USER || "logistyka@grupaeltron.pl",
         pass: process.env.SMTP_PASSWORD
       }
     });
@@ -132,9 +139,6 @@ const sendCommentNotification = async (commenterEmail, transport, comment, recip
     // Sprawdź czy transporter jest skonfigurowany
     if (!process.env.SMTP_PASSWORD) {
       console.log('SMTP nie skonfigurowany - symulacja wysyłki emaila');
-      console.log('Do:', recipients.join(', '));
-      console.log('Temat: Nowy komentarz do transportu');
-      console.log('Treść:', comment);
       return { success: true, message: 'Email wysłany (symulacja)' };
     }
 

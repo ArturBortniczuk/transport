@@ -203,14 +203,19 @@ const sendRatingNotification = async (transportId, ratingId) => {
 
     // Definiowanie stałych odbiorców
     const recipients = [
-      'mateusz.klewinowski@grupaeltron.pl',
-      'logistyka@grupaeltron.pl' // Spedycja zawsze
+      'mateusz.klewinowski@grupaeltron.pl'
     ];
 
-    // Dodatkowi odbiorcy dla Zielonki
-    if (transport.source_warehouse === 'zielonka') {
+    const warehouse = transport.source_warehouse ? transport.source_warehouse.toLowerCase() : '';
+
+    // Logika odbiorców na podstawie magazynu
+    if (warehouse === 'zielonka') {
       recipients.push('s.swiderski@grupaeltron.pl');
       recipients.push('k.gryka@grupaeltron.pl');
+      recipients.push('magazynzielonka@grupaeltron.pl');
+    } else if (warehouse === 'bialystok') {
+      recipients.push('magazynbialystok@grupaeltron.pl');
+      recipients.push('p.pietrusewicz@grupaeltron.pl');
     }
 
     // Dodaj zgłaszającego transport (jeśli jest)
@@ -234,7 +239,7 @@ const sendRatingNotification = async (transportId, ratingId) => {
       port: parseInt(process.env.SMTP_PORT || '465'),
       secure: process.env.SMTP_SECURE === 'true',
       auth: {
-        user: "logistyka@grupaeltron.pl",
+        user: process.env.SMTP_USER || "logistyka@grupaeltron.pl",
         pass: process.env.SMTP_PASSWORD
       }
     });
