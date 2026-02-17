@@ -61,7 +61,7 @@ export async function POST(request) {
     if (!canSendTransportOrder) {
       return NextResponse.json({
         success: false,
-        error: 'Brak uprawnień do wysyłania zlecenia transportowego'
+        error: 'Brak uprawnień do wysyłania zlecenia spedycyjnego'
       }, { status: 403 });
     }
     
@@ -193,7 +193,7 @@ export async function POST(request) {
       from: `"System Transportowy" <logistyka@grupaeltron.pl>`,
       to: emailOdbiorcy,
       cc: user.email, // Opcjonalnie dodaj użytkownika inicjującego wysyłkę w kopii
-      subject: `Zlecenie transportowe nr ${spedycja.order_number || spedycja.id}`,
+      subject: `Zlecenie spedycyjne nr ${spedycja.order_number || spedycja.id}`,
       html: htmlContent
     };
     
@@ -375,7 +375,7 @@ function generateTransportOrderHTML({ spedycja, producerAddress, delivery, respo
     <head>
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Zlecenie Transportowe</title>
+      <title>Zlecenie Spedycyjne</title>
       <style>
         body {
           font-family: Arial, sans-serif;
@@ -459,7 +459,7 @@ function generateTransportOrderHTML({ spedycja, producerAddress, delivery, respo
     </head>
     <body>
       <div class="header">
-        <h1>ZLECENIE TRANSPORTOWE</h1>
+        <h1>ZLECENIE SPEDYCYJNE</h1>
         <p>Nr zlecenia: ${spedycja.order_number || spedycja.id} | Data utworzenia: ${formatDate(new Date().toISOString())}</p>
       </div>
       
@@ -589,3 +589,4 @@ function generateTransportOrderHTML({ spedycja, producerAddress, delivery, respo
     </html>
   `;
 }
+
