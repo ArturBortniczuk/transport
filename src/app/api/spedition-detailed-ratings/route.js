@@ -198,8 +198,8 @@ const sendRatingNotification = async (speditionId, ratingId) => {
     recipients.push('t.kozlowski@grupaeltron.pl');
 
     // Dodaj zgłaszającego (często handlowiec)
-    if (spedition.order_added_by_email) {
-      recipients.push(spedition.order_added_by_email);
+    if (spedition.created_by_email) {
+      recipients.push(spedition.created_by_email);
     }
 
     // Usuń duplikaty
@@ -528,7 +528,7 @@ export async function POST(request) {
     const spedition = await db('spedycje')
       .where('id', speditionId)
       // Pobieramy więcej pól do maila
-      .select('status', 'location', 'order_added_by_email', 'client_name', 'destination_city', 'destination_zip', 'street', 'loading_date', 'delivery_date', 'plate_numbers')
+      .select('status', 'location', 'created_by_email', 'client_name', 'destination_city', 'destination_zip', 'street', 'loading_date', 'delivery_date', 'plate_numbers')
       .first()
 
     if (!spedition) {
