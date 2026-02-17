@@ -528,7 +528,7 @@ export async function POST(request) {
     const spedition = await db('spedycje')
       .where('id', speditionId)
       // Pobieramy więcej pól do maila
-      .select('status', 'location', 'created_by_email', 'client_name', 'destination_city', 'destination_zip', 'street', 'loading_date', 'delivery_date', 'plate_numbers')
+      .select('status', 'location', 'created_by_email', 'client_name', 'location_data', 'delivery_data', 'response_data', 'delivery_date')
       .first()
 
     if (!spedition) {
@@ -537,6 +537,43 @@ export async function POST(request) {
         error: 'Transport spedycyjny nie istnieje'
       }, { status: 404 })
     }
+
+    // Parsowanie danych JSON w celu wyciągnięcia brakujących pól
+    let producerData = {};
+    let deliveryData = {};
+    let responseData = {};
+
+    try {
+      if (spedition.location_data) {
+        producerData = typeof spedition.location_data === 'string'
+          ? JSON.parse(spedition.location_data)
+          : spedition.location_data;
+      }
+      if (spedition.delivery_data) {
+        deliveryData = typeof spedition.delivery_data === 'string'
+          ? JSON.parse(spedition.delivery_data)
+          : spedition.delivery_data;
+      }
+      if (spedition.response_data) {
+        responseData = typeof spedition.response_data === 'string'
+          ? JSON.parse(spedition.response_data)
+          : spedition.response_data;
+      }
+    } catch (e) {
+      console.error('Błąd parsowania danych JSON:', e);
+    }
+
+    // Uzupełnienie obiektu spedition o pola wymagane w mailu
+    spedition.destination_city = deliveryData.city || '';
+    spedition.destination_zip = deliveryData.postalCode || '';
+    spedition.street = deliveryData.street || '';
+
+    // Data załadunku zwykle jest w location_data (producerAddress) lub trzeba ją pobrać z innego źródła jeśli istnieje
+    // W tabeli nie ma loading_date, sprawdzamy czy jest w JSON
+    spedition.loading_date = producerData.date || null;
+
+    // Rejestracja z odpowiedzi przewoźnika
+    spedition.plate_numbers = responseData.vehicleNumber || 'Brak danych';
 
     if (spedition.status !== 'completed') {
       return NextResponse.json({
