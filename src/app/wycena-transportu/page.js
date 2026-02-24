@@ -179,8 +179,8 @@ export default function WycenaTransportu() {
                                 className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 mb-2"
                             >
                                 <option value="">Wybierz magazyn, lub wpisz miasto poniżej...</option>
-                                <option value="Białystok">Magazyn Białystok (ul. Popiełuszki 115)</option>
-                                <option value="Zielonka">Magazyn Zielonka (ul. Marecka 68)</option>
+                                <option value="Białystok">Magazyn Białystok (15-169 ul. Wysockiego 69B)</option>
+                                <option value="Zielonka">Magazyn Zielonka (05-220 Zielonka ul. Krótka 4)</option>
                             </select>
                             <input
                                 ref={sourceInputRef}
@@ -341,23 +341,35 @@ export default function WycenaTransportu() {
                                         {result.history.speditions.map(s => (
                                             <li key={s.id} className="p-3 bg-gray-50 rounded text-sm border-l-4 border-purple-400 flex flex-col">
                                                 <div className="flex justify-between items-start mb-1">
-                                                    <span className="font-medium truncate mr-2" title={s.location}>{s.location || 'Brak danych'}</span>
+                                                    <span className="font-medium mr-2" title={s.location}>
+                                                        {(() => {
+                                                            try {
+                                                                const loc = s.location_data ? (typeof s.location_data === 'string' ? JSON.parse(s.location_data) : s.location_data) : null;
+                                                                const del = s.delivery_data ? (typeof s.delivery_data === 'string' ? JSON.parse(s.delivery_data) : s.delivery_data) : null;
+                                                                const startCity = loc && loc.city ? loc.city : s.location;
+                                                                const endCity = del && del.city ? del.city : '';
+                                                                return endCity ? `${startCity} → ${endCity}` : (startCity || 'Brak danych');
+                                                            } catch (e) {
+                                                                return s.location || 'Brak danych';
+                                                            }
+                                                        })()}
+                                                    </span>
                                                     <span className="flex-shrink-0 bg-gray-200 text-gray-700 text-xs px-2 py-0.5 rounded">{s.distance_km} km</span>
                                                 </div>
                                                 <div className="text-xs text-gray-500 mt-1">
                                                     Data: {s.delivery_date ? new Date(s.delivery_date).toLocaleDateString() : 'Brak'}
                                                 </div>
-                                                {/* Spedycja ma koszt w response_data w formacie np. [ { responseCost: 1500 } ] */}
                                                 {(() => {
                                                     try {
                                                         if (s.response_data) {
-                                                            const data = JSON.parse(s.response_data);
-                                                            if (data && data.length > 0 && data[0].responseCost) {
-                                                                return <div className="font-semibold text-purple-600 mt-1 text-right">{data[0].responseCost} PLN</div>;
+                                                            const data = typeof s.response_data === 'string' ? JSON.parse(s.response_data) : s.response_data;
+                                                            const cost = data.deliveryPrice || data.costPerTransport || data.responseCost || data?.responseCost?.[0] || data?.[0]?.responseCost;
+                                                            if (cost) {
+                                                                return <div className="font-semibold text-purple-600 mt-1 text-right">{cost} PLN</div>;
                                                             }
                                                         }
                                                     } catch (e) { }
-                                                    return null;
+                                                    return <div className="text-xs text-gray-400 mt-1 text-right">Brak zapisanej ceny</div>;
                                                 })()}
                                             </li>
                                         ))}
