@@ -290,12 +290,12 @@ export default function WycenaTransportu() {
                             </div>
 
                             <div className="border-t pt-4">
-                                <h3 className="text-sm font-medium text-gray-700 mb-3">Składowe wyceny:</h3>
+                                <h3 className="text-sm font-medium text-gray-700 mb-3">Uwzględnione założenia do wyceny:</h3>
                                 <ul className="space-y-2">
                                     {result.breakdown.map((item, idx) => (
-                                        <li key={idx} className="flex justify-between text-sm">
+                                        <li key={idx} className="flex items-center text-sm">
+                                            <span className="w-1.5 h-1.5 bg-blue-500 rounded-full mr-2 min-w-[6px]"></span>
                                             <span className="text-gray-600">{item.name}</span>
-                                            <span className="font-medium">{item.value.toFixed(2)} PLN</span>
                                         </li>
                                     ))}
                                 </ul>

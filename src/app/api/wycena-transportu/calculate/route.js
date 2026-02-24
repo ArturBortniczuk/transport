@@ -58,44 +58,64 @@ export async function POST(request) {
         // 2. Oblicz podstawowy koszt
         let estimatedCost = baseRate + (distanceKm * ratePerKm);
         let breakdown = [
-            { name: 'Opłata bazowa', value: baseRate },
-            { name: `Dystans (${distanceKm.toFixed(1)} km × ${ratePerKm} PLN)`, value: distanceKm * ratePerKm }
+            { name: 'Opłata za dystans bazowy', value: null }
         ];
 
-        // 3. Dodaj mnożnik za wagę
+        // 3. Dodaj mnożnik za wagę (powyżej 1 tony oraz powyżej 12 ton)
         const numWeight = parseFloat(weight);
-        if (numWeight && numWeight > (settings.weight_threshold || 1000)) {
-            const weightMultiplier = settings.weight_multiplier || 10;
-            const weightCost = estimatedCost * (weightMultiplier / 100);
-            estimatedCost += weightCost;
-            breakdown.push({ name: `Dopłata za wagę > ${settings.weight_threshold}kg (+${weightMultiplier}%)`, value: weightCost });
+        if (numWeight && numWeight > 1000) {
+            let weightMultiplier = settings.weight_multiplier || 10;
+            let weightMsg = `Dopłata za wagę > 1t`;
+
+            // Jeśli waga powyżej 12 ton, zwiększony mnożnik (np. trzykrotność bazowego mnożnika)
+            if (numWeight > 12000) {
+                weightMultiplier = (settings.weight_multiplier || 10) * 3;
+                weightMsg = `Dopłata za ciężki transport > 12t`;
+            }
+
+            estimatedCost += estimatedCost * (weightMultiplier / 100);
+            breakdown.push({ name: weightMsg, value: null });
         }
 
-        // 4. Dodaj mnożnik za długość
+        // 4. Mnożnik za gabaryty / rozmiar auta (długość)
         const numLength = parseFloat(length);
-        if (numLength && numLength > (settings.length_threshold || 6)) {
-            const lengthMultiplier = settings.length_multiplier || 15;
-            const lengthCost = estimatedCost * (lengthMultiplier / 100);
-            estimatedCost += lengthCost;
-            breakdown.push({ name: `Dopłata za długość > ${settings.length_threshold}m (+${lengthMultiplier}%)`, value: lengthCost });
+        if (numLength) {
+            let lengthMultiplier = 0;
+            let carTypeMsg = "Wymagane auto: Bus (≤ 5m)";
+
+            if (numLength > 5 && numLength <= 8) {
+                // Solówka (zwiększona dopłata np. 1.5x lub z settings)
+                lengthMultiplier = settings.length_multiplier || 15;
+                carTypeMsg = "Wymagane auto: Solówka (> 5m i ≤ 8m)";
+            } else if (numLength > 8) {
+                // Zestaw (znacznie większa dopłata)
+                lengthMultiplier = (settings.length_multiplier || 15) * 2.5;
+                carTypeMsg = "Wymagane auto: Zestaw (> 8m)";
+            }
+
+            if (lengthMultiplier > 0) {
+                estimatedCost += estimatedCost * (lengthMultiplier / 100);
+                breakdown.push({ name: carTypeMsg, value: null });
+            }
         }
 
         // 5. Dodaj dopłatę za pilność
         if (deliveryDateStr) {
             const deliveryDate = new Date(deliveryDateStr);
             const today = new Date();
-            const diffTime = Math.abs(deliveryDate - today);
+            const diffTime = deliveryDate.getTime() - today.getTime();
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
             const urgentThreshold = settings.urgent_threshold_days || 2;
-            // Pilne jeśli dostawa jest dzisiaj lub jutro (diffDays <= 2)
             if (diffDays <= urgentThreshold) {
                 const urgentMultiplier = settings.urgent_multiplier || 20;
-                const urgentCost = estimatedCost * (urgentMultiplier / 100);
-                estimatedCost += urgentCost;
-                breakdown.push({ name: `Dopłata za pilny transport (≤ ${urgentThreshold} dni) (+${urgentMultiplier}%)`, value: urgentCost });
+                estimatedCost += estimatedCost * (urgentMultiplier / 100);
+                breakdown.push({ name: `Dopłata za pilny transport (szybszy termin)`, value: null });
             }
         }
+
+        // 5.5 Zaokrąglenie kosztu w góre do pełnych dziesiątek (np. 562 -> 570)
+        estimatedCost = Math.ceil(estimatedCost / 10) * 10;
 
         // 6. Szukaj podobnych transportów własnych
         // Z racji braku kolumny distance_km, szukamy na podstawie docelowego miasta (%LIKE%)
@@ -128,14 +148,14 @@ export async function POST(request) {
             return {
                 ...t,
                 // Skoro to ta sama trasa, przyjmujemy bieżący distanceKm z Google Maps
-                estimatedCost: Math.round((baseRate + (distanceKm * ratePerKm)) * 100) / 100,
+                estimatedCost: Math.ceil((baseRate + (distanceKm * ratePerKm)) / 10) * 10,
                 distance_km: Math.round(distanceKm)
             };
         });
 
         return NextResponse.json({
             success: true,
-            estimatedCost: Math.round(estimatedCost * 100) / 100, // Zaokrąglenie do 2 miejsc po przecinku
+            estimatedCost: estimatedCost,
             breakdown,
             history: {
                 ownTransports: enhancedOwnTransports,
