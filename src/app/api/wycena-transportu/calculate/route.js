@@ -91,13 +91,110 @@ export async function POST(request) {
             return NextResponse.json({ error: 'Brakujące parametry kalkulacji transportu (miasto początkowe, docelowe)' }, { status: 400 });
         }
 
+        let breakdown = [];
+        let ratePerKm = 0;
+        let carTypeMsg = "";
+
+        const numLength = parseFloat(length) || 0;
+        const numWeight = parseFloat(weight) || 0;
+
+        // Określanie stawki za kilometr na podstawie wymiarów i wagi
+        if (numWeight > 9000) {
+            // Waga powyżej 9 ton - wymusza zestaw i stawkę 4.5
+            ratePerKm = 4.5;
+            carTypeMsg = "Zestaw (waga > 9t): 4.5 PLN/km";
+        } else if (numWeight > 1100 || numLength > 8) {
+            // Waga > 1100kg lub dł > 8m -> trzeba zestaw, chociaż dł > 8m = zestaw stawka 4.5 według wytycznych? 
+            // "pomiędzy 5 a 8 damy 3,5zł, a powyżej 4,5zł/km."
+            if (numLength > 8) {
+                ratePerKm = 4.5;
+                carTypeMsg = "Zestaw (długość > 8m): 4.5 PLN/km";
+            } else {
+                ratePerKm = 3.5;
+                carTypeMsg = "Solówka (waga > 1100kg): 3.5 PLN/km";
+            }
+        } else if (numLength > 5 && numLength <= 8) {
+            ratePerKm = 3.5;
+            carTypeMsg = "Solówka (5m - 8m): 3.5 PLN/km";
+        } else {
+            // Poniżej lub 5m i waga do 1100kg
+            ratePerKm = 2.0;
+            carTypeMsg = "Bus (≤ 5m, waga ≤ 1100kg): 2.0 PLN/km";
+        }
+
+        breakdown.push({ name: `Wyliczenie stawki kilometrowej (${carTypeMsg})`, value: null });
+
+        // Oblicz podstawowy koszt
+        let distanceCost = distanceKm * ratePerKm;
+
+        // Minimalny koszt
+        if (distanceCost < 500) {
+            distanceCost = 500;
+            breakdown.push({ name: 'Dopłata do minimalnej kwoty zamówienia (500 PLN)', value: null });
+        }
+
+        let estimatedCost = distanceCost;
+
+        // Dopłata za pilność (stała kwota)
+        if (deliveryDateStr) {
+            const deliveryDate = new Date(deliveryDateStr);
+            const today = new Date();
+            const diffTime = deliveryDate.getTime() - today.getTime();
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+            if (diffDays === 0) {
+                // Na dzisiaj
+                estimatedCost += 300;
+                breakdown.push({ name: `Dopłata za transport na dziś`, value: null });
+            } else if (diffDays === 1) {
+                // Na jutro
+                estimatedCost += 200;
+                breakdown.push({ name: `Dopłata za transport na jutro`, value: null });
+            }
+        }
+
+        // Zaokrąglenie kosztu w góre do pełnych dziesiątek
+        estimatedCost = Math.ceil(estimatedCost / 10) * 10;
+
+        // 6. Szukaj podobnych transportów własnych
+        const normalizedSource = sourceCity.toLowerCase().replace('ł', 'l');
+
+        const similarOwnTransports = await db('transports')
+            .where(function () {
+                this.whereRaw('LOWER(source_warehouse) LIKE ?', [`%${normalizedSource}%`])
+                    .orWhereRaw('LOWER(source_warehouse) LIKE ?', [`%${sourceCity.toLowerCase()}%`])
+            })
+            .andWhereRaw('LOWER(destination_city) LIKE ?', [`%${destinationCity.toLowerCase()}%`])
+            .orderBy('id', 'desc')
+            .limit(5);
+
+        // 7. Szukaj podobnych spedycji
+        const minDistance = Math.round(distanceKm * 0.8);
+        const maxDistance = Math.round(distanceKm * 1.2);
+
+        const similarSpeditions = await db('spedycje')
+            .whereBetween('distance_km', [minDistance, maxDistance])
+            .orderBy('id', 'desc')
+            .limit(5);
+
+        // Podmiana historycznych
+        const enhancedOwnTransports = similarOwnTransports.map(t => {
+            return {
+                ...t,
+                // Nie wyliczamy tutaj już historycznego po staremu, bo zasady zależą od długości/wagi na bieżąco, które mogą być inne.
+                // Aby ułatwić, zostawiamy pusty estimate dla pokazania samej trasy LUB przeliczamy wg aktualnych reguł.
+                estimatedCost: estimatedCost, // Zastępczo
+                distance_km: Math.round(distanceKm)
+            };
+        });
+
         return NextResponse.json({
             success: true,
+            mode: 'wlasny',
             estimatedCost: estimatedCost,
-            geodisCost: geodisCost,
             breakdown,
             history: {
-                ownTransports: enhancedOwnTransports,
+                ownTransports: enhancedOwnTransports, // Tutaj można zostawić enhanced z dystansem
                 speditions: similarSpeditions
             }
         });
