@@ -185,7 +185,7 @@ export async function POST(request) {
             .limit(5);
 
         // Parsowanie JSONów dla spedycji, aby odczytać info o towarze
-        const similarSpeditions = similarSpeditionsRaw.map(s => {
+        let similarSpeditions = similarSpeditionsRaw.map(s => {
             let goodsInfo = null;
             let mergedInfo = null;
 
@@ -217,6 +217,24 @@ export async function POST(request) {
             };
         });
 
+        // Filtracja: ukryj spedycje bez opisu towaru i stawki
+        similarSpeditions = similarSpeditions.filter(s => {
+            let hasPrice = false;
+            try {
+                if (s.response_data) {
+                    const data = typeof s.response_data === 'string' ? JSON.parse(s.response_data) : s.response_data;
+                    const cost = data.deliveryPrice || data.costPerTransport || data.responseCost || data?.responseCost?.[0] || data?.[0]?.responseCost;
+                    if (cost) hasPrice = true;
+                }
+            } catch (e) { }
+
+            const hasGoodsInfo = s.parsedGoods && (s.parsedGoods.description || s.parsedGoods.weight);
+
+            // "nie mają opisu towaru albo stawki" -> muszą mieć obydwie rzeczy
+            return hasPrice && hasGoodsInfo;
+        });
+
+        // Jeśli brakuje nam wyników po filtracji, można by dociągnąć więcej, ale zostawmy to jako proste filtrowanie
         // Podmiana historycznych
         const enhancedOwnTransports = similarOwnTransports.map(t => {
             return {
