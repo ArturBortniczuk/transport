@@ -102,24 +102,24 @@ export async function POST(request) {
         if (numWeight > 9000) {
             // Waga powyżej 9 ton - wymusza zestaw i stawkę 4.5
             ratePerKm = 4.5;
-            carTypeMsg = "Zestaw (waga > 9t): 4.5 PLN/km";
+            carTypeMsg = "Zestaw (waga > 9t): 4.7 PLN/km";
         } else if (numWeight > 1100 || numLength > 8) {
             // Waga > 1100kg lub dł > 8m -> trzeba zestaw, chociaż dł > 8m = zestaw stawka 4.5 według wytycznych? 
             // "pomiędzy 5 a 8 damy 3,5zł, a powyżej 4,5zł/km."
             if (numLength > 8) {
-                ratePerKm = 4.5;
-                carTypeMsg = "Zestaw (długość > 8m): 4.5 PLN/km";
+                ratePerKm = 4.7;
+                carTypeMsg = "Zestaw (długość > 8m): 4.7 PLN/km";
             } else {
-                ratePerKm = 3.5;
-                carTypeMsg = "Solówka (waga > 1100kg): 3.5 PLN/km";
+                ratePerKm = 3.7;
+                carTypeMsg = "Solówka (waga > 1100kg): 3.7 PLN/km";
             }
         } else if (numLength > 5 && numLength <= 8) {
-            ratePerKm = 3.5;
-            carTypeMsg = "Solówka (5m - 8m): 3.5 PLN/km";
+            ratePerKm = 3.7;
+            carTypeMsg = "Solówka (5m - 8m): 3.7 PLN/km";
         } else {
             // Poniżej lub 5m i waga do 1100kg
-            ratePerKm = 2.0;
-            carTypeMsg = "Bus (≤ 5m, waga ≤ 1100kg): 2.0 PLN/km";
+            ratePerKm = 2.2;
+            carTypeMsg = "Bus (≤ 5m, waga ≤ 1100kg): 2.2 PLN/km";
         }
 
         breakdown.push({ name: `Wyliczenie stawki kilometrowej (${carTypeMsg})`, value: null });
@@ -181,9 +181,9 @@ export async function POST(request) {
         const enhancedOwnTransports = similarOwnTransports.map(t => {
             return {
                 ...t,
-                // Nie wyliczamy tutaj już historycznego po staremu, bo zasady zależą od długości/wagi na bieżąco, które mogą być inne.
-                // Aby ułatwić, zostawiamy pusty estimate dla pokazania samej trasy LUB przeliczamy wg aktualnych reguł.
-                estimatedCost: estimatedCost, // Zastępczo
+                // Stała stawka 3.5 PLN za km wg wytycznych użytkownika dla historii, nie uwzględnia nowej dynamicznej stawki ani daty.
+                // Do wcześniejszego wyświetlania historii dodaliśmy zaokrąglenie, zostawmy je dla ładnego podglądu lub pokażmy czyste mnożenie:
+                estimatedCost: Math.ceil((distanceKm * 3.5) / 10) * 10,
                 distance_km: Math.round(distanceKm)
             };
         });
