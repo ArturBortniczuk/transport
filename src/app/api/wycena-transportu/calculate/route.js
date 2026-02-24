@@ -55,48 +55,53 @@ export async function POST(request) {
         const baseRate = settings.base_rate || 100;
         const ratePerKm = settings.rate_per_km || 3.5;
 
-        // 2. Oblicz podstawowy koszt
-        let estimatedCost = baseRate + (distanceKm * ratePerKm);
+        // 2. Oblicz koszt czystego dystansu (baza do wyliczeń)
+        const distanceCost = distanceKm * ratePerKm;
+
         let breakdown = [
             { name: 'Opłata za dystans bazowy', value: null }
         ];
 
-        // 3. Dodaj mnożnik za wagę (powyżej 1 tony oraz powyżej 12 ton)
+        // 3. Mnożnik za gabaryty / rozmiar auta (długość)
+        const numLength = parseFloat(length);
+        let carMultiplier = 1.0;
+
+        if (numLength) {
+            let carTypeMsg = "Wymagane auto: Bus (≤ 5m)";
+
+            if (numLength <= 5) {
+                // Bus jest tańszy
+                carMultiplier = 0.75;
+            } else if (numLength > 5 && numLength <= 8) {
+                // Solówka (baza)
+                carTypeMsg = "Wymagane auto: Solówka (> 5m i ≤ 8m)";
+            } else if (numLength > 8) {
+                // Zestaw (dopłata ze zmiennych procentowych)
+                const lengthMultiplier = settings.length_multiplier || 30;
+                carMultiplier = 1 + (lengthMultiplier / 100);
+                carTypeMsg = "Wymagane auto: Zestaw (> 8m)";
+            }
+
+            breakdown.push({ name: carTypeMsg, value: null });
+        }
+
+        // Kwota po zastosowaniu zniżki/zwyżki za samochód, plus opłata stała
+        let estimatedCost = (distanceCost * carMultiplier) + baseRate;
+        const baselineCostForModifiers = distanceCost * carMultiplier; // Dopłaty liczymy od bazy, nie od siebie nawzajem
+
+        // 4. Mnożnik za wagę (powyżej 1 tony oraz powyżej 12 ton)
         const numWeight = parseFloat(weight);
         if (numWeight && numWeight > 1000) {
             let weightMultiplier = settings.weight_multiplier || 10;
             let weightMsg = `Dopłata za wagę > 1t`;
 
-            // Jeśli waga powyżej 12 ton, zwiększony mnożnik (np. trzykrotność bazowego mnożnika)
             if (numWeight > 12000) {
                 weightMultiplier = (settings.weight_multiplier || 10) * 3;
                 weightMsg = `Dopłata za ciężki transport > 12t`;
             }
 
-            estimatedCost += estimatedCost * (weightMultiplier / 100);
+            estimatedCost += baselineCostForModifiers * (weightMultiplier / 100);
             breakdown.push({ name: weightMsg, value: null });
-        }
-
-        // 4. Mnożnik za gabaryty / rozmiar auta (długość)
-        const numLength = parseFloat(length);
-        if (numLength) {
-            let lengthMultiplier = 0;
-            let carTypeMsg = "Wymagane auto: Bus (≤ 5m)";
-
-            if (numLength > 5 && numLength <= 8) {
-                // Solówka (zwiększona dopłata np. 1.5x lub z settings)
-                lengthMultiplier = settings.length_multiplier || 15;
-                carTypeMsg = "Wymagane auto: Solówka (> 5m i ≤ 8m)";
-            } else if (numLength > 8) {
-                // Zestaw (znacznie większa dopłata)
-                lengthMultiplier = (settings.length_multiplier || 15) * 2.5;
-                carTypeMsg = "Wymagane auto: Zestaw (> 8m)";
-            }
-
-            if (lengthMultiplier > 0) {
-                estimatedCost += estimatedCost * (lengthMultiplier / 100);
-                breakdown.push({ name: carTypeMsg, value: null });
-            }
         }
 
         // 5. Dodaj dopłatę za pilność
@@ -109,7 +114,7 @@ export async function POST(request) {
             const urgentThreshold = settings.urgent_threshold_days || 2;
             if (diffDays <= urgentThreshold) {
                 const urgentMultiplier = settings.urgent_multiplier || 20;
-                estimatedCost += estimatedCost * (urgentMultiplier / 100);
+                estimatedCost += baselineCostForModifiers * (urgentMultiplier / 100);
                 breakdown.push({ name: `Dopłata za pilny transport (szybszy termin)`, value: null });
             }
         }
