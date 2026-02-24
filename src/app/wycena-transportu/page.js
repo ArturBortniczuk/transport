@@ -13,6 +13,7 @@ export default function WycenaTransportu() {
         destinationCity: '',
         weight: '',
         length: '',
+        palletType: '',
         deliveryDate: ''
     });
 
@@ -240,6 +241,24 @@ export default function WycenaTransportu() {
 
                         <div>
                             <label className="block text-sm font-medium text-gray-700 items-center flex mb-1">
+                                <FileText className="w-4 h-4 mr-2" /> Rodzaj palety (Geodis)
+                            </label>
+                            <select
+                                name="palletType"
+                                value={formData.palletType}
+                                onChange={handleChange}
+                                className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                            >
+                                <option value="">Transport własny / Spedycja dużego auta</option>
+                                <option value="0.6x0.8">Półpaleta (0.6x0.8m) - do 300kg</option>
+                                <option value="1.2x0.8">Paleta Euro (1.2x0.8m) - do 1200kg</option>
+                                <option value="1.2x1.2">Paleta Przemysłowa (1.2x1.2m) - do 1200kg</option>
+                                <option value="ponadgabaryt">Ponadgabaryt (do 1.8x1.8m) - do 1200kg</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 items-center flex mb-1">
                                 <Calendar className="w-4 h-4 mr-2" /> Planowana data
                             </label>
                             <input
@@ -267,39 +286,91 @@ export default function WycenaTransportu() {
                 <div className="lg:col-span-2 space-y-6">
                     {/* Wynik wyceny */}
                     {result ? (
-                        <div className="bg-white p-6 rounded-xl shadow-md border border-green-100 overflow-hidden relative">
-                            <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
-                                <Truck className="w-32 h-32" />
-                            </div>
-                            <h2 className="text-xl font-semibold mb-4 text-gray-800">Wynik Kalkulacji</h2>
-
-                            <div className="flex items-center text-lg text-gray-600 mb-6 bg-gray-50 p-4 rounded-lg">
-                                <span className="font-semibold">{result.searchParams.sourceCity}</span>
-                                <ArrowRight className="mx-4 text-blue-500" />
-                                <span className="font-semibold">{result.searchParams.destinationCity}</span>
-                                <span className="ml-auto text-sm bg-blue-100 text-blue-800 py-1 px-3 rounded-full">
-                                    ~ {Math.round(result.distanceKm)} km
-                                </span>
-                            </div>
-
-                            <div className="mb-6">
-                                <div className="text-4xl font-bold text-green-600 mb-1">
-                                    {result.estimatedCost.toLocaleString('pl-PL')} PLN
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* Karta transportu własnego */}
+                            <div className="bg-white p-6 rounded-xl shadow-md border border-green-100 overflow-hidden relative">
+                                <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
+                                    <Truck className="w-32 h-32" />
                                 </div>
-                                <div className="text-sm text-gray-500">Szacowany koszt transportu we własnym zakresie</div>
+                                <h2 className="text-xl font-semibold mb-4 text-gray-800">Transport Własny</h2>
+
+                                <div className="flex items-center text-sm md:text-base text-gray-600 mb-6 bg-gray-50 p-4 rounded-lg">
+                                    <span className="font-semibold">{result.searchParams.sourceCity.substring(0, 15)}</span>
+                                    <ArrowRight className="mx-2 text-blue-500 flex-shrink-0" />
+                                    <span className="font-semibold truncate">{result.searchParams.destinationCity}</span>
+                                    <span className="ml-auto text-xs md:text-sm bg-blue-100 text-blue-800 py-1 px-2 rounded-full whitespace-nowrap">
+                                        ~ {Math.round(result.distanceKm)} km
+                                    </span>
+                                </div>
+
+                                <div className="mb-6">
+                                    <div className="text-4xl font-bold text-green-600 mb-1">
+                                        {result.estimatedCost.toLocaleString('pl-PL')} PLN
+                                    </div>
+                                    <div className="text-sm text-gray-500">Szacowany koszt dla Twojej floty</div>
+                                </div>
+
+                                <div className="border-t pt-4">
+                                    <h3 className="text-sm font-medium text-gray-700 mb-3">Uwzględnione założenia do wyceny:</h3>
+                                    <ul className="space-y-2">
+                                        {result.breakdown.map((item, idx) => (
+                                            <li key={idx} className="flex items-center text-sm">
+                                                <span className="w-1.5 h-1.5 bg-green-500 rounded-full mr-2 min-w-[6px]"></span>
+                                                <span className="text-gray-600">{item.name}</span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
                             </div>
 
-                            <div className="border-t pt-4">
-                                <h3 className="text-sm font-medium text-gray-700 mb-3">Uwzględnione założenia do wyceny:</h3>
-                                <ul className="space-y-2">
-                                    {result.breakdown.map((item, idx) => (
-                                        <li key={idx} className="flex items-center text-sm">
-                                            <span className="w-1.5 h-1.5 bg-blue-500 rounded-full mr-2 min-w-[6px]"></span>
-                                            <span className="text-gray-600">{item.name}</span>
-                                        </li>
-                                    ))}
-                                </ul>
-                            </div>
+                            {/* Karta Kuriera Geodis - Pojawi się tylko jeśli wybrano rodzaj palety i wyliczono cenę */}
+                            {result.geodisCost ? (
+                                <div className="bg-white p-6 rounded-xl shadow-md border border-orange-100 overflow-hidden relative">
+                                    <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
+                                        <Send className="w-32 h-32" />
+                                    </div>
+                                    <h2 className="text-xl font-semibold mb-4 text-gray-800">Kurier (Geodis)</h2>
+
+                                    <div className="flex items-center justify-center text-sm md:text-base mb-6 bg-orange-50 p-4 rounded-lg border border-orange-100">
+                                        <span className="font-medium text-orange-800 flex items-center">
+                                            <Scale className="w-4 h-4 mr-2" />
+                                            {result.searchParams.palletType} do {result.searchParams.weight} kg
+                                        </span>
+                                    </div>
+
+                                    <div className="mb-6">
+                                        <div className="text-4xl font-bold text-orange-600 mb-1">
+                                            {result.geodisCost.totalPrice.toFixed(2).replace('.', ',')} PLN
+                                        </div>
+                                        <div className="text-sm text-gray-500">Całkowity koszt netto z dopłatami</div>
+                                    </div>
+
+                                    <div className="border-t border-orange-100 pt-4">
+                                        <h3 className="text-sm font-medium text-gray-700 mb-3">Składniki taryfy Geodis:</h3>
+                                        <ul className="space-y-2">
+                                            <li className="flex justify-between text-sm">
+                                                <span className="text-gray-600 flex items-center"><span className="w-1.5 h-1.5 bg-orange-400 rounded-full mr-2 min-w-[6px]"></span> Baza tabelaryczna</span>
+                                                <span className="font-medium">{result.geodisCost.basePrice.toFixed(2)} PLN</span>
+                                            </li>
+                                            <li className="flex justify-between text-sm">
+                                                <span className="text-gray-600 flex items-center"><span className="w-1.5 h-1.5 bg-orange-400 rounded-full mr-2 min-w-[6px]"></span> Opłata paliwowa (28%)</span>
+                                                <span className="font-medium">+ {result.geodisCost.fuelSurcharge.toFixed(2)} PLN</span>
+                                            </li>
+                                            {result.geodisCost.isSeasonal && (
+                                                <li className="flex justify-between text-sm text-orange-700">
+                                                    <span className="flex items-center"><span className="w-1.5 h-1.5 bg-red-500 rounded-full mr-2 min-w-[6px]"></span> Opłata sezonowa (7.8%)</span>
+                                                    <span className="font-bold">+ {result.geodisCost.seasonalSurcharge.toFixed(2)} PLN</span>
+                                                </li>
+                                            )}
+                                        </ul>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="bg-gray-50 border border-gray-200 border-dashed rounded-xl p-6 flex flex-col items-center justify-center text-gray-400">
+                                    <Package className="w-12 h-12 mb-4 text-gray-300" />
+                                    <p className="text-sm text-center">Wybierz "Rodzaj palety" i wagę poniżej 1200kg, aby sprawdzić cennik kurierski.</p>
+                                </div>
+                            )}
                         </div>
                     ) : (
                         <div className="bg-gray-50 border border-gray-200 border-dashed rounded-xl p-12 flex flex-col items-center justify-center text-gray-400 h-full min-h-[400px]">

@@ -9,6 +9,7 @@ export async function POST(request) {
             destinationCity,
             weight,
             length,
+            palletType,
             deliveryDateStr,
             distanceKm
         } = data;
@@ -158,9 +159,65 @@ export async function POST(request) {
             };
         });
 
+        // 8. Obliczanie kosztu kuriera Geodis
+        let geodisCost = null;
+        if (palletType && palletType !== '') {
+            const geodisRates = {
+                '0.6x0.8': { 200: 55.43, 300: 59.12 },
+                '1.2x0.8': { 200: 91.15, 300: 91.15, 400: 91.15, 600: 101.00, 800: 103.46, 900: 109.62, 1000: 112.08, 1200: 121.94 },
+                '1.2x1.2': { 200: 129.33, 300: 129.33, 400: 129.33, 600: 129.33, 800: 129.33, 900: 135.49, 1000: 140.41, 1200: 149.04 },
+                'ponadgabaryt': { 400: 91.15, 600: 101.00, 800: 103.46, 900: 109.62, 1000: 465.00, 1200: 586.63 }
+            };
+
+            const ratesForType = geodisRates[palletType];
+            if (ratesForType && numWeight > 0 && numWeight <= 1200) {
+                // Znajdź najbliższy próg wagowy (w górę)
+                let applicableWeight = null;
+                const weightTiers = Object.keys(ratesForType).map(Number).sort((a, b) => a - b);
+
+                for (const tier of weightTiers) {
+                    if (numWeight <= tier) {
+                        applicableWeight = tier;
+                        break;
+                    }
+                }
+
+                if (applicableWeight !== null) {
+                    let baseGeodisCost = ratesForType[applicableWeight];
+                    const FUEL_SURCHARGE = 0.28;
+                    const SEASONAL_SURCHARGE = 0.078;
+
+                    let totalSurcharge = FUEL_SURCHARGE;
+
+                    // Sprawdzanie opłaty sezonowej (1 września do 31 grudnia)
+                    const targetDate = deliveryDateStr ? new Date(deliveryDateStr) : new Date();
+                    const month = targetDate.getMonth() + 1; // 1-12
+
+                    let isSeasonal = false;
+                    if (month >= 9 && month <= 12) {
+                        isSeasonal = true;
+                    }
+                    // Tutaj można dodać daty ruchome (Wielkanoc, Majówka, Boże Ciało) - dla uproszczenia stosujemy szczyt jesienny
+
+                    if (isSeasonal) {
+                        totalSurcharge += SEASONAL_SURCHARGE;
+                    }
+
+                    geodisCost = {
+                        basePrice: baseGeodisCost,
+                        fuelSurcharge: baseGeodisCost * FUEL_SURCHARGE,
+                        seasonalSurcharge: isSeasonal ? baseGeodisCost * SEASONAL_SURCHARGE : 0,
+                        totalPrice: baseGeodisCost * (1 + totalSurcharge),
+                        isSeasonal
+                    };
+                }
+            }
+        }
+
         return NextResponse.json({
             success: true,
             estimatedCost: estimatedCost,
+            geodisCost: geodisCost,
             breakdown,
             history: {
                 ownTransports: enhancedOwnTransports,
