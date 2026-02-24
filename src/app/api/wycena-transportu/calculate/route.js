@@ -190,12 +190,24 @@ export async function POST(request) {
             let mergedInfo = null;
 
             try {
-                if (s.goods_description) goodsInfo = JSON.parse(s.goods_description);
-            } catch (e) { }
+                if (s.order_data) {
+                    const orderData = typeof s.order_data === 'string' ? JSON.parse(s.order_data) : s.order_data;
+                    if (orderData.towar || orderData.waga) {
+                        goodsInfo = {
+                            description: orderData.towar || '',
+                            weight: orderData.waga ? `${orderData.waga} kg` : ''
+                        };
+                    }
+                }
+            } catch (e) {
+                console.error("Error parsing order_data for spedition ID " + s.id, e);
+            }
 
             try {
                 if (s.merged_transports) mergedInfo = JSON.parse(s.merged_transports);
-            } catch (e) { }
+            } catch (e) {
+                console.error("Error parsing merged_transports for spedition ID " + s.id, e);
+            }
 
             return {
                 ...s,
