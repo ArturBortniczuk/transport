@@ -11,207 +11,84 @@ export async function POST(request) {
             length,
             palletType,
             deliveryDateStr,
-            distanceKm
+            distanceKm,
+            mode // 'wlasny' (default) lub 'kurier'
         } = data;
 
+        // ------------------ TRYB KURIER ------------------
+        if (mode === 'kurier') {
+            const numWeight = parseFloat(weight);
+            let geodisCost = null;
+
+            if (palletType && palletType !== '') {
+                const geodisRates = {
+                    '0.6x0.8': { 200: 55.43, 300: 59.12 },
+                    '1.2x0.8': { 200: 91.15, 300: 91.15, 400: 91.15, 600: 101.00, 800: 103.46, 900: 109.62, 1000: 112.08, 1200: 121.94 },
+                    '1.2x1.2': { 200: 129.33, 300: 129.33, 400: 129.33, 600: 129.33, 800: 129.33, 900: 135.49, 1000: 140.41, 1200: 149.04 },
+                    'ponadgabaryt': { 400: 91.15, 600: 101.00, 800: 103.46, 900: 109.62, 1000: 465.00, 1200: 586.63 }
+                };
+
+                const ratesForType = geodisRates[palletType];
+                if (ratesForType && numWeight > 0 && numWeight <= 1200) {
+                    let applicableWeight = null;
+                    const weightTiers = Object.keys(ratesForType).map(Number).sort((a, b) => a - b);
+
+                    for (const tier of weightTiers) {
+                        if (numWeight <= tier) {
+                            applicableWeight = tier;
+                            break;
+                        }
+                    }
+
+                    if (applicableWeight !== null) {
+                        let baseGeodisCost = ratesForType[applicableWeight];
+                        const FUEL_SURCHARGE = 0.28;
+                        const SEASONAL_SURCHARGE = 0.078;
+
+                        let totalSurcharge = FUEL_SURCHARGE;
+
+                        const targetDate = deliveryDateStr ? new Date(deliveryDateStr) : new Date();
+                        const month = targetDate.getMonth() + 1;
+
+                        let isSeasonal = false;
+                        if (month >= 9 && month <= 12) {
+                            isSeasonal = true;
+                        }
+
+                        if (isSeasonal) {
+                            totalSurcharge += SEASONAL_SURCHARGE;
+                        }
+
+                        const netPrice = baseGeodisCost * (1 + totalSurcharge);
+                        const grossPrice = netPrice * 1.23;
+
+                        geodisCost = {
+                            basePrice: baseGeodisCost,
+                            fuelSurcharge: baseGeodisCost * FUEL_SURCHARGE,
+                            seasonalSurcharge: isSeasonal ? baseGeodisCost * SEASONAL_SURCHARGE : 0,
+                            netPrice: netPrice,
+                            grossPrice: grossPrice,
+                            isSeasonal
+                        };
+                    }
+                }
+            }
+
+            if (!geodisCost) {
+                return NextResponse.json({ error: 'Nie można wycenić kuriera. Sprawdź czy podana waga mieści się w przedziałach dla tej palety.' }, { status: 400 });
+            }
+
+            return NextResponse.json({
+                success: true,
+                mode: 'kurier',
+                geodisCost: geodisCost
+            });
+        }
+
+        // ------------------ TRYB WŁASNY / SPEDYCJA ------------------
+
         if (!sourceCity || !destinationCity || distanceKm === undefined) {
-            return NextResponse.json({ error: 'Brakujące parametry kalkulacji' }, { status: 400 });
-        }
-
-        // 1. Pobierz ustawienia wyceny
-        let settingsRaw;
-        try {
-            settingsRaw = await db('valuation_settings').select('*');
-        } catch (e) {
-            if (e.message && e.message.includes('relation "valuation_settings" does not exist')) {
-                await db.schema.createTable('valuation_settings', table => {
-                    table.increments('id').primary();
-                    table.string('key').unique().notNullable();
-                    table.string('name').notNullable();
-                    table.string('value').notNullable();
-                    table.string('type').defaultTo('number');
-                    table.string('description');
-                    table.timestamp('updated_at').defaultTo(db.fn.now());
-                });
-                await db('valuation_settings').insert([
-                    { key: 'base_rate', name: 'Stawka bazowa (stała opłata)', value: '100', type: 'number', description: 'Podstawowa opłata doliczana do każdego transportu (PLN)' },
-                    { key: 'rate_per_km', name: 'Stawka za kilometr', value: '3.5', type: 'number', description: 'Stawka za każdy kilometr trasy (PLN)' },
-                    { key: 'weight_threshold', name: 'Próg wagowy (kg)', value: '1000', type: 'number', description: 'Waga, od której naliczany jest mnożnik za wagę' },
-                    { key: 'weight_multiplier', name: 'Mnożnik za wagę (%)', value: '10', type: 'percentage', description: 'O ile procent rośnie cena po przekroczeniu progu wagowego' },
-                    { key: 'length_threshold', name: 'Próg długości (m)', value: '6', type: 'number', description: 'Długość ładunku, od której naliczany jest mnożnik' },
-                    { key: 'length_multiplier', name: 'Mnożnik za długość (%)', value: '15', type: 'percentage', description: 'O ile procent rośnie cena po przekroczeniu progu długości' },
-                    { key: 'urgent_threshold_days', name: 'Pilny transport (dni)', value: '2', type: 'number', description: 'Liczba dni lub mniej do dostawy, która oznacza transport pilny' },
-                    { key: 'urgent_multiplier', name: 'Mnożnik za transport pilny (%)', value: '20', type: 'percentage', description: 'Dopłata procentowa za szybki termin realizacji' }
-                ]);
-                settingsRaw = await db('valuation_settings').select('*');
-            } else {
-                throw e;
-            }
-        }
-        const settings = settingsRaw.reduce((acc, curr) => {
-            acc[curr.key] = parseFloat(curr.value);
-            return acc;
-        }, {});
-
-        const baseRate = settings.base_rate || 100;
-        const ratePerKm = settings.rate_per_km || 3.5;
-
-        // 2. Oblicz koszt czystego dystansu (baza do wyliczeń)
-        const distanceCost = distanceKm * ratePerKm;
-
-        let breakdown = [
-            { name: 'Opłata za dystans bazowy', value: null }
-        ];
-
-        // 3. Mnożnik za gabaryty / rozmiar auta (długość)
-        const numLength = parseFloat(length);
-        let carMultiplier = 1.0;
-
-        if (numLength) {
-            let carTypeMsg = "Wymagane auto: Bus (≤ 5m)";
-
-            if (numLength <= 5) {
-                // Bus jest tańszy
-                carMultiplier = 0.75;
-            } else if (numLength > 5 && numLength <= 8) {
-                // Solówka (baza)
-                carTypeMsg = "Wymagane auto: Solówka (> 5m i ≤ 8m)";
-            } else if (numLength > 8) {
-                // Zestaw (dopłata ze zmiennych procentowych)
-                const lengthMultiplier = settings.length_multiplier || 30;
-                carMultiplier = 1 + (lengthMultiplier / 100);
-                carTypeMsg = "Wymagane auto: Zestaw (> 8m)";
-            }
-
-            breakdown.push({ name: carTypeMsg, value: null });
-        }
-
-        // Kwota po zastosowaniu zniżki/zwyżki za samochód, plus opłata stała
-        let estimatedCost = (distanceCost * carMultiplier) + baseRate;
-        const baselineCostForModifiers = distanceCost * carMultiplier; // Dopłaty liczymy od bazy, nie od siebie nawzajem
-
-        // 4. Mnożnik za wagę (powyżej 1 tony oraz powyżej 12 ton)
-        const numWeight = parseFloat(weight);
-        if (numWeight && numWeight > 1000) {
-            let weightMultiplier = settings.weight_multiplier || 10;
-            let weightMsg = `Dopłata za wagę > 1t`;
-
-            if (numWeight > 12000) {
-                weightMultiplier = (settings.weight_multiplier || 10) * 3;
-                weightMsg = `Dopłata za ciężki transport > 12t`;
-            }
-
-            estimatedCost += baselineCostForModifiers * (weightMultiplier / 100);
-            breakdown.push({ name: weightMsg, value: null });
-        }
-
-        // 5. Dodaj dopłatę za pilność
-        if (deliveryDateStr) {
-            const deliveryDate = new Date(deliveryDateStr);
-            const today = new Date();
-            const diffTime = deliveryDate.getTime() - today.getTime();
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-            const urgentThreshold = settings.urgent_threshold_days || 2;
-            if (diffDays <= urgentThreshold) {
-                const urgentMultiplier = settings.urgent_multiplier || 20;
-                estimatedCost += baselineCostForModifiers * (urgentMultiplier / 100);
-                breakdown.push({ name: `Dopłata za pilny transport (szybszy termin)`, value: null });
-            }
-        }
-
-        // 5.5 Zaokrąglenie kosztu w góre do pełnych dziesiątek (np. 562 -> 570)
-        estimatedCost = Math.ceil(estimatedCost / 10) * 10;
-
-        // 6. Szukaj podobnych transportów własnych
-        // Z racji braku kolumny distance_km, szukamy na podstawie docelowego miasta (%LIKE%)
-        // oraz źródła (bazy), pomijając polskie znaki w nazwie bazy (Białystok -> bialystok)
-        const normalizedSource = sourceCity.toLowerCase().replace('ł', 'l');
-
-        const similarOwnTransports = await db('transports')
-            .where(function () {
-                this.whereRaw('LOWER(source_warehouse) LIKE ?', [`%${normalizedSource}%`])
-                    .orWhereRaw('LOWER(source_warehouse) LIKE ?', [`%${sourceCity.toLowerCase()}%`])
-            })
-            .andWhereRaw('LOWER(destination_city) LIKE ?', [`%${destinationCity.toLowerCase()}%`])
-            .orderBy('id', 'desc')
-            .limit(5);
-
-        // 7. Szukaj podobnych spedycji
-        // Spedycje mają `location` często w formacie "Od - Do" lub podobnym. 
-        // Dlatego szukamy po dystansie.
-        const minDistance = Math.round(distanceKm * 0.8);
-        const maxDistance = Math.round(distanceKm * 1.2);
-
-        const similarSpeditions = await db('spedycje')
-            .whereBetween('distance_km', [minDistance, maxDistance])
-            .orderBy('id', 'desc')
-            .limit(5);
-
-        // Dodaj pole estimatedCost do transportów własnych, żeby pokazywać historyczne wyceny 
-        // kalkulowane na podst. dzisiejszych stawek i odległości API
-        const enhancedOwnTransports = similarOwnTransports.map(t => {
-            return {
-                ...t,
-                // Skoro to ta sama trasa, przyjmujemy bieżący distanceKm z Google Maps
-                estimatedCost: Math.ceil((baseRate + (distanceKm * ratePerKm)) / 10) * 10,
-                distance_km: Math.round(distanceKm)
-            };
-        });
-
-        // 8. Obliczanie kosztu kuriera Geodis
-        let geodisCost = null;
-        if (palletType && palletType !== '') {
-            const geodisRates = {
-                '0.6x0.8': { 200: 55.43, 300: 59.12 },
-                '1.2x0.8': { 200: 91.15, 300: 91.15, 400: 91.15, 600: 101.00, 800: 103.46, 900: 109.62, 1000: 112.08, 1200: 121.94 },
-                '1.2x1.2': { 200: 129.33, 300: 129.33, 400: 129.33, 600: 129.33, 800: 129.33, 900: 135.49, 1000: 140.41, 1200: 149.04 },
-                'ponadgabaryt': { 400: 91.15, 600: 101.00, 800: 103.46, 900: 109.62, 1000: 465.00, 1200: 586.63 }
-            };
-
-            const ratesForType = geodisRates[palletType];
-            if (ratesForType && numWeight > 0 && numWeight <= 1200) {
-                // Znajdź najbliższy próg wagowy (w górę)
-                let applicableWeight = null;
-                const weightTiers = Object.keys(ratesForType).map(Number).sort((a, b) => a - b);
-
-                for (const tier of weightTiers) {
-                    if (numWeight <= tier) {
-                        applicableWeight = tier;
-                        break;
-                    }
-                }
-
-                if (applicableWeight !== null) {
-                    let baseGeodisCost = ratesForType[applicableWeight];
-                    const FUEL_SURCHARGE = 0.28;
-                    const SEASONAL_SURCHARGE = 0.078;
-
-                    let totalSurcharge = FUEL_SURCHARGE;
-
-                    // Sprawdzanie opłaty sezonowej (1 września do 31 grudnia)
-                    const targetDate = deliveryDateStr ? new Date(deliveryDateStr) : new Date();
-                    const month = targetDate.getMonth() + 1; // 1-12
-
-                    let isSeasonal = false;
-                    if (month >= 9 && month <= 12) {
-                        isSeasonal = true;
-                    }
-                    // Tutaj można dodać daty ruchome (Wielkanoc, Majówka, Boże Ciało) - dla uproszczenia stosujemy szczyt jesienny
-
-                    if (isSeasonal) {
-                        totalSurcharge += SEASONAL_SURCHARGE;
-                    }
-
-                    geodisCost = {
-                        basePrice: baseGeodisCost,
-                        fuelSurcharge: baseGeodisCost * FUEL_SURCHARGE,
-                        seasonalSurcharge: isSeasonal ? baseGeodisCost * SEASONAL_SURCHARGE : 0,
-                        totalPrice: baseGeodisCost * (1 + totalSurcharge),
-                        isSeasonal
-                    };
-                }
-            }
+            return NextResponse.json({ error: 'Brakujące parametry kalkulacji transportu (miasto początkowe, docelowe)' }, { status: 400 });
         }
 
         return NextResponse.json({
