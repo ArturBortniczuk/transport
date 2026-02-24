@@ -4,15 +4,15 @@ import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import ChangePassword from './ChangePassword'
-import { 
-  ChevronDown, 
-  Truck, 
-  Calendar, 
-  Archive, 
-  Map, 
-  FileText, 
-  Building2, 
-  Package, 
+import {
+  ChevronDown,
+  Truck,
+  Calendar,
+  Archive,
+  Map,
+  FileText,
+  Building2,
+  Package,
   Send,
   Users,
   Settings,
@@ -20,7 +20,8 @@ import {
   LogOut,
   Menu,
   X,
-  Star // NOWA IKONA dla Ocen
+  Star, // NOWA IKONA dla Ocen
+  Calculator // IKONA dla Wyceny Transportu
 } from 'lucide-react'
 
 export default function Navigation() {
@@ -35,22 +36,22 @@ export default function Navigation() {
   const [userRole, setUserRole] = useState(null)
   const [userName, setUserName] = useState('')
   const [showChangePassword, setShowChangePassword] = useState(false)
-  
+
   // Stany dla dropdown menu
   const [openDropdown, setOpenDropdown] = useState(null)
   const dropdownRefs = useRef({})
-  
+
   const pathname = usePathname()
   const router = useRouter()
 
   // Funkcja pomocnicza do obsługi różnych formatów boolean
   const isTrueValue = (value) => {
-    return value === true || 
-           value === 1 || 
-           value === 't' || 
-           value === 'TRUE' || 
-           value === 'true' || 
-           value === 'T';
+    return value === true ||
+      value === 1 ||
+      value === 't' ||
+      value === 'TRUE' ||
+      value === 'true' ||
+      value === 'T';
   };
 
   // Funkcja pobierająca dane użytkownika
@@ -59,38 +60,38 @@ export default function Navigation() {
       console.log('Pobieranie informacji o użytkowniku...');
       const response = await fetch('/api/user');
       const data = await response.json();
-      
+
       console.log('Odpowiedź z API:', data);
-      
+
       setIsLoggedIn(data.isAuthenticated);
       if (data.isAuthenticated && data.user) {
         const role = data.user.role;
         let normalizedRole = role;
         if (role === 'magazyn_bialystok') normalizedRole = 'magazyn';
         if (role === 'magazyn_zielonka') normalizedRole = 'magazyn';
-        
+
         setUserRole(normalizedRole || null);
         setUserName(data.user.name || '');
-        
-        const adminStatus = 
-          data.user.isAdmin === true || 
-          data.user.isAdmin === 1 || 
-          data.user.isAdmin === 't' || 
+
+        const adminStatus =
+          data.user.isAdmin === true ||
+          data.user.isAdmin === 1 ||
+          data.user.isAdmin === 't' ||
           data.user.isAdmin === 'TRUE' ||
           data.user.isAdmin === 'true' ||
           data.user.role === 'admin';
-        
+
         setIsAdmin(adminStatus);
 
         const permissions = data.user.permissions || {};
-        const hasPackagingsAccess = permissions.admin?.packagings === true || 
-                                     permissions.admin?.packagings === 1 ||
-                                     permissions.admin?.packagings === 't' ||
-                                     adminStatus;
-        const hasConstructionsAccess = permissions.admin?.constructions === true || 
-                                       permissions.admin?.constructions === 1 ||
-                                       permissions.admin?.constructions === 't' ||
-                                       adminStatus;
+        const hasPackagingsAccess = permissions.admin?.packagings === true ||
+          permissions.admin?.packagings === 1 ||
+          permissions.admin?.packagings === 't' ||
+          adminStatus;
+        const hasConstructionsAccess = permissions.admin?.constructions === true ||
+          permissions.admin?.constructions === 1 ||
+          permissions.admin?.constructions === 't' ||
+          adminStatus;
 
         setAdminAccess({
           isFullAdmin: adminStatus,
@@ -105,20 +106,20 @@ export default function Navigation() {
 
   useEffect(() => {
     fetchUserInfo();
-    
-    const intervalId = isLoggedIn 
+
+    const intervalId = isLoggedIn
       ? setInterval(() => {
         fetchUserInfo();
       }, 60000)
-    : null;
-      
+      : null;
+
     const handleAuthChange = () => {
       console.log('Wykryto zmianę stanu uwierzytelnienia');
       fetchUserInfo();
     };
-    
+
     window.addEventListener('auth-state-changed', handleAuthChange);
-    
+
     return () => {
       if (intervalId) clearInterval(intervalId);
       window.removeEventListener('auth-state-changed', handleAuthChange);
@@ -145,7 +146,7 @@ export default function Navigation() {
       await fetch('/api/logout', {
         method: 'POST',
       });
-      
+
       setIsLoggedIn(false);
       setUserRole(null);
       setUserName('');
@@ -155,7 +156,7 @@ export default function Navigation() {
         packagings: false,
         constructions: false
       });
-      
+
       window.dispatchEvent(new Event('auth-state-changed'));
       router.push('/login');
     } catch (error) {
@@ -179,7 +180,7 @@ export default function Navigation() {
         { name: 'Kalendarz', path: '/kalendarz', icon: Calendar },
         { name: 'Archiwum', path: '/archiwum', icon: Archive },
         { name: 'Mapa', path: '/mapa', icon: Map },
-        ...(userRole === 'handlowiec' 
+        ...(userRole === 'handlowiec'
           ? [{ name: 'Moje wnioski', path: '/moje-wnioski', icon: FileText }]
           : []
         ),
@@ -206,15 +207,15 @@ export default function Navigation() {
       title: 'Panel Administratora',
       icon: Settings,
       items: [
-        ...(adminAccess.isFullAdmin 
+        ...(adminAccess.isFullAdmin
           ? [{ name: 'Zarządzanie użytkownikami', path: '/admin', icon: Users }]
           : []
         ),
-        ...(adminAccess.packagings 
+        ...(adminAccess.packagings
           ? [{ name: 'Zarządzanie opakowaniami', path: '/admin/packagings', icon: Package }]
           : []
         ),
-        ...(adminAccess.constructions 
+        ...(adminAccess.constructions
           ? [{ name: 'Zarządzanie budowami', path: '/admin/constructions', icon: Building2 }]
           : []
         )
@@ -229,21 +230,21 @@ export default function Navigation() {
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center">
               <Link href="/" className="flex items-center space-x-3">
-                <img 
-                  src="/logo.png" 
-                  alt="Logo TRANSPORT" 
+                <img
+                  src="/logo.png"
+                  alt="Logo TRANSPORT"
                   className="h-10 w-auto"
                   onError={(e) => {
                     e.target.style.display = 'none';
                     e.target.nextElementSibling.style.display = 'block';
                   }}
                 />
-                <svg 
-                  className="h-8 w-8 hidden" 
-                  fill="none" 
-                  viewBox="0 0 24 24" 
+                <svg
+                  className="h-8 w-8 hidden"
+                  fill="none"
+                  viewBox="0 0 24 24"
                   stroke="currentColor"
-                  style={{display: 'none'}}
+                  style={{ display: 'none' }}
                 >
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
@@ -269,21 +270,21 @@ export default function Navigation() {
           {/* Logo */}
           <div className="flex items-center">
             <Link href="/" className="flex items-center space-x-3">
-              <img 
-                src="/logo.png" 
-                alt="Logo TransportSystem" 
+              <img
+                src="/logo.png"
+                alt="Logo TransportSystem"
                 className="h-10 w-auto"
                 onError={(e) => {
                   e.target.style.display = 'none';
                   e.target.nextElementSibling.style.display = 'block';
                 }}
               />
-              <svg 
-                className="h-8 w-8 hidden" 
-                fill="none" 
-                viewBox="0 0 24 24" 
+              <svg
+                className="h-8 w-8 hidden"
+                fill="none"
+                viewBox="0 0 24 24"
                 stroke="currentColor"
-                style={{display: 'none'}}
+                style={{ display: 'none' }}
               >
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
@@ -298,11 +299,10 @@ export default function Navigation() {
               <div key={key} className="relative" ref={el => dropdownRefs.current[key] = el}>
                 <button
                   onClick={() => toggleDropdown(key)}
-                  className={`${
-                    isDropdownActive(category.items.map(item => item.path))
+                  className={`${isDropdownActive(category.items.map(item => item.path))
                       ? 'text-white bg-blue-800'
                       : 'text-blue-100 hover:text-white hover:bg-blue-800'
-                  } px-3 py-2 rounded-md text-sm font-medium transition-custom flex items-center space-x-1`}
+                    } px-3 py-2 rounded-md text-sm font-medium transition-custom flex items-center space-x-1`}
                 >
                   <category.icon className="w-4 h-4" />
                   <span>{category.title}</span>
@@ -317,11 +317,10 @@ export default function Navigation() {
                           key={item.path}
                           href={item.path}
                           onClick={() => setOpenDropdown(null)}
-                          className={`${
-                            isActive(item.path)
+                          className={`${isActive(item.path)
                               ? 'bg-blue-50 text-blue-700'
                               : 'text-gray-700 hover:bg-gray-100'
-                          } group flex items-center px-4 py-2 text-sm transition-colors`}
+                            } group flex items-center px-4 py-2 text-sm transition-colors`}
                         >
                           <item.icon className="w-4 h-4 mr-3 text-gray-400 group-hover:text-gray-500" />
                           {item.name}
@@ -336,14 +335,25 @@ export default function Navigation() {
             {/* NOWY LINK - OCENY (bez dropdown, bezpośredni link) */}
             <Link
               href="/oceny"
-              className={`${
-                isActive('/oceny')
+              className={`${isActive('/oceny')
                   ? 'text-white bg-blue-800'
                   : 'text-blue-100 hover:text-white hover:bg-blue-800'
-              } px-3 py-2 rounded-md text-sm font-medium transition-custom flex items-center space-x-1`}
+                } px-3 py-2 rounded-md text-sm font-medium transition-custom flex items-center space-x-1`}
             >
               <Star className="w-4 h-4" />
               <span>Oceny</span>
+            </Link>
+
+            {/* NOWY LINK - WYCENA TRANSPORTU */}
+            <Link
+              href="/wycena-transportu"
+              className={`${isActive('/wycena-transportu')
+                  ? 'text-white bg-blue-800'
+                  : 'text-blue-100 hover:text-white hover:bg-blue-800'
+                } px-3 py-2 rounded-md text-sm font-medium transition-custom flex items-center space-x-1`}
+            >
+              <Calculator className="w-4 h-4" />
+              <span>Wycena transportu</span>
             </Link>
 
             {/* User Menu */}
@@ -416,11 +426,10 @@ export default function Navigation() {
                         key={item.path}
                         href={item.path}
                         onClick={() => setIsMobileMenuOpen(false)}
-                        className={`${
-                          isActive(item.path)
+                        className={`${isActive(item.path)
                             ? 'bg-blue-700 text-white'
                             : 'text-blue-100 hover:bg-blue-700 hover:text-white'
-                        } group flex items-center px-3 py-2 rounded-md text-sm font-medium transition-custom`}
+                          } group flex items-center px-3 py-2 rounded-md text-sm font-medium transition-custom`}
                       >
                         <item.icon className="w-4 h-4 mr-2" />
                         {item.name}
@@ -429,21 +438,33 @@ export default function Navigation() {
                   </div>
                 </div>
               ))}
-              
+
               {/* NOWY LINK - OCENY (mobile) */}
               <Link
                 href="/oceny"
                 onClick={() => setIsMobileMenuOpen(false)}
-                className={`${
-                  isActive('/oceny')
+                className={`${isActive('/oceny')
                     ? 'bg-blue-700 text-white'
                     : 'text-blue-100 hover:bg-blue-700 hover:text-white'
-                } group flex items-center px-3 py-2 rounded-md text-sm font-medium transition-custom`}
+                  } group flex items-center px-3 py-2 rounded-md text-sm font-medium transition-custom`}
               >
                 <Star className="w-4 h-4 mr-2" />
                 Oceny
               </Link>
-              
+
+              {/* NOWY LINK - WYCENA TRANSPORTU (mobile) */}
+              <Link
+                href="/wycena-transportu"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className={`${isActive('/wycena-transportu')
+                    ? 'bg-blue-700 text-white'
+                    : 'text-blue-100 hover:bg-blue-700 hover:text-white'
+                  } group flex items-center px-3 py-2 mt-1 rounded-md text-sm font-medium transition-custom`}
+              >
+                <Calculator className="w-4 h-4 mr-2" />
+                Wycena transportu
+              </Link>
+
               {/* Mobile User Menu */}
               <div className="border-t border-blue-700 pt-2 mt-2">
                 <div className="px-3 py-2 text-sm text-blue-100">

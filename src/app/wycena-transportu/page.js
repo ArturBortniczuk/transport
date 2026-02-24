@@ -1,0 +1,375 @@
+'use client';
+
+import React, { useState, useEffect, useRef } from 'react';
+import {
+    Calculator, MapPin, Truck, Calendar, Scale, Ruler, Building2,
+    ArrowRight, Search, FileText, Send
+} from 'lucide-react';
+
+export default function WycenaTransportu() {
+    const [formData, setFormData] = useState({
+        sourceWarehouse: '',
+        sourceCity: '',
+        destinationCity: '',
+        weight: '',
+        length: '',
+        deliveryDate: ''
+    });
+
+    const [loading, setLoading] = useState(false);
+    const [result, setResult] = useState(null);
+    const [error, setError] = useState('');
+
+    // Google Maps autocompletes
+    const sourceInputRef = useRef(null);
+    const destinationInputRef = useRef(null);
+    const autocompleteSource = useRef(null);
+    const autocompleteDest = useRef(null);
+
+    useEffect(() => {
+        // Load Google Maps API if not already present
+        if (typeof window !== 'undefined' && !window.google) {
+            const script = document.createElement('script');
+            script.src = `https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places`;
+            script.async = true;
+            script.defer = true;
+            script.onload = initAutocomplete;
+            document.head.appendChild(script);
+        } else if (window.google) {
+            initAutocomplete();
+        }
+    }, []);
+
+    const initAutocomplete = () => {
+        if (!window.google) return;
+
+        if (sourceInputRef.current) {
+            autocompleteSource.current = new window.google.maps.places.Autocomplete(sourceInputRef.current, {
+                types: ['(cities)'],
+                componentRestrictions: { country: ['pl', 'de', 'cz', 'sk', 'lt'] }
+            });
+
+            autocompleteSource.current.addListener('place_changed', () => {
+                const place = autocompleteSource.current.getPlace();
+                if (place.name) {
+                    setFormData(prev => ({ ...prev, sourceCity: place.name, sourceWarehouse: '' }));
+                }
+            });
+        }
+
+        if (destinationInputRef.current) {
+            autocompleteDest.current = new window.google.maps.places.Autocomplete(destinationInputRef.current, {
+                types: ['(cities)'],
+                componentRestrictions: { country: ['pl', 'de', 'cz', 'sk', 'lt'] }
+            });
+
+            autocompleteDest.current.addListener('place_changed', () => {
+                const place = autocompleteDest.current.getPlace();
+                if (place.name) {
+                    setFormData(prev => ({ ...prev, destinationCity: place.name }));
+                }
+            });
+        }
+    };
+
+    const calculateDistance = async (origin, destination) => {
+        return new Promise((resolve, reject) => {
+            if (!window.google) {
+                reject('Google Maps API not loaded');
+                return;
+            }
+
+            const service = new window.google.maps.DistanceMatrixService();
+            service.getDistanceMatrix({
+                origins: [origin],
+                destinations: [destination],
+                travelMode: 'DRIVING'
+            }, (response, status) => {
+                if (status === 'OK' && response.rows[0].elements[0].status === 'OK') {
+                    const distanceValue = response.rows[0].elements[0].distance.value;
+                    resolve(distanceValue / 1000); // km
+                } else {
+                    reject('Nie udało się obliczyć trasy');
+                }
+            });
+        });
+    };
+
+    const handleChange = (e) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, [name]: value }));
+
+        // Jeśli wybieramy magazyn z listy
+        if (name === 'sourceWarehouse') {
+            if (value === 'Białystok') {
+                setFormData(prev => ({ ...prev, sourceCity: 'Białystok' }));
+                if (sourceInputRef.current) sourceInputRef.current.value = 'Białystok';
+            } else if (value === 'Zielonka') {
+                setFormData(prev => ({ ...prev, sourceCity: 'Zielonka' }));
+                if (sourceInputRef.current) sourceInputRef.current.value = 'Zielonka';
+            }
+        }
+    };
+
+    const handleManualSourceChange = (e) => {
+        setFormData(prev => ({ ...prev, sourceCity: e.target.value, sourceWarehouse: '' }));
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (!formData.sourceCity || !formData.destinationCity) {
+            setError('Wprowadź miasto początkowe i docelowe');
+            return;
+        }
+
+        setLoading(true);
+        setError('');
+        setResult(null);
+
+        try {
+            // 1. Oblicz odległość przez Google Maps
+            const distanceKm = await calculateDistance(formData.sourceCity, formData.destinationCity);
+
+            // 2. Wyślij zapytanie do naszego API
+            const response = await fetch('/api/wycena-transportu/calculate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    ...formData, // sourceCity, destinationCity, weight, length, deliveryDate
+                    deliveryDateStr: formData.deliveryDate,
+                    distanceKm
+                })
+            });
+
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Błąd API');
+
+            setResult({ ...data, distanceKm, searchParams: { ...formData } });
+        } catch (err) {
+            console.error(err);
+            setError('Wystąpił błąd podczas wyceny transportu: ' + err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div className="container mx-auto px-4 py-8 max-w-6xl">
+            <div className="flex items-center justify-between mb-8">
+                <h1 className="text-3xl font-bold text-gray-800 flex items-center">
+                    <Calculator className="mr-3 h-8 w-8 text-blue-600" />
+                    Wycena Transportu
+                </h1>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* Formularz - lewa kolumna */}
+                <div className="lg:col-span-1 bg-white p-6 rounded-xl shadow-md border border-gray-100 h-max">
+                    <h2 className="text-xl font-semibold mb-6 text-gray-800 border-b pb-3">Parametry trasy</h2>
+
+                    <form onSubmit={handleSubmit} className="space-y-5">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 items-center flex mb-1">
+                                <Building2 className="w-4 h-4 mr-2" /> Start (Baza)
+                            </label>
+                            <select
+                                name="sourceWarehouse"
+                                value={formData.sourceWarehouse}
+                                onChange={handleChange}
+                                className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 mb-2"
+                            >
+                                <option value="">Wybierz magazyn, lub wpisz miasto poniżej...</option>
+                                <option value="Białystok">Magazyn Białystok (ul. Popiełuszki 115)</option>
+                                <option value="Zielonka">Magazyn Zielonka (ul. Marecka 68)</option>
+                            </select>
+                            <input
+                                ref={sourceInputRef}
+                                type="text"
+                                value={formData.sourceCity}
+                                onChange={handleManualSourceChange}
+                                placeholder="Miasto początkowe"
+                                className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 items-center flex mb-1">
+                                <MapPin className="w-4 h-4 mr-2" /> Cel
+                            </label>
+                            <input
+                                ref={destinationInputRef}
+                                type="text"
+                                value={formData.destinationCity}
+                                onChange={(e) => setFormData(p => ({ ...p, destinationCity: e.target.value }))}
+                                placeholder="Miasto docelowe"
+                                className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                            />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 items-center flex mb-1">
+                                    <Scale className="w-4 h-4 mr-2" /> Waga (kg)
+                                </label>
+                                <input
+                                    type="number"
+                                    name="weight"
+                                    max="24000"
+                                    value={formData.weight}
+                                    onChange={handleChange}
+                                    placeholder="np. 1500"
+                                    className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 items-center flex mb-1">
+                                    <Ruler className="w-4 h-4 mr-2" /> Długość (m)
+                                </label>
+                                <input
+                                    type="number"
+                                    name="length"
+                                    max="13.6"
+                                    step="0.1"
+                                    value={formData.length}
+                                    onChange={handleChange}
+                                    placeholder="np. 5.5"
+                                    className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                />
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 items-center flex mb-1">
+                                <Calendar className="w-4 h-4 mr-2" /> Planowana data
+                            </label>
+                            <input
+                                type="date"
+                                name="deliveryDate"
+                                value={formData.deliveryDate}
+                                onChange={handleChange}
+                                className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                            />
+                        </div>
+
+                        {error && <div className="p-3 bg-red-50 text-red-700 rounded-md text-sm">{error}</div>}
+
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-md transition duration-150 flex items-center justify-center disabled:bg-blue-300"
+                        >
+                            {loading ? 'Obliczanie...' : <><Search className="w-5 h-5 mr-2" /> Oblicz koszt</>}
+                        </button>
+                    </form>
+                </div>
+
+                {/* Wyniki - prawa kolumna */}
+                <div className="lg:col-span-2 space-y-6">
+                    {/* Wynik wyceny */}
+                    {result ? (
+                        <div className="bg-white p-6 rounded-xl shadow-md border border-green-100 overflow-hidden relative">
+                            <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
+                                <Truck className="w-32 h-32" />
+                            </div>
+                            <h2 className="text-xl font-semibold mb-4 text-gray-800">Wynik Kalkulacji</h2>
+
+                            <div className="flex items-center text-lg text-gray-600 mb-6 bg-gray-50 p-4 rounded-lg">
+                                <span className="font-semibold">{result.searchParams.sourceCity}</span>
+                                <ArrowRight className="mx-4 text-blue-500" />
+                                <span className="font-semibold">{result.searchParams.destinationCity}</span>
+                                <span className="ml-auto text-sm bg-blue-100 text-blue-800 py-1 px-3 rounded-full">
+                                    ~ {Math.round(result.distanceKm)} km
+                                </span>
+                            </div>
+
+                            <div className="mb-6">
+                                <div className="text-4xl font-bold text-green-600 mb-1">
+                                    {result.estimatedCost.toLocaleString('pl-PL')} PLN
+                                </div>
+                                <div className="text-sm text-gray-500">Szacowany koszt transportu we własnym zakresie</div>
+                            </div>
+
+                            <div className="border-t pt-4">
+                                <h3 className="text-sm font-medium text-gray-700 mb-3">Składowe wyceny:</h3>
+                                <ul className="space-y-2">
+                                    {result.breakdown.map((item, idx) => (
+                                        <li key={idx} className="flex justify-between text-sm">
+                                            <span className="text-gray-600">{item.name}</span>
+                                            <span className="font-medium">{item.value.toFixed(2)} PLN</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="bg-gray-50 border border-gray-200 border-dashed rounded-xl p-12 flex flex-col items-center justify-center text-gray-400 h-full min-h-[400px]">
+                            <Calculator className="w-16 h-16 mb-4 text-gray-300" />
+                            <p className="text-lg">Wprowadź dane z lewej strony, aby uzyskać wycenę.</p>
+                        </div>
+                    )}
+
+                    {/* Historia transportów */}
+                    {result && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* Transport Własny Miejsca */}
+                            <div className="bg-white p-5 rounded-lg shadow border border-gray-100">
+                                <h3 className="text-lg font-medium mb-4 flex items-center text-blue-800">
+                                    <Truck className="w-5 h-5 mr-2" /> Podobne Trasowo (Własne)
+                                </h3>
+                                {result.history.ownTransports.length > 0 ? (
+                                    <ul className="space-y-3">
+                                        {result.history.ownTransports.map(t => (
+                                            <li key={t.id} className="p-3 bg-gray-50 rounded text-sm border-l-4 border-blue-400">
+                                                <div className="font-medium">{t.destination_city}</div>
+                                                <div className="text-gray-500 mb-1">{new Date(t.completed_at || t.delivery_date).toLocaleDateString()}</div>
+                                                {t.client_name && <div className="text-xs text-gray-400 truncate">Klient: {t.client_name}</div>}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                ) : (
+                                    <p className="text-sm text-gray-500">Brak historycznych transportów na tej trasie.</p>
+                                )}
+                            </div>
+
+                            {/* Spedycje odległość */}
+                            <div className="bg-white p-5 rounded-lg shadow border border-gray-100">
+                                <h3 className="text-lg font-medium mb-4 flex items-center text-purple-800">
+                                    <Send className="w-5 h-5 mr-2" /> Szacunkowe Spedycje (na dystans +-20%)
+                                </h3>
+                                {result.history.speditions.length > 0 ? (
+                                    <ul className="space-y-3">
+                                        {result.history.speditions.map(s => (
+                                            <li key={s.id} className="p-3 bg-gray-50 rounded text-sm border-l-4 border-purple-400 flex flex-col">
+                                                <div className="flex justify-between items-start mb-1">
+                                                    <span className="font-medium truncate mr-2" title={s.location}>{s.location || 'Brak danych'}</span>
+                                                    <span className="flex-shrink-0 bg-gray-200 text-gray-700 text-xs px-2 py-0.5 rounded">{s.distance_km} km</span>
+                                                </div>
+                                                <div className="text-xs text-gray-500 mt-1">
+                                                    Data: {s.delivery_date ? new Date(s.delivery_date).toLocaleDateString() : 'Brak'}
+                                                </div>
+                                                {/* Spedycja ma koszt w response_data w formacie np. [ { responseCost: 1500 } ] */}
+                                                {(() => {
+                                                    try {
+                                                        if (s.response_data) {
+                                                            const data = JSON.parse(s.response_data);
+                                                            if (data && data.length > 0 && data[0].responseCost) {
+                                                                return <div className="font-semibold text-purple-600 mt-1 text-right">{data[0].responseCost} PLN</div>;
+                                                            }
+                                                        }
+                                                    } catch (e) { }
+                                                    return null;
+                                                })()}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                ) : (
+                                    <p className="text-sm text-gray-500">Brak spedycji dla podobnego dystansu.</p>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
