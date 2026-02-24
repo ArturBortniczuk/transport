@@ -18,7 +18,35 @@ export async function POST(request) {
         }
 
         // 1. Pobierz ustawienia wyceny
-        const settingsRaw = await db('valuation_settings').select('*');
+        let settingsRaw;
+        try {
+            settingsRaw = await db('valuation_settings').select('*');
+        } catch (e) {
+            if (e.message && e.message.includes('relation "valuation_settings" does not exist')) {
+                await db.schema.createTable('valuation_settings', table => {
+                    table.increments('id').primary();
+                    table.string('key').unique().notNullable();
+                    table.string('name').notNullable();
+                    table.string('value').notNullable();
+                    table.string('type').defaultTo('number');
+                    table.string('description');
+                    table.timestamp('updated_at').defaultTo(db.fn.now());
+                });
+                await db('valuation_settings').insert([
+                    { key: 'base_rate', name: 'Stawka bazowa (stała opłata)', value: '100', type: 'number', description: 'Podstawowa opłata doliczana do każdego transportu (PLN)' },
+                    { key: 'rate_per_km', name: 'Stawka za kilometr', value: '3.5', type: 'number', description: 'Stawka za każdy kilometr trasy (PLN)' },
+                    { key: 'weight_threshold', name: 'Próg wagowy (kg)', value: '1000', type: 'number', description: 'Waga, od której naliczany jest mnożnik za wagę' },
+                    { key: 'weight_multiplier', name: 'Mnożnik za wagę (%)', value: '10', type: 'percentage', description: 'O ile procent rośnie cena po przekroczeniu progu wagowego' },
+                    { key: 'length_threshold', name: 'Próg długości (m)', value: '6', type: 'number', description: 'Długość ładunku, od której naliczany jest mnożnik' },
+                    { key: 'length_multiplier', name: 'Mnożnik za długość (%)', value: '15', type: 'percentage', description: 'O ile procent rośnie cena po przekroczeniu progu długości' },
+                    { key: 'urgent_threshold_days', name: 'Pilny transport (dni)', value: '2', type: 'number', description: 'Liczba dni lub mniej do dostawy, która oznacza transport pilny' },
+                    { key: 'urgent_multiplier', name: 'Mnożnik za transport pilny (%)', value: '20', type: 'percentage', description: 'Dopłata procentowa za szybki termin realizacji' }
+                ]);
+                settingsRaw = await db('valuation_settings').select('*');
+            } else {
+                throw e;
+            }
+        }
         const settings = settingsRaw.reduce((acc, curr) => {
             acc[curr.key] = parseFloat(curr.value);
             return acc;
@@ -102,6 +130,6 @@ export async function POST(request) {
 
     } catch (error) {
         console.error('API /api/wycena-transportu/calculate error:', error);
-        return NextResponse.json({ error: 'Błąd podczas kalkulacji wyceny' }, { status: 500 });
+        return NextResponse.json({ error: 'Błąd: ' + (error.message || error.toString()) }, { status: 500 });
     }
 }
