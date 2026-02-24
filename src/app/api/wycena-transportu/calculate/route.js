@@ -169,13 +169,41 @@ export async function POST(request) {
             .limit(5);
 
         // 7. Szukaj podobnych spedycji
-        const minDistance = Math.round(distanceKm * 0.8);
-        const maxDistance = Math.round(distanceKm * 1.2);
+        let speditionPercentage = 0.2; // 20% domyślnie dla <= 300km
+        let minDistance, maxDistance;
 
-        const similarSpeditions = await db('spedycje')
+        if (distanceKm > 300) {
+            speditionPercentage = 0.1; // 10% dla > 300km
+        }
+
+        minDistance = Math.round(distanceKm * (1 - speditionPercentage));
+        maxDistance = Math.round(distanceKm * (1 + speditionPercentage));
+
+        const similarSpeditionsRaw = await db('spedycje')
             .whereBetween('distance_km', [minDistance, maxDistance])
             .orderBy('id', 'desc')
             .limit(5);
+
+        // Parsowanie JSONów dla spedycji, aby odczytać info o towarze
+        const similarSpeditions = similarSpeditionsRaw.map(s => {
+            let goodsInfo = null;
+            let mergedInfo = null;
+
+            try {
+                if (s.goods_description) goodsInfo = JSON.parse(s.goods_description);
+            } catch (e) { }
+
+            try {
+                if (s.merged_transports) mergedInfo = JSON.parse(s.merged_transports);
+            } catch (e) { }
+
+            return {
+                ...s,
+                parsedGoods: goodsInfo,
+                parsedMerged: mergedInfo,
+                searchPercentage: speditionPercentage * 100 // do info w UI
+            };
+        });
 
         // Podmiana historycznych
         const enhancedOwnTransports = similarOwnTransports.map(t => {
@@ -195,7 +223,8 @@ export async function POST(request) {
             breakdown,
             history: {
                 ownTransports: enhancedOwnTransports, // Tutaj można zostawić enhanced z dystansem
-                speditions: similarSpeditions
+                speditions: similarSpeditions,
+                speditionPercentage: speditionPercentage * 100
             }
         });
 

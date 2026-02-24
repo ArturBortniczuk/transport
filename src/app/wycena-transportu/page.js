@@ -404,7 +404,7 @@ export default function WycenaTransportu() {
 
                                         <div className="bg-white p-5 rounded-lg shadow border border-gray-100">
                                             <h3 className="text-lg font-medium mb-4 flex items-center text-purple-800">
-                                                <Send className="w-5 h-5 mr-2" /> Szacunkowe Spedycje (+-20%)
+                                                <Send className="w-5 h-5 mr-2" /> Szacunkowe Spedycje (+-{result.history?.speditionPercentage || 20}%)
                                             </h3>
                                             {result.history?.speditions?.length > 0 ? (
                                                 <ul className="space-y-3">
@@ -429,6 +429,17 @@ export default function WycenaTransportu() {
                                                             <div className="text-xs text-gray-500 mt-1">
                                                                 Data: {s.delivery_date ? new Date(s.delivery_date).toLocaleDateString() : 'Brak'}
                                                             </div>
+                                                            {s.parsedMerged && s.parsedMerged.length > 0 && (
+                                                                <div className="text-xs font-semibold text-orange-600 mt-0.5">
+                                                                    Łączony transport ze zleceniem: {s.parsedMerged[0].targetOrderNumber || s.parsedMerged[0].id || s.parsedMerged[0]}
+                                                                </div>
+                                                            )}
+                                                            {s.parsedGoods && (s.parsedGoods.towar || s.parsedGoods.waga) && (
+                                                                <div className="text-xs text-gray-600 mt-0.5 break-words">
+                                                                    Towar: <span className="font-medium">{s.parsedGoods.towar || 'brak nazwy'}</span>
+                                                                    {s.parsedGoods.waga ? ` | ${s.parsedGoods.waga}` : ''}
+                                                                </div>
+                                                            )}
                                                             {(() => {
                                                                 try {
                                                                     if (s.response_data) {
