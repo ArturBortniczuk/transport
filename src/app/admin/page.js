@@ -23,13 +23,13 @@ export default function AdminPage() {
     try {
       const response = await fetch('/api/check-admin');
       const data = await response.json();
-      
+
       setAdminAccess({
         isAdmin: data.isAdmin,
         packagings: data.isAdmin || data.permissions?.admin?.packagings,
         constructions: data.isAdmin || data.permissions?.admin?.constructions
       });
-      
+
       // Ładuj użytkowników tylko jeśli ma uprawnienia administratora
       if (data.isAdmin) {
         fetchUsers();
@@ -49,18 +49,18 @@ export default function AdminPage() {
       if (!response.ok) {
         throw new Error('Problem z pobraniem danych')
       }
-      
+
       const data = await response.json()
       console.log('Pobrane dane użytkowników:', data);
-      
+
       if (!Array.isArray(data)) {
         throw new Error('Nieprawidłowy format danych')
       }
-      
+
       // Dodaj domyślne uprawnienia jeśli nie istnieją
       const usersWithPermissions = data.map(user => {
         let permissions = {};
-        
+
         try {
           if (user.permissions && typeof user.permissions === 'string') {
             permissions = JSON.parse(user.permissions);
@@ -68,7 +68,7 @@ export default function AdminPage() {
         } catch (e) {
           console.error('Błąd parsowania uprawnień dla użytkownika:', user.email, e);
         }
-        
+
         // Ustaw domyślne uprawnienia, jeśli nie istnieją
         const defaultPermissions = {
           calendar: {
@@ -87,7 +87,7 @@ export default function AdminPage() {
             constructions: false
           }
         };
-        
+
         // Połącz istniejące uprawnienia z domyślnymi
         return {
           ...user,
@@ -97,7 +97,7 @@ export default function AdminPage() {
           }
         };
       });
-      
+
       console.log('Użytkownicy z uprawnieniami:', usersWithPermissions);
       setUsers(usersWithPermissions);
     } catch (err) {
@@ -112,15 +112,15 @@ export default function AdminPage() {
     try {
       setSavingUserId(userId); // Ustaw ID użytkownika, którego uprawnienia są zapisywane
       setImportStatus('Zapisywanie zmian...');
-      
+
       const user = users.find(u => u.email === userId);
       if (!user) {
         throw new Error('Nie znaleziono użytkownika');
       }
-  
+
       // Bezpieczne sprawdzenie wartości uprawnienia
       const currentValue = user.permissions?.[section]?.[permission] === true;
-      
+
       console.log('Zmiana uprawnienia:', {
         userId,
         section,
@@ -128,7 +128,7 @@ export default function AdminPage() {
         from: currentValue,
         to: !currentValue
       });
-      
+
       const response = await fetch('/api/users/permissions', {
         method: 'PUT',
         headers: {
@@ -141,26 +141,26 @@ export default function AdminPage() {
           value: !currentValue
         })
       });
-  
+
       const data = await response.json();
       console.log('Odpowiedź serwera:', data);
-      
+
       if (!response.ok) {
         throw new Error(data.error || 'Nie udało się zaktualizować uprawnień');
       }
-  
+
       // Aktualizuj stan lokalnie
       setUsers(users.map(user => {
         if (user.email === userId) {
           // Aktualizuj tylko konkretne uprawnienie
           const updatedPermissions = { ...user.permissions };
-          
+
           if (!updatedPermissions[section]) {
             updatedPermissions[section] = {};
           }
-          
+
           updatedPermissions[section][permission] = !currentValue;
-          
+
           return {
             ...user,
             permissions: updatedPermissions
@@ -168,7 +168,7 @@ export default function AdminPage() {
         }
         return user;
       }));
-  
+
       setImportStatus('Pomyślnie zaktualizowano uprawnienia');
       setTimeout(() => setImportStatus(''), 3000);
     } catch (err) {
@@ -183,7 +183,7 @@ export default function AdminPage() {
     try {
       setSavingUserId(userId);
       setImportStatus('Zapisywanie zmian...');
-      
+
       const response = await fetch('/api/users/role', {
         method: 'PUT',
         headers: {
@@ -196,7 +196,7 @@ export default function AdminPage() {
       });
 
       const data = await response.json();
-      
+
       if (!response.ok) {
         throw new Error(data.error || 'Nie udało się zaktualizować roli');
       }
@@ -228,7 +228,7 @@ export default function AdminPage() {
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Panel Administratora</h1>
         </div>
-        
+
         {/* Karty funkcji administratora */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
           {/* Karta zarządzania użytkownikami - tylko dla pełnego admina */}
@@ -255,7 +255,7 @@ export default function AdminPage() {
               </div>
             </div>
           )}
-          
+
           {/* Karta zarządzania opakowaniami - dla admina i użytkowników z uprawnieniami */}
           {adminAccess.packagings && (
             <div className="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300">
@@ -280,7 +280,7 @@ export default function AdminPage() {
               </div>
             </div>
           )}
-          
+
           {/* Karta zarządzania budowami - dla admina i użytkowników z uprawnieniami */}
           {adminAccess.constructions && (
             <div className="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300">
@@ -305,14 +305,39 @@ export default function AdminPage() {
               </div>
             </div>
           )}
+
+          {/* Karta ustawień wyceny transportu - tylko dla admina */}
+          {adminAccess.isAdmin && (
+            <div className="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300">
+              <div className="p-6">
+                <div className="flex items-center mb-4">
+                  <div className="bg-purple-100 p-3 rounded-full">
+                    <svg className="w-6 h-6 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                  <h3 className="ml-4 text-lg font-medium">Ustawienia wyceny</h3>
+                </div>
+                <p className="text-gray-600 mb-4">
+                  Konfiguruj stawki za kilometr, wagi i wymiary dla algorytmu wyliczania kosztu transportu.
+                </p>
+                <Link
+                  href="/admin/valuation"
+                  className="w-full inline-flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
+                >
+                  Przejdź do zarządzania
+                </Link>
+              </div>
+            </div>
+          )}
         </div>
-        
+
         {/* Sekcja zarządzania uprawnieniami użytkowników - widoczna tylko gdy jest admin */}
         {adminAccess.isAdmin && (
           <div id="users-section" className="bg-white rounded-lg shadow overflow-hidden mt-8">
             <div className="p-6">
               <h2 className="text-xl font-semibold mb-4">Zarządzanie uprawnieniami użytkowników</h2>
-              
+
               {users.map((user) => (
                 <div key={user.email} className="mb-6 border p-4 rounded-lg hover:bg-gray-50 transition-colors">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
@@ -322,7 +347,7 @@ export default function AdminPage() {
                       <p className="text-gray-600">{user.email}</p>
                       <p className="text-gray-500 text-sm">{user.position}</p>
                     </div>
-                    
+
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Rola</label>
                       <select
@@ -340,7 +365,7 @@ export default function AdminPage() {
                         <span className="ml-2 text-xs text-blue-500">Zapisywanie...</span>
                       )}
                     </div>
-                    
+
                     <div className="flex items-center justify-end">
                       {savingUserId === user.email ? (
                         <span className="text-blue-500 bg-blue-50 px-3 py-1 rounded-full text-sm">
@@ -355,7 +380,7 @@ export default function AdminPage() {
                       )}
                     </div>
                   </div>
-                  
+
                   {/* Uprawnienia - układ w formie checkboxów w rzędzie */}
                   <div className="bg-gray-50 p-4 rounded-md mb-3">
                     <h4 className="font-medium mb-3">Uprawnienia systemowe</h4>
@@ -374,7 +399,7 @@ export default function AdminPage() {
                           Edycja Kalendarza
                         </label>
                       </div>
-                      
+
                       {/* Oznaczanie jako Zrealizowane */}
                       <div className="flex items-center space-x-2">
                         <input
@@ -389,7 +414,7 @@ export default function AdminPage() {
                           Oznaczanie jako Zrealizowane
                         </label>
                       </div>
-                      
+
                       {/* Dodawanie Spedycji */}
                       <div className="flex items-center space-x-2">
                         <input
@@ -404,7 +429,7 @@ export default function AdminPage() {
                           Dodawanie Spedycji
                         </label>
                       </div>
-                      
+
                       {/* Odpowiadanie na Spedycje */}
                       <div className="flex items-center space-x-2">
                         <input
@@ -419,7 +444,7 @@ export default function AdminPage() {
                           Odpowiadanie na Spedycje
                         </label>
                       </div>
-                      
+
                       {/* Wysyłanie Zlecenia */}
                       <div className="flex items-center space-x-2">
                         <input
@@ -436,7 +461,7 @@ export default function AdminPage() {
                       </div>
                     </div>
                   </div>
-                  
+
                   {/* Nowa sekcja uprawnień administratora */}
                   <div className="bg-gray-50 p-4 rounded-md">
                     <h4 className="font-medium mb-3">Uprawnienia administratora</h4>
@@ -455,7 +480,7 @@ export default function AdminPage() {
                           Zarządzanie Opakowaniami
                         </label>
                       </div>
-                      
+
                       {/* Uprawnienia do modułu Budów */}
                       <div className="flex items-center space-x-2">
                         <input
@@ -474,19 +499,18 @@ export default function AdminPage() {
                   </div>
                 </div>
               ))}
-              
+
               {importStatus && (
-                <div className={`mt-4 p-4 rounded-md ${
-                  importStatus.includes('sukces') || importStatus.includes('Pomyślnie') 
-                  ? 'bg-green-50 text-green-700' 
-                  : importStatus.includes('Zapisywanie')
-                  ? 'bg-blue-50 text-blue-700'
-                  : 'bg-red-50 text-red-700'
-                }`}>
+                <div className={`mt-4 p-4 rounded-md ${importStatus.includes('sukces') || importStatus.includes('Pomyślnie')
+                    ? 'bg-green-50 text-green-700'
+                    : importStatus.includes('Zapisywanie')
+                      ? 'bg-blue-50 text-blue-700'
+                      : 'bg-red-50 text-red-700'
+                  }`}>
                   {importStatus}
                 </div>
               )}
-              
+
               {error && (
                 <div className="mt-4 p-4 rounded-md bg-red-50 text-red-700">
                   {error}
