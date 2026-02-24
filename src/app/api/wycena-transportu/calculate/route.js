@@ -110,8 +110,8 @@ export async function POST(request) {
         // Spedycje mają `location` często w formacie "Od - Do" lub podobnym. 
         // Dlatego możemy szukać po JSON-ie (location_data) lub wpisanej destynacji / distance_km.
         // Zakładając margines błędu +/- 20% odległości
-        const minDistance = distanceKm * 0.8;
-        const maxDistance = distanceKm * 1.2;
+        const minDistance = Math.round(distanceKm * 0.8);
+        const maxDistance = Math.round(distanceKm * 1.2);
 
         const similarSpeditions = await db('spedycje')
             .whereBetween('distance_km', [minDistance, maxDistance])
