@@ -114,17 +114,31 @@ export async function POST(request) {
         // 7. Szukaj podobnych spedycji
         // Spedycje mają `location` często w formacie "Od - Do" lub podobnym. 
         // Dlatego szukamy po dystansie.
+        const minDistance = Math.round(distanceKm * 0.8);
+        const maxDistance = Math.round(distanceKm * 1.2);
+
         const similarSpeditions = await db('spedycje')
             .whereBetween('distance_km', [minDistance, maxDistance])
             .orderBy('id', 'desc')
             .limit(5);
+
+        // Dodaj pole estimatedCost do transportów własnych, żeby pokazywać historyczne wyceny 
+        // kalkulowane na podst. dzisiejszych stawek i odległości API
+        const enhancedOwnTransports = similarOwnTransports.map(t => {
+            return {
+                ...t,
+                // Skoro to ta sama trasa, przyjmujemy bieżący distanceKm z Google Maps
+                estimatedCost: Math.round((baseRate + (distanceKm * ratePerKm)) * 100) / 100,
+                distance_km: Math.round(distanceKm)
+            };
+        });
 
         return NextResponse.json({
             success: true,
             estimatedCost: Math.round(estimatedCost * 100) / 100, // Zaokrąglenie do 2 miejsc po przecinku
             breakdown,
             history: {
-                ownTransports: similarOwnTransports,
+                ownTransports: enhancedOwnTransports,
                 speditions: similarSpeditions
             }
         });

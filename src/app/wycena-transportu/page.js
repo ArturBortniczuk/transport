@@ -319,10 +319,14 @@ export default function WycenaTransportu() {
                                 {result.history.ownTransports.length > 0 ? (
                                     <ul className="space-y-3">
                                         {result.history.ownTransports.map(t => (
-                                            <li key={t.id} className="p-3 bg-gray-50 rounded text-sm border-l-4 border-blue-400">
-                                                <div className="font-medium">{t.destination_city}</div>
-                                                <div className="text-gray-500 mb-1">{new Date(t.completed_at || t.delivery_date).toLocaleDateString()}</div>
+                                            <li key={t.id} className="p-3 bg-gray-50 rounded text-sm border-l-4 border-blue-400 flex flex-col">
+                                                <div className="flex justify-between items-start mb-1">
+                                                    <span className="font-medium mr-2 truncate" title={t.destination_city}>{t.destination_city}</span>
+                                                    {t.distance_km && <span className="flex-shrink-0 bg-gray-200 text-gray-700 text-xs px-2 py-0.5 rounded">~ {t.distance_km} km</span>}
+                                                </div>
+                                                <div className="text-gray-500 text-xs mb-1">Data: {new Date(t.completed_at || t.delivery_date).toLocaleDateString()}</div>
                                                 {t.client_name && <div className="text-xs text-gray-400 truncate">Klient: {t.client_name}</div>}
+                                                {t.estimatedCost && <div className="font-semibold text-blue-600 mt-1 text-right">{t.estimatedCost} PLN</div>}
                                             </li>
                                         ))}
                                     </ul>
