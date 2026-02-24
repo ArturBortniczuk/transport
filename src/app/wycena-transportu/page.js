@@ -434,10 +434,10 @@ export default function WycenaTransportu() {
                                                                     Łączony transport ze zleceniem: {s.parsedMerged[0].targetOrderNumber || s.parsedMerged[0].id || s.parsedMerged[0]}
                                                                 </div>
                                                             )}
-                                                            {s.parsedGoods && (s.parsedGoods.towar || s.parsedGoods.waga) && (
+                                                            {s.parsedGoods && (s.parsedGoods.description || s.parsedGoods.weight) && (
                                                                 <div className="text-xs text-gray-600 mt-0.5 break-words">
-                                                                    Towar: <span className="font-medium">{s.parsedGoods.towar || 'brak nazwy'}</span>
-                                                                    {s.parsedGoods.waga ? ` | ${s.parsedGoods.waga}` : ''}
+                                                                    Towar: <span className="font-medium">{s.parsedGoods.description || 'brak nazwy'}</span>
+                                                                    {s.parsedGoods.weight ? ` | ${s.parsedGoods.weight}` : ''}
                                                                 </div>
                                                             )}
                                                             {(() => {
