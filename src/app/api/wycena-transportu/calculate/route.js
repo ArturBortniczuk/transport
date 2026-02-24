@@ -97,14 +97,17 @@ export async function POST(request) {
             }
         }
 
-        // 6. Szukaj podobnych transportów własnych (na podstawie odległości)
-        // Podobnie jak spedycje, szukamy transportów własnych w promieniu +/- 20% odległości
-        // by uniknąć problemów z niedopasowaniem dosłownych nazw magazynów z długimi adresami.
-        const minDistance = Math.round(distanceKm * 0.8);
-        const maxDistance = Math.round(distanceKm * 1.2);
+        // 6. Szukaj podobnych transportów własnych
+        // Z racji braku kolumny distance_km, szukamy na podstawie docelowego miasta (%LIKE%)
+        // oraz źródła (bazy), pomijając polskie znaki w nazwie bazy (Białystok -> bialystok)
+        const normalizedSource = sourceCity.toLowerCase().replace('ł', 'l');
 
         const similarOwnTransports = await db('transports')
-            .whereBetween('distance_km', [minDistance, maxDistance])
+            .where(function () {
+                this.whereRaw('LOWER(source_warehouse) LIKE ?', [`%${normalizedSource}%`])
+                    .orWhereRaw('LOWER(source_warehouse) LIKE ?', [`%${sourceCity.toLowerCase()}%`])
+            })
+            .andWhereRaw('LOWER(destination_city) LIKE ?', [`%${destinationCity.toLowerCase()}%`])
             .orderBy('id', 'desc')
             .limit(5);
 
