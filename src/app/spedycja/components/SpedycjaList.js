@@ -243,6 +243,14 @@ export default function SpedycjaList({
       (!zamowienie.response || Object.keys(zamowienie.response).length === 0);
   }
 
+  // Funkcja pobierająca poprawne MPK (z zamówienia lub z powiązanej budowy)
+  const getCurrentMPK = (zamowienie) => {
+    if (zamowienie.responsibleConstructions && zamowienie.responsibleConstructions.length > 0) {
+      return zamowienie.responsibleConstructions[0].mpk || zamowienie.mpk || '';
+    }
+    return zamowienie.mpk || '';
+  }
+
   // Renderuje info o powiązanych transportach
   const renderConnectedTransports = (transport) => {
     if (!transport.response || !transport.response.connectedTransports ||
@@ -432,7 +440,7 @@ export default function SpedycjaList({
                     <p className="text-sm text-gray-500 flex items-center mt-1">
                       <FileText size={14} className="mr-1" />
                       {zamowienie.orderNumber && <span className="font-medium mr-2">{zamowienie.orderNumber}</span>}
-                      MPK: {zamowienie.mpk}
+                      MPK: {getCurrentMPK(zamowienie)}
                     </p>
 
                     {/* Wyświetl informację o budowach */}
@@ -551,7 +559,7 @@ export default function SpedycjaList({
                         Dane zamówienia
                       </h4>
                       <p className="text-sm mb-2"><span className="font-medium">Numer zamówienia:</span> {zamowienie.orderNumber || '-'}</p>
-                      <p className="text-sm mb-2"><span className="font-medium">MPK:</span> {zamowienie.mpk}</p>
+                      <p className="text-sm mb-2"><span className="font-medium">MPK:</span> {getCurrentMPK(zamowienie)}</p>
                       <p className="text-sm mb-2"><span className="font-medium">Osoba dodająca:</span> {zamowienie.createdBy || zamowienie.requestedBy}</p>
                       <p className="text-sm mb-2"><span className="font-medium">Osoba odpowiedzialna:</span> {zamowienie.responsiblePerson || zamowienie.createdBy || zamowienie.requestedBy}</p>
                       <p className="text-sm mb-2"><span className="font-medium">Dokumenty:</span> {zamowienie.documents}</p>
