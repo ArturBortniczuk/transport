@@ -164,6 +164,14 @@ export default function SpedycjaList({
     return ''; // Nie wyświetlamy numeru telefonu, zostawiamy puste
   };
 
+  // FUNKCJA POMOCNICZA: Pobiera nazwę klienta docelowego (budowy lub firmy)
+  const getUnloadingCompanyName = (zamowienie) => {
+    if (zamowienie.responsibleConstructions && zamowienie.responsibleConstructions.length > 0) {
+      return zamowienie.responsibleConstructions[0].name;
+    }
+    return zamowienie.clientName || 'Odbiorca nieznany';
+  };
+
   // FUNKCJA POMOCNICZA: Pobiera trasę dla wyświetlenia w nagłówku
   const getDisplayRoute = (zamowienie) => {
     const connectedRoute = calculateConnectedRoute(zamowienie);
@@ -390,7 +398,7 @@ export default function SpedycjaList({
                           <span className="mx-3 text-gray-400">&rarr;</span>
                           <div className="flex flex-col">
                             <span>{getDeliveryCity(zamowienie)}</span>
-                            <span className="text-[11px] text-gray-500 font-normal leading-tight mt-0.5">{zamowienie.clientName || 'Odbiorca nieznany'}</span>
+                            <span className="text-[11px] text-gray-500 font-normal leading-tight mt-0.5">{getUnloadingCompanyName(zamowienie)}</span>
                           </div>
                         </div>
                       ) : (
