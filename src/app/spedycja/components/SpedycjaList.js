@@ -369,16 +369,26 @@ export default function SpedycjaList({
                   </div>
                   <div>
                     <h3 className="font-medium flex items-center">
-                      <span className={displayRoute.isConnected ? "text-blue-600 font-semibold" : ""}>
-                        {displayRoute.text}
-                      </span>
-                      {zamowienie.clientName && (
-                        <span className="ml-2 text-sm text-gray-600">
-                          ({zamowienie.clientName})
+                      {!displayRoute.isConnected ? (
+                        <div className="flex items-center mt-1 mb-1">
+                          <div className="flex flex-col">
+                            <span>{getLoadingCity(zamowienie)}</span>
+                            <span className="text-[11px] text-gray-500 font-normal leading-tight mt-0.5">{getLoadingCompanyName(zamowienie)}</span>
+                          </div>
+                          <span className="mx-3 text-gray-400">&rarr;</span>
+                          <div className="flex flex-col">
+                            <span>{getDeliveryCity(zamowienie)}</span>
+                            <span className="text-[11px] text-gray-500 font-normal leading-tight mt-0.5">{zamowienie.clientName || 'Odbiorca nieznany'}</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-blue-600 font-semibold">
+                          {displayRoute.text}
                         </span>
                       )}
+
                       {displayRoute.isConnected && (
-                        <span className="ml-2 bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-xs flex items-center">
+                        <span className="ml-3 bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-xs flex items-center h-6">
                           <LinkIcon size={12} className="mr-1" />
                           Połączone ({displayRoute.distance} km)
                         </span>
