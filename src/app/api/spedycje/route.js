@@ -365,7 +365,8 @@ export async function GET(request) {
         orderSentBy: item.order_sent_by,
         orderRecipient: item.order_recipient,
         orderData: item.order_data,
-        mergedTransports: item.merged_transports
+        mergedTransports: item.merged_transports,
+        sourceClientName: item.source_client_name
       };
     });
 
@@ -450,6 +451,7 @@ export async function POST(request) {
       notes: spedycjaData.notes,
       distance_km: spedycjaData.distanceKm || 0,
       client_name: spedycjaData.clientName || '',
+      source_client_name: spedycjaData.sourceClientName || '',
       goods_description: goodsDescriptionJson,
       responsible_constructions: responsibleConstructionsJson,
       created_at: db.fn.now()
@@ -487,6 +489,7 @@ export async function POST(request) {
         table.string('order_recipient');
         table.text('order_data');
         table.string('client_name');
+        table.string('source_client_name');
         table.text('goods_description');
         table.text('responsible_constructions');
         table.text('merged_transports');

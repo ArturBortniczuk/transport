@@ -587,6 +587,7 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
         location: selectedLocation,
         documents: formData.get('documents'),
         clientName: formData.get('clientName') || '',  // Dodane pole nazwy klienta
+        sourceClientName: formData.get('sourceClientName') || '', // Dodane pole firmy punktu załadunku
         producerAddress: selectedLocation === 'Odbiory własne' ? {
           city: formData.get('producerCity'),
           postalCode: formData.get('producerPostalCode'),
@@ -645,6 +646,7 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
         location: selectedLocation,
         documents: formData.get('documents'),
         clientName: formData.get('clientName') || '',  // Dodane pole nazwy klienta
+        sourceClientName: formData.get('sourceClientName') || '', // Nazwa firmy dla odbiorów własnych
         producerAddress: selectedLocation === 'Odbiory własne' ? {
           city: formData.get('producerCity'),
           postalCode: formData.get('producerPostalCode'),

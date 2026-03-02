@@ -161,7 +161,7 @@ export default function SpedycjaList({
     } else if (transport.location === 'Magazyn Zielonka') {
       return 'Magazyn Zielonka';
     }
-    return transport.loadingContact || 'Nie podano firmy';
+    return ''; // Nie wyświetlamy numeru telefonu, zostawiamy puste
   };
 
   // FUNKCJA POMOCNICZA: Pobiera trasę dla wyświetlenia w nagłówku
