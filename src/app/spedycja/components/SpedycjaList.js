@@ -152,6 +152,18 @@ export default function SpedycjaList({
     };
   };
 
+  // FUNKCJA POMOCNICZA: Pobiera nazwę firmy załadowczej
+  const getLoadingCompanyName = (transport) => {
+    if (transport.location === 'Odbiory własne' && transport.sourceClientName) {
+      return transport.sourceClientName;
+    } else if (transport.location === 'Magazyn Białystok') {
+      return 'Magazyn Białystok';
+    } else if (transport.location === 'Magazyn Zielonka') {
+      return 'Magazyn Zielonka';
+    }
+    return transport.loadingContact || 'Nie podano firmy';
+  };
+
   // FUNKCJA POMOCNICZA: Pobiera trasę dla wyświetlenia w nagłówku
   const getDisplayRoute = (zamowienie) => {
     const connectedRoute = calculateConnectedRoute(zamowienie);
