@@ -524,6 +524,7 @@ export default function ArchiwumSpedycjiPage() {
         'Przewoźnik': (transport.response?.driverName || '') + ' ' + (transport.response?.driverSurname || ''),
         'Numer auta': transport.response?.vehicleNumber || '',
         'Telefon przewoźnika': transport.response?.driverPhone || '',
+        'Rodzaj transportu': transport.response?.transportType || '',
         'Cena rzeczywista (PLN)': price || '',
         'Cena obliczona (PLN)': calculatedCost.toFixed(2).replace('.', ','),
         'Odległość (km)': distanceKm,
@@ -1308,6 +1309,12 @@ export default function ArchiwumSpedycjiPage() {
                                   </a>
                                 </div>
                               </div>
+                              {transport.response.transportType && (
+                                <div>
+                                  <span className="font-medium text-gray-700">Rodzaj transportu:</span>
+                                  <div className="font-semibold text-gray-900">{transport.response.transportType}</div>
+                                </div>
+                              )}
                             </div>
                           ) : (
                             <div className="text-sm text-gray-500 italic">

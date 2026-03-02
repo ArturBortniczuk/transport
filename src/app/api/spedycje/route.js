@@ -8,13 +8,13 @@ const validateSession = async (authToken) => {
   if (!authToken) {
     return null;
   }
-  
+
   const session = await db('sessions')
     .where('token', authToken)
     .whereRaw('expires_at > NOW()')
     .select('user_id')
     .first();
-  
+
   return session?.user_id;
 };
 
@@ -63,13 +63,13 @@ const sendResponseNotification = async (spedycjaData, responseData) => {
 
     let producerInfo = '';
     let deliveryInfo = '';
-    
+
     try {
       if (spedycjaData.location_data) {
-        const producerData = typeof spedycjaData.location_data === 'string' 
-          ? JSON.parse(spedycjaData.location_data) 
+        const producerData = typeof spedycjaData.location_data === 'string'
+          ? JSON.parse(spedycjaData.location_data)
           : spedycjaData.location_data;
-        
+
         if (producerData) {
           producerInfo = `
             <div class="info-row">
@@ -91,7 +91,7 @@ const sendResponseNotification = async (spedycjaData, responseData) => {
         const deliveryData = typeof spedycjaData.delivery_data === 'string'
           ? JSON.parse(spedycjaData.delivery_data)
           : spedycjaData.delivery_data;
-        
+
         if (deliveryData) {
           deliveryInfo = `
             <div class="info-row">
@@ -183,6 +183,9 @@ const sendResponseNotification = async (spedycjaData, responseData) => {
                 ${responseData.vehicleNumber ? `
                   <div><strong>Pojazd:</strong> ${responseData.vehicleNumber}</div>
                 ` : ''}
+                ${responseData.transportType ? `
+                  <div><strong>Rodzaj transportu:</strong> ${responseData.transportType}</div>
+                ` : ''}
                 ${responseData.deliveryPrice ? `
                   <div><strong>Cena dostawy:</strong> ${responseData.deliveryPrice} PLN</div>
                 ` : ''}
@@ -230,10 +233,10 @@ const sendResponseNotification = async (spedycjaData, responseData) => {
 
     console.log('📧 Wysyłanie powiadomienia o odpowiedzi na spedycję do:', recipient);
     const info = await transporter.sendMail(mailOptions);
-    
+
     console.log('✅ Powiadomienie wysłane:', info.messageId);
-    return { 
-      success: true, 
+    return {
+      success: true,
       message: `Powiadomienie wysłane do zleceniodawcy`,
       messageId: info.messageId,
       recipient: recipient
@@ -241,9 +244,9 @@ const sendResponseNotification = async (spedycjaData, responseData) => {
 
   } catch (error) {
     console.error('❌ Błąd wysyłania powiadomienia o odpowiedzi na spedycję:', error);
-    return { 
-      success: false, 
-      message: 'Błąd wysyłania powiadomienia: ' + error.message 
+    return {
+      success: false,
+      message: 'Błąd wysyłania powiadomienia: ' + error.message
     };
   }
 };
@@ -253,17 +256,17 @@ export async function GET(request) {
   try {
     const authToken = request.cookies.get('authToken')?.value;
     const userId = await validateSession(authToken);
-    
+
     if (!userId) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Unauthorized' 
+      return NextResponse.json({
+        success: false,
+        error: 'Unauthorized'
       }, { status: 401 });
     }
-    
+
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
-    
+
     const tableExists = await db.schema.hasTable('spedycje');
     if (!tableExists) {
       await db.schema.createTable('spedycje', table => {
@@ -299,17 +302,17 @@ export async function GET(request) {
         table.text('merged_transports');
       });
     }
-    
+
     let query = db('spedycje');
-    
+
     if (status) {
       query = query.where('status', status);
     }
-    
+
     query = query.orderBy('created_at', 'desc');
-    
+
     const spedycje = await query;
-    
+
     const processedData = spedycje.map(item => {
       try {
         if (item.location_data) {
@@ -330,7 +333,7 @@ export async function GET(request) {
       } catch (e) {
         console.error('Error parsing JSON data in spedycje:', e);
       }
-      
+
       return {
         ...item,
         id: item.id,
@@ -365,16 +368,16 @@ export async function GET(request) {
         mergedTransports: item.merged_transports
       };
     });
-    
-    return NextResponse.json({ 
-      success: true, 
+
+    return NextResponse.json({
+      success: true,
       spedycje: processedData || []
     });
   } catch (error) {
     console.error('Error fetching spedycje:', error);
-    return NextResponse.json({ 
-      success: false, 
-      error: error.message 
+    return NextResponse.json({
+      success: false,
+      error: error.message
     }, { status: 500 });
   }
 }
@@ -384,31 +387,31 @@ export async function POST(request) {
   try {
     const authToken = request.cookies.get('authToken')?.value;
     const userId = await validateSession(authToken);
-    
+
     if (!userId) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Unauthorized' 
+      return NextResponse.json({
+        success: false,
+        error: 'Unauthorized'
       }, { status: 401 });
     }
-    
+
     const user = await db('users')
       .where('email', userId)
       .select('name')
       .first();
-    
+
     const spedycjaData = await request.json();
-    
+
     const currentDate = new Date();
     const month = (currentDate.getMonth() + 1).toString().padStart(2, '0');
     const year = currentDate.getFullYear();
-    
+
     const lastOrderQuery = await db('spedycje')
       .whereRaw('EXTRACT(MONTH FROM created_at) = ?', [month])
       .whereRaw('EXTRACT(YEAR FROM created_at) = ?', [year])
       .orderBy('id', 'desc')
       .first();
-    
+
     let orderNumber = 1;
     if (lastOrderQuery && lastOrderQuery.order_number) {
       const lastOrderMatch = lastOrderQuery.order_number.match(/^(\d+)\/\d+\/\d+$/);
@@ -416,19 +419,19 @@ export async function POST(request) {
         orderNumber = parseInt(lastOrderMatch[1], 10) + 1;
       }
     }
-    
+
     const formattedOrderNumber = `${orderNumber.toString().padStart(4, '0')}/${month}/${year}`;
-    
+
     let goodsDescriptionJson = null;
     if (spedycjaData.goodsDescription) {
       goodsDescriptionJson = JSON.stringify(spedycjaData.goodsDescription);
     }
-    
+
     let responsibleConstructionsJson = null;
     if (spedycjaData.responsibleConstructions && spedycjaData.responsibleConstructions.length > 0) {
       responsibleConstructionsJson = JSON.stringify(spedycjaData.responsibleConstructions);
     }
-    
+
     const dataToSave = {
       status: 'new',
       order_number: formattedOrderNumber,
@@ -451,9 +454,9 @@ export async function POST(request) {
       responsible_constructions: responsibleConstructionsJson,
       created_at: db.fn.now()
     };
-    
+
     console.log('Dane do zapisania w bazie:', dataToSave);
-    
+
     const tableExists = await db.schema.hasTable('spedycje');
     if (!tableExists) {
       await db.schema.createTable('spedycje', table => {
@@ -489,20 +492,20 @@ export async function POST(request) {
         table.text('merged_transports');
       });
     }
-    
+
     const result = await db('spedycje').insert(dataToSave).returning('id');
     const id = result[0]?.id;
-    
-    return NextResponse.json({ 
-      success: true, 
+
+    return NextResponse.json({
+      success: true,
       id: id,
       orderNumber: formattedOrderNumber
     });
   } catch (error) {
     console.error('Error creating spedycja:', error);
-    return NextResponse.json({ 
-      success: false, 
-      error: error.message 
+    return NextResponse.json({
+      success: false,
+      error: error.message
     }, { status: 500 });
   }
 }
@@ -510,54 +513,55 @@ export async function POST(request) {
 // Funkcja automatycznego uzupełniania odpowiedzi w połączonych transportach
 const createResponsesForConnectedTransports = async (connectedTransports, mainResponseData) => {
   console.log('Tworzenie odpowiedzi dla połączonych transportów:', connectedTransports);
-  
+
   for (const connectedTransport of connectedTransports) {
     try {
       const currentTransport = await db('spedycje')
         .where('id', connectedTransport.id)
         .first();
-      
+
       if (!currentTransport) {
         console.error(`Transport o ID ${connectedTransport.id} nie istnieje`);
         continue;
       }
-      
+
       if (currentTransport.response_data && currentTransport.response_data !== 'null' && currentTransport.response_data !== '{}') {
         console.log(`Transport ${connectedTransport.id} już ma odpowiedź, pomijam`);
         continue;
       }
-      
+
       const connectedResponseData = {
         driverName: mainResponseData.driverName,
         driverSurname: mainResponseData.driverSurname,
         driverPhone: mainResponseData.driverPhone,
         vehicleNumber: mainResponseData.vehicleNumber,
+        transportType: mainResponseData.transportType,
         deliveryPrice: mainResponseData.costPerTransport,
         distanceKm: currentTransport.distance_km || 0,
-        pricePerKm: currentTransport.distance_km > 0 ? 
+        pricePerKm: currentTransport.distance_km > 0 ?
           (mainResponseData.costPerTransport / currentTransport.distance_km).toFixed(2) : 0,
         adminNotes: mainResponseData.adminNotes || '',
         autoGenerated: true,
         sourceTransportId: mainResponseData.sourceTransportId || null,
         connectedFrom: `Transport ID: ${mainResponseData.sourceTransportId || 'Główny'}`
       };
-      
+
       if (mainResponseData.dateChanged) {
         connectedResponseData.newDeliveryDate = mainResponseData.newDeliveryDate;
         connectedResponseData.originalDeliveryDate = currentTransport.delivery_date;
         connectedResponseData.dateChanged = true;
       }
-      
+
       console.log(`Zapisuję odpowiedź dla transportu ${connectedTransport.id}:`, connectedResponseData);
-      
+
       await db('spedycje')
         .where('id', connectedTransport.id)
         .update({
           response_data: JSON.stringify(connectedResponseData)
         });
-      
+
       console.log(`Pomyślnie utworzono odpowiedź dla transportu ${connectedTransport.id}`);
-      
+
     } catch (error) {
       console.error(`Błąd tworzenia odpowiedzi dla transportu ${connectedTransport.id}:`, error);
     }
@@ -569,22 +573,22 @@ export async function PUT(request) {
   try {
     const authToken = request.cookies.get('authToken')?.value;
     const userId = await validateSession(authToken);
-    
+
     if (!userId) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Unauthorized' 
+      return NextResponse.json({
+        success: false,
+        error: 'Unauthorized'
       }, { status: 401 });
     }
-    
+
     const { id, ...data } = await request.json();
     console.log('Otrzymane dane odpowiedzi:', { id, ...data });
-    
+
     const user = await db('users')
       .where('email', userId)
       .select('role', 'permissions', 'is_admin')
       .first();
-    
+
     let permissions = {};
     try {
       if (user.permissions && typeof user.permissions === 'string') {
@@ -598,38 +602,38 @@ export async function PUT(request) {
     const canRespondToSpedycja = isAdmin || permissions?.spedycja?.respond === true;
 
     if (!canRespondToSpedycja) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Brak uprawnień do odpowiadania na zlecenia spedycji' 
+      return NextResponse.json({
+        success: false,
+        error: 'Brak uprawnień do odpowiadania na zlecenia spedycji'
       }, { status: 403 });
     }
-    
+
     const responseData = {
       ...data,
       sourceTransportId: id
     };
-    
+
     const updateData = {
       response_data: JSON.stringify(responseData)
     };
-    
+
     if (data.distanceKm) {
       updateData.distance_km = data.distanceKm;
     }
-    
+
     console.log('Dane odpowiedzi do zapisania:', updateData);
-    
+
     const updated = await db('spedycje')
       .where('id', id)
       .update(updateData);
-    
+
     if (updated === 0) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Nie znaleziono zlecenia spedycji o podanym ID' 
+      return NextResponse.json({
+        success: false,
+        error: 'Nie znaleziono zlecenia spedycji o podanym ID'
       }, { status: 404 });
     }
-    
+
     // POBIERZ PEŁNE DANE SPEDYCJI DO POWIADOMIENIA
     const updatedSpedycja = await db('spedycje')
       .where('id', id)
@@ -644,19 +648,19 @@ export async function PUT(request) {
     console.log('📮 Wysyłanie powiadomienia email o odpowiedzi na spedycję...');
     const emailResult = await sendResponseNotification(updatedSpedycja, responseData);
     console.log('📬 Wynik wysyłki emaila:', emailResult.message);
-    
-    return NextResponse.json({ 
+
+    return NextResponse.json({
       success: true,
-      message: data.connectedTransports?.length > 0 
+      message: data.connectedTransports?.length > 0
         ? `Odpowiedź zapisana i automatycznie dodana do ${data.connectedTransports.length} połączonych transportów`
         : 'Odpowiedź została pomyślnie zapisana',
       emailNotification: emailResult
     });
   } catch (error) {
     console.error('Error updating spedycja:', error);
-    return NextResponse.json({ 
-      success: false, 
-      error: error.message 
+    return NextResponse.json({
+      success: false,
+      error: error.message
     }, { status: 500 });
   }
 }
@@ -666,55 +670,55 @@ export async function DELETE(request) {
   try {
     const authToken = request.cookies.get('authToken')?.value;
     const userId = await validateSession(authToken);
-    
+
     if (!userId) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Unauthorized' 
+      return NextResponse.json({
+        success: false,
+        error: 'Unauthorized'
       }, { status: 401 });
     }
-    
+
     const isAdmin = await db('users')
       .where('email', userId)
       .where('is_admin', true)
       .first();
-    
+
     if (!isAdmin) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Brak uprawnień administratora' 
+      return NextResponse.json({
+        success: false,
+        error: 'Brak uprawnień administratora'
       }, { status: 403 });
     }
-    
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
-    
+
     if (!id) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Nie podano ID zlecenia' 
+      return NextResponse.json({
+        success: false,
+        error: 'Nie podano ID zlecenia'
       }, { status: 400 });
     }
-    
+
     const deleted = await db('spedycje')
       .where('id', id)
       .del();
-    
+
     if (deleted === 0) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Nie znaleziono zlecenia o podanym ID' 
+      return NextResponse.json({
+        success: false,
+        error: 'Nie znaleziono zlecenia o podanym ID'
       }, { status: 404 });
     }
-    
-    return NextResponse.json({ 
+
+    return NextResponse.json({
       success: true
     });
   } catch (error) {
     console.error('Error deleting spedycja:', error);
-    return NextResponse.json({ 
-      success: false, 
-      error: error.message 
+    return NextResponse.json({
+      success: false,
+      error: error.message
     }, { status: 500 });
   }
 }

@@ -4,13 +4,13 @@ import { pl } from 'date-fns/locale'
 import { generateCMR } from '@/lib/utils/generateCMR'
 import { Truck, Package, MapPin, Phone, FileText, Calendar, DollarSign, User, Clipboard, ArrowRight, ChevronDown, ChevronUp, AlertCircle, Edit, Pencil, Building, ShoppingBag, Weight, Bot, Link as LinkIcon } from 'lucide-react'
 
-export default function SpedycjaList({ 
-  zamowienia, 
-  showArchive, 
-  isAdmin, 
-  onResponse, 
-  onMarkAsCompleted, 
-  onCreateOrder, 
+export default function SpedycjaList({
+  zamowienia,
+  showArchive,
+  isAdmin,
+  onResponse,
+  onMarkAsCompleted,
+  onCreateOrder,
   canSendOrder,
   onEdit,
   currentUserEmail
@@ -37,7 +37,7 @@ export default function SpedycjaList({
       return 'Nieprawidłowa data';
     }
   }
-  
+
   const getLoadingCity = (zamowienie) => {
     if (zamowienie.location === 'Odbiory własne' && zamowienie.producerAddress) {
       return zamowienie.producerAddress.city || '';
@@ -48,7 +48,7 @@ export default function SpedycjaList({
     }
     return '';
   }
-  
+
   const getDeliveryCity = (zamowienie) => {
     return zamowienie.delivery?.city || '';
   }
@@ -58,7 +58,7 @@ export default function SpedycjaList({
     // Pobierz dane źródłowe i docelowe
     let origin = '';
     let destination = '';
-    
+
     // Ustal miejsce załadunku
     if (transport.location === 'Odbiory własne' && transport.producerAddress) {
       const addr = transport.producerAddress;
@@ -68,20 +68,20 @@ export default function SpedycjaList({
     } else if (transport.location === 'Magazyn Zielonka') {
       origin = 'Zielonka';
     }
-    
+
     // Ustal miejsce dostawy
     if (transport.delivery) {
       const addr = transport.delivery;
       destination = `${addr.city},${addr.postalCode},${addr.street || ''}`;
     }
-    
+
     // Jeśli brakuje któregoś z punktów, zwróć pusty string
     if (!origin || !destination) return '';
-    
+
     // Kodowanie URI komponentów
     origin = encodeURIComponent(origin);
     destination = encodeURIComponent(destination);
-    
+
     // Zwróć link do Google Maps
     return `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=driving`;
   };
@@ -104,10 +104,10 @@ export default function SpedycjaList({
 
     // Zbierz wszystkie punkty trasy w odpowiedniej kolejności
     const routePoints = [];
-    
+
     // Posortuj połączone transporty według kolejności
     const sortedTransports = [...connectedTransports].sort((a, b) => (a.order || 0) - (b.order || 0));
-    
+
     // Dodaj punkty z połączonych transportów
     sortedTransports.forEach(ct => {
       if (ct.route) {
@@ -118,25 +118,25 @@ export default function SpedycjaList({
         }
       }
     });
-    
+
     // Dodaj punkt głównego transportu (załadunek) jeśli jeszcze go nie ma
     const mainStart = getLoadingCity(mainTransport);
     if (mainStart && !routePoints.includes(mainStart)) {
       routePoints.push(mainStart);
     }
-    
+
     // Dodaj punkt docelowy (zawsze na końcu)
     const mainEnd = getDeliveryCity(mainTransport);
     if (mainEnd && !routePoints.includes(mainEnd)) {
       routePoints.push(mainEnd);
     }
-    
+
     // Oblicz całkowitą odległość - POPRAWIONA LOGIKA
     let totalDistance = 0;
-    
+
     // Dodaj odległość głównego transportu
     totalDistance += mainTransport.distanceKm || 0;
-    
+
     // Dodaj odległości z połączonych transportów
     sortedTransports.forEach(ct => {
       // Spróbuj znaleźć oryginalny transport w liście wszystkich zamówień
@@ -144,7 +144,7 @@ export default function SpedycjaList({
       const originalTransportDistance = ct.distanceKm || 50; // fallback 50km jeśli nie ma danych
       totalDistance += originalTransportDistance;
     });
-    
+
     return {
       route: routePoints.join(' → '),
       totalDistance: totalDistance,
@@ -155,7 +155,7 @@ export default function SpedycjaList({
   // FUNKCJA POMOCNICZA: Pobiera trasę dla wyświetlenia w nagłówku
   const getDisplayRoute = (zamowienie) => {
     const connectedRoute = calculateConnectedRoute(zamowienie);
-    
+
     if (connectedRoute) {
       return {
         text: connectedRoute.route,
@@ -163,7 +163,7 @@ export default function SpedycjaList({
         isConnected: true
       };
     }
-    
+
     // Dla normalnych transportów
     return {
       text: `${getLoadingCity(zamowienie)} → ${getDeliveryCity(zamowienie)}`,
@@ -175,21 +175,21 @@ export default function SpedycjaList({
   // Funkcja do określania statusu zamówienia - ZMODYFIKOWANA
   const getStatusLabel = (zamowienie) => {
     if (zamowienie.status === 'completed') {
-      return { 
-        label: 'Zakończone', 
+      return {
+        label: 'Zakończone',
         className: 'bg-green-100 text-green-800 border border-green-300',
         icon: <Clipboard size={16} className="mr-1" />
       };
     } else if (zamowienie.response && Object.keys(zamowienie.response).length > 0) {
       // Wszystkie odpowiedzi teraz mają ten sam status "Odpowiedziane"
-      return { 
-        label: 'Odpowiedziane', 
+      return {
+        label: 'Odpowiedziane',
         className: 'bg-yellow-100 text-yellow-800 border border-yellow-300',
         icon: <Truck size={16} className="mr-1" />
       };
     } else {
-      return { 
-        label: 'Nowe', 
+      return {
+        label: 'Nowe',
         className: 'bg-blue-100 text-blue-800 border border-blue-300',
         icon: <Package size={16} className="mr-1" />
       };
@@ -198,9 +198,9 @@ export default function SpedycjaList({
 
   // Funkcja sprawdzająca czy data dostawy została zmieniona
   const isDeliveryDateChanged = (zamowienie) => {
-    return zamowienie.response && 
-           zamowienie.response.dateChanged === true && 
-           zamowienie.response.newDeliveryDate;
+    return zamowienie.response &&
+      zamowienie.response.dateChanged === true &&
+      zamowienie.response.newDeliveryDate;
   }
 
   // Funkcja pobierająca aktualną datę dostawy (oryginalną lub zmienioną)
@@ -219,25 +219,25 @@ export default function SpedycjaList({
   // Sprawdza, czy zamówienie może być edytowane
   const canBeEdited = (zamowienie) => {
     // Tylko nowe zamówienia bez odpowiedzi mogą być edytowane
-    return zamowienie.status === 'new' && 
-           (!zamowienie.response || Object.keys(zamowienie.response).length === 0);
+    return zamowienie.status === 'new' &&
+      (!zamowienie.response || Object.keys(zamowienie.response).length === 0);
   }
-  
+
   // Renderuje info o powiązanych transportach
   const renderConnectedTransports = (transport) => {
-    if (!transport.response || !transport.response.connectedTransports || 
-        !transport.response.connectedTransports.length) return null;
-    
+    if (!transport.response || !transport.response.connectedTransports ||
+      !transport.response.connectedTransports.length) return null;
+
     const connectedTransports = transport.response.connectedTransports;
     const connectedRoute = calculateConnectedRoute(transport);
-    
+
     return (
       <div className="mt-4 p-3 bg-indigo-50 border border-indigo-100 rounded-md">
         <h4 className="font-medium text-indigo-700 mb-2 flex items-center">
           <LinkIcon size={16} className="mr-2" />
           Transport połączony
         </h4>
-        
+
         {/* Pokaż pełną trasę */}
         {connectedRoute && (
           <div className="mb-3 p-2 bg-white rounded border border-indigo-200">
@@ -245,12 +245,12 @@ export default function SpedycjaList({
               Trasa połączona: {connectedRoute.route}
             </div>
             <div className="text-xs text-indigo-600 mt-1">
-              Łączna odległość: {connectedRoute.totalDistance} km • 
+              Łączna odległość: {connectedRoute.totalDistance} km •
               Liczba transportów: {connectedRoute.connectedCount + 1}
             </div>
           </div>
         )}
-        
+
         <div className="text-sm text-indigo-700">
           <span className="font-medium">Transporty w tej trasie:</span>
         </div>
@@ -259,17 +259,17 @@ export default function SpedycjaList({
             <div key={ct.id} className="flex justify-between items-center text-sm border-b border-indigo-100 pb-2 last:border-0">
               <div className="flex-1">
                 <div className="font-medium">
-                  {index+1}. {ct.orderNumber || ct.id} {ct.route && `(${ct.route})`}
+                  {index + 1}. {ct.orderNumber || ct.id} {ct.route && `(${ct.route})`}
                 </div>
                 <div className="text-xs text-indigo-700">
-                  {ct.type === 'loading' ? 'Załadunek' : 'Rozładunek'} • 
+                  {ct.type === 'loading' ? 'Załadunek' : 'Rozładunek'} •
                   <span className="ml-1">MPK: {ct.mpk}</span> •
                   <span className="ml-1">{ct.responsiblePerson || 'Brak'}</span>
                 </div>
               </div>
             </div>
           ))}
-          
+
           {/* Pokaż główny transport */}
           <div className="flex justify-between items-center text-sm font-medium text-indigo-800 pt-2 border-t border-indigo-200">
             <div className="flex-1">
@@ -277,16 +277,16 @@ export default function SpedycjaList({
                 {connectedTransports.length + 1}. {transport.orderNumber || transport.id} (główny transport)
               </div>
               <div className="text-xs">
-                {getLoadingCity(transport)} → {getDeliveryCity(transport)} • 
+                {getLoadingCity(transport)} → {getDeliveryCity(transport)} •
                 <span className="ml-1">MPK: {transport.mpk}</span>
               </div>
             </div>
           </div>
         </div>
-        
+
         {transport.response.deliveryPrice && (
           <div className="text-sm text-indigo-800 mt-3 pt-2 border-t border-indigo-100">
-            <span className="font-medium">Całkowity koszt transportu:</span> 
+            <span className="font-medium">Całkowity koszt transportu:</span>
             <span className="ml-1">{transport.response.deliveryPrice} PLN</span>
             {transport.response.costPerTransport && (
               <div className="text-xs text-indigo-600 mt-1">
@@ -298,11 +298,11 @@ export default function SpedycjaList({
       </div>
     );
   };
-  
+
   // Renderuje info o odpowiedzialnych budowach
   const renderResponsibleConstructions = (transport) => {
     if (!transport.responsibleConstructions || !transport.responsibleConstructions.length) return null;
-    
+
     return (
       <div className="mt-2">
         <div className="font-medium text-sm">Budowy:</div>
@@ -318,11 +318,11 @@ export default function SpedycjaList({
       </div>
     );
   };
-  
+
   // Renderuje info o towarze
   const renderGoodsInfo = (transport) => {
     if (!transport.goodsDescription) return null;
-    
+
     return (
       <div className="mt-3 bg-blue-50 p-2 rounded-md border border-blue-100">
         <div className="flex items-center text-blue-700 font-medium">
@@ -353,18 +353,17 @@ export default function SpedycjaList({
           const canEdit = canBeEdited(zamowienie) && (isAdmin || isCreatedByCurrentUser(zamowienie));
           const isAutoResponse = isAutoGeneratedResponse(zamowienie);
           const displayRoute = getDisplayRoute(zamowienie);
-          
+
           return (
             <div key={zamowienie.id} className="p-4 hover:bg-gray-50 transition-colors">
-              <div 
+              <div
                 onClick={() => setExpandedId(expandedId === zamowienie.id ? null : zamowienie.id)}
                 className="flex justify-between items-start cursor-pointer"
               >
                 <div className="flex items-start">
                   <div className="mr-3 mt-1">
-                    <div className={`h-8 w-8 rounded-full flex items-center justify-center text-blue-700 ${
-                      isAutoResponse ? 'bg-purple-100' : 'bg-blue-100'
-                    }`}>
+                    <div className={`h-8 w-8 rounded-full flex items-center justify-center text-blue-700 ${isAutoResponse ? 'bg-purple-100' : 'bg-blue-100'
+                      }`}>
                       {isAutoResponse ? <Bot size={18} /> : <Truck size={18} />}
                     </div>
                   </div>
@@ -387,7 +386,7 @@ export default function SpedycjaList({
                     </h3>
                     <p className="text-sm text-gray-500 flex items-center mt-1">
                       <Calendar size={14} className="mr-1" />
-                      Data dostawy: 
+                      Data dostawy:
                       {dateChanged ? (
                         <span className="ml-1 flex items-center">
                           <span className="line-through text-gray-400">{formatDate(zamowienie.deliveryDate)}</span>
@@ -405,7 +404,7 @@ export default function SpedycjaList({
                       {zamowienie.orderNumber && <span className="font-medium mr-2">{zamowienie.orderNumber}</span>}
                       MPK: {zamowienie.mpk}
                     </p>
-                    
+
                     {/* Wyświetl informację o budowach */}
                     {zamowienie.responsibleConstructions && zamowienie.responsibleConstructions.length > 0 && (
                       <div className="flex items-center mt-1">
@@ -423,9 +422,9 @@ export default function SpedycjaList({
                     {statusInfo.icon}
                     {statusInfo.label}
                   </span>
-                  
+
                   {expandedId === zamowienie.id ? (
-                    <button 
+                    <button
                       className="p-1 rounded-full hover:bg-gray-200"
                       onClick={(e) => {
                         e.stopPropagation()
@@ -435,7 +434,7 @@ export default function SpedycjaList({
                       <ChevronUp size={20} />
                     </button>
                   ) : (
-                    <button 
+                    <button
                       className="p-1 rounded-full hover:bg-gray-200"
                       onClick={(e) => {
                         e.stopPropagation()
@@ -445,10 +444,10 @@ export default function SpedycjaList({
                       <ChevronDown size={20} />
                     </button>
                   )}
-                  
+
                   {/* Przycisk edycji - widoczny dla twórcy lub admina */}
                   {canEdit && (
-                    <button 
+                    <button
                       type="button"
                       className={buttonClasses.outline}
                       onClick={(e) => {
@@ -460,13 +459,13 @@ export default function SpedycjaList({
                       Edytuj
                     </button>
                   )}
-                  
+
                   {/* Przyciski admina - odpowiadanie i oznaczanie jako zrealizowane */}
                   {isAdmin && zamowienie.status === 'new' && (
                     <>
                       {/* Pokaż przycisk "Odpowiedz" tylko jeśli NIE MA odpowiedzi */}
                       {(!zamowienie.response || Object.keys(zamowienie.response).length === 0) && (
-                        <button 
+                        <button
                           type="button"
                           className={buttonClasses.outline}
                           onClick={(e) => {
@@ -478,10 +477,10 @@ export default function SpedycjaList({
                           Odpowiedz
                         </button>
                       )}
-                      
+
                       {/* Pokaż przycisk "Edytuj odpowiedź" tylko jeśli JUŻ MA odpowiedź */}
                       {(zamowienie.response && Object.keys(zamowienie.response).length > 0) && (
-                        <button 
+                        <button
                           type="button"
                           className={buttonClasses.outline}
                           onClick={(e) => {
@@ -493,8 +492,8 @@ export default function SpedycjaList({
                           Edytuj odpowiedź
                         </button>
                       )}
-                      
-                      <button 
+
+                      <button
                         type="button"
                         className={buttonClasses.success}
                         onClick={(e) => {
@@ -526,15 +525,15 @@ export default function SpedycjaList({
                       <p className="text-sm mb-2"><span className="font-medium">Osoba dodająca:</span> {zamowienie.createdBy || zamowienie.requestedBy}</p>
                       <p className="text-sm mb-2"><span className="font-medium">Osoba odpowiedzialna:</span> {zamowienie.responsiblePerson || zamowienie.createdBy || zamowienie.requestedBy}</p>
                       <p className="text-sm mb-2"><span className="font-medium">Dokumenty:</span> {zamowienie.documents}</p>
-                      
+
                       {/* Dodana informacja o nazwie klienta/odbiorcy */}
                       {zamowienie.clientName && (
                         <p className="text-sm mb-2"><span className="font-medium">Nazwa klienta/odbiorcy:</span> {zamowienie.clientName}</p>
                       )}
-                      
+
                       {/* Informacje o budowach */}
                       {renderResponsibleConstructions(zamowienie)}
-                      
+
                       {/* Informacja o towarze */}
                       {renderGoodsInfo(zamowienie)}
                     </div>
@@ -554,7 +553,7 @@ export default function SpedycjaList({
                         <Phone size={14} className="mr-1" />
                         Kontakt: {zamowienie.loadingContact}
                       </p>
-                      
+
                       <h4 className="font-medium mt-5 mb-3 pb-2 border-b flex items-center text-orange-700">
                         <MapPin size={18} className="mr-2" />
                         Szczegóły dostawy
@@ -564,14 +563,14 @@ export default function SpedycjaList({
                         <Phone size={14} className="mr-1" />
                         Kontakt: {zamowienie.unloadingContact}
                       </p>
-                      
+
                       {/* Link do Google Maps */}
                       {generateGoogleMapsLink(zamowienie) && (
                         <div className="mt-4">
-                          <a 
-                            href={generateGoogleMapsLink(zamowienie)} 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
+                          <a
+                            href={generateGoogleMapsLink(zamowienie)}
+                            target="_blank"
+                            rel="noopener noreferrer"
                             className="bg-blue-50 hover:bg-blue-100 text-blue-700 px-3 py-2 rounded-md flex items-center w-fit transition-colors"
                             onClick={(e) => e.stopPropagation()}
                           >
@@ -588,14 +587,14 @@ export default function SpedycjaList({
                         <Truck size={18} className="mr-2" />
                         Informacje o transporcie
                       </h4>
-                      
+
                       {/* Data dostawy z wyróżnieniem, jeśli zmieniona */}
                       <div className="text-sm mb-2">
                         <div className="flex items-center">
                           <Calendar size={14} className="mr-2 text-gray-500" />
                           <span className="font-medium">Data dostawy:</span>
                         </div>
-                        
+
                         {dateChanged ? (
                           <div className="ml-7 mt-1 p-2 bg-yellow-50 rounded-md border border-yellow-200">
                             <div className="flex items-center text-yellow-800">
@@ -617,211 +616,213 @@ export default function SpedycjaList({
                           </div>
                         )}
                       </div>
-                      
+
                       <p className="text-sm mb-2 flex items-center">
                         <Calendar size={14} className="mr-2 text-gray-500" />
                         <span className="font-medium">Data dodania:</span> {formatDate(zamowienie.createdAt)}
                       </p>
-                      
+
                       <p className="text-sm mb-2 flex items-center">
                         <MapPin size={14} className="mr-2 text-gray-500" />
-                        <span className="font-medium">Odległość:</span> 
+                        <span className="font-medium">Odległość:</span>
                         <span className="bg-blue-50 px-2 py-0.5 rounded ml-1 font-medium">
-                          {displayRoute.isConnected 
+                          {displayRoute.isConnected
                             ? `${displayRoute.distance} km (trasa połączona)`
                             : `${displayRoute.distance} km`}
                         </span>
                       </p>
-                      
+
                       {zamowienie.response && zamowienie.response.deliveryPrice && (
                         <>
                           <p className="text-sm mb-2 flex items-center">
-                        <DollarSign size={14} className="mr-2 text-gray-500" />
-                           <span className="font-medium">Cena transportu:</span> 
-                           <span className="bg-green-50 px-2 py-0.5 rounded ml-1 font-medium">
-                             {zamowienie.response.deliveryPrice} PLN
-                           </span>
-                         </p>
-                         <p className="text-sm mb-2 flex items-center">
-                           <DollarSign size={14} className="mr-2 text-gray-500" />
-                           <span className="font-medium">Cena za km:</span> 
-                           <span className="bg-green-50 px-2 py-0.5 rounded ml-1 font-medium">
-                             {(() => {
-                               const totalDistance = displayRoute.distance;
-                               return totalDistance > 0 
-                                 ? (zamowienie.response.deliveryPrice / totalDistance).toFixed(2)
-                                 : '0.00';
-                             })()} PLN/km
-                           </span>
-                         </p>
-                       </>
-                     )}
-                     
-                     {zamowienie.notes && (
-                       <div className="mt-3 bg-gray-50 p-2 rounded-md">
-                         <p className="text-sm"><span className="font-medium">Uwagi:</span> {zamowienie.notes}</p>
-                       </div>
-                     )}
-                   </div>
-                 </div>
+                            <DollarSign size={14} className="mr-2 text-gray-500" />
+                            <span className="font-medium">Cena transportu:</span>
+                            <span className="bg-green-50 px-2 py-0.5 rounded ml-1 font-medium">
+                              {zamowienie.response.deliveryPrice} PLN
+                            </span>
+                          </p>
+                          <p className="text-sm mb-2 flex items-center">
+                            <DollarSign size={14} className="mr-2 text-gray-500" />
+                            <span className="font-medium">Cena za km:</span>
+                            <span className="bg-green-50 px-2 py-0.5 rounded ml-1 font-medium">
+                              {(() => {
+                                const totalDistance = displayRoute.distance;
+                                return totalDistance > 0
+                                  ? (zamowienie.response.deliveryPrice / totalDistance).toFixed(2)
+                                  : '0.00';
+                              })()} PLN/km
+                            </span>
+                          </p>
+                        </>
+                      )}
 
-                 {canEdit && (
-                   <div className="mt-4 flex justify-end">
-                     <button 
-                       type="button"
-                       className={buttonClasses.primary}
-                       onClick={(e) => {
-                         e.stopPropagation()
-                         onEdit(zamowienie)
-                       }}
-                     >
-                       <Pencil size={16} />
-                       Edytuj zamówienie
-                     </button>
-                   </div>
-                 )}
+                      {zamowienie.notes && (
+                        <div className="mt-3 bg-gray-50 p-2 rounded-md">
+                          <p className="text-sm"><span className="font-medium">Uwagi:</span> {zamowienie.notes}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
 
-                 {zamowienie.response && (
-                   <div className={`mt-4 p-5 rounded-lg border shadow-sm ${
-                     isAutoResponse 
-                       ? 'bg-purple-50 border-purple-200' 
-                       : 'bg-gray-50 border-gray-200'
-                   }`}>
-                     <h4 className="font-medium mb-3 pb-2 border-b border-gray-200 flex items-center text-gray-800">
-                       {isAutoResponse ? <Bot size={18} className="mr-2" /> : <Truck size={18} className="mr-2" />}
-                       {isAutoResponse ? 'Szczegóły realizacji (transport połączony)' : 'Szczegóły realizacji'}
-                     </h4>
-                     
-                     {/* Renderuj informacje o powiązanych transportach */}
-                     {renderConnectedTransports(zamowienie)}
-                     
-                     {zamowienie.response.completedManually ? (
-                       <div className="bg-blue-50 text-blue-800 p-3 rounded-md border border-blue-100 flex items-center">
-                         <Clipboard size={18} className="mr-2" />
-                         Zamówienie zostało ręcznie oznaczone jako zrealizowane.
-                       </div>
-                     ) : (
-                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                         {/* Informacje o przewoźniku */}
-                         <div className="bg-white p-3 rounded-md shadow-sm border border-gray-100">
-                           <h5 className="text-sm font-medium mb-2 pb-1 border-b flex items-center text-blue-600">
-                             <User size={14} className="mr-1" />
-                             Dane przewoźnika
-                           </h5>
-                           <p className="text-sm mb-1.5"><span className="font-medium">Kierowca:</span> {zamowienie.response.driverName} {zamowienie.response.driverSurname}</p>
-                           <p className="text-sm mb-1.5"><span className="font-medium">Telefon:</span> {zamowienie.response.driverPhone}</p>
-                           <p className="text-sm mb-1.5"><span className="font-medium">Numery auta:</span> {zamowienie.response.vehicleNumber}</p>
-                         </div>
-                         
-                         {/* Informacje o kosztach */}
-                         <div className="bg-white p-3 rounded-md shadow-sm border border-gray-100">
-                           <h5 className="text-sm font-medium mb-2 pb-1 border-b flex items-center text-green-600">
-                             <DollarSign size={14} className="mr-1" />
-                             Dane finansowe
-                           </h5>
-                           <p className="text-sm mb-1.5"><span className="font-medium">Cena całkowita:</span> 
-                             <span className="bg-green-50 px-2 py-0.5 rounded ml-1">
-                               {zamowienie.response.deliveryPrice} PLN
-                             </span>
-                           </p>
-                           <p className="text-sm mb-1.5"><span className="font-medium">Odległość całkowita:</span> 
-                             {`${displayRoute.distance} km${displayRoute.isConnected ? ' (łącznie)' : ''}`}
-                           </p>
-                           {(() => {
-                             const totalDistance = displayRoute.distance;
-                             
-                             if (totalDistance > 0 && zamowienie.response.deliveryPrice > 0) {
-                               return (
-                                 <p className="text-sm mb-1.5"><span className="font-medium">Koszt za km:</span> 
-                                   <span className="bg-green-50 px-2 py-0.5 rounded ml-1">
-                                     {(zamowienie.response.deliveryPrice / totalDistance).toFixed(2)} PLN/km
-                                   </span>
-                                 </p>
-                               );
-                             }
-                             return null;
-                           })()}
-                           
-                           {/* Podział kosztów dla połączonych transportów */}
-                           {isAutoResponse && zamowienie.response.costPerTransport && (
-                             <div className="mt-2 pt-2 border-t border-gray-100">
-                               <p className="text-sm text-blue-600">
-                                 <span className="font-medium">Koszt na transport:</span> 
-                                 <span className="ml-1">{zamowienie.response.costPerTransport} PLN</span>
-                               </p>
-                               <p className="text-xs text-gray-500 mt-1">
-                                 {(() => {
-                                   const connectedRoute = calculateConnectedRoute(zamowienie);
-                                   return connectedRoute ? `Podzielone na ${connectedRoute.connectedCount + 1} transporty` : '';
-                                 })()}
-                               </p>
-                             </div>
-                           )}
-                         </div>
-                         
-                         {/* Informacje o realizacji */}
-                         <div className="bg-white p-3 rounded-md shadow-sm border border-gray-100">
-                           <h5 className="text-sm font-medium mb-2 pb-1 border-b flex items-center text-purple-600">
-                             <Calendar size={14} className="mr-1" />
-                             Informacje o realizacji
-                           </h5>
-                           <p className="text-sm mb-1.5"><span className="font-medium">Data odpowiedzi:</span> {formatDate(zamowienie.completedAt || zamowienie.createdAt)}</p>
-                           
-                           {/* Wyświetl informację o automatycznym generowaniu */}
-                           {isAutoResponse && (
-                             <div className="bg-purple-50 p-2 rounded-md border border-purple-100 mt-2 mb-1.5">
-                               <p className="text-xs font-medium text-purple-800 flex items-center">
-                                 <Bot size={12} className="mr-1" />
-                                 Transport połączony
-                               </p>
-                             </div>
-                           )}
-                           
-                           {zamowienie.response.dateChanged && (
-                             <div className="bg-yellow-50 p-2 rounded-md border border-yellow-100 mt-2 mb-1.5">
-                               <p className="text-sm font-medium text-yellow-800">Zmieniono datę dostawy:</p>
-                               <p className="text-xs flex justify-between mt-1">
-                                 <span>Z: <span className="line-through">{formatDate(zamowienie.response.originalDeliveryDate)}</span></span>
-                                 <span>→</span>
-                                 <span>Na: <span className="font-medium">{formatDate(zamowienie.response.newDeliveryDate)}</span></span>
-                               </p>
-                             </div>
-                           )}
-                           
-                           {zamowienie.response.adminNotes && (
-                             <p className="text-sm"><span className="font-medium">Uwagi:</span> {zamowienie.response.adminNotes}</p>
-                           )}
-                         </div>
-                       </div>
-                     )}
-                     
-                     <div className="mt-5 flex space-x-3">
-                       <button 
-                         type="button"
-                         className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors flex items-center gap-2"
-                         onClick={() => generateCMR(zamowienie)}
-                       >
-                         <FileText size={16} />
-                         Generuj CMR
-                       </button>
-                       {zamowienie.response && !showArchive && canSendOrder && (
-                         <button 
-                           type="button"
-                           className="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors flex items-center gap-2"
-                           onClick={() => onCreateOrder(zamowienie)}
-                         >
-                           <Truck size={16} />
-                           Stwórz zlecenie transportowe
-                         </button>
-                       )}
-                     </div>
-                   </div>
-                 )}
-               </div>
-             )}
-           </div>
-         );
-       })}
-   </div>
- )
+                  {canEdit && (
+                    <div className="mt-4 flex justify-end">
+                      <button
+                        type="button"
+                        className={buttonClasses.primary}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onEdit(zamowienie)
+                        }}
+                      >
+                        <Pencil size={16} />
+                        Edytuj zamówienie
+                      </button>
+                    </div>
+                  )}
+
+                  {zamowienie.response && (
+                    <div className={`mt-4 p-5 rounded-lg border shadow-sm ${isAutoResponse
+                        ? 'bg-purple-50 border-purple-200'
+                        : 'bg-gray-50 border-gray-200'
+                      }`}>
+                      <h4 className="font-medium mb-3 pb-2 border-b border-gray-200 flex items-center text-gray-800">
+                        {isAutoResponse ? <Bot size={18} className="mr-2" /> : <Truck size={18} className="mr-2" />}
+                        {isAutoResponse ? 'Szczegóły realizacji (transport połączony)' : 'Szczegóły realizacji'}
+                      </h4>
+
+                      {/* Renderuj informacje o powiązanych transportach */}
+                      {renderConnectedTransports(zamowienie)}
+
+                      {zamowienie.response.completedManually ? (
+                        <div className="bg-blue-50 text-blue-800 p-3 rounded-md border border-blue-100 flex items-center">
+                          <Clipboard size={18} className="mr-2" />
+                          Zamówienie zostało ręcznie oznaczone jako zrealizowane.
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          {/* Informacje o przewoźniku */}
+                          <div className="bg-white p-3 rounded-md shadow-sm border border-gray-100">
+                            <h5 className="text-sm font-medium mb-2 pb-1 border-b flex items-center text-blue-600">
+                              <User size={14} className="mr-1" />
+                              Dane przewoźnika
+                            </h5>
+                            <p className="text-sm mb-1.5"><span className="font-medium">Kierowca:</span> {zamowienie.response.driverName} {zamowienie.response.driverSurname}</p>
+                            <p className="text-sm mb-1.5"><span className="font-medium">Telefon:</span> {zamowienie.response.driverPhone}</p>
+                            <p className="text-sm mb-1.5"><span className="font-medium">Numery auta:</span> {zamowienie.response.vehicleNumber}</p>
+                            {zamowienie.response.transportType && (
+                              <p className="text-sm mb-1.5"><span className="font-medium">Rodzaj transportu:</span> {zamowienie.response.transportType}</p>
+                            )}
+                          </div>
+
+                          {/* Informacje o kosztach */}
+                          <div className="bg-white p-3 rounded-md shadow-sm border border-gray-100">
+                            <h5 className="text-sm font-medium mb-2 pb-1 border-b flex items-center text-green-600">
+                              <DollarSign size={14} className="mr-1" />
+                              Dane finansowe
+                            </h5>
+                            <p className="text-sm mb-1.5"><span className="font-medium">Cena całkowita:</span>
+                              <span className="bg-green-50 px-2 py-0.5 rounded ml-1">
+                                {zamowienie.response.deliveryPrice} PLN
+                              </span>
+                            </p>
+                            <p className="text-sm mb-1.5"><span className="font-medium">Odległość całkowita:</span>
+                              {`${displayRoute.distance} km${displayRoute.isConnected ? ' (łącznie)' : ''}`}
+                            </p>
+                            {(() => {
+                              const totalDistance = displayRoute.distance;
+
+                              if (totalDistance > 0 && zamowienie.response.deliveryPrice > 0) {
+                                return (
+                                  <p className="text-sm mb-1.5"><span className="font-medium">Koszt za km:</span>
+                                    <span className="bg-green-50 px-2 py-0.5 rounded ml-1">
+                                      {(zamowienie.response.deliveryPrice / totalDistance).toFixed(2)} PLN/km
+                                    </span>
+                                  </p>
+                                );
+                              }
+                              return null;
+                            })()}
+
+                            {/* Podział kosztów dla połączonych transportów */}
+                            {isAutoResponse && zamowienie.response.costPerTransport && (
+                              <div className="mt-2 pt-2 border-t border-gray-100">
+                                <p className="text-sm text-blue-600">
+                                  <span className="font-medium">Koszt na transport:</span>
+                                  <span className="ml-1">{zamowienie.response.costPerTransport} PLN</span>
+                                </p>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  {(() => {
+                                    const connectedRoute = calculateConnectedRoute(zamowienie);
+                                    return connectedRoute ? `Podzielone na ${connectedRoute.connectedCount + 1} transporty` : '';
+                                  })()}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Informacje o realizacji */}
+                          <div className="bg-white p-3 rounded-md shadow-sm border border-gray-100">
+                            <h5 className="text-sm font-medium mb-2 pb-1 border-b flex items-center text-purple-600">
+                              <Calendar size={14} className="mr-1" />
+                              Informacje o realizacji
+                            </h5>
+                            <p className="text-sm mb-1.5"><span className="font-medium">Data odpowiedzi:</span> {formatDate(zamowienie.completedAt || zamowienie.createdAt)}</p>
+
+                            {/* Wyświetl informację o automatycznym generowaniu */}
+                            {isAutoResponse && (
+                              <div className="bg-purple-50 p-2 rounded-md border border-purple-100 mt-2 mb-1.5">
+                                <p className="text-xs font-medium text-purple-800 flex items-center">
+                                  <Bot size={12} className="mr-1" />
+                                  Transport połączony
+                                </p>
+                              </div>
+                            )}
+
+                            {zamowienie.response.dateChanged && (
+                              <div className="bg-yellow-50 p-2 rounded-md border border-yellow-100 mt-2 mb-1.5">
+                                <p className="text-sm font-medium text-yellow-800">Zmieniono datę dostawy:</p>
+                                <p className="text-xs flex justify-between mt-1">
+                                  <span>Z: <span className="line-through">{formatDate(zamowienie.response.originalDeliveryDate)}</span></span>
+                                  <span>→</span>
+                                  <span>Na: <span className="font-medium">{formatDate(zamowienie.response.newDeliveryDate)}</span></span>
+                                </p>
+                              </div>
+                            )}
+
+                            {zamowienie.response.adminNotes && (
+                              <p className="text-sm"><span className="font-medium">Uwagi:</span> {zamowienie.response.adminNotes}</p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="mt-5 flex space-x-3">
+                        <button
+                          type="button"
+                          className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors flex items-center gap-2"
+                          onClick={() => generateCMR(zamowienie)}
+                        >
+                          <FileText size={16} />
+                          Generuj CMR
+                        </button>
+                        {zamowienie.response && !showArchive && canSendOrder && (
+                          <button
+                            type="button"
+                            className="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors flex items-center gap-2"
+                            onClick={() => onCreateOrder(zamowienie)}
+                          >
+                            <Truck size={16} />
+                            Stwórz zlecenie transportowe
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+    </div>
+  )
 }
