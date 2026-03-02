@@ -494,6 +494,15 @@ export async function POST(request) {
         table.text('responsible_constructions');
         table.text('merged_transports');
       });
+    } else {
+      // Sprawdź czy nowa kolumna istnieje i dodaj ją jeśli nie
+      const hasSourceClientName = await db.schema.hasColumn('spedycje', 'source_client_name');
+      if (!hasSourceClientName) {
+        await db.schema.alterTable('spedycje', table => {
+          table.string('source_client_name');
+        });
+        console.log('Dodano brakującą kolumnę source_client_name do tabeli spedycje');
+      }
     }
 
     const result = await db('spedycje').insert(dataToSave).returning('id');

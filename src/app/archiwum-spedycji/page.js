@@ -283,6 +283,9 @@ export default function ArchiwumSpedycjiPage() {
   }
 
   const getUnloadingCompanyName = (transport) => {
+    if (transport.responsibleConstructions && transport.responsibleConstructions.length > 0) {
+      return transport.responsibleConstructions[0].name;
+    }
     return transport.clientName || 'Nie podano';
   }
 

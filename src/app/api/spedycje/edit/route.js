@@ -103,6 +103,15 @@ export async function PUT(request) {
       dataToUpdate.responsible_constructions = null;
     }
 
+    // Sprawdź czy nowa kolumna istnieje (na wypadek gdyby edycja była pierwszą akcją)
+    const hasSourceClientName = await db.schema.hasColumn('spedycje', 'source_client_name');
+    if (!hasSourceClientName) {
+      await db.schema.alterTable('spedycje', table => {
+        table.string('source_client_name');
+      });
+      console.log('Dodano brakującą kolumnę source_client_name do tabeli spedycje w trybie edycji');
+    }
+
     // Aktualizujemy rekord w bazie
     await db('spedycje')
       .where('id', id)
