@@ -682,8 +682,8 @@ export default function SpedycjaList({
 
                   {zamowienie.response && (
                     <div className={`mt-4 p-5 rounded-lg border shadow-sm ${isAutoResponse
-                        ? 'bg-purple-50 border-purple-200'
-                        : 'bg-gray-50 border-gray-200'
+                      ? 'bg-purple-50 border-purple-200'
+                      : 'bg-gray-50 border-gray-200'
                       }`}>
                       <h4 className="font-medium mb-3 pb-2 border-b border-gray-200 flex items-center text-gray-800">
                         {isAutoResponse ? <Bot size={18} className="mr-2" /> : <Truck size={18} className="mr-2" />}
@@ -720,11 +720,26 @@ export default function SpedycjaList({
                               <DollarSign size={14} className="mr-1" />
                               Dane finansowe
                             </h5>
-                            <p className="text-sm mb-1.5"><span className="font-medium">Cena całkowita:</span>
-                              <span className="bg-green-50 px-2 py-0.5 rounded ml-1">
-                                {zamowienie.response.deliveryPrice} PLN
-                              </span>
-                            </p>
+                            {zamowienie.response.totalDeliveryPrice ? (
+                              <>
+                                <p className="text-sm mb-1.5"><span className="font-medium">Koszt całej trasy:</span>
+                                  <span className="bg-blue-50 px-2 py-0.5 rounded ml-1">
+                                    {zamowienie.response.totalDeliveryPrice} PLN
+                                  </span>
+                                </p>
+                                <p className="text-sm mb-1.5"><span className="font-medium">Koszt tego transportu:</span>
+                                  <span className="bg-green-50 px-2 py-0.5 rounded ml-1">
+                                    {zamowienie.response.deliveryPrice} PLN
+                                  </span>
+                                </p>
+                              </>
+                            ) : (
+                              <p className="text-sm mb-1.5"><span className="font-medium">Cena całkowita:</span>
+                                <span className="bg-green-50 px-2 py-0.5 rounded ml-1">
+                                  {zamowienie.response.deliveryPrice} PLN
+                                </span>
+                              </p>
+                            )}
                             <p className="text-sm mb-1.5"><span className="font-medium">Odległość całkowita:</span>
                               {`${displayRoute.distance} km${displayRoute.isConnected ? ' (łącznie)' : ''}`}
                             </p>
@@ -743,8 +758,8 @@ export default function SpedycjaList({
                               return null;
                             })()}
 
-                            {/* Podział kosztów dla połączonych transportów */}
-                            {isAutoResponse && zamowienie.response.costPerTransport && (
+                            {/* Podział kosztów dla połączonych transportów (stary system) */}
+                            {isAutoResponse && zamowienie.response.costPerTransport && !zamowienie.response.totalDeliveryPrice && (
                               <div className="mt-2 pt-2 border-t border-gray-100">
                                 <p className="text-sm text-blue-600">
                                   <span className="font-medium">Koszt na transport:</span>

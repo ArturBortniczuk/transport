@@ -901,16 +901,16 @@ export default function ArchiwumSpedycjiPage() {
             </div>
           </div>
 
-          {transport.response.deliveryPrice && (
+          {(transport.response.totalDeliveryPrice || transport.response.deliveryPrice) && (
             <div className="mt-4 pt-4 border-t border-indigo-200 grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <div className="text-sm text-indigo-800 font-medium mb-1">Całkowity koszt transportu:</div>
-                <div className="text-lg font-bold text-indigo-900">{transport.response.deliveryPrice} PLN</div>
+                <div className="text-sm text-indigo-800 font-medium mb-1">Całkowity koszt połączonej trasy:</div>
+                <div className="text-lg font-bold text-indigo-900">{transport.response.totalDeliveryPrice || transport.response.deliveryPrice} PLN</div>
               </div>
-              {transport.response.costPerTransport && (
+              {transport.response.deliveryPrice && (
                 <div>
-                  <div className="text-sm text-indigo-800 font-medium mb-1">Koszt na transport:</div>
-                  <div className="text-lg font-bold text-indigo-900">{transport.response.costPerTransport} PLN</div>
+                  <div className="text-sm text-indigo-800 font-medium mb-1">Przypisany koszt tego transportu:</div>
+                  <div className="text-lg font-bold text-indigo-900">{transport.response.deliveryPrice} PLN</div>
                 </div>
               )}
             </div>

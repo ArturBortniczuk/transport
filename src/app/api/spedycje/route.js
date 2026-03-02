@@ -537,6 +537,7 @@ const createResponsesForConnectedTransports = async (connectedTransports, mainRe
         vehicleNumber: mainResponseData.vehicleNumber,
         transportType: mainResponseData.transportType,
         deliveryPrice: mainResponseData.costPerTransport,
+        totalDeliveryPrice: mainResponseData.totalDeliveryPrice,
         distanceKm: currentTransport.distance_km || 0,
         pricePerKm: currentTransport.distance_km > 0 ?
           (mainResponseData.costPerTransport / currentTransport.distance_km).toFixed(2) : 0,

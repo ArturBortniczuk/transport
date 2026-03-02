@@ -9,7 +9,7 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
   const [constructions, setConstructions] = useState([])
   const [selectedUser, setSelectedUser] = useState(null)
   const [selectedConstructions, setSelectedConstructions] = useState([])
-  const [totalPrice, setTotalPrice] = useState(initialData?.response?.deliveryPrice || 0) // Zmiana nazwy
+  const [totalPrice, setTotalPrice] = useState(initialData?.response?.totalDeliveryPrice || initialData?.response?.deliveryPrice || 0) // Zmiana nazwy i inicjalizacji
   const [pricePerTransport, setPricePerTransport] = useState(0) // Nowa zmienna
   const [currentUser, setCurrentUser] = useState({
     email: '',
@@ -540,7 +540,8 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
         driverPhone: formData.get('driverPhone'),
         vehicleNumber: formData.get('vehicleNumber'),
         transportType: transportType, // Przekazywanie zapisanego rodzaju transportu
-        deliveryPrice: totalDeliveryPrice, // Całkowita cena
+        deliveryPrice: connectedTransports.length > 0 ? pricePerTransport : totalDeliveryPrice, // Przypisana cena transportu
+        totalDeliveryPrice: totalDeliveryPrice, // Całkowita cena trasy
         distanceKm: Number(distanceKm),
         pricePerKm: Number(pricePerKm),
         adminNotes: formData.get('adminNotes')
