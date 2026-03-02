@@ -1166,25 +1166,31 @@ export default function ArchiwumSpedycjiPage() {
                     <div className="flex-1">
                       <div className="mb-3">
                         <h3 className="text-xl font-bold text-gray-900 flex items-center mb-2">
-                          <span className={`flex items-center ${displayRoute.isConnected ? "text-blue-700" : ""}`}>
-                            {displayRoute.text.toUpperCase()}
-                          </span>
+                          {!displayRoute.isConnected ? (
+                            <div className="flex items-center">
+                              <div className="flex flex-col">
+                                <span>{getLoadingCity(transport).toUpperCase()}</span>
+                                <span className="text-sm text-gray-500 font-normal mt-0.5 normal-case">{getLoadingCompanyName(transport)}</span>
+                              </div>
+                              <ArrowRight size={20} className="mx-3 text-gray-400" />
+                              <div className="flex flex-col">
+                                <span>{getDeliveryCity(transport).toUpperCase()}</span>
+                                <span className="text-sm text-gray-500 font-normal mt-0.5 normal-case">{getUnloadingCompanyName(transport)}</span>
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="flex items-center text-blue-700">
+                              {displayRoute.text.toUpperCase()}
+                            </span>
+                          )}
 
                           {displayRoute.isConnected && (
-                            <span className="ml-3 bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-sm font-medium flex items-center">
+                            <span className="ml-3 bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-sm font-medium flex items-center h-8">
                               <LinkIcon size={14} className="mr-1" />
                               Połączone
                             </span>
                           )}
                         </h3>
-                        {/* Wyświetlanie firm pod spodem jeśli to nie jest trasa połączona, albo w uproszczonej formie */}
-                        {!displayRoute.isConnected && (
-                          <div className="flex items-center text-sm text-gray-500 mb-2">
-                            <span>{getLoadingCompanyName(transport)}</span>
-                            <ArrowRight size={14} className="mx-2" />
-                            <span>{getUnloadingCompanyName(transport)}</span>
-                          </div>
-                        )}
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
