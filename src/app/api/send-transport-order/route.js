@@ -555,7 +555,7 @@ function generateTransportOrderHTML({ spedycja, producerAddress, delivery, respo
         <table class="info-table">
           <tr>
             <th>Cena transportu:</th>
-            <td>${responseData.deliveryPrice ? formatPrice(responseData.deliveryPrice) : 'Nie podano'}</td>
+            <td>${(responseData.totalDeliveryPrice || responseData.deliveryPrice) ? formatPrice(responseData.totalDeliveryPrice || responseData.deliveryPrice) : 'Nie podano'}</td>
           </tr>
           <tr>
             <th>Termin płatności:</th>
