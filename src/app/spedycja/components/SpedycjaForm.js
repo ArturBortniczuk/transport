@@ -1097,14 +1097,19 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">Waga towaru</label>
-                  <input
-                    name="weight"
-                    type="text"
-                    value={goodsDescription.weight}
-                    onChange={handleGoodsDescriptionChange}
-                    className="w-full p-2 border rounded-md"
-                    placeholder="np. 1500 kg"
-                  />
+                  <div className="flex items-center gap-2">
+                    <input
+                      name="weight"
+                      type="number"
+                      min="0"
+                      step="any"
+                      value={goodsDescription.weight}
+                      onChange={handleGoodsDescriptionChange}
+                      className="flex-1 p-2 border rounded-md bg-white"
+                      placeholder="np. 1500"
+                    />
+                    <span className="font-medium text-gray-700">kg</span>
+                  </div>
                 </div>
               </div>
             )}

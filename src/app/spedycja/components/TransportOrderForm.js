@@ -11,7 +11,7 @@ export default function TransportOrderForm({ onSubmit, onCancel, zamowienie }) {
     dataRozladunku: '',
     emailOdbiorcy: ''
   })
-  
+
   // Stan dla dodatkowych miejsc
   const [additionalPlaces, setAdditionalPlaces] = useState([])
   const [isLoadingTransports, setIsLoadingTransports] = useState(false)
@@ -19,10 +19,10 @@ export default function TransportOrderForm({ onSubmit, onCancel, zamowienie }) {
   const [showAddPlaceForm, setShowAddPlaceForm] = useState(false)
   const [selectedTransportId, setSelectedTransportId] = useState('')
   const [placeType, setPlaceType] = useState('załadunek') // 'załadunek' lub 'rozładunek'
-  
+
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState(null)
-  
+
   // Pobierz dostępne transporty przy pierwszym renderowaniu
   useEffect(() => {
     const fetchTransports = async () => {
@@ -30,10 +30,10 @@ export default function TransportOrderForm({ onSubmit, onCancel, zamowienie }) {
         setIsLoadingTransports(true)
         const response = await fetch('/api/spedycje?status=new')
         const data = await response.json()
-        
+
         if (data.success && data.spedycje) {
           // Filtrujemy tylko transporty, które mają numer zamówienia i nie są tym samym transportem
-          const filtered = data.spedycje.filter(t => 
+          const filtered = data.spedycje.filter(t =>
             t.id !== zamowienie.id && (t.orderNumber || t.order_number)
           )
           setAvailableTransports(filtered)
@@ -44,10 +44,10 @@ export default function TransportOrderForm({ onSubmit, onCancel, zamowienie }) {
         setIsLoadingTransports(false)
       }
     }
-    
+
     fetchTransports()
   }, [zamowienie.id])
-  
+
   const handleChange = (e) => {
     const { name, value } = e.target
     setFormData(prev => ({
@@ -55,12 +55,12 @@ export default function TransportOrderForm({ onSubmit, onCancel, zamowienie }) {
       [name]: value
     }))
   }
-  
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setIsSubmitting(true)
     setError(null)
-    
+
     try {
       await onSubmit({
         spedycjaId: zamowienie.id,
@@ -73,13 +73,13 @@ export default function TransportOrderForm({ onSubmit, onCancel, zamowienie }) {
       setIsSubmitting(false)
     }
   }
-  
+
   const handleAddPlace = () => {
     if (!selectedTransportId) return
-    
+
     const selectedTransport = availableTransports.find(t => t.id === parseInt(selectedTransportId))
     if (!selectedTransport) return
-    
+
     // Przygotuj dane miejsca w zależności od wybranego typu
     let placeData = {
       type: placeType,
@@ -87,13 +87,13 @@ export default function TransportOrderForm({ onSubmit, onCancel, zamowienie }) {
       orderNumber: selectedTransport.orderNumber || selectedTransport.order_number || '',
       route: getTransportRoute(selectedTransport)
     }
-    
+
     if (placeType === 'załadunek') {
       placeData = {
         ...placeData,
         location: selectedTransport.location,
-        address: selectedTransport.location === 'Producent' 
-          ? selectedTransport.producerAddress 
+        address: selectedTransport.location === 'Producent'
+          ? selectedTransport.producerAddress
           : selectedTransport.location,
         contact: selectedTransport.loadingContact
       }
@@ -104,26 +104,26 @@ export default function TransportOrderForm({ onSubmit, onCancel, zamowienie }) {
         contact: selectedTransport.unloadingContact
       }
     }
-    
+
     setAdditionalPlaces(prev => [...prev, placeData])
     setShowAddPlaceForm(false)
     setSelectedTransportId('')
   }
-  
+
   const getTransportRoute = (transport) => {
-    const start = transport.location === 'Producent' && transport.producerAddress 
-      ? transport.producerAddress.city 
+    const start = transport.location === 'Producent' && transport.producerAddress
+      ? transport.producerAddress.city
       : transport.location.replace('Magazyn ', '')
-    
+
     const end = transport.delivery?.city || 'Brak danych'
-    
+
     return `${start} → ${end}`
   }
-  
+
   const removeAdditionalPlace = (index) => {
     setAdditionalPlaces(prev => prev.filter((_, i) => i !== index))
   }
-  
+
   return (
     <form onSubmit={handleSubmit} className="p-6 space-y-6">
       <div className="flex justify-between items-center mb-6">
@@ -136,7 +136,7 @@ export default function TransportOrderForm({ onSubmit, onCancel, zamowienie }) {
           Anuluj
         </button>
       </div>
-      
+
       {error && (
         <div className="bg-red-50 text-red-700 p-4 rounded-md mb-4">
           {error}
@@ -157,18 +157,23 @@ export default function TransportOrderForm({ onSubmit, onCancel, zamowienie }) {
         </div>
         <div>
           <label className="block text-sm font-medium mb-1">Waga towaru</label>
-          <input
-            name="waga"
-            type="text"
-            value={formData.waga}
-            onChange={handleChange}
-            className="w-full p-2 border rounded-md"
-            required
-            placeholder="np. 2500 kg"
-          />
+          <div className="flex items-center gap-2">
+            <input
+              name="waga"
+              type="number"
+              min="0"
+              step="any"
+              value={formData.waga}
+              onChange={handleChange}
+              className="flex-1 p-2 border rounded-md bg-white"
+              required
+              placeholder="np. 2500"
+            />
+            <span className="font-medium text-gray-700">kg</span>
+          </div>
         </div>
       </div>
-      
+
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium mb-1">Data załadunku</label>
@@ -193,7 +198,7 @@ export default function TransportOrderForm({ onSubmit, onCancel, zamowienie }) {
           />
         </div>
       </div>
-      
+
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium mb-1">Termin płatności</label>
@@ -223,7 +228,7 @@ export default function TransportOrderForm({ onSubmit, onCancel, zamowienie }) {
           />
         </div>
       </div>
-      
+
       {/* Sekcja dodatkowych miejsc */}
       <div className="mt-6">
         <div className="flex justify-between items-center mb-2">
@@ -236,7 +241,7 @@ export default function TransportOrderForm({ onSubmit, onCancel, zamowienie }) {
             Dodaj miejsce
           </button>
         </div>
-        
+
         {additionalPlaces.length > 0 ? (
           <div className="space-y-3">
             {additionalPlaces.map((place, index) => (
@@ -249,8 +254,8 @@ export default function TransportOrderForm({ onSubmit, onCancel, zamowienie }) {
                     {place.route} ({place.orderNumber})
                   </div>
                 </div>
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   onClick={() => removeAdditionalPlace(index)}
                   className="text-red-500 hover:text-red-700"
                 >
@@ -262,7 +267,7 @@ export default function TransportOrderForm({ onSubmit, onCancel, zamowienie }) {
         ) : (
           <p className="text-gray-500 text-sm italic">Brak dodatkowych miejsc</p>
         )}
-        
+
         {/* Formularz dodawania miejsca */}
         {showAddPlaceForm && (
           <div className="mt-3 p-4 border border-blue-200 rounded-md bg-blue-50">
@@ -326,7 +331,7 @@ export default function TransportOrderForm({ onSubmit, onCancel, zamowienie }) {
           </div>
         )}
       </div>
-      
+
       {/* Informacje o zamówieniu */}
       <div className="mt-4 bg-gray-50 p-4 rounded-md">
         <h3 className="font-medium mb-2">Informacje o zleceniu</h3>
@@ -335,7 +340,7 @@ export default function TransportOrderForm({ onSubmit, onCancel, zamowienie }) {
         <p className="text-sm"><span className="font-medium">Trasa:</span> {getTransportRoute(zamowienie)}</p>
         <p className="text-sm"><span className="font-medium">MPK:</span> {zamowienie.mpk}</p>
       </div>
-      
+
       <div className="flex justify-end gap-2">
         <button
           type="submit"
