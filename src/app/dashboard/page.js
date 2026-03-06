@@ -184,8 +184,11 @@ export default function DashboardPage() {
         </div>
 
         {isFiltered && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            <MyTransportsChart data={dashboardData} />
+          <div className="space-y-6 mb-8">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <MyTransportsChart data={dashboardData} />
+              <RecentSpeditionsFeedWidget speditions={dashboardData?.recentSpeditions} />
+            </div>
             <CostAnalysisWidget costData={dashboardData?.speditionCosts} isFiltered={isFiltered} />
           </div>
         )}
@@ -484,29 +487,36 @@ function MyTransportsChart({ data }) {
   return (
     <DashboardWidget
       title="Podział Twoich Transportów"
-      icon={<BarChart3 className="w-5 h-5" />}
+      icon={<PieChart className="w-5 h-5 text-indigo-600" />}
+      className="bg-gradient-to-br from-white to-blue-50/50"
     >
       <div className="space-y-6">
-        <div className="flex justify-between items-center text-sm text-gray-600 mb-2">
-          <span>Transport Własny</span>
-          <span className="font-semibold text-blue-600 text-lg">{ownCount}</span>
+        <div className="flex justify-between items-center text-sm mb-2">
+          <div className="flex items-center space-x-2">
+            <div className="w-3 h-3 rounded-full bg-blue-500 shadow-sm"></div>
+            <span className="text-gray-700 font-medium">Transport Własny</span>
+          </div>
+          <span className="font-bold text-blue-700 text-xl">{ownCount}</span>
         </div>
-        <div className="w-full bg-gray-100 rounded-full h-6 overflow-hidden flex cursor-pointer" title={`Własny: ${ownPercent}%`}>
+        <div className="w-full bg-white/60 shadow-inner rounded-full h-8 overflow-hidden flex border border-gray-100" title={`Własny: ${ownPercent}%`}>
           <div
-            className="bg-blue-500 h-6 flex items-center justify-center text-xs text-white font-medium transition-all duration-1000"
+            className="bg-gradient-to-r from-blue-400 to-blue-600 h-full flex items-center justify-center text-xs text-white font-bold transition-all duration-1000 shadow-sm"
             style={{ width: `${ownPercent}%` }}
           >
             {ownPercent > 10 ? `${ownPercent}%` : ''}
           </div>
         </div>
 
-        <div className="flex justify-between items-center text-sm text-gray-600 mb-2 mt-6">
-          <span>Transport Spedycyjny</span>
-          <span className="font-semibold text-purple-600 text-lg">{spedCount}</span>
+        <div className="flex justify-between items-center text-sm mb-2 mt-8">
+          <div className="flex items-center space-x-2">
+            <div className="w-3 h-3 rounded-full bg-purple-500 shadow-sm"></div>
+            <span className="text-gray-700 font-medium">Transport Spedycyjny</span>
+          </div>
+          <span className="font-bold text-purple-700 text-xl">{spedCount}</span>
         </div>
-        <div className="w-full bg-gray-100 rounded-full h-6 overflow-hidden flex cursor-pointer" title={`Spedycyjny: ${spedPercent}%`}>
+        <div className="w-full bg-white/60 shadow-inner rounded-full h-8 overflow-hidden flex border border-gray-100" title={`Spedycyjny: ${spedPercent}%`}>
           <div
-            className="bg-purple-500 h-6 flex items-center justify-center text-xs text-white font-medium transition-all duration-1000"
+            className="bg-gradient-to-r from-purple-400 to-purple-600 h-full flex items-center justify-center text-xs text-white font-bold transition-all duration-1000 shadow-sm"
             style={{ width: `${spedPercent}%` }}
           >
             {spedPercent > 10 ? `${spedPercent}%` : ''}
@@ -514,8 +524,46 @@ function MyTransportsChart({ data }) {
         </div>
 
         {total === 0 && (
-          <div className="text-center text-sm text-gray-500 italic mt-4">
-            Brak transportów w tym miesiącu do wyświetlenia wykresu.
+          <div className="text-center text-sm text-gray-400 italic mt-6 bg-white/50 py-3 rounded-lg">
+            Brak transportów w tym miesiącu.
+          </div>
+        )}
+      </div>
+    </DashboardWidget>
+  )
+}
+
+function RecentSpeditionsFeedWidget({ speditions }) {
+  return (
+    <DashboardWidget
+      title="Ostatnie Koszty Spedycji"
+      icon={<DollarSign className="w-5 h-5 text-green-600" />}
+      className="bg-gradient-to-br from-white to-green-50/30"
+    >
+      <div className="space-y-3 max-h-72 overflow-y-auto pr-2 custom-scrollbar">
+        {speditions && speditions.length > 0 ? (
+          speditions.map((sped, index) => (
+            <div key={index} className="flex justify-between items-center p-3 bg-white rounded-lg border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+              <div className="flex flex-col">
+                <span className="text-xs text-gray-400 font-medium mb-1">
+                  {new Date(sped.date).toLocaleDateString('pl-PL')} • {sped.spedition_number}
+                </span>
+                <span className="text-sm font-semibold text-gray-800">
+                  Kierunek: <span className="text-indigo-600">{sped.destination}</span>
+                </span>
+              </div>
+              <div className="flex items-center bg-green-50 px-3 py-1.5 rounded-md border border-green-100">
+                <span className="font-bold text-green-700">
+                  {sped.price !== null ? `${sped.price.toLocaleString()} zł` : 'Wycena'}
+                </span>
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="text-center py-8">
+            <DollarSign className="w-12 h-12 text-gray-200 mx-auto mb-3" />
+            <p className="text-gray-500 font-medium">Brak historii kosztów spedycji.</p>
+            <p className="text-xs text-gray-400 mt-1">Gdy dodasz zlecenia, pojawią się tutaj.</p>
           </div>
         )}
       </div>
@@ -575,60 +623,75 @@ function TransportAnalysisWidget({ data, isFiltered }) {
 }
 
 function CostAnalysisWidget({ costData, isFiltered }) {
+  const currentMonth = costData?.thisMonth || 0;
+  const lastMonth = costData?.lastMonth || 0;
+
+  // Oblicz postęp (czy przekroczyliśmy budżet z zeszłego miesiąca?)
+  const limit = lastMonth > 0 ? lastMonth : Math.max(currentMonth, 10000); // fallback
+  const percentUsed = Math.min(Math.round((currentMonth / limit) * 100), 100);
+  const isOverBudget = currentMonth > lastMonth && lastMonth > 0;
+
   return (
     <DashboardWidget
-      title={isFiltered ? "Analiza Kosztów Twojej Spedycji" : "Analiza Kosztów Spedycji"}
-      icon={<TrendingUp className="w-5 h-5" />}
+      title={isFiltered ? "Twój Budżet Spedycyjny" : "Analiza Kosztów Spedycji"}
+      icon={<TrendingUp className="w-5 h-5 text-emerald-600" />}
+      className="bg-white border-emerald-100/50"
     >
-      <div className="space-y-4">
+      <div className="space-y-6">
         {costData ? (
           <>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-green-50 p-3 rounded-lg text-center">
-                <div className="text-xs text-green-600 mb-1">Ten miesiąc</div>
-                <div className="font-bold text-green-700">{costData.thisMonth.toLocaleString()} zł</div>
+            <div className="flex justify-between items-end mb-2">
+              <div>
+                <div className="text-sm font-medium text-gray-500 mb-1">Koszty w tym miesiącu</div>
+                <div className="text-3xl font-bold text-gray-900">{currentMonth.toLocaleString()} zł</div>
               </div>
-              <div className="bg-blue-50 p-3 rounded-lg text-center">
-                <div className="text-xs text-blue-600 mb-1">Poprzedni</div>
-                <div className="font-bold text-blue-700">{costData.lastMonth.toLocaleString()} zł</div>
-              </div>
+
+              {lastMonth > 0 && (
+                <div className={`flex items-center px-2.5 py-1 rounded-full text-sm font-semibold ${isOverBudget ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'
+                  }`}>
+                  {isOverBudget ? <TrendingUp className="w-4 h-4 mr-1" /> : <TrendingDown className="w-4 h-4 mr-1" />}
+                  {Math.abs(Math.round(((currentMonth - lastMonth) / lastMonth) * 100))}%
+                </div>
+              )}
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-purple-50 p-3 rounded-lg text-center">
-                <div className="text-xs text-purple-600 mb-1">Ten tydzień</div>
-                <div className="font-bold text-purple-700">{costData.thisWeek.toLocaleString()} zł</div>
-              </div>
-              <div className="bg-gray-50 p-3 rounded-lg text-center">
-                <div className="text-xs text-gray-600 mb-1">Poprzedni</div>
-                <div className="font-bold text-gray-700">{costData.lastWeek.toLocaleString()} zł</div>
-              </div>
-            </div>
-
-            {/* Trend miesięczny */}
-            {costData.lastMonth > 0 && (
-              <div className="pt-3 border-t border-gray-200">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Trend miesięczny</span>
-                  <div className="flex items-center">
-                    {costData.thisMonth > costData.lastMonth ? (
-                      <TrendingUp className="w-4 h-4 text-red-500 mr-1" />
-                    ) : (
-                      <TrendingDown className="w-4 h-4 text-green-500 mr-1" />
-                    )}
-                    <span className={`text-sm font-medium ${costData.thisMonth > costData.lastMonth ? 'text-red-500' : 'text-green-500'
-                      }`}>
-                      {Math.abs(Math.round(((costData.thisMonth - costData.lastMonth) / costData.lastMonth) * 100))}%
-                    </span>
-                  </div>
+            {/* Pasek postępu vs zeszły miesiąc */}
+            {lastMonth > 0 && (
+              <div className="space-y-2">
+                <div className="flex justify-between text-xs font-medium">
+                  <span className="text-gray-500">Postęp względem zeszłego miesiąca</span>
+                  <span className={isOverBudget ? "text-red-600" : "text-emerald-600"}>
+                    {percentUsed}% limitu
+                  </span>
+                </div>
+                <div className="w-full bg-gray-100 rounded-full h-2.5">
+                  <div
+                    className={`h-2.5 rounded-full transition-all duration-1000 ${percentUsed > 90 ? 'bg-red-500' : percentUsed > 75 ? 'bg-amber-400' : 'bg-emerald-500'
+                      }`}
+                    style={{ width: `${percentUsed}%` }}
+                  ></div>
+                </div>
+                <div className="text-right text-xs text-gray-400">
+                  Zeszły miesiąc: {lastMonth.toLocaleString()} zł
                 </div>
               </div>
             )}
+
+            <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-100 mt-6">
+              <div className="bg-gradient-to-br from-indigo-50 to-blue-50/30 p-4 rounded-xl border border-indigo-50/50">
+                <div className="text-xs font-semibold text-indigo-600/70 mb-1 uppercase tracking-wider">Ten tydzień</div>
+                <div className="font-bold text-indigo-900 text-lg">{costData.thisWeek.toLocaleString()} zł</div>
+              </div>
+              <div className="bg-gray-50/80 p-4 rounded-xl border border-gray-100/50">
+                <div className="text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wider">Poprzedni tydzień</div>
+                <div className="font-bold text-gray-700 text-lg">{costData.lastWeek.toLocaleString()} zł</div>
+              </div>
+            </div>
           </>
         ) : (
-          <div className="text-center py-6">
-            <DollarSign className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-            <p className="text-gray-500 text-sm">Brak danych o kosztach</p>
+          <div className="text-center py-10">
+            <DollarSign className="w-12 h-12 text-gray-200 mx-auto mb-3" />
+            <p className="text-gray-500 font-medium">Brak danych o kosztach</p>
           </div>
         )}
       </div>
