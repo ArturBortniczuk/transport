@@ -261,10 +261,21 @@ export async function GET(request) {
 
         dashboardData.recentSpeditions = recentSpeds.map(spedycja => {
           let price = null;
+          let destination = 'Nieznane';
+
           try {
             if (spedycja.response_data) {
               const responseData = typeof spedycja.response_data === 'string' ? JSON.parse(spedycja.response_data) : spedycja.response_data;
               price = responseData.deliveryPrice ? parseFloat(responseData.deliveryPrice) : null;
+            }
+          } catch (e) { }
+
+          try {
+            if (spedycja.delivery_data) {
+              const deliveryData = typeof spedycja.delivery_data === 'string' ? JSON.parse(spedycja.delivery_data) : spedycja.delivery_data;
+              destination = deliveryData.city || 'Nieznane';
+            } else if (spedycja.destination_city) {
+              destination = spedycja.destination_city;
             }
           } catch (e) { }
 
@@ -274,7 +285,7 @@ export async function GET(request) {
             date: spedycja.created_at,
             mpk: spedycja.mpk || 'Brak',
             price: price,
-            destination: spedycja.destination_city || 'Nieznane'
+            destination: destination
           };
         });
 

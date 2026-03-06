@@ -189,7 +189,10 @@ export default function DashboardPage() {
               <MyTransportsChart data={dashboardData} />
               <RecentSpeditionsFeedWidget speditions={dashboardData?.recentSpeditions} />
             </div>
-            <CostAnalysisWidget costData={dashboardData?.speditionCosts} isFiltered={isFiltered} />
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <CostAnalysisWidget costData={dashboardData?.speditionCosts} isFiltered={isFiltered} />
+              <CostChartWidget chartData={dashboardData?.costChartData} />
+            </div>
           </div>
         )}
 
@@ -431,7 +434,7 @@ function ActiveSpeditionsWidget({ activeSpeditions, speditionCosts, isFiltered }
       title={isFiltered ? "Twoje Aktywne Spedycje" : "Aktywne Spedycje"}
       icon={<FileText className="w-5 h-5" />}
     >
-      <div className="flex flex-col h-[280px]">
+      <div className="flex flex-col h-full min-h-[280px]">
         <div className="flex-1 flex flex-col justify-center items-center text-center p-6 border-b border-gray-100">
           <div className="bg-blue-50 w-20 h-20 rounded-full flex items-center justify-center mb-4">
             <span className="text-4xl font-bold text-blue-600 border-b-2 border-transparent">{activeSpeditions || 0}</span>
@@ -692,6 +695,60 @@ function CostAnalysisWidget({ costData, isFiltered }) {
           <div className="text-center py-10">
             <DollarSign className="w-12 h-12 text-gray-200 mx-auto mb-3" />
             <p className="text-gray-500 font-medium">Brak danych o kosztach</p>
+          </div>
+        )}
+      </div>
+    </DashboardWidget>
+  )
+}
+
+function CostChartWidget({ chartData }) {
+  // Max cost for height percentages
+  const maxCost = chartData && chartData.length > 0
+    ? Math.max(...chartData.map(d => d.koszt), 1)
+    : 1;
+
+  return (
+    <DashboardWidget
+      title="Historia Kosztów (6m)"
+      icon={<BarChart3 className="w-5 h-5 text-indigo-500" />}
+      className="bg-white border-indigo-50"
+    >
+      <div className="space-y-4">
+        {chartData && chartData.length > 0 ? (
+          <div className="flex items-end justify-between h-56 mt-6 pt-4 space-x-2">
+            {chartData.map((data, index) => {
+              const heightPercent = Math.max((data.koszt / maxCost) * 100, 5); // min 5% 
+              const isCurrentMonth = index === chartData.length - 1;
+
+              return (
+                <div key={index} className="flex flex-col items-center flex-1 group">
+                  <div className="relative flex justify-center w-full h-full flex-col justify-end">
+                    {/* Tooltip on hover */}
+                    <div className="opacity-0 group-hover:opacity-100 absolute -top-10 bg-gray-900 text-white text-xs font-bold py-1.5 px-3 rounded-lg whitespace-nowrap transition-all duration-300 z-10 pointer-events-none mb-2 shadow-lg">
+                      {data.koszt.toLocaleString()} zł
+                      <div className="absolute w-2 h-2 bg-gray-900 transform rotate-45 left-1/2 -bottom-1 -translate-x-1/2"></div>
+                    </div>
+                    {/* Bar */}
+                    <div
+                      className={`w-full max-w-[44px] rounded-t-xl mx-auto transition-all duration-1000 origin-bottom hover:brightness-110 ${isCurrentMonth
+                          ? 'bg-gradient-to-t from-indigo-500 to-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.4)]'
+                          : 'bg-gradient-to-t from-gray-200 to-gray-100 border-x border-t border-gray-200/50'
+                        }`}
+                      style={{ height: `${heightPercent}%` }}
+                    ></div>
+                  </div>
+                  <span className={`text-xs mt-3 ${isCurrentMonth ? 'font-bold text-indigo-600' : 'text-gray-500 font-medium'}`}>
+                    {data.month}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          <div className="text-center py-12">
+            <BarChart3 className="w-12 h-12 text-gray-200 mx-auto mb-3" />
+            <p className="text-gray-500 font-medium">Brak danych historycznych do wyświetlenia</p>
           </div>
         )}
       </div>
