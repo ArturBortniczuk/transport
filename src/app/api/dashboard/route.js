@@ -8,14 +8,14 @@ const validateSession = async (authToken) => {
   if (!authToken || !db) {
     return null;
   }
-  
+
   try {
     const session = await db('sessions')
       .where('token', authToken)
       .whereRaw('expires_at > NOW()')
       .select('user_id')
       .first();
-    
+
     return session?.user_id;
   } catch (error) {
     console.error('Błąd walidacji sesji:', error);
@@ -41,41 +41,64 @@ const formatDate = (date) => {
 export async function GET(request) {
   try {
     console.log('=== START GET /api/dashboard ===');
-    
+
     // Sprawdzamy uwierzytelnienie
     const authToken = request.cookies.get('authToken')?.value;
     const userId = await validateSession(authToken);
-    
+
     if (!userId) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Unauthorized' 
+      return NextResponse.json({
+        success: false,
+        error: 'Unauthorized'
       }, { status: 401 });
     }
 
     // Pobierz dane użytkownika
     const user = await db('users')
       .where('email', userId)
-      .select('role', 'name', 'permissions')
+      .select('role', 'name', 'permissions', 'mpk')
       .first();
 
     if (!user) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'User not found' 
+      return NextResponse.json({
+        success: false,
+        error: 'User not found'
       }, { status: 404 });
     }
 
     // Sprawdź uprawnienia
     const isAdmin = user.role === 'admin';
     const isMagazyn = user.role === 'magazyn' || user.role?.startsWith('magazyn_');
-    
-    if (!isAdmin && !isMagazyn) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Brak uprawnień do dashboardu' 
-      }, { status: 403 });
-    }
+    const isHandlowiec = !isAdmin && !isMagazyn;
+
+    // Funkcje pomocnicze do filtrowania zapytań dla handlowców
+    const applyTransportFilter = (query) => {
+      if (isHandlowiec) {
+        query.where(function () {
+          if (user.mpk) {
+            this.where('mpk', user.mpk);
+          }
+          this.orWhere('requester_email', userId)
+            .orWhere('requester_name', user.name);
+        });
+      }
+      return query;
+    };
+
+    const applySpedycjaFilter = (query) => {
+      if (isHandlowiec) {
+        query.where(function () {
+          if (user.mpk) {
+            this.where('mpk', user.mpk);
+          }
+          this.orWhere('created_by_email', userId)
+            .orWhere('responsible_email', userId)
+            .orWhere('created_by', user.name)
+            .orWhere('responsible_person', user.name);
+        });
+      }
+      return query;
+    };
 
     // Daty dla analiz
     const now = new Date();
@@ -108,45 +131,25 @@ export async function GET(request) {
       transportTypes: { own: { count: 0, thisMonth: 0 }, spedition: { count: 0, thisMonth: 0 } },
       monthlyChartData: [],
       weeklyChartData: [],
-      costChartData: []
+      costChartData: [],
+      userFiltered: isHandlowiec
     };
 
     // 1. TRANSPORTY WŁASNE
     let ownTransportsThisMonth = 0;
     let ownTransportsLastMonth = 0;
-    
+
     try {
       const transportsExist = await db.schema.hasTable('transports');
       if (transportsExist) {
-        // DEBUG: Sprawdź strukturę tabeli i przykładowe dane
-        try {
-          const sampleTransports = await db('transports')
-            .select('id', 'driver_id', 'vehicle_id', 'status', 'delivery_date')
-            .limit(3);
-          console.log('Przykładowe transporty:', sampleTransports);
-
-          // Sprawdź kolumny tabeli
-          const tableInfo = await db.raw(`
-            SELECT column_name 
-            FROM information_schema.columns 
-            WHERE table_name = 'transports' 
-            AND table_schema = 'public'
-          `);
-          console.log('Kolumny w tabeli transports:', tableInfo.rows.map(r => r.column_name));
-        } catch (debugError) {
-          console.error('Błąd debug tabeli transports:', debugError);
-        }
-
         // Aktywne transporty
-        const activeResult = await db('transports')
+        const activeResult = await applyTransportFilter(db('transports'))
           .whereNot('status', 'completed')
           .count('* as count').first();
         dashboardData.activeTransports = parseInt(activeResult?.count || 0);
 
-        console.log('Aktywne transporty (status != completed):', dashboardData.activeTransports);
-
         // Dzisiejsze transporty
-        const todayTransports = await db('transports')
+        const todayTransports = await applyTransportFilter(db('transports'))
           .where('delivery_date', '>=', todayStart.toISOString())
           .where('delivery_date', '<', todayEnd.toISOString())
           .orderBy('delivery_date', 'asc').limit(10);
@@ -160,37 +163,36 @@ export async function GET(request) {
         }));
 
         // Aktywni kierowcy (unikalni kierowcy z aktywnymi transportami)
-        const activeDriversResult = await db('transports')
+        const activeDriversResult = await applyTransportFilter(db('transports'))
           .whereNot('status', 'completed')
           .whereNotNull('driver_id')
           .countDistinct('driver_id as count')
           .first();
-        
+
         dashboardData.activeDrivers = parseInt(activeDriversResult?.count || 0);
 
         // Pojazdy w użyciu (unikalne pojazdy z aktywnymi transportami)
-        const fleetsInUseResult = await db('transports')
+        const fleetsInUseResult = await applyTransportFilter(db('transports'))
           .whereNot('status', 'completed')
           .whereNotNull('vehicle_id')
           .countDistinct('vehicle_id as count')
           .first();
-        
+
         dashboardData.fleetsInUse = parseInt(fleetsInUseResult?.count || 0);
 
         // Jeśli vehicle_id nie istnieje, sprawdź driver_id (kierowca = pojazd)
         if (dashboardData.fleetsInUse === 0) {
-          console.log('Brak vehicle_id, sprawdzam driver_id jako pojazdy...');
-          const fleetsFromDriversResult = await db('transports')
+          const fleetsFromDriversResult = await applyTransportFilter(db('transports'))
             .whereNot('status', 'completed')
             .whereNotNull('driver_id')
             .countDistinct('driver_id as count')
             .first();
-          
+
           dashboardData.fleetsInUse = parseInt(fleetsFromDriversResult?.count || 0);
         }
 
         // Magazyny
-        const warehouseData = await db('transports')
+        const warehouseData = await applyTransportFilter(db('transports'))
           .whereNot('status', 'completed')
           .select('source_warehouse')
           .count('* as count')
@@ -205,13 +207,13 @@ export async function GET(request) {
         });
 
         // Transport własny w tym miesiącu
-        const ownThisMonth = await db('transports')
+        const ownThisMonth = await applyTransportFilter(db('transports'))
           .where('delivery_date', '>=', thisMonthStart.toISOString())
           .count('* as count').first();
         ownTransportsThisMonth = parseInt(ownThisMonth?.count || 0);
 
         // Transport własny w zeszłym miesiącu
-        const ownLastMonth = await db('transports')
+        const ownLastMonth = await applyTransportFilter(db('transports'))
           .where('delivery_date', '>=', lastMonthStart.toISOString())
           .where('delivery_date', '<=', lastMonthEnd.toISOString())
           .count('* as count').first();
@@ -233,19 +235,19 @@ export async function GET(request) {
       const spedycjeExist = await db.schema.hasTable('spedycje');
       if (spedycjeExist) {
         // Aktywne spedycje
-        const activeSpedResult = await db('spedycje')
+        const activeSpedResult = await applySpedycjaFilter(db('spedycje'))
           .whereNot('status', 'completed')
           .count('* as count').first();
         dashboardData.activeSpeditions = parseInt(activeSpedResult?.count || 0);
 
         // Spedycje w tym miesiącu
-        const spedThisMonth = await db('spedycje')
+        const spedThisMonth = await applySpedycjaFilter(db('spedycje'))
           .where('created_at', '>=', thisMonthStart.toISOString())
           .count('* as count').first();
         speditionTransportsThisMonth = parseInt(spedThisMonth?.count || 0);
 
         // Spedycje w zeszłym miesiącu
-        const spedLastMonth = await db('spedycje')
+        const spedLastMonth = await applySpedycjaFilter(db('spedycje'))
           .where('created_at', '>=', lastMonthStart.toISOString())
           .where('created_at', '<=', lastMonthEnd.toISOString())
           .count('* as count').first();
@@ -253,7 +255,7 @@ export async function GET(request) {
 
         // KOSZTY SPEDYCJI
         // Ten miesiąc
-        const thisMonthSpeditions = await db('spedycje')
+        const thisMonthSpeditions = await applySpedycjaFilter(db('spedycje'))
           .where('completed_at', '>=', thisMonthStart.toISOString())
           .where('status', 'completed')
           .select('response_data');
@@ -261,16 +263,16 @@ export async function GET(request) {
         thisMonthSpeditions.forEach(spedycja => {
           try {
             if (spedycja.response_data) {
-              const responseData = JSON.parse(spedycja.response_data);
+              const responseData = typeof spedycja.response_data === 'string' ? JSON.parse(spedycja.response_data) : spedycja.response_data;
               if (responseData.deliveryPrice) {
                 thisMonthCost += parseFloat(responseData.deliveryPrice);
               }
             }
-          } catch (e) {}
+          } catch (e) { }
         });
 
         // Zeszły miesiąc
-        const lastMonthSpeditions = await db('spedycje')
+        const lastMonthSpeditions = await applySpedycjaFilter(db('spedycje'))
           .where('completed_at', '>=', lastMonthStart.toISOString())
           .where('completed_at', '<=', lastMonthEnd.toISOString())
           .where('status', 'completed')
@@ -279,16 +281,16 @@ export async function GET(request) {
         lastMonthSpeditions.forEach(spedycja => {
           try {
             if (spedycja.response_data) {
-              const responseData = JSON.parse(spedycja.response_data);
+              const responseData = typeof spedycja.response_data === 'string' ? JSON.parse(spedycja.response_data) : spedycja.response_data;
               if (responseData.deliveryPrice) {
                 lastMonthCost += parseFloat(responseData.deliveryPrice);
               }
             }
-          } catch (e) {}
+          } catch (e) { }
         });
 
         // Ten tydzień
-        const thisWeekSpeditions = await db('spedycje')
+        const thisWeekSpeditions = await applySpedycjaFilter(db('spedycje'))
           .where('completed_at', '>=', thisWeekStart.toISOString())
           .where('status', 'completed')
           .select('response_data');
@@ -296,16 +298,16 @@ export async function GET(request) {
         thisWeekSpeditions.forEach(spedycja => {
           try {
             if (spedycja.response_data) {
-              const responseData = JSON.parse(spedycja.response_data);
+              const responseData = typeof spedycja.response_data === 'string' ? JSON.parse(spedycja.response_data) : spedycja.response_data;
               if (responseData.deliveryPrice) {
                 thisWeekCost += parseFloat(responseData.deliveryPrice);
               }
             }
-          } catch (e) {}
+          } catch (e) { }
         });
 
         // Zeszły tydzień
-        const lastWeekSpeditions = await db('spedycje')
+        const lastWeekSpeditions = await applySpedycjaFilter(db('spedycje'))
           .where('completed_at', '>=', lastWeekStart.toISOString())
           .where('completed_at', '<=', lastWeekEnd.toISOString())
           .where('status', 'completed')
@@ -314,12 +316,12 @@ export async function GET(request) {
         lastWeekSpeditions.forEach(spedycja => {
           try {
             if (spedycja.response_data) {
-              const responseData = JSON.parse(spedycja.response_data);
+              const responseData = typeof spedycja.response_data === 'string' ? JSON.parse(spedycja.response_data) : spedycja.response_data;
               if (responseData.deliveryPrice) {
                 lastWeekCost += parseFloat(responseData.deliveryPrice);
               }
             }
-          } catch (e) {}
+          } catch (e) { }
         });
       }
     } catch (error) {
@@ -330,9 +332,12 @@ export async function GET(request) {
     try {
       const requestsExist = await db.schema.hasTable('transport_requests');
       if (requestsExist) {
-        const pendingResult = await db('transport_requests')
-          .where('status', 'pending')
-          .count('* as count').first();
+        // Zastosuj filtr user.email lub user.name na transport_requests 
+        const pendingQuery = db('transport_requests').where('status', 'pending');
+        if (isHandlowiec) {
+          pendingQuery.where('created_by_email', userId);
+        }
+        const pendingResult = await pendingQuery.count('* as count').first();
         dashboardData.pendingRequests = parseInt(pendingResult?.count || 0);
       }
     } catch (error) {
@@ -357,7 +362,7 @@ export async function GET(request) {
     const transportChartData = [];
     // Wykres kosztów spedycji (tylko spedycja) - ostatnie 6 miesięcy  
     const costChartData = [];
-    
+
     for (let i = 5; i >= 0; i--) {
       const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
@@ -371,7 +376,7 @@ export async function GET(request) {
         // Transport własny
         const transportsExist = await db.schema.hasTable('transports');
         if (transportsExist) {
-          const ownResult = await db('transports')
+          const ownResult = await applyTransportFilter(db('transports'))
             .where('delivery_date', '>=', monthStart.toISOString())
             .where('delivery_date', '<=', monthEnd.toISOString())
             .count('* as count').first();
@@ -381,14 +386,14 @@ export async function GET(request) {
         // Spedycje
         const spedycjeExist = await db.schema.hasTable('spedycje');
         if (spedycjeExist) {
-          const spedResult = await db('spedycje')
+          const spedResult = await applySpedycjaFilter(db('spedycje'))
             .where('created_at', '>=', monthStart.toISOString())
             .where('created_at', '<=', monthEnd.toISOString())
             .count('* as count').first();
           speditionCount = parseInt(spedResult?.count || 0);
 
           // Koszty TYLKO spedycji
-          const monthSpeditions = await db('spedycje')
+          const monthSpeditions = await applySpedycjaFilter(db('spedycje'))
             .where('completed_at', '>=', monthStart.toISOString())
             .where('completed_at', '<=', monthEnd.toISOString())
             .where('status', 'completed')
@@ -397,12 +402,12 @@ export async function GET(request) {
           monthSpeditions.forEach(spedycja => {
             try {
               if (spedycja.response_data) {
-                const responseData = JSON.parse(spedycja.response_data);
+                const responseData = typeof spedycja.response_data === 'string' ? JSON.parse(spedycja.response_data) : spedycja.response_data;
                 if (responseData.deliveryPrice) {
                   monthCost += parseFloat(responseData.deliveryPrice);
                 }
               }
-            } catch (e) {}
+            } catch (e) { }
           });
         }
       } catch (error) {
@@ -446,9 +451,9 @@ export async function GET(request) {
 
   } catch (error) {
     console.error('Błąd w GET /api/dashboard:', error);
-    return NextResponse.json({ 
-      success: false, 
-      error: 'Błąd serwera: ' + error.message 
+    return NextResponse.json({
+      success: false,
+      error: 'Błąd serwera: ' + error.message
     }, { status: 500 });
   }
 }

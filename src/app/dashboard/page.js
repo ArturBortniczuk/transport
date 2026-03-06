@@ -1,11 +1,11 @@
 // src/app/dashboard/page.js
 'use client'
 import React, { useState, useEffect } from 'react'
-import { 
-  Truck, 
-  Users, 
-  Clock, 
-  AlertCircle, 
+import {
+  Truck,
+  Users,
+  Clock,
+  AlertCircle,
   TrendingUp,
   TrendingDown,
   Star,
@@ -26,6 +26,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [userRole, setUserRole] = useState('')
+  const [userName, setUserName] = useState('')
 
   useEffect(() => {
     fetchDashboardData()
@@ -36,10 +37,11 @@ export default function DashboardPage() {
       setLoading(true)
       const response = await fetch('/api/dashboard')
       const data = await response.json()
-      
+
       if (data.success) {
         setDashboardData(data.data)
         setUserRole(data.userRole)
+        setUserName(data.userName)
       } else {
         setError(data.error)
       }
@@ -58,12 +60,12 @@ export default function DashboardPage() {
           <div className="animate-pulse">
             <div className="h-8 bg-gray-200 rounded w-1/4 mb-8"></div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-              {[1,2,3,4].map(i => (
+              {[1, 2, 3, 4].map(i => (
                 <div key={i} className="h-32 bg-gray-200 rounded-lg"></div>
               ))}
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {[1,2].map(i => (
+              {[1, 2].map(i => (
                 <div key={i} className="h-64 bg-gray-200 rounded-lg"></div>
               ))}
             </div>
@@ -80,7 +82,7 @@ export default function DashboardPage() {
           <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
           <h2 className="text-xl font-semibold text-gray-900 mb-2">Błąd ładowania dashboardu</h2>
           <p className="text-gray-600 mb-4">{error}</p>
-          <button 
+          <button
             onClick={fetchDashboardData}
             className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors"
           >
@@ -91,35 +93,48 @@ export default function DashboardPage() {
     )
   }
 
+  const isFiltered = dashboardData?.userFiltered;
+
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Dashboard Zarządzania</h1>
-          <p className="text-gray-600 mt-2">
-            Przegląd najważniejszych informacji o transporcie i flotie
-          </p>
+        <div className="mb-8 flex justify-between items-end">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">
+              {isFiltered ? `Twój Dashboard - ${userName}` : 'Dashboard Zarządzania'}
+            </h1>
+            <p className="text-gray-600 mt-2">
+              {isFiltered
+                ? 'Przegląd transportów i kosztów spedycji przypisanych do Twojego rynku'
+                : 'Przegląd najważniejszych informacji o transporcie i flotie'}
+            </p>
+          </div>
+          {isFiltered && (
+            <div className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium border border-blue-200">
+              Dane filtrowane (Twój rynek / MPK)
+            </div>
+          )}
         </div>
 
         {/* Główne wskaźniki KPI */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <StatCard
-            title="Aktywne Transporty"
+            title={isFiltered ? "Twoje Aktywne Transporty" : "Aktywne Transporty"}
             value={(dashboardData?.activeTransports || 0) + (dashboardData?.activeSpeditions || 0)}
             icon={<Truck className="w-8 h-8" />}
             color="blue"
             description={`Własne: ${dashboardData?.activeTransports || 0} | Spedycyjne: ${dashboardData?.activeSpeditions || 0}`}
           />
-          
+
           <StatCard
-            title="Oczekujące Wnioski"
+            title={isFiltered ? "Twoje Wnioski Oczekujące" : "Oczekujące Wnioski"}
             value={dashboardData?.pendingRequests || 0}
             icon={dashboardData?.pendingRequests > 0 ? <AlertCircle className="w-8 h-8" /> : <Clock className="w-8 h-8" />}
             color={dashboardData?.pendingRequests > 0 ? "red" : "yellow"}
-            description="Wymagają zatwierdzenia"
+            description={isFiltered ? "Wnioski do rozpatrzenia" : "Wymagają zatwierdzenia"}
           />
-          
+
           <StatCard
             title="Kierowcy na Trasach"
             value={dashboardData?.activeDrivers || 0}
@@ -127,52 +142,53 @@ export default function DashboardPage() {
             color="green"
             description="Aktywni kierowcy"
           />
-          
+
           <StatCard
-            title="Koszty Spedycji"
+            title={isFiltered ? "Koszty Twojej Spedycji" : "Koszty Spedycji"}
             value={dashboardData?.speditionCosts?.thisMonth ? `${dashboardData.speditionCosts.thisMonth.toLocaleString()} zł` : '0 zł'}
             icon={<DollarSign className="w-8 h-8" />}
             color="purple"
             description="W tym miesiącu"
-            trend={dashboardData?.speditionCosts?.thisMonth > dashboardData?.speditionCosts?.lastMonth ? 'up' : 
-                   dashboardData?.speditionCosts?.thisMonth < dashboardData?.speditionCosts?.lastMonth ? 'down' : null}
-            trendValue={dashboardData?.speditionCosts?.lastMonth ? 
-              `${Math.abs(Math.round(((dashboardData.speditionCosts.thisMonth - dashboardData.speditionCosts.lastMonth) / dashboardData.speditionCosts.lastMonth) * 100))}%` : 
+            trend={dashboardData?.speditionCosts?.thisMonth > dashboardData?.speditionCosts?.lastMonth ? 'up' :
+              dashboardData?.speditionCosts?.thisMonth < dashboardData?.speditionCosts?.lastMonth ? 'down' : null}
+            trendValue={dashboardData?.speditionCosts?.lastMonth ?
+              `${Math.abs(Math.round(((dashboardData.speditionCosts.thisMonth - dashboardData.speditionCosts.lastMonth) / dashboardData.speditionCosts.lastMonth) * 100))}%` :
               null}
           />
         </div>
 
         {/* Główny content grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          <TodayTransportsWidget transports={dashboardData?.todayTransports} />
+          <TodayTransportsWidget transports={dashboardData?.todayTransports} isFiltered={isFiltered} />
           <WarehouseStatusWidget warehouses={dashboardData?.warehouses} />
         </div>
 
         {/* Dodatkowe sekcje */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
           <RecentRatingsWidget ratings={dashboardData?.recentRatings} />
-          <FleetActivityWidget 
-            fleetsInUse={dashboardData?.fleetsInUse} 
-            totalFleets={dashboardData?.totalFleets} 
+          <FleetActivityWidget
+            fleetsInUse={dashboardData?.fleetsInUse}
+            totalFleets={dashboardData?.totalFleets}
           />
-          <ActiveSpeditionsWidget 
+          <ActiveSpeditionsWidget
             activeSpeditions={dashboardData?.activeSpeditions}
             speditionCosts={dashboardData?.speditionCosts}
+            isFiltered={isFiltered}
           />
         </div>
 
         {/* Sekcja analiz bez wykresów */}
         <div className="mb-8">
           <h2 className="text-2xl font-bold text-gray-900 mb-6">Analizy i Statystyki</h2>
-          
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-            <TransportAnalysisWidget data={dashboardData} />
-            <CostAnalysisWidget costData={dashboardData?.speditionCosts} />
+            <TransportAnalysisWidget data={dashboardData} isFiltered={isFiltered} />
+            <CostAnalysisWidget costData={dashboardData?.speditionCosts} isFiltered={isFiltered} />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <MonthlyStatsWidget data={dashboardData?.costChartData} />
-            <TransportTypesWidget data={dashboardData?.transportTypes} />
+            <MonthlyStatsWidget data={dashboardData?.costChartData} isFiltered={isFiltered} />
+            <TransportTypesWidget data={dashboardData?.transportTypes} isFiltered={isFiltered} />
             <QuickActionsWidget />
           </div>
         </div>
@@ -185,7 +201,7 @@ export default function DashboardPage() {
 function StatCard({ title, value, icon, color, description, trend, trendValue }) {
   const colorClasses = {
     blue: 'bg-blue-50 border-blue-200 text-blue-600',
-    yellow: 'bg-yellow-50 border-yellow-200 text-yellow-600', 
+    yellow: 'bg-yellow-50 border-yellow-200 text-yellow-600',
     green: 'bg-green-50 border-green-200 text-green-600',
     purple: 'bg-purple-50 border-purple-200 text-purple-600',
     red: 'bg-red-50 border-red-200 text-red-600'
@@ -238,10 +254,10 @@ function DashboardWidget({ title, icon, children, className = "" }) {
   )
 }
 
-function TodayTransportsWidget({ transports }) {
+function TodayTransportsWidget({ transports, isFiltered }) {
   return (
     <DashboardWidget
-      title="Dzisiejsze Transporty"
+      title={isFiltered ? "Twoje Dzisiejsze Transporty" : "Dzisiejsze Transporty"}
       icon={<Calendar className="w-5 h-5" />}
     >
       <div className="space-y-3 max-h-80 overflow-y-auto">
@@ -252,9 +268,11 @@ function TodayTransportsWidget({ transports }) {
         ) : (
           <div className="text-center py-8">
             <Calendar className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-500">Brak transportów na dzisiaj</p>
-            <a 
-              href="/kalendarz" 
+            <p className="text-gray-500">
+              {isFiltered ? 'Brak Twoich transportów na dzisiaj' : 'Brak transportów na dzisiaj'}
+            </p>
+            <a
+              href="/kalendarz"
               className="text-blue-600 hover:text-blue-700 text-sm mt-2 inline-block"
             >
               Dodaj transport →
@@ -273,17 +291,17 @@ function WarehouseStatusWidget({ warehouses }) {
       icon={<Building className="w-5 h-5" />}
     >
       <div className="space-y-4">
-        <WarehouseStatus 
-          name="Białystok" 
+        <WarehouseStatus
+          name="Białystok"
           activeTransports={warehouses?.bialystok || 0}
           status="operational"
         />
-        <WarehouseStatus 
-          name="Zielonka" 
+        <WarehouseStatus
+          name="Zielonka"
           activeTransports={warehouses?.zielonka || 0}
           status="operational"
         />
-        
+
         <div className="mt-4 pt-4 border-t border-gray-200">
           <div className="flex justify-between text-sm">
             <span className="text-gray-600">Łącznie aktywnych:</span>
@@ -315,14 +333,14 @@ function RecentRatingsWidget({ ratings }) {
           </div>
         )}
       </div>
-      
+
       {ratings?.length > 0 && (
         <div className="mt-4 pt-4 border-t border-gray-200">
-          <a 
-            href="/archiwum" 
+          <a
+            href="/archiwum"
             className="text-blue-600 hover:text-blue-700 text-sm flex items-center"
           >
-            Zobacz wszystkie oceny 
+            Zobacz wszystkie oceny
             <ExternalLink className="w-3 h-3 ml-1" />
           </a>
         </div>
@@ -333,7 +351,7 @@ function RecentRatingsWidget({ ratings }) {
 
 function FleetActivityWidget({ fleetsInUse, totalFleets }) {
   const usagePercentage = totalFleets > 0 ? Math.round((fleetsInUse / totalFleets) * 100) : 0;
-  
+
   return (
     <DashboardWidget
       title="Aktywność Floty"
@@ -344,29 +362,27 @@ function FleetActivityWidget({ fleetsInUse, totalFleets }) {
           <span className="text-sm text-gray-600">Pojazdy w użyciu</span>
           <span className="font-semibold text-lg">{fleetsInUse}/{totalFleets}</span>
         </div>
-        
+
         <div className="w-full bg-gray-200 rounded-full h-3">
-          <div 
-            className={`h-3 rounded-full transition-all duration-500 ${
-              usagePercentage >= 80 ? 'bg-red-500' :
+          <div
+            className={`h-3 rounded-full transition-all duration-500 ${usagePercentage >= 80 ? 'bg-red-500' :
               usagePercentage >= 60 ? 'bg-yellow-500' :
-              'bg-green-500'
-            }`}
-            style={{width: `${usagePercentage}%`}}
+                'bg-green-500'
+              }`}
+            style={{ width: `${usagePercentage}%` }}
           ></div>
         </div>
-        
+
         <div className="flex justify-between text-xs">
           <span className="text-gray-500">Wykorzystanie floty</span>
-          <span className={`font-medium ${
-            usagePercentage >= 80 ? 'text-red-600' :
+          <span className={`font-medium ${usagePercentage >= 80 ? 'text-red-600' :
             usagePercentage >= 60 ? 'text-yellow-600' :
-            'text-green-600'
-          }`}>
+              'text-green-600'
+            }`}>
             {usagePercentage}%
           </span>
         </div>
-        
+
         <div className="pt-3 border-t border-gray-200">
           <div className="text-xs text-gray-500">
             <div className="flex justify-between mb-1">
@@ -375,14 +391,13 @@ function FleetActivityWidget({ fleetsInUse, totalFleets }) {
             </div>
             <div className="flex justify-between">
               <span>Status:</span>
-              <span className={`font-medium ${
-                usagePercentage >= 90 ? 'text-red-600' :
+              <span className={`font-medium ${usagePercentage >= 90 ? 'text-red-600' :
                 usagePercentage >= 70 ? 'text-yellow-600' :
-                'text-green-600'
-              }`}>
+                  'text-green-600'
+                }`}>
                 {usagePercentage >= 90 ? 'Krytyczne' :
-                 usagePercentage >= 70 ? 'Wysokie' :
-                 'Normalne'}
+                  usagePercentage >= 70 ? 'Wysokie' :
+                    'Normalne'}
               </span>
             </div>
           </div>
@@ -392,20 +407,21 @@ function FleetActivityWidget({ fleetsInUse, totalFleets }) {
   )
 }
 
-function ActiveSpeditionsWidget({ activeSpeditions, speditionCosts }) {
+function ActiveSpeditionsWidget({ activeSpeditions, speditionCosts, isFiltered }) {
   return (
     <DashboardWidget
-      title="Aktywne Spedycje"
-      icon={<Truck className="w-5 h-5" />}
+      title={isFiltered ? "Twoje Aktywne Spedycje" : "Aktywne Spedycje"}
+      icon={<FileText className="w-5 h-5" />}
     >
-      <div className="space-y-4">
-        <div className="text-center">
-          <div className="text-3xl font-bold text-red-600 mb-2">
-            {activeSpeditions || 0}
+      <div className="flex flex-col h-[280px]">
+        <div className="flex-1 flex flex-col justify-center items-center text-center p-6 border-b border-gray-100">
+          <div className="bg-blue-50 w-20 h-20 rounded-full flex items-center justify-center mb-4">
+            <span className="text-4xl font-bold text-blue-600 border-b-2 border-transparent">{activeSpeditions || 0}</span>
           </div>
-          <div className="text-sm text-gray-600">
-            Spedycji w trakcie realizacji
-          </div>
+          <p className="text-gray-600 font-medium">Spedycje w realizacji</p>
+          <p className="text-sm text-gray-500 mt-1">
+            {isFiltered ? "Aktywne zlecenia dla Twojego rynku" : "Wszystkie aktywne zlecenia spedycyjne w systemie"}
+          </p>
         </div>
 
         {speditionCosts && (
@@ -417,7 +433,7 @@ function ActiveSpeditionsWidget({ activeSpeditions, speditionCosts }) {
               </div>
               {speditionCosts.lastMonth > 0 && (
                 <div className="text-xs text-gray-500">
-                  {speditionCosts.thisMonth > speditionCosts.lastMonth ? '↗' : '↘'} 
+                  {speditionCosts.thisMonth > speditionCosts.lastMonth ? '↗' : '↘'}
                   {' '}vs. {speditionCosts.lastMonth.toLocaleString()} zł
                 </div>
               )}
@@ -430,7 +446,7 @@ function ActiveSpeditionsWidget({ activeSpeditions, speditionCosts }) {
               </div>
               {speditionCosts.lastWeek > 0 && (
                 <div className="text-xs text-gray-500">
-                  {speditionCosts.thisWeek > speditionCosts.lastWeek ? '↗' : '↘'} 
+                  {speditionCosts.thisWeek > speditionCosts.lastWeek ? '↗' : '↘'}
                   {' '}vs. {speditionCosts.lastWeek.toLocaleString()} zł
                 </div>
               )}
@@ -442,11 +458,11 @@ function ActiveSpeditionsWidget({ activeSpeditions, speditionCosts }) {
   )
 }
 
-function TransportAnalysisWidget({ data }) {
+function TransportAnalysisWidget({ data, isFiltered }) {
   return (
     <DashboardWidget
-      title="Analiza Transportów"
-      icon={<BarChart3 className="w-5 h-5" />}
+      title={isFiltered ? "Analiza Twoich Transportów" : "Ogólna Analiza Transportów"}
+      icon={<Activity className="w-5 h-5" />}
     >
       <div className="space-y-4">
         <div className="flex justify-between items-center">
@@ -457,7 +473,7 @@ function TransportAnalysisWidget({ data }) {
           <span className="text-sm text-gray-600">Transport spedycyjny (miesiąc)</span>
           <span className="font-semibold text-red-600">{data?.transportTypes?.spedition?.thisMonth || 0}</span>
         </div>
-        
+
         {/* Prostky wykres słupkowy CSS */}
         <div className="mt-4">
           <div className="text-xs text-gray-500 mb-2">Porównanie miesięczne</div>
@@ -465,7 +481,7 @@ function TransportAnalysisWidget({ data }) {
             <div className="flex items-center">
               <div className="w-16 text-xs text-gray-600 mr-2">Własny</div>
               <div className="flex-1 bg-gray-200 rounded-full h-4">
-                <div 
+                <div
                   className="bg-blue-500 h-4 rounded-full transition-all duration-500"
                   style={{
                     width: `${data?.transportTypes ? (data.transportTypes.own.thisMonth / Math.max(data.transportTypes.own.thisMonth + data.transportTypes.spedition.thisMonth, 1)) * 100 : 0}%`
@@ -477,7 +493,7 @@ function TransportAnalysisWidget({ data }) {
             <div className="flex items-center">
               <div className="w-16 text-xs text-gray-600 mr-2">Spedycja</div>
               <div className="flex-1 bg-gray-200 rounded-full h-4">
-                <div 
+                <div
                   className="bg-red-500 h-4 rounded-full transition-all duration-500"
                   style={{
                     width: `${data?.transportTypes ? (data.transportTypes.spedition.thisMonth / Math.max(data.transportTypes.own.thisMonth + data.transportTypes.spedition.thisMonth, 1)) * 100 : 0}%`
@@ -493,11 +509,11 @@ function TransportAnalysisWidget({ data }) {
   )
 }
 
-function CostAnalysisWidget({ costData }) {
+function CostAnalysisWidget({ costData, isFiltered }) {
   return (
     <DashboardWidget
-      title="Analiza Kosztów Spedycji"
-      icon={<DollarSign className="w-5 h-5" />}
+      title={isFiltered ? "Analiza Kosztów Twojej Spedycji" : "Analiza Kosztów Spedycji"}
+      icon={<TrendingUp className="w-5 h-5" />}
     >
       <div className="space-y-4">
         {costData ? (
@@ -512,7 +528,7 @@ function CostAnalysisWidget({ costData }) {
                 <div className="font-bold text-blue-700">{costData.lastMonth.toLocaleString()} zł</div>
               </div>
             </div>
-            
+
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-purple-50 p-3 rounded-lg text-center">
                 <div className="text-xs text-purple-600 mb-1">Ten tydzień</div>
@@ -535,9 +551,8 @@ function CostAnalysisWidget({ costData }) {
                     ) : (
                       <TrendingDown className="w-4 h-4 text-green-500 mr-1" />
                     )}
-                    <span className={`text-sm font-medium ${
-                      costData.thisMonth > costData.lastMonth ? 'text-red-500' : 'text-green-500'
-                    }`}>
+                    <span className={`text-sm font-medium ${costData.thisMonth > costData.lastMonth ? 'text-red-500' : 'text-green-500'
+                      }`}>
                       {Math.abs(Math.round(((costData.thisMonth - costData.lastMonth) / costData.lastMonth) * 100))}%
                     </span>
                   </div>
@@ -556,11 +571,14 @@ function CostAnalysisWidget({ costData }) {
   )
 }
 
-function MonthlyStatsWidget({ data }) {
+function MonthlyStatsWidget({ data, isFiltered }) {
+  // Obliczamy max i uwnikamy dzielenia przez 0
+  const maxValue = data ? Math.max(...data.map(d => d.koszt), 1) : 1;
+
   return (
     <DashboardWidget
-      title="Wykres Kosztów Spedycji"
-      icon={<DollarSign className="w-5 h-5" />}
+      title={isFiltered ? "Twoje Koszty Spedycji (6m)" : "Koszty Spedycji (6m)"}
+      icon={<BarChart3 className="w-5 h-5" />}
     >
       <div className="space-y-3">
         {data && data.length > 0 ? (
@@ -585,14 +603,17 @@ function MonthlyStatsWidget({ data }) {
   )
 }
 
-function TransportTypesWidget({ data }) {
-  const total = data ? data.own.thisMonth + data.spedition.thisMonth : 0;
-  const ownPercentage = total > 0 ? Math.round((data.own.thisMonth / total) * 100) : 0;
-  const speditionPercentage = total > 0 ? Math.round((data.spedition.thisMonth / total) * 100) : 0;
+function TransportTypesWidget({ data, isFiltered }) {
+  const ownCount = data?.own?.count || 0;
+  const spedCount = data?.spedition?.count || 0;
+  const total = ownCount + spedCount || 1; // unikamy dzielenia przez 0
+
+  const ownPercentage = Math.round((ownCount / total) * 100);
+  const speditionPercentage = Math.round((spedCount / total) * 100);
 
   return (
     <DashboardWidget
-      title="Podział Transportów"
+      title={isFiltered ? "Podział Twoich Transportów" : "Podział Transportów"}
       icon={<PieChart className="w-5 h-5" />}
     >
       <div className="space-y-4">
@@ -608,7 +629,7 @@ function TransportTypesWidget({ data }) {
                 <div className="text-xs text-gray-500">{ownPercentage}%</div>
               </div>
             </div>
-            
+
             <div className="flex items-center justify-between">
               <div className="flex items-center">
                 <div className="w-3 h-3 bg-red-500 rounded-full mr-2"></div>
@@ -649,7 +670,7 @@ function QuickActionsWidget() {
     },
     {
       href: "/spedycja",
-      text: "Panel Spedycji", 
+      text: "Panel Spedycji",
       icon: <FileText className="w-4 h-4" />,
       color: "green",
       description: "Zarządzaj zleceniami"
@@ -680,7 +701,7 @@ function QuickActionsWidget() {
 // Pozostałe funkcje pomocnicze
 function TransportItem({ transport }) {
   const getStatusColor = (status) => {
-    switch(status) {
+    switch (status) {
       case 'completed': return 'bg-green-100 text-green-800';
       case 'active': return 'bg-blue-100 text-blue-800';
       case 'pending': return 'bg-yellow-100 text-yellow-800';
@@ -689,7 +710,7 @@ function TransportItem({ transport }) {
   }
 
   const getStatusText = (status) => {
-    switch(status) {
+    switch (status) {
       case 'completed': return 'Ukończony';
       case 'active': return 'Aktywny';
       case 'pending': return 'Oczekujący';
@@ -726,9 +747,8 @@ function WarehouseStatus({ name, activeTransports, status }) {
   return (
     <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
       <div className="flex items-center">
-        <div className={`w-3 h-3 rounded-full mr-3 ${
-          status === 'operational' ? 'bg-green-500' : 'bg-red-500'
-        }`}></div>
+        <div className={`w-3 h-3 rounded-full mr-3 ${status === 'operational' ? 'bg-green-500' : 'bg-red-500'
+          }`}></div>
         <div>
           <div className="font-medium text-gray-900">{name}</div>
           <div className="text-sm text-gray-600">
@@ -737,9 +757,8 @@ function WarehouseStatus({ name, activeTransports, status }) {
         </div>
       </div>
       <div className="text-right">
-        <div className={`text-sm font-medium ${
-          status === 'operational' ? 'text-green-600' : 'text-red-600'
-        }`}>
+        <div className={`text-sm font-medium ${status === 'operational' ? 'text-green-600' : 'text-red-600'
+          }`}>
           {status === 'operational' ? 'Operacyjny' : 'Problem'}
         </div>
       </div>
@@ -773,12 +792,12 @@ function RatingItem({ rating }) {
 function QuickActionButton({ href, text, icon, color, description }) {
   const colorClasses = {
     blue: 'bg-blue-600 hover:bg-blue-700 text-white',
-    green: 'bg-green-600 hover:bg-green-700 text-white', 
+    green: 'bg-green-600 hover:bg-green-700 text-white',
     gray: 'bg-gray-600 hover:bg-gray-700 text-white'
   }
 
   return (
-    <a 
+    <a
       href={href}
       className={`flex items-center justify-between px-4 py-3 rounded-lg transition-colors ${colorClasses[color]} group`}
     >

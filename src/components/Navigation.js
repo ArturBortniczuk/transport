@@ -173,6 +173,13 @@ export default function Navigation() {
 
   // Struktura menu
   const menuStructure = {
+    'panel-glowny': {
+      title: 'Panel Główny',
+      icon: Activity,
+      items: [
+        { name: 'Dashboard', path: '/dashboard', icon: BarChart3 }
+      ]
+    },
     'transport-wlasny': {
       title: 'Transport własny',
       icon: Truck,
@@ -300,8 +307,8 @@ export default function Navigation() {
                 <button
                   onClick={() => toggleDropdown(key)}
                   className={`${isDropdownActive(category.items.map(item => item.path))
-                      ? 'text-white bg-blue-800'
-                      : 'text-blue-100 hover:text-white hover:bg-blue-800'
+                    ? 'text-white bg-blue-800'
+                    : 'text-blue-100 hover:text-white hover:bg-blue-800'
                     } px-3 py-2 rounded-md text-sm font-medium transition-custom flex items-center space-x-1`}
                 >
                   <category.icon className="w-4 h-4" />
@@ -318,8 +325,8 @@ export default function Navigation() {
                           href={item.path}
                           onClick={() => setOpenDropdown(null)}
                           className={`${isActive(item.path)
-                              ? 'bg-blue-50 text-blue-700'
-                              : 'text-gray-700 hover:bg-gray-100'
+                            ? 'bg-blue-50 text-blue-700'
+                            : 'text-gray-700 hover:bg-gray-100'
                             } group flex items-center px-4 py-2 text-sm transition-colors`}
                         >
                           <item.icon className="w-4 h-4 mr-3 text-gray-400 group-hover:text-gray-500" />
@@ -336,8 +343,8 @@ export default function Navigation() {
             <Link
               href="/oceny"
               className={`${isActive('/oceny')
-                  ? 'text-white bg-blue-800'
-                  : 'text-blue-100 hover:text-white hover:bg-blue-800'
+                ? 'text-white bg-blue-800'
+                : 'text-blue-100 hover:text-white hover:bg-blue-800'
                 } px-3 py-2 rounded-md text-sm font-medium transition-custom flex items-center space-x-1`}
             >
               <Star className="w-4 h-4" />
@@ -348,8 +355,8 @@ export default function Navigation() {
             <Link
               href="/wycena-transportu"
               className={`${isActive('/wycena-transportu')
-                  ? 'text-white bg-blue-800'
-                  : 'text-blue-100 hover:text-white hover:bg-blue-800'
+                ? 'text-white bg-blue-800'
+                : 'text-blue-100 hover:text-white hover:bg-blue-800'
                 } px-3 py-2 rounded-md text-sm font-medium transition-custom flex items-center space-x-1`}
             >
               <Calculator className="w-4 h-4" />
@@ -427,8 +434,8 @@ export default function Navigation() {
                         href={item.path}
                         onClick={() => setIsMobileMenuOpen(false)}
                         className={`${isActive(item.path)
-                            ? 'bg-blue-700 text-white'
-                            : 'text-blue-100 hover:bg-blue-700 hover:text-white'
+                          ? 'bg-blue-700 text-white'
+                          : 'text-blue-100 hover:bg-blue-700 hover:text-white'
                           } group flex items-center px-3 py-2 rounded-md text-sm font-medium transition-custom`}
                       >
                         <item.icon className="w-4 h-4 mr-2" />
@@ -444,8 +451,8 @@ export default function Navigation() {
                 href="/oceny"
                 onClick={() => setIsMobileMenuOpen(false)}
                 className={`${isActive('/oceny')
-                    ? 'bg-blue-700 text-white'
-                    : 'text-blue-100 hover:bg-blue-700 hover:text-white'
+                  ? 'bg-blue-700 text-white'
+                  : 'text-blue-100 hover:bg-blue-700 hover:text-white'
                   } group flex items-center px-3 py-2 rounded-md text-sm font-medium transition-custom`}
               >
                 <Star className="w-4 h-4 mr-2" />
@@ -457,8 +464,8 @@ export default function Navigation() {
                 href="/wycena-transportu"
                 onClick={() => setIsMobileMenuOpen(false)}
                 className={`${isActive('/wycena-transportu')
-                    ? 'bg-blue-700 text-white'
-                    : 'text-blue-100 hover:bg-blue-700 hover:text-white'
+                  ? 'bg-blue-700 text-white'
+                  : 'text-blue-100 hover:bg-blue-700 hover:text-white'
                   } group flex items-center px-3 py-2 mt-1 rounded-md text-sm font-medium transition-custom`}
               >
                 <Calculator className="w-4 h-4 mr-2" />
