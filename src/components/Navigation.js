@@ -175,11 +175,13 @@ export default function Navigation() {
 
   // Struktura menu
   const menuStructure = {
-    'panel-glowny': {
-      title: 'Panel Główny',
+    'narzedzia': {
+      title: 'Narzędzia',
       icon: Activity,
       items: [
-        { name: 'Dashboard', path: '/dashboard', icon: BarChart3 }
+        { name: 'Dashboard', path: '/dashboard', icon: BarChart3 },
+        { name: 'Oceny', path: '/oceny', icon: Star },
+        { name: 'Wycena transportu', path: '/wycena-transportu', icon: Calculator }
       ]
     },
     'transport-wlasny': {
@@ -341,30 +343,6 @@ export default function Navigation() {
               </div>
             ))}
 
-            {/* NOWY LINK - OCENY (bez dropdown, bezpośredni link) */}
-            <Link
-              href="/oceny"
-              className={`${isActive('/oceny')
-                ? 'text-white bg-blue-800'
-                : 'text-blue-100 hover:text-white hover:bg-blue-800'
-                } px-3 py-2 rounded-md text-sm font-medium transition-custom flex items-center space-x-1`}
-            >
-              <Star className="w-4 h-4" />
-              <span>Oceny</span>
-            </Link>
-
-            {/* NOWY LINK - WYCENA TRANSPORTU */}
-            <Link
-              href="/wycena-transportu"
-              className={`${isActive('/wycena-transportu')
-                ? 'text-white bg-blue-800'
-                : 'text-blue-100 hover:text-white hover:bg-blue-800'
-                } px-3 py-2 rounded-md text-sm font-medium transition-custom flex items-center space-x-1`}
-            >
-              <Calculator className="w-4 h-4" />
-              <span>Wycena transportu</span>
-            </Link>
-
             {/* User Menu */}
             <div className="relative ml-6" ref={el => dropdownRefs.current['user-menu'] = el}>
               <button
@@ -447,32 +425,6 @@ export default function Navigation() {
                   </div>
                 </div>
               ))}
-
-              {/* NOWY LINK - OCENY (mobile) */}
-              <Link
-                href="/oceny"
-                onClick={() => setIsMobileMenuOpen(false)}
-                className={`${isActive('/oceny')
-                  ? 'bg-blue-700 text-white'
-                  : 'text-blue-100 hover:bg-blue-700 hover:text-white'
-                  } group flex items-center px-3 py-2 rounded-md text-sm font-medium transition-custom`}
-              >
-                <Star className="w-4 h-4 mr-2" />
-                Oceny
-              </Link>
-
-              {/* NOWY LINK - WYCENA TRANSPORTU (mobile) */}
-              <Link
-                href="/wycena-transportu"
-                onClick={() => setIsMobileMenuOpen(false)}
-                className={`${isActive('/wycena-transportu')
-                  ? 'bg-blue-700 text-white'
-                  : 'text-blue-100 hover:bg-blue-700 hover:text-white'
-                  } group flex items-center px-3 py-2 mt-1 rounded-md text-sm font-medium transition-custom`}
-              >
-                <Calculator className="w-4 h-4 mr-2" />
-                Wycena transportu
-              </Link>
 
               {/* Mobile User Menu */}
               <div className="border-t border-blue-700 pt-2 mt-2">
