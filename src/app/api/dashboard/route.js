@@ -132,6 +132,7 @@ export async function GET(request) {
       monthlyChartData: [],
       weeklyChartData: [],
       costChartData: [],
+      recentSpeditions: [],
       userFiltered: isHandlowiec
     };
 
@@ -252,6 +253,30 @@ export async function GET(request) {
           .where('created_at', '<=', lastMonthEnd.toISOString())
           .count('* as count').first();
         speditionTransportsLastMonth = parseInt(spedLastMonth?.count || 0);
+
+        // Ostatnie 5 zlecenia spedycyjne (Dla nowego widżetu)
+        const recentSpeds = await applySpedycjaFilter(db('spedycje'))
+          .orderBy('created_at', 'desc')
+          .limit(5);
+
+        dashboardData.recentSpeditions = recentSpeds.map(spedycja => {
+          let price = null;
+          try {
+            if (spedycja.response_data) {
+              const responseData = typeof spedycja.response_data === 'string' ? JSON.parse(spedycja.response_data) : spedycja.response_data;
+              price = responseData.deliveryPrice ? parseFloat(responseData.deliveryPrice) : null;
+            }
+          } catch (e) { }
+
+          return {
+            id: spedycja.id,
+            spedition_number: spedycja.spedition_number,
+            date: spedycja.created_at,
+            mpk: spedycja.mpk || 'Brak',
+            price: price,
+            destination: spedycja.destination_city || 'Nieznane'
+          };
+        });
 
         // KOSZTY SPEDYCJI
         // Ten miesiąc
