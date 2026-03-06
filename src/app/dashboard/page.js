@@ -135,13 +135,15 @@ export default function DashboardPage() {
             description={isFiltered ? "Wnioski do rozpatrzenia" : "Wymagają zatwierdzenia"}
           />
 
-          <StatCard
-            title="Kierowcy na Trasach"
-            value={dashboardData?.activeDrivers || 0}
-            icon={<Users className="w-8 h-8" />}
-            color="green"
-            description="Aktywni kierowcy"
-          />
+          {!isFiltered && (
+            <StatCard
+              title="Kierowcy na Trasach"
+              value={dashboardData?.activeDrivers || 0}
+              icon={<Users className="w-8 h-8" />}
+              color="green"
+              description="Aktywni kierowcy"
+            />
+          )}
 
           <StatCard
             title={isFiltered ? "Koszty Twojej Spedycji" : "Koszty Spedycji"}
@@ -158,18 +160,22 @@ export default function DashboardPage() {
         </div>
 
         {/* Główny content grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <div className={`grid grid-cols-1 gap-6 mb-8 ${isFiltered ? 'lg:grid-cols-1' : 'lg:grid-cols-2'}`}>
           <TodayTransportsWidget transports={dashboardData?.todayTransports} isFiltered={isFiltered} />
-          <WarehouseStatusWidget warehouses={dashboardData?.warehouses} />
+          {!isFiltered && (
+            <WarehouseStatusWidget warehouses={dashboardData?.warehouses} />
+          )}
         </div>
 
         {/* Dodatkowe sekcje */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        <div className={`grid grid-cols-1 gap-6 mb-8 ${isFiltered ? 'lg:grid-cols-2' : 'lg:grid-cols-3'}`}>
           <RecentRatingsWidget ratings={dashboardData?.recentRatings} />
-          <FleetActivityWidget
-            fleetsInUse={dashboardData?.fleetsInUse}
-            totalFleets={dashboardData?.totalFleets}
-          />
+          {!isFiltered && (
+            <FleetActivityWidget
+              fleetsInUse={dashboardData?.fleetsInUse}
+              totalFleets={dashboardData?.totalFleets}
+            />
+          )}
           <ActiveSpeditionsWidget
             activeSpeditions={dashboardData?.activeSpeditions}
             speditionCosts={dashboardData?.speditionCosts}
@@ -177,21 +183,30 @@ export default function DashboardPage() {
           />
         </div>
 
-        {/* Sekcja analiz bez wykresów */}
-        <div className="mb-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">Analizy i Statystyki</h2>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-            <TransportAnalysisWidget data={dashboardData} isFiltered={isFiltered} />
+        {isFiltered && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            <MyTransportsChart data={dashboardData} />
             <CostAnalysisWidget costData={dashboardData?.speditionCosts} isFiltered={isFiltered} />
           </div>
+        )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <MonthlyStatsWidget data={dashboardData?.costChartData} isFiltered={isFiltered} />
-            <TransportTypesWidget data={dashboardData?.transportTypes} isFiltered={isFiltered} />
-            <QuickActionsWidget />
+        {/* Sekcja analiz bez wykresów (tylko dla niefiltrowanych) */}
+        {!isFiltered && (
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">Analizy i Statystyki</h2>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+              <TransportAnalysisWidget data={dashboardData} isFiltered={isFiltered} />
+              <CostAnalysisWidget costData={dashboardData?.speditionCosts} isFiltered={isFiltered} />
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <MonthlyStatsWidget data={dashboardData?.costChartData} isFiltered={isFiltered} />
+              <TransportTypesWidget data={dashboardData?.transportTypes} isFiltered={isFiltered} />
+              <QuickActionsWidget />
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   )
@@ -451,6 +466,56 @@ function ActiveSpeditionsWidget({ activeSpeditions, speditionCosts, isFiltered }
                 </div>
               )}
             </div>
+          </div>
+        )}
+      </div>
+    </DashboardWidget>
+  )
+}
+
+function MyTransportsChart({ data }) {
+  const ownCount = data?.transportTypes?.own?.thisMonth || 0;
+  const spedCount = data?.transportTypes?.spedition?.thisMonth || 0;
+  const total = ownCount + spedCount;
+
+  const ownPercent = total > 0 ? Math.round((ownCount / total) * 100) : 0;
+  const spedPercent = total > 0 ? Math.round((spedCount / total) * 100) : 0;
+
+  return (
+    <DashboardWidget
+      title="Podział Twoich Transportów"
+      icon={<BarChart3 className="w-5 h-5" />}
+    >
+      <div className="space-y-6">
+        <div className="flex justify-between items-center text-sm text-gray-600 mb-2">
+          <span>Transport Własny</span>
+          <span className="font-semibold text-blue-600 text-lg">{ownCount}</span>
+        </div>
+        <div className="w-full bg-gray-100 rounded-full h-6 overflow-hidden flex cursor-pointer" title={`Własny: ${ownPercent}%`}>
+          <div
+            className="bg-blue-500 h-6 flex items-center justify-center text-xs text-white font-medium transition-all duration-1000"
+            style={{ width: `${ownPercent}%` }}
+          >
+            {ownPercent > 10 ? `${ownPercent}%` : ''}
+          </div>
+        </div>
+
+        <div className="flex justify-between items-center text-sm text-gray-600 mb-2 mt-6">
+          <span>Transport Spedycyjny</span>
+          <span className="font-semibold text-purple-600 text-lg">{spedCount}</span>
+        </div>
+        <div className="w-full bg-gray-100 rounded-full h-6 overflow-hidden flex cursor-pointer" title={`Spedycyjny: ${spedPercent}%`}>
+          <div
+            className="bg-purple-500 h-6 flex items-center justify-center text-xs text-white font-medium transition-all duration-1000"
+            style={{ width: `${spedPercent}%` }}
+          >
+            {spedPercent > 10 ? `${spedPercent}%` : ''}
+          </div>
+        </div>
+
+        {total === 0 && (
+          <div className="text-center text-sm text-gray-500 italic mt-4">
+            Brak transportów w tym miesiącu do wyświetlenia wykresu.
           </div>
         )}
       </div>
