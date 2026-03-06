@@ -21,7 +21,9 @@ import {
   Menu,
   X,
   Star, // NOWA IKONA dla Ocen
-  Calculator // IKONA dla Wyceny Transportu
+  Calculator, // IKONA dla Wyceny Transportu
+  Activity,
+  BarChart3
 } from 'lucide-react'
 
 export default function Navigation() {
