@@ -12,16 +12,18 @@ import { KIEROWCY } from '@/app/kalendarz/constants'
 // Mapowanie kodu MPK na rynek
 const getMarketFromMPK = (mpk) => {
   if (!mpk) return null
-  
-  if (mpk.match(/^522-02-/)) return 'Rynek Podlaski'
-  if (mpk.match(/^522-04-/)) return 'Rynek Lubelski'
-  if (mpk.match(/^522-05-/)) return 'Rynek Mazowiecki'
-  if (mpk.match(/^522-06-/)) return 'Rynek Pomorski'
-  if (mpk.match(/^522-07-/)) return 'Rynek Małopolski'
-  if (mpk.match(/^522-08-/)) return 'Rynek Dolnośląski'
-  if (mpk.match(/^522-09-/)) return 'Rynek Wielkopolski'
-  if (mpk.match(/^522-11-/)) return 'Rynek Śląski'
-  
+
+  const cleanMpk = String(mpk).trim()
+
+  if (cleanMpk.match(/^522-02-/)) return 'Rynek Podlaski'
+  if (cleanMpk.match(/^522-04-/)) return 'Rynek Lubelski'
+  if (cleanMpk.match(/^522-05-/)) return 'Rynek Mazowiecki'
+  if (cleanMpk.match(/^522-06-/)) return 'Rynek Pomorski'
+  if (cleanMpk.match(/^522-07-/)) return 'Rynek Małopolski'
+  if (cleanMpk.match(/^522-08-/)) return 'Rynek Dolnośląski'
+  if (cleanMpk.match(/^522-09-/)) return 'Rynek Wielkopolski'
+  if (cleanMpk.match(/^522-11-/)) return 'Rynek Śląski'
+
   return null
 }
 
@@ -31,7 +33,7 @@ export default function OcenyPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [users, setUsers] = useState([])
-  
+
   // Filtry
   const [dateRange, setDateRange] = useState('week')
   const [startDate, setStartDate] = useState('')
@@ -44,7 +46,7 @@ export default function OcenyPage() {
   const [transportTypeFilter, setTransportTypeFilter] = useState('all')
   const [ratingFilter, setRatingFilter] = useState('all')
   const [showFilters, setShowFilters] = useState(false)
-  
+
   // Modal
   const [selectedTransport, setSelectedTransport] = useState(null)
   const [showRatingModal, setShowRatingModal] = useState(false)
@@ -57,8 +59,8 @@ export default function OcenyPage() {
   useEffect(() => {
     const today = new Date()
     let start, end
-    
-    switch(dateRange) {
+
+    switch (dateRange) {
       case 'week':
         start = startOfWeek(today, { locale: pl })
         end = endOfWeek(today, { locale: pl })
@@ -74,7 +76,7 @@ export default function OcenyPage() {
       default:
         return
     }
-    
+
     setStartDate(format(start, 'yyyy-MM-dd'))
     setEndDate(format(end, 'yyyy-MM-dd'))
   }, [dateRange])
@@ -89,9 +91,9 @@ export default function OcenyPage() {
     try {
       const response = await fetch('/api/users')
       const data = await response.json()
-      
+
       let usersData = []
-      
+
       if (Array.isArray(data)) {
         usersData = data
       } else if (data.success && Array.isArray(data.users)) {
@@ -100,14 +102,14 @@ export default function OcenyPage() {
         console.error('❌ Nieprawidłowy format danych użytkowników')
         return
       }
-      
+
       const usersWithMarket = usersData.map(user => ({
         ...user,
         market: getMarketFromMPK(user.mpk)
       }))
-      
+
       setUsers(usersWithMarket)
-      
+
     } catch (error) {
       console.error('Błąd pobierania użytkowników:', error)
     }
@@ -117,13 +119,13 @@ export default function OcenyPage() {
     try {
       setLoading(true)
       setError(null)
-      
+
       const params = new URLSearchParams({
         type: activeTab,
         startDate,
         endDate
       })
-      
+
       const response = await fetch(`/api/oceny-transportow?${params}`, {
         cache: 'no-store',
         headers: {
@@ -131,7 +133,7 @@ export default function OcenyPage() {
         }
       })
       const data = await response.json()
-      
+
       if (data.success) {
         setTransports(data.transports)
       } else {
@@ -153,51 +155,51 @@ export default function OcenyPage() {
   const filteredTransports = transports.filter(transport => {
     // Filtr osoby odpowiedzialnej
     if (selectedRequester) {
-      const email = activeTab === 'wlasny' 
-        ? transport.requester_email 
+      const email = activeTab === 'wlasny'
+        ? transport.requester_email
         : transport.responsible_email
       if (email !== selectedRequester) {
         return false
       }
     }
-    
+
     // Filtr rynku
     if (selectedMarket) {
-      const email = activeTab === 'wlasny' 
-        ? transport.requester_email 
+      const email = activeTab === 'wlasny'
+        ? transport.requester_email
         : transport.responsible_email
       const user = users.find(u => u.email === email)
       if (!user || user.market !== selectedMarket) {
         return false
       }
     }
-    
+
     // Filtr klienta
     if (selectedClient && !transport.client_name?.toLowerCase().includes(selectedClient.toLowerCase())) {
       return false
     }
-    
+
     // Filtr magazynu
     if (selectedWarehouse) {
-      const warehouse = activeTab === 'wlasny' 
-        ? transport.source_warehouse 
-        : (transport.location === 'Magazyn Białystok' ? 'bialystok' : 
-           transport.location === 'Magazyn Zielonka' ? 'zielonka' : null)
+      const warehouse = activeTab === 'wlasny'
+        ? transport.source_warehouse
+        : (transport.location === 'Magazyn Białystok' ? 'bialystok' :
+          transport.location === 'Magazyn Zielonka' ? 'zielonka' : null)
       if (warehouse !== selectedWarehouse) {
         return false
       }
     }
-    
+
     // Filtr miasta
     if (selectedCity) {
-      const city = activeTab === 'wlasny' 
-        ? transport.destination_city 
+      const city = activeTab === 'wlasny'
+        ? transport.destination_city
         : transport.delivery?.city
       if (!city?.toLowerCase().includes(selectedCity.toLowerCase())) {
         return false
       }
     }
-    
+
     // Filtr typu transportu
     if (transportTypeFilter !== 'all') {
       const constructionRegex = /^\d{3}-\d{2}-\d{2}\/\d{4}$/
@@ -231,7 +233,7 @@ export default function OcenyPage() {
         return false
       }
     }
-    
+
     // Filtr ocen
     if (ratingFilter !== 'all') {
       if (ratingFilter === 'rated' && !transport.has_rating) {
@@ -242,7 +244,7 @@ export default function OcenyPage() {
         if (transport.rating_percentage === null || transport.rating_percentage === 100) return false
       }
     }
-    
+
     return true
   })
 
@@ -261,7 +263,7 @@ export default function OcenyPage() {
   }
 
   const getMagazynName = (warehouse) => {
-    switch(warehouse) {
+    switch (warehouse) {
       case 'bialystok': return 'Białystok'
       case 'zielonka': return 'Zielonka'
       default: return warehouse || 'Nieznany'
@@ -307,21 +309,19 @@ export default function OcenyPage() {
         <div className="flex space-x-2 mb-6 border-b border-gray-200">
           <button
             onClick={() => setActiveTab('wlasny')}
-            className={`px-6 py-3 font-medium transition-colors border-b-2 ${
-              activeTab === 'wlasny'
+            className={`px-6 py-3 font-medium transition-colors border-b-2 ${activeTab === 'wlasny'
                 ? 'border-blue-600 text-blue-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
+              }`}
           >
             Transport Własny
           </button>
           <button
             onClick={() => setActiveTab('spedycyjny')}
-            className={`px-6 py-3 font-medium transition-colors border-b-2 ${
-              activeTab === 'spedycyjny'
+            className={`px-6 py-3 font-medium transition-colors border-b-2 ${activeTab === 'spedycyjny'
                 ? 'border-blue-600 text-blue-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
+              }`}
           >
             Transport Spedycyjny
           </button>
@@ -529,7 +529,7 @@ export default function OcenyPage() {
         ) : (
           <div className="overflow-x-auto">
             {activeTab === 'wlasny' ? (
-              <TransportWlasnyTable 
+              <TransportWlasnyTable
                 transports={filteredTransports}
                 onRate={handleOpenRatingModal}
                 getMagazynName={getMagazynName}
@@ -537,7 +537,7 @@ export default function OcenyPage() {
                 refreshBadges={refreshBadges}
               />
             ) : (
-              <TransportSpedycyjnyTable 
+              <TransportSpedycyjnyTable
                 transports={filteredTransports}
                 onRate={handleOpenRatingModal}
                 getMagazynName={getMagazynName}
@@ -646,11 +646,11 @@ function TransportWlasnyTable({ transports, onRate, getMagazynName, getDriverNam
               {getDriverName(transport.driver_id)}
             </td>
             <td className="px-4 py-3 whitespace-nowrap text-sm">
-              <TransportDetailedRatingBadge 
+              <TransportDetailedRatingBadge
                 key={`rating-${transport.id}-${refreshBadges}`}
                 transportId={transport.id}
                 type="transport"
-                refreshTrigger={refreshBadges} 
+                refreshTrigger={refreshBadges}
               />
             </td>
             <td className="px-4 py-3 whitespace-nowrap text-sm">
@@ -713,8 +713,8 @@ function TransportSpedycyjnyTable({ transports, onRate, getMagazynName, refreshB
       </thead>
       <tbody className="bg-white divide-y divide-gray-200">
         {transports.map((transport) => {
-          const pricePerKm = transport.response?.deliveryPrice && transport.response?.distanceKm 
-            ? (transport.response.deliveryPrice / transport.response.distanceKm).toFixed(2) 
+          const pricePerKm = transport.response?.deliveryPrice && transport.response?.distanceKm
+            ? (transport.response.deliveryPrice / transport.response.distanceKm).toFixed(2)
             : '-'
 
           return (
@@ -734,9 +734,9 @@ function TransportSpedycyjnyTable({ transports, onRate, getMagazynName, refreshB
                 {safeFormatDate(transport.delivery_date)}
               </td>
               <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                {transport.location === 'Magazyn Białystok' ? 'Białystok' : 
-                 transport.location === 'Magazyn Zielonka' ? 'Zielonka' : 
-                 transport.producerAddress?.city || '-'}
+                {transport.location === 'Magazyn Białystok' ? 'Białystok' :
+                  transport.location === 'Magazyn Zielonka' ? 'Zielonka' :
+                    transport.producerAddress?.city || '-'}
               </td>
               <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                 {transport.responsible_name || transport.responsible_email || '-'}
@@ -745,9 +745,9 @@ function TransportSpedycyjnyTable({ transports, onRate, getMagazynName, refreshB
                 {transport.response?.distanceKm ? `${transport.response.distanceKm} km` : '-'}
               </td>
               <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                {transport.location === 'Magazyn Białystok' ? 'Białystok' : 
-                 transport.location === 'Magazyn Zielonka' ? 'Zielonka' : 
-                 transport.producerAddress?.city || '-'}
+                {transport.location === 'Magazyn Białystok' ? 'Białystok' :
+                  transport.location === 'Magazyn Zielonka' ? 'Zielonka' :
+                    transport.producerAddress?.city || '-'}
               </td>
               <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                 {transport.delivery?.city || '-'}
@@ -765,21 +765,21 @@ function TransportSpedycyjnyTable({ transports, onRate, getMagazynName, refreshB
               </td>
               <td className="px-4 py-3 text-sm text-gray-900">
                 <div className="max-w-xs truncate" title={
-                  typeof transport.goods_description === 'object' 
+                  typeof transport.goods_description === 'object'
                     ? transport.goods_description?.description || '-'
                     : transport.goods_description || '-'
                 }>
-                  {typeof transport.goods_description === 'object' 
+                  {typeof transport.goods_description === 'object'
                     ? transport.goods_description?.description || '-'
                     : transport.goods_description || '-'}
                 </div>
               </td>
               <td className="px-4 py-3 whitespace-nowrap text-sm">
-                <TransportDetailedRatingBadge 
+                <TransportDetailedRatingBadge
                   key={`rating-${transport.id}-${refreshBadges}`}
                   transportId={transport.id}
                   type="spedition"
-                  refreshTrigger={refreshBadges} 
+                  refreshTrigger={refreshBadges}
                 />
               </td>
               <td className="px-4 py-3 whitespace-nowrap text-sm">
