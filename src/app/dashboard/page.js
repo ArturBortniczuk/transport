@@ -263,14 +263,16 @@ function StatCard({ title, value, icon, color, description, trend, trendValue })
 
 function DashboardWidget({ title, icon, children, className = "" }) {
   return (
-    <div className={`bg-white p-6 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow ${className}`}>
-      <div className="flex items-center mb-4">
+    <div className={`bg-white p-6 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow flex flex-col h-full ${className}`}>
+      <div className="flex items-center mb-4 flex-shrink-0">
         <div className="text-gray-600">
           {icon}
         </div>
         <h3 className="text-lg font-semibold text-gray-900 ml-2">{title}</h3>
       </div>
-      {children}
+      <div className="flex-1 flex flex-col justify-between">
+        {children}
+      </div>
     </div>
   )
 }
@@ -434,8 +436,8 @@ function ActiveSpeditionsWidget({ activeSpeditions, speditionCosts, isFiltered }
       title={isFiltered ? "Twoje Aktywne Spedycje" : "Aktywne Spedycje"}
       icon={<FileText className="w-5 h-5" />}
     >
-      <div className="flex flex-col h-full min-h-[280px]">
-        <div className="flex-1 flex flex-col justify-center items-center text-center p-6 border-b border-gray-100">
+      <div className="flex flex-col h-full">
+        <div className="flex-1 flex flex-col justify-center items-center text-center p-6 border-b border-gray-100 min-h-[160px]">
           <div className="bg-blue-50 w-20 h-20 rounded-full flex items-center justify-center mb-4">
             <span className="text-4xl font-bold text-blue-600 border-b-2 border-transparent">{activeSpeditions || 0}</span>
           </div>
