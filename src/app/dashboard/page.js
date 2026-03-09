@@ -725,20 +725,22 @@ function CostChartWidget({ chartData }) {
 
               return (
                 <div key={index} className="flex flex-col items-center flex-1 group">
-                  <div className="relative flex justify-center w-full h-full flex-col justify-end">
+                  <div className="relative flex justify-center w-full h-[160px] flex-col justify-end">
                     {/* Tooltip on hover */}
                     <div className="opacity-0 group-hover:opacity-100 absolute -top-10 bg-gray-900 text-white text-xs font-bold py-1.5 px-3 rounded-lg whitespace-nowrap transition-all duration-300 z-10 pointer-events-none mb-2 shadow-lg">
                       {data.koszt.toLocaleString()} zł
                       <div className="absolute w-2 h-2 bg-gray-900 transform rotate-45 left-1/2 -bottom-1 -translate-x-1/2"></div>
                     </div>
                     {/* Bar */}
-                    <div
-                      className={`w-full max-w-[44px] rounded-t-xl mx-auto transition-all duration-1000 origin-bottom hover:brightness-110 ${isCurrentMonth
-                          ? 'bg-gradient-to-t from-indigo-500 to-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.4)]'
-                          : 'bg-gradient-to-t from-gray-200 to-gray-100 border-x border-t border-gray-200/50'
-                        }`}
-                      style={{ height: `${heightPercent}%` }}
-                    ></div>
+                    <div className="w-full flex justify-center items-end h-full">
+                      <div
+                        className={`w-full max-w-[40px] rounded-t-xl transition-all duration-1000 origin-bottom hover:opacity-80 ${isCurrentMonth
+                          ? 'bg-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.4)]'
+                          : 'bg-gray-200 border-x border-t border-gray-300'
+                          }`}
+                        style={{ height: `${heightPercent}%` }}
+                      ></div>
+                    </div>
                   </div>
                   <span className={`text-xs mt-3 ${isCurrentMonth ? 'font-bold text-indigo-600' : 'text-gray-500 font-medium'}`}>
                     {data.month}
