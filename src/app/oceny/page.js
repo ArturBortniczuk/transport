@@ -11,7 +11,7 @@ import { KIEROWCY } from '@/app/kalendarz/constants'
 
 // Mapowanie kodu MPK na rynek
 const getMarketFromMPK = (mpk) => {
-  if (!mpk) return null
+  if (!mpk) return 'Inne (Brak MPK)'
 
   const cleanMpk = String(mpk).trim()
 
@@ -24,7 +24,7 @@ const getMarketFromMPK = (mpk) => {
   if (cleanMpk.match(/^522-09-/)) return 'Rynek Wielkopolski'
   if (cleanMpk.match(/^522-11-/)) return 'Rynek Śląski'
 
-  return null
+  return 'Inne (Nierozpoznane MPK)'
 }
 
 export default function OcenyPage() {
@@ -103,10 +103,12 @@ export default function OcenyPage() {
         return
       }
 
-      const usersWithMarket = usersData.map(user => ({
-        ...user,
-        market: getMarketFromMPK(user.mpk)
-      }))
+      const usersWithMarket = usersData
+        .filter(user => user.role === 'handlowiec' || getMarketFromMPK(user.mpk) !== 'Inne (Brak MPK)')
+        .map(user => ({
+          ...user,
+          market: getMarketFromMPK(user.mpk)
+        }))
 
       setUsers(usersWithMarket)
 
@@ -310,8 +312,8 @@ export default function OcenyPage() {
           <button
             onClick={() => setActiveTab('wlasny')}
             className={`px-6 py-3 font-medium transition-colors border-b-2 ${activeTab === 'wlasny'
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
               }`}
           >
             Transport Własny
@@ -319,8 +321,8 @@ export default function OcenyPage() {
           <button
             onClick={() => setActiveTab('spedycyjny')}
             className={`px-6 py-3 font-medium transition-colors border-b-2 ${activeTab === 'spedycyjny'
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
               }`}
           >
             Transport Spedycyjny

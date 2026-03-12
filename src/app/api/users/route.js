@@ -1,21 +1,13 @@
 // src/app/api/users/route.js
 import { NextResponse } from 'next/server';
 import db from '@/database/db';
-import { getFromCache, setInCache, removeFromCache } from '@/utils/cache';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export async function GET() {
   try {
-    // Sprawdź czy dane są w cache
-    const cacheKey = 'all_users_list';
-    const cachedUsers = getFromCache(cacheKey);
-
-    if (cachedUsers) {
-      return NextResponse.json(cachedUsers);
-    }
-
-    // Pobieranie listy użytkowników - zaktualizowane do Knex
+    // Pobieranie listy użytkowników
     const users = await db('users')
       .select('name', 'position', 'email', 'permissions', 'role', 'mpk');
 
@@ -23,10 +15,6 @@ export async function GET() {
       throw new Error('Nie znaleziono użytkowników');
     }
 
-    // Zapisz w cache na 30 minut (lista użytkowników rzadko się zmienia)
-    setInCache(cacheKey, users, 1800);
-
-    // Zapewnij, że zawsze zwracamy tablicę
     return NextResponse.json(users);
   } catch (error) {
     console.error('Error fetching users:', error);
