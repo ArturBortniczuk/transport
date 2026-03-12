@@ -15,14 +15,15 @@ const getMarketFromMPK = (mpk) => {
 
   const cleanMpk = String(mpk).trim()
 
-  if (cleanMpk.match(/^522-02-/)) return 'Rynek Podlaski'
-  if (cleanMpk.match(/^522-04-/)) return 'Rynek Lubelski'
-  if (cleanMpk.match(/^522-05-/)) return 'Rynek Mazowiecki'
-  if (cleanMpk.match(/^522-06-/)) return 'Rynek Pomorski'
-  if (cleanMpk.match(/^522-07-/)) return 'Rynek Małopolski'
-  if (cleanMpk.match(/^522-08-/)) return 'Rynek Dolnośląski'
-  if (cleanMpk.match(/^522-09-/)) return 'Rynek Wielkopolski'
-  if (cleanMpk.match(/^522-11-/)) return 'Rynek Śląski'
+  if (cleanMpk.startsWith('522-01')) return 'Handel podlaskie'
+  if (cleanMpk.startsWith('522-02')) return 'Handel Lubelskie'
+  if (cleanMpk.startsWith('522-03')) return 'Handel Mazowieckie'
+  if (cleanMpk.startsWith('522-04')) return 'Handel pomorskie'
+  if (cleanMpk.startsWith('522-05')) return 'Handel małopolskie'
+  if (cleanMpk.startsWith('522-06')) return 'Handel dolnośląskie'
+  if (cleanMpk.startsWith('522-07')) return 'Handel wielkopolskie'
+  if (cleanMpk.startsWith('522-08')) return 'Handel śląskie'
+  if (cleanMpk.startsWith('522-09')) return 'Handel zachodniopomorskie'
 
   return 'Inne (Nierozpoznane MPK)'
 }
@@ -39,6 +40,7 @@ export default function OcenyPage() {
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [selectedRequester, setSelectedRequester] = useState('')
+  const [requesterSearch, setRequesterSearch] = useState('')
   const [selectedMarket, setSelectedMarket] = useState('')
   const [selectedClient, setSelectedClient] = useState('')
   const [selectedWarehouse, setSelectedWarehouse] = useState('')
@@ -150,8 +152,32 @@ export default function OcenyPage() {
   }
 
   const uniqueMarkets = useMemo(() => {
-    const markets = [...new Set(users.map(u => u.market).filter(Boolean))].sort()
-    return markets
+    const definedOrder = [
+      'Handel podlaskie',
+      'Handel Lubelskie',
+      'Handel Mazowieckie',
+      'Handel pomorskie',
+      'Handel małopolskie',
+      'Handel dolnośląskie',
+      'Handel wielkopolskie',
+      'Handel śląskie',
+      'Handel zachodniopomorskie'
+    ];
+    let markets = [...new Set(users.map(u => u.market).filter(Boolean))];
+    markets.sort((a, b) => {
+      const aIndex = definedOrder.findIndex(m => m.toLowerCase() === a.toLowerCase());
+      const bIndex = definedOrder.findIndex(m => m.toLowerCase() === b.toLowerCase());
+
+      if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
+      if (aIndex !== -1) return -1;
+      if (bIndex !== -1) return 1;
+
+      if (a.startsWith('Inne') && !b.startsWith('Inne')) return 1;
+      if (!a.startsWith('Inne') && b.startsWith('Inne')) return -1;
+
+      return a.localeCompare(b);
+    });
+    return markets;
   }, [users])
 
   const filteredTransports = transports.filter(transport => {
@@ -390,28 +416,41 @@ export default function OcenyPage() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Osoba odpowiedzialna</label>
+              <input
+                type="text"
+                placeholder="Filtruj osobę (wpisz słowo...)"
+                value={requesterSearch}
+                onChange={(e) => setRequesterSearch(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 mb-2 text-sm text-gray-900"
+              />
               <select
                 value={selectedRequester}
                 onChange={(e) => setSelectedRequester(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-gray-900"
               >
                 <option value="">Wszystkie osoby</option>
                 {selectedMarket ? (
-                  getUsersByMarket(selectedMarket).map(user => (
-                    <option key={user.email} value={user.email}>
-                      {user.name}
-                    </option>
-                  ))
+                  getUsersByMarket(selectedMarket)
+                    .filter(u => !requesterSearch || u.name.toLowerCase().includes(requesterSearch.toLowerCase()))
+                    .map(user => (
+                      <option key={user.email} value={user.email}>
+                        {user.name}
+                      </option>
+                    ))
                 ) : (
-                  uniqueMarkets.map(market => (
-                    <optgroup key={market} label={market}>
-                      {getUsersByMarket(market).map(user => (
-                        <option key={user.email} value={user.email}>
-                          {user.name}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))
+                  uniqueMarkets.map(market => {
+                    const filteredUsers = getUsersByMarket(market).filter(u => !requesterSearch || u.name.toLowerCase().includes(requesterSearch.toLowerCase()));
+                    if (filteredUsers.length === 0) return null;
+                    return (
+                      <optgroup key={market} label={market}>
+                        {filteredUsers.map(user => (
+                          <option key={user.email} value={user.email}>
+                            {user.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    );
+                  })
                 )}
               </select>
             </div>
@@ -480,6 +519,7 @@ export default function OcenyPage() {
             <div className="flex items-end">
               <button
                 onClick={() => {
+                  setRequesterSearch('')
                   setSelectedRequester('')
                   setSelectedMarket('')
                   setSelectedClient('')
