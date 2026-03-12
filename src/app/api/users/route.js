@@ -29,10 +29,7 @@ export async function POST(request) {
   try {
     // Tu może być kod do dodawania użytkownika
 
-    // Unieważnij cache związany z użytkownikami
-    removeFromCache('all_users_list');
-
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, message: 'Dane użytkowników można już odczytać na bieżąco, bez cache' });
   } catch (error) {
     console.error('Error adding user:', error);
     return NextResponse.json({
