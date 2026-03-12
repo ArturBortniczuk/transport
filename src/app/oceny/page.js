@@ -9,8 +9,36 @@ import SpeditionRatingModal from '@/components/SpeditionRatingModal'
 import TransportDetailedRatingBadge from '@/components/TransportRatingBadge'
 import { KIEROWCY } from '@/app/kalendarz/constants'
 
-// Mapowanie kodu MPK na rynek
-const getMarketFromMPK = (mpk) => {
+const userMarketMapping = {
+  'Mateusz Magnuszewski': 'Handel podlaskie',
+  'Karol Kulesza': 'Handel podlaskie',
+  'Bartłomiej Klimaszewski': 'Handel podlaskie',
+  'Przemysław Ziętek': 'Handel Lubelskie',
+  'Łukasz Wasak': 'Handel Lubelskie',
+  'Adrian Chotyniec': 'Handel Lubelskie',
+  'Michał Berliński': 'Handel Mazowieckie',
+  'Karol Kołodziejczak': 'Handel Mazowieckie',
+  'Marcin Misztela': 'Handel Mazowieckie',
+  'Mariusz Tryc': 'Handel Mazowieckie',
+  'Wojciech Paździorko': 'Handel pomorskie',
+  'Mateusz Manikowski': 'Handel pomorskie',
+  'Marcin Szafraniec': 'Handel małopolskie',
+  'Mariusz Szafrański': 'Handel małopolskie',
+  'Łukasz Korgul': 'Handel dolnośląskie',
+  'Maksymilian Bela': 'Handel dolnośląskie',
+  'Mikołaj Sadowczyk': 'Handel wielkopolskie',
+  'Maciej Lubojański': 'Handel śląskie',
+  'Grzegorz Górny': 'Handel śląskie',
+}
+
+const getMarketForUser = (user) => {
+  // 1. Sprawdź twarde mapowanie po nazwisku zdefiniowane przez użytkownika
+  if (user && userMarketMapping[user.name]) {
+    return userMarketMapping[user.name]
+  }
+
+  // 2. Jeśli nie ma w mapowaniu, użyj MPK
+  const mpk = user?.mpk;
   if (!mpk) return 'Inne (Brak MPK)'
 
   const cleanMpk = String(mpk).trim()
@@ -106,10 +134,10 @@ export default function OcenyPage() {
       }
 
       const usersWithMarket = usersData
-        .filter(user => user.role === 'handlowiec' || getMarketFromMPK(user.mpk) !== 'Inne (Brak MPK)')
+        .filter(user => user.role === 'handlowiec' || getMarketForUser(user) !== 'Inne (Brak MPK)')
         .map(user => ({
           ...user,
-          market: getMarketFromMPK(user.mpk)
+          market: getMarketForUser(user)
         }))
 
       setUsers(usersWithMarket)
