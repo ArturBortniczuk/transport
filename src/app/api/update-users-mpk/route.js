@@ -40,9 +40,17 @@ export async function GET() {
         // Zaktualizuj każdego użytkownika i sprawdź efekt
         for (const data of updates) {
             const { name, mpk } = data;
+            const parts = name.split(' ');
+            const firstName = parts[0];
+            const lastName = parts[parts.length - 1];
 
             const updateResult = await db('users')
-                .where('name', 'ilike', `%${name}%`) // Używamy ilike by ignorować wielkość znaków lub lekkie przekręcenia
+                .where(function () {
+                    this.where('name', 'ilike', `%${name}%`)
+                        .orWhere('name', 'ilike', `%${lastName}%${firstName}%`)
+                        .orWhere('name', 'ilike', `%${firstName}%${lastName}%`)
+                        .orWhere('name', 'ilike', `%${lastName}%`)
+                })
                 .update({ mpk: mpk });
 
             results.push({ name: name, mpk: mpk, updatedRows: updateResult });
