@@ -23,7 +23,8 @@ import {
   Star, // NOWA IKONA dla Ocen
   Calculator, // IKONA dla Wyceny Transportu
   Activity,
-  BarChart3
+  BarChart3,
+  ListFilter // Ikona dla Koordynatora
 } from 'lucide-react'
 
 export default function Navigation() {
@@ -197,6 +198,10 @@ export default function Navigation() {
         ),
         ...(userRole === 'magazyn' || userRole?.startsWith('magazyn_') || userRole === 'admin'
           ? [{ name: 'Wnioski transportowe', path: '/wnioski-transportowe', icon: FileText }]
+          : []
+        ),
+        ...(userRole === 'koordynator' || userRole === 'admin'
+          ? [{ name: 'Panel koordynatora', path: '/koordynator', icon: ListFilter }]
           : []
         )
       ]

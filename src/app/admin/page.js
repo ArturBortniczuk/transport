@@ -357,6 +357,7 @@ export default function AdminPage() {
                         disabled={savingUserId === user.email}
                       >
                         <option value="admin">Administrator</option>
+                        <option value="koordynator">Koordynator</option>
                         <option value="handlowiec">Handlowiec</option>
                         <option value="magazyn_zielonka">Magazyn Zielonka</option>
                         <option value="magazyn_bialystok">Magazyn Białystok</option>
