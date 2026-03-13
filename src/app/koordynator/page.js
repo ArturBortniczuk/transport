@@ -111,7 +111,8 @@ export default function KoordynatorPage() {
     Papa.parse(selectedFile, {
       header: true,
       skipEmptyLines: true,
-      encoding: "UTF-8", // Upewnienie się o poprawne kodowanie dla polskich znaków
+      delimiter: ";", // Wymuszamy podział po średnikach (standard z programów magazynowych PL)
+      encoding: "windows-1250", // Kodowanie powszechne w polskich eksportach do excela, rozwiązuje problem 'krzaków'
       complete: (results) => {
         // Obiekty bezpośrednio z CSV, upewnijmy się, że klucze (nazwy z pierwszego wiersza) są zachowane
         const rawData = results.data;

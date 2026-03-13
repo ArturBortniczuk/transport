@@ -199,10 +199,6 @@ export default function Navigation() {
         ...(userRole === 'magazyn' || userRole?.startsWith('magazyn_') || userRole === 'admin'
           ? [{ name: 'Wnioski transportowe', path: '/wnioski-transportowe', icon: FileText }]
           : []
-        ),
-        ...(userRole === 'koordynator' || userRole === 'admin'
-          ? [{ name: 'Panel koordynatora', path: '/koordynator', icon: ListFilter }]
-          : []
         )
       ]
     },
@@ -218,7 +214,7 @@ export default function Navigation() {
     }
   };
 
-  if (adminAccess.isFullAdmin || adminAccess.packagings || adminAccess.constructions) {
+  if (adminAccess.isFullAdmin || adminAccess.packagings || adminAccess.constructions || userRole === 'koordynator') {
     menuStructure['panel-admin'] = {
       title: 'Panel Administratora',
       icon: Settings,
@@ -233,6 +229,10 @@ export default function Navigation() {
         ),
         ...(adminAccess.constructions
           ? [{ name: 'Zarządzanie budowami', path: '/admin/constructions', icon: Building2 }]
+          : []
+        ),
+        ...(userRole === 'koordynator' || userRole === 'admin'
+          ? [{ name: 'Panel koordynatora', path: '/koordynator', icon: ListFilter }]
           : []
         )
       ]
