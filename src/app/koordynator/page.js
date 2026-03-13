@@ -108,21 +108,45 @@ export default function KoordynatorPage() {
     
     setFile(selectedFile);
     
-    Papa.parse(selectedFile, {
-      header: true,
-      skipEmptyLines: true,
-      delimiter: ";", // Wymuszamy podział po średnikach (standard z programów magazynowych PL)
-      encoding: "windows-1250", // Kodowanie powszechne w polskich eksportach do excela, rozwiązuje problem 'krzaków'
-      complete: (results) => {
-        // Obiekty bezpośrednio z CSV, upewnijmy się, że klucze (nazwy z pierwszego wiersza) są zachowane
-        const rawData = results.data;
-        processData(rawData);
-      },
-      error: (error) => {
-        console.error("Błąd podczas parsowania pliku CSV:", error);
-        alert('Wystąpił błąd podczas odczytu pliku CSV.');
+    const reader = new FileReader();
+    
+    // Używamy windows-1250, żeby polskie znaki z Excela wczytały się poprawnie jako string przed PapaParse
+    reader.readAsText(selectedFile, 'windows-1250');
+    
+    reader.onload = (e) => {
+      let csvText = e.target.result;
+      
+      // Sprawdzenie i usunięcie pierwszej linijki, jeśli to tylko tytuł dokumentu 
+      // (np. "LISTA DOKUMENTÓW MAGAZYNOWYCH WYDANIA - YMS") i nie zawiera średników
+      const lines = csvText.split(/\r?\n/);
+      if (lines.length > 0) {
+        // Jeśli pierwszy wiersz nie ma średników (naszego separatora), to jest to pewnie tytuł a nie nagłówki kolumn
+        if (!lines[0].includes(';')) {
+          csvText = lines.slice(1).join('\n');
+        } else if (lines[0].split(';').length < 3 && lines.length > 1 && lines[1].includes(';')) {
+          // Na wypadek gdyby nazwa raportu miała np. jeden średnik przypadkowo
+          csvText = lines.slice(1).join('\n');
+        }
       }
-    });
+
+      Papa.parse(csvText, {
+        header: true,
+        skipEmptyLines: true,
+        delimiter: ";", // Wymuszamy podział po średnikach (standard z programów magazynowych PL)
+        complete: (results) => {
+          const rawData = results.data;
+          processData(rawData);
+        },
+        error: (error) => {
+          console.error("Błąd podczas parsowania pliku CSV:", error);
+          alert('Wystąpił błąd podczas odczytu pliku CSV.');
+        }
+      });
+    };
+    
+    reader.onerror = () => {
+      alert('Wystąpił błąd podczas czytania pliku.');
+    };
   };
 
   const extractAddress = (miejsceDostawy) => {
