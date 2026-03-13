@@ -143,10 +143,17 @@ export default function KoordynatorPage() {
       // 1. Standaryzacja i ekstrakcja danych z każdego wiersza
       const processedRows = rawData.map(row => {
         // Znalezienie prawidłowych kluczy ignorując wielkość znaków i białe znaki
+        // Trimujemy klucze dla pewności (czasem wpadają z cudzysłowami ew. spacjami z CSV)
         const getColumn = (patterns) => {
           for (const pattern of patterns) {
-            const key = Object.keys(row).find(k => k.toLowerCase().includes(pattern.toLowerCase()));
-            if (key) return row[key];
+            const key = Object.keys(row).find(k => 
+              k.replace(/["'\s]/g, '').toLowerCase().includes(pattern.toLowerCase())
+            );
+            if (key) {
+               // Usuwamy też ewentualne otaczające cudzysłowy ze środka samej string-wartości
+               const val = row[key];
+               return typeof val === 'string' ? val.replace(/^["']|["']$/g, '').trim() : val;
+            }
           }
           return '';
         };
@@ -154,7 +161,7 @@ export default function KoordynatorPage() {
         const kontrahent = getColumn(['kontrahent', 'klient']);
         const jednostka = getColumn(['jednostka', 'lokalizacj']);
         const typ = getColumn(['typ', 'dokument']);
-        const magazyn = getColumn(['magazyn', 'skład']);
+        const magazyn = getColumn(['magazyn', 'skład', 'sklad']);
         const numer = getColumn(['numer', 'wz']);
         const miejsceDostawy = getColumn(['miejsce', 'dostawy', 'adres']);
         
