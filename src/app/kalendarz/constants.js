@@ -1,6 +1,6 @@
 // Rozdzielone listy kierowców i pojazdów
 export const KIEROWCY = [
-  { id: 1, imie: "Dzianis Nestser", telefon: "885 560 083" },
+  { id: 1, imie: "Grzegorz Piwko", telefon: "885 560 083" },
   { id: 2, imie: "Wojciech Ostaszewski", telefon: "691 690 165" },
   { id: 3, imie: "Paweł Małecki", telefon: "601 162 537" },
   { id: 4, imie: "Krzysztof Sobolewski", telefon: "885 561 444" },
