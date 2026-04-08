@@ -1,6 +1,7 @@
 // src/app/api/users/route.js
 import { NextResponse } from 'next/server';
 import db from '@/database/db';
+import { removeFromCache } from '@/utils/cache';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -27,7 +28,8 @@ export async function GET() {
 // Dodajemy endpoint do unieważniania cache po modyfikacji użytkowników
 export async function POST(request) {
   try {
-    // Tu może być kod do dodawania użytkownika
+    // Odświeżamy cache listy użytkowników
+    removeFromCache('users_list_basic');
 
     return NextResponse.json({ success: true, message: 'Dane użytkowników można już odczytać na bieżąco, bez cache' });
   } catch (error) {

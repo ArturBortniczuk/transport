@@ -1,6 +1,7 @@
 // src/app/api/users/permissions/route.js
 import { NextResponse } from 'next/server';
 import db from '@/database/db';
+import { removeFromCache } from '@/utils/cache';
 
 // Funkcja pomocnicza do weryfikacji sesji - zaktualizowana do Knex
 const validateSession = async (authToken) => {
@@ -97,6 +98,9 @@ export async function PUT(request) {
     if (updated === 0) {
       throw new Error('Nie udało się zaktualizować uprawnień');
     }
+
+    // Wyczyść cache listy użytkowników po zmianie uprawnień
+    removeFromCache('users_list_basic');
 
     return NextResponse.json({ 
       success: true,

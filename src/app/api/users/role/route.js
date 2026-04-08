@@ -1,6 +1,7 @@
 // src/app/api/users/role/route.js
 import { NextResponse } from 'next/server';
 import db from '@/database/db';
+import { removeFromCache } from '@/utils/cache';
 
 // Funkcja pomocnicza do weryfikacji sesji
 const validateSession = async (authToken) => {
@@ -60,6 +61,9 @@ export async function PUT(request) {
     if (updated === 0) {
       throw new Error('Nie udało się zaktualizować roli');
     }
+
+    // Wyczyść cache listy użytkowników po zmianie roli
+    removeFromCache('users_list_basic');
 
     return NextResponse.json({ 
       success: true
