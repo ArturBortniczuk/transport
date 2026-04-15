@@ -15,7 +15,7 @@ export async function GET() {
     
     // Pobieranie listy użytkowników - zaktualizowane do Knex
     const users = await db('users')
-      .select('name', 'email', 'mpk');
+      .select('name', 'email', 'mpk', 'role');
 
     // Dodaj logi, aby sprawdzić, czy MPK jest prawidłowo zwracane
     console.log('Przykład użytkownika zwróconego przez API:', users[0]);

@@ -148,7 +148,8 @@ export default function TransportForm({
       try {
         const response = await fetch('/api/users/list')
         if (response.ok) {
-          const data = await response.json()
+          const rawData = await response.json()
+          const data = rawData.filter(user => user.role !== 'pozostale' && user.role !== 'Pozostałe')
           setUsers(data)
           setFilteredUsers(data)
         }

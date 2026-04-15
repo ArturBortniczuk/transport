@@ -130,7 +130,9 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
         const data = await response.json();
 
         // Map the data to a consistent format
-        const formattedUsers = data.map(user => ({
+        const formattedUsers = data
+          .filter(user => user.role !== 'pozostale' && user.role !== 'Pozostałe')
+          .map(user => ({
           email: user.email,
           name: user.name,
           mpk: user.mpk || '',
