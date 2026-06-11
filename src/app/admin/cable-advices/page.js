@@ -15,7 +15,9 @@ export default function CableDictionariesPage() {
     { id: 'supplier', name: 'Dostawca' },
     { id: 'order_type', name: 'Typ zamówienia' },
     { id: 'unloading_place', name: 'Miejsce rozładunku' },
-    { id: 'cable_voltage', name: 'Napięcie kabla (rodzaj)' }
+    { id: 'cable_voltage', name: 'Napięcie kabla (rodzaj)' },
+    { id: 'cable_guidelines', name: 'Wytyczne kabla' },
+    { id: 'warehouse', name: 'Magazyn docelowy (Przeznaczenie)' }
   ];
 
   useEffect(() => {

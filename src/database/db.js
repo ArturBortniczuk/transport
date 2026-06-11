@@ -283,10 +283,9 @@ const initializeDatabase = async () => {
         table.string('order_number').notNullable();
         table.string('unloading_place').notNullable(); // WMS Zielonka, WMS Białystok
         table.string('cable_voltage').notNullable(); // NN, WN
-        table.string('cable_type_details'); // PGE/Tauron/ENEA or specific name
-        table.float('quantity');
-        table.string('packaging'); // np ilość bębnów po ile metrów
-        table.string('destination'); // rynek, handlowiec, WMS
+        table.string('cable_guidelines'); // PGE/Tauron/ENEA or specific name from dict
+        table.float('quantity'); // Total calculated quantity
+        table.text('packagings_data'); // JSON array of packagings: [{drums, length, dest_type, dest_value}]
         table.date('preliminary_date_from');
         table.date('preliminary_date_to');
         table.date('final_date_from');
@@ -325,7 +324,11 @@ const initializeDatabase = async () => {
           { category: 'unloading_place', value: 'WMS Zielonka' },
           { category: 'unloading_place', value: 'WMS Białystok' },
           { category: 'cable_voltage', value: 'NN' },
-          { category: 'cable_voltage', value: 'WN' }
+          { category: 'cable_voltage', value: 'WN' },
+          { category: 'cable_guidelines', value: 'PGE' },
+          { category: 'cable_guidelines', value: 'Tauron' },
+          { category: 'cable_guidelines', value: 'ENEA' },
+          { category: 'warehouse', value: 'Magazyn Główny' }
         ]);
         console.log('Wstawiono domyślne słowniki awizacji kabli.');
       } catch (e) {

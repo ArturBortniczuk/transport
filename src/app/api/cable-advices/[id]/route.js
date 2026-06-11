@@ -6,12 +6,24 @@ export async function PUT(request, { params }) {
     const { id } = params;
     const data = await request.json();
 
+    let updateData = { ...data, updated_at: db.fn.now() };
+
+    if (data.packagings_data !== undefined) {
+      if (Array.isArray(data.packagings_data)) {
+        updateData.quantity = data.packagings_data.reduce((sum, item) => {
+          const drums = parseInt(item.drums) || 0;
+          const length = parseInt(item.length) || 0;
+          return sum + (drums * length);
+        }, 0);
+        updateData.packagings_data = JSON.stringify(data.packagings_data);
+      } else {
+        updateData.packagings_data = typeof data.packagings_data === 'string' ? data.packagings_data : JSON.stringify(data.packagings_data);
+      }
+    }
+
     await db('cable_advices')
       .where({ id })
-      .update({
-        ...data,
-        updated_at: db.fn.now()
-      });
+      .update(updateData);
 
     return NextResponse.json({ success: true });
   } catch (error) {
