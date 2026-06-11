@@ -300,6 +300,41 @@ const initializeDatabase = async () => {
       console.log('Tabela cable_advices już istnieje');
     }
 
+    // Tabela słowników awizacji kabli
+    const cableDictionariesExists = await db.schema.hasTable('cable_dictionaries');
+    if (!cableDictionariesExists) {
+      await db.schema.createTable('cable_dictionaries', table => {
+        table.increments('id').primary();
+        table.string('category').notNullable(); // supplier, order_type, unloading_place, cable_voltage
+        table.string('value').notNullable();
+        table.boolean('is_active').defaultTo(true);
+        table.timestamp('created_at').defaultTo(db.fn.now());
+      });
+      console.log('Tabela cable_dictionaries została utworzona');
+
+      // Wstaw domyślne słowniki
+      try {
+        await db('cable_dictionaries').insert([
+          { category: 'supplier', value: 'NKT' },
+          { category: 'supplier', value: 'ELPAR' },
+          { category: 'supplier', value: 'NEXANS' },
+          { category: 'order_type', value: 'ZD' },
+          { category: 'order_type', value: 'ZDS' },
+          { category: 'order_type', value: 'ZDH' },
+          { category: 'order_type', value: 'ZDB' },
+          { category: 'unloading_place', value: 'WMS Zielonka' },
+          { category: 'unloading_place', value: 'WMS Białystok' },
+          { category: 'cable_voltage', value: 'NN' },
+          { category: 'cable_voltage', value: 'WN' }
+        ]);
+        console.log('Wstawiono domyślne słowniki awizacji kabli.');
+      } catch (e) {
+        console.error('Błąd podczas wstawiania słowników awizacji kabli:', e);
+      }
+    } else {
+      console.log('Tabela cable_dictionaries już istnieje');
+    }
+
     return true;
   } catch (error) {
     console.error('Błąd inicjalizacji bazy danych:', error);
