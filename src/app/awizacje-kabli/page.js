@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import SearchableSelect from '@/components/SearchableSelect';
 
 export default function AwizacjeKabliPage() {
   const [advices, setAdvices] = useState([]);
@@ -13,6 +14,7 @@ export default function AwizacjeKabliPage() {
     cable_guidelines: [],
     warehouse: []
   });
+  const [cablesCatalog, setCablesCatalog] = useState({ uniqueNames: [], grouped: {} });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
@@ -27,8 +29,9 @@ export default function AwizacjeKabliPage() {
     order_type: '',
     order_number: '',
     unloading_place: '',
-    cable_voltage: '',
     cable_guidelines: '',
+    cable_name: '',
+    cable_cross_section: '',
     packagings_data: [],
     preliminary_date_from: '',
     preliminary_date_to: '',
@@ -47,10 +50,11 @@ export default function AwizacjeKabliPage() {
     try {
       setLoading(true);
       
-      const [advicesRes, dictRes, usersRes] = await Promise.all([
+      const [advicesRes, dictRes, usersRes, cablesRes] = await Promise.all([
         fetch('/api/cable-advices'),
         fetch('/api/cable-dictionaries'),
-        fetch('/api/users')
+        fetch('/api/users'),
+        fetch('/api/cables-catalog')
       ]);
       
       if (!advicesRes.ok || !dictRes.ok) throw new Error('Nie udało się pobrać danych');
@@ -58,9 +62,11 @@ export default function AwizacjeKabliPage() {
       const advicesData = await advicesRes.json();
       const dictData = await dictRes.json();
       const usersData = usersRes.ok ? await usersRes.json() : [];
+      const cablesData = cablesRes.ok ? await cablesRes.json() : { uniqueNames: [], grouped: {} };
       
       setAdvices(advicesData);
       setUsers(usersData);
+      setCablesCatalog(cablesData);
       
       const groupedDicts = {
         supplier: dictData.filter(d => d.category === 'supplier'),
@@ -145,6 +151,8 @@ export default function AwizacjeKabliPage() {
       unloading_place: dictionaries.unloading_place[0]?.value || '',
       cable_voltage: dictionaries.cable_voltage[0]?.value || '',
       cable_guidelines: dictionaries.cable_guidelines[0]?.value || '',
+      cable_name: '',
+      cable_cross_section: '',
       packagings_data: [{ drums: 1, length: 1000, dest_type: 'Rynek', dest_value: RYNKI[0] }]
     });
     setEditingAdvice(null);
@@ -307,6 +315,33 @@ export default function AwizacjeKabliPage() {
               </div>
               
               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nazwa kabla</label>
+                <SearchableSelect 
+                  name="cable_name"
+                  value={formData.cable_name}
+                  onChange={(e) => {
+                    handleInputChange(e);
+                    // Kiedy nazwa kabla się zmienia, zresetuj przekrój
+                    setFormData(prev => ({ ...prev, cable_cross_section: '' }));
+                  }}
+                  options={cablesCatalog.uniqueNames}
+                  placeholder="Wpisz lub wybierz z listy..."
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Przekrój</label>
+                <SearchableSelect 
+                  name="cable_cross_section"
+                  value={formData.cable_cross_section}
+                  onChange={handleInputChange}
+                  options={formData.cable_name && cablesCatalog.grouped[formData.cable_name] ? cablesCatalog.grouped[formData.cable_name] : []}
+                  placeholder={formData.cable_name ? "Wpisz lub wybierz przekrój..." : "Najpierw wybierz kabel"}
+                  disabled={!formData.cable_name}
+                />
+              </div>
+              
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Termin wstępny (Od)</label>
                 <input type="date" name="preliminary_date_from" value={formData.preliminary_date_from} onChange={handleInputChange} className="w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500" />
               </div>
@@ -428,7 +463,8 @@ export default function AwizacjeKabliPage() {
                         <div className="text-xs text-gray-400 mt-1">Rozładunek: {advice.unloading_place}</div>
                       </td>
                       <td className="px-6 py-4">
-                        <div className="text-sm text-gray-900 font-medium">{advice.cable_voltage}</div>
+                        <div className="text-sm text-gray-900 font-bold">{advice.cable_name}</div>
+                        <div className="text-sm text-gray-900 font-medium">{advice.cable_cross_section} {advice.cable_voltage && `(${advice.cable_voltage})`}</div>
                         <div className="text-sm text-gray-500">Wyt: {advice.cable_guidelines}</div>
                         <div className="text-sm font-bold text-indigo-600 mt-1">Suma: {advice.quantity}m</div>
                       </td>

@@ -283,9 +283,11 @@ const initializeDatabase = async () => {
         table.string('order_number').notNullable();
         table.string('unloading_place').notNullable(); // WMS Zielonka, WMS Białystok
         table.string('cable_voltage').notNullable(); // NN, WN
-        table.string('cable_guidelines'); // PGE/Tauron/ENEA or specific name from dict
+        table.string('cable_guidelines'); // PGE/Tauron/ENEA
+        table.string('cable_name'); // XRUHAKXS 6/10 kV
+        table.string('cable_cross_section'); // 1x35/16
         table.float('quantity'); // Total calculated quantity
-        table.text('packagings_data'); // JSON array of packagings: [{drums, length, dest_type, dest_value}]
+        table.text('packagings_data'); // JSON array of packagings
         table.date('preliminary_date_from');
         table.date('preliminary_date_to');
         table.date('final_date_from');
@@ -297,6 +299,27 @@ const initializeDatabase = async () => {
       console.log('Tabela cable_advices została utworzona');
     } else {
       console.log('Tabela cable_advices już istnieje');
+    }
+
+    // Tabela katalogu kabli
+    const cablesCatalogExists = await db.schema.hasTable('cables_catalog');
+    if (!cablesCatalogExists) {
+      await db.schema.createTable('cables_catalog', table => {
+        table.increments('id').primary();
+        table.string('name').notNullable(); // Nazwa kabla
+        table.string('cross_section').notNullable(); // Liczba i przekrój żył
+        table.string('shape'); // Kształt
+        table.float('working_core_diameter'); // Średnica żyły roboczej
+        table.float('insulation_thickness'); // Grubość znamionowa izolacji
+        table.float('outer_diameter'); // Średnica zewnętrzna kabla
+        table.float('bending_radius'); // Promień gięcia
+        table.float('weight_kg_km'); // Masa kg/km
+        table.boolean('is_active').defaultTo(true);
+        table.timestamp('created_at').defaultTo(db.fn.now());
+      });
+      console.log('Tabela cables_catalog została utworzona');
+    } else {
+      console.log('Tabela cables_catalog już istnieje');
     }
 
     // Tabela słowników awizacji kabli
@@ -394,6 +417,59 @@ const initializeUsersFromExcel = async () => {
     console.log('Inicjalizacja użytkowników z Excel zakończona');
   } catch (error) {
     console.error('Błąd inicjalizacji użytkowników z Excel:', error);
+  }
+};
+
+// Funkcja do inicjalizacji katalogu kabli z pliku Excel
+const initializeCablesFromExcel = async () => {
+  if (isBuildPhase) {
+    return;
+  }
+
+  try {
+    // Sprawdź, czy w bazie już są kable
+    const existingCables = await db('cables_catalog').count('* as count').first();
+    if (existingCables.count > 0) {
+      console.log('Kable już istnieją w bazie danych');
+      return;
+    }
+
+    const excelPath = path.join(process.cwd(), 'public', 'wszystkiekable.xlsx');
+
+    if (!fs.existsSync(excelPath)) {
+      console.log('Plik wszystkiekable.xlsx nie istnieje - pomijam inicjalizację kabli');
+      return;
+    }
+
+    const workbook = XLSX.readFile(excelPath);
+    const sheetName = workbook.SheetNames.includes('Kable') ? 'Kable' : workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    const data = XLSX.utils.sheet_to_json(worksheet);
+
+    console.log(`Rozpoczynam import ${data.length} kabli...`);
+    
+    // Używamy batch insert dla wydajności przy dużej liczbie rekordów
+    const batchSize = 100;
+    for (let i = 0; i < data.length; i += batchSize) {
+      const batch = data.slice(i, i + batchSize).map(row => ({
+        name: row['Nazwa'],
+        cross_section: row['Liczba i przekrój żył'],
+        shape: row['Kształt'],
+        working_core_diameter: row['Średnica żyły roboczej'] ? parseFloat(row['Średnica żyły roboczej']) : null,
+        insulation_thickness: row['Grubość znamionowa izolacji'] ? parseFloat(row['Grubość znamionowa izolacji']) : null,
+        outer_diameter: row['średnica zewnętrzna kabla'] ? parseFloat(row['średnica zewnętrzna kabla']) : null,
+        bending_radius: row['promień gięcia'] ? parseFloat(row['promień gięcia']) : null,
+        weight_kg_km: row['Masa kg/km'] ? parseFloat(row['Masa kg/km']) : null
+      })).filter(c => c.name && c.cross_section); // Pomijaj puste
+
+      if (batch.length > 0) {
+        await db('cables_catalog').insert(batch);
+      }
+    }
+
+    console.log('Inicjalizacja kabli z Excel zakończona');
+  } catch (error) {
+    console.error('Błąd inicjalizacji kabli z Excel:', error);
   }
 };
 
@@ -580,6 +656,20 @@ const checkCableAdvicesTable = async () => {
       });
       console.log('Dodano kolumnę packagings_data do tabeli cable_advices');
     }
+
+    if (!columnNames.includes('cable_name')) {
+      await db.schema.table('cable_advices', table => {
+        table.string('cable_name');
+      });
+      console.log('Dodano kolumnę cable_name do tabeli cable_advices');
+    }
+
+    if (!columnNames.includes('cable_cross_section')) {
+      await db.schema.table('cable_advices', table => {
+        table.string('cable_cross_section');
+      });
+      console.log('Dodano kolumnę cable_cross_section do tabeli cable_advices');
+    }
   } catch (error) {
     console.error('Błąd sprawdzania tabeli cable_advices:', error);
   }
@@ -764,6 +854,7 @@ if (!isBuildPhase) {
     try {
       await initializeDatabase();
       await initializeUsersFromExcel();
+      await initializeCablesFromExcel();
       await showAllUsers();
       await checkTransportsTable();
       await checkSpedycjeTable();

@@ -47,6 +47,8 @@ export async function POST(request) {
       unloading_place: data.unloading_place,
       cable_voltage: data.cable_voltage,
       cable_guidelines: data.cable_guidelines || '',
+      cable_name: data.cable_name || '',
+      cable_cross_section: data.cable_cross_section || '',
       quantity: calculatedQuantity,
       packagings_data: packagingsDataStr,
       preliminary_date_from: data.preliminary_date_from || null,

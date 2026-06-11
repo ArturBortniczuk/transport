@@ -10,6 +10,7 @@ export default function CableDictionariesPage() {
   const [newValue, setNewValue] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('supplier');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [cablesCount, setCablesCount] = useState(0);
 
   const categories = [
     { id: 'supplier', name: 'Dostawca' },
@@ -27,10 +28,18 @@ export default function CableDictionariesPage() {
   const fetchDictionaries = async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/cable-dictionaries');
-      if (!res.ok) throw new Error('Nie udało się pobrać słowników');
-      const data = await res.json();
-      setDictionaries(data);
+      const [dictRes, cablesRes] = await Promise.all([
+        fetch('/api/cable-dictionaries'),
+        fetch('/api/cables-catalog')
+      ]);
+      if (!dictRes.ok) throw new Error('Nie udało się pobrać słowników');
+      const dictData = await dictRes.json();
+      setDictionaries(dictData);
+      
+      if (cablesRes.ok) {
+        const cablesData = await cablesRes.json();
+        setCablesCount(cablesData.all?.length || 0);
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -127,6 +136,17 @@ export default function CableDictionariesPage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="bg-white rounded-lg shadow overflow-hidden border-2 border-indigo-200">
+            <div className="bg-indigo-50 px-4 py-3 border-b border-indigo-100 flex justify-between items-center">
+              <h3 className="font-bold text-indigo-900">Katalog Kabli (Excel)</h3>
+              <span className="bg-indigo-600 text-white text-xs px-2 py-1 rounded-full font-bold">{cablesCount}</span>
+            </div>
+            <div className="p-4 text-sm text-gray-600">
+              <p className="mb-2">Baza <strong>{cablesCount}</strong> modeli kabli oraz ich przekrojów została załadowana z pliku <code className="bg-gray-100 px-1 rounded">wszystkiekable.xlsx</code>.</p>
+              <p>Zamiast ręcznego konfigurowania długich list, formularz Awizacji automatycznie przeszukuje i dopasowuje przekroje do wybranego modelu kabla.</p>
+            </div>
+          </div>
+
           {categories.map(cat => {
             const items = dictionaries.filter(d => d.category === cat.id);
             return (
