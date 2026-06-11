@@ -7,7 +7,7 @@ export const revalidate = 0;
 export async function GET() {
   try {
     const cables = await db('cables_catalog')
-      .select('name', 'cross_section')
+      .select('id', 'name', 'cross_section')
       .where('is_active', true)
       .orderBy('name', 'asc')
       .orderBy('cross_section', 'asc');

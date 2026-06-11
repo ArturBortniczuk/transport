@@ -10,19 +10,21 @@ export default function CableDictionariesPage() {
   const [error, setError] = useState(null);
   const [selectedTab, setSelectedTab] = useState('cables');
   const [searchQuery, setSearchQuery] = useState('');
-  const fileInputRef = useRef(null);
   
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [editMode, setEditMode] = useState(null); // null, 'dict', 'cable', 'cable_group'
+  const [editId, setEditId] = useState(null); // id lub stara nazwa grupy
   
-  // For standard dicts
+  // Fields
   const [newValue, setNewValue] = useState('');
-  // For cables
   const [newCableName, setNewCableName] = useState('');
   const [newCableCrossSection, setNewCableCrossSection] = useState('');
   
   const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef(null);
+  const [expandedCables, setExpandedCables] = useState({});
 
   const tabs = [
     { id: 'cables', name: 'Kable' },
@@ -85,32 +87,69 @@ export default function CableDictionariesPage() {
     }
   };
 
-  const handleAdd = async (e) => {
+  const openAddModal = () => {
+    setEditMode(null);
+    setEditId(null);
+    setNewValue('');
+    setNewCableName('');
+    setNewCableCrossSection('');
+    setIsModalOpen(true);
+  };
+
+  const openEditModal = (item, type, e) => {
+    if (e) e.stopPropagation();
+    setEditMode(type);
+    if (type === 'dict') {
+      setEditId(item.id);
+      setNewValue(item.value);
+    } else if (type === 'cable') {
+      setEditId(item.id);
+      setNewCableName(item.name);
+      setNewCableCrossSection(item.cross_section);
+    } else if (type === 'cable_group') {
+      setEditId(item); 
+      setNewCableName(item);
+    }
+    setIsModalOpen(true);
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     try {
       setIsSubmitting(true);
       
-      if (selectedTab === 'cables') {
+      if (editMode === 'cable_group') {
+        if (!newCableName.trim()) return;
+        const res = await fetch('/api/cables-catalog/bulk-rename', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ oldName: editId, newName: newCableName.trim() })
+        });
+        if (!res.ok) throw new Error('Nie udało się zmienić nazwy grupy');
+      } else if (editMode === 'cable' || (selectedTab === 'cables' && !editMode)) {
         if (!newCableName.trim() || !newCableCrossSection.trim()) return;
-        const res = await fetch('/api/cables-catalog', {
-          method: 'POST',
+        const url = editMode === 'cable' ? `/api/cables-catalog/${editId}` : '/api/cables-catalog';
+        const method = editMode === 'cable' ? 'PUT' : 'POST';
+        
+        const res = await fetch(url, {
+          method,
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name: newCableName.trim(), cross_section: newCableCrossSection.trim() })
         });
-        if (!res.ok) throw new Error('Nie udało się dodać kabla');
+        if (!res.ok) throw new Error('Nie udało się zapisać kabla');
       } else {
         if (!newValue.trim()) return;
-        const res = await fetch('/api/cable-dictionaries', {
-          method: 'POST',
+        const url = editMode === 'dict' ? `/api/cable-dictionaries/${editId}` : '/api/cable-dictionaries';
+        const method = editMode === 'dict' ? 'PUT' : 'POST';
+
+        const res = await fetch(url, {
+          method,
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ category: selectedTab, value: newValue.trim() })
         });
-        if (!res.ok) throw new Error('Nie udało się dodać wpisu');
+        if (!res.ok) throw new Error('Nie udało się zapisać wpisu');
       }
 
-      setNewValue('');
-      setNewCableName('');
-      setNewCableCrossSection('');
       setIsModalOpen(false);
       await fetchData();
     } catch (err) {
@@ -120,16 +159,12 @@ export default function CableDictionariesPage() {
     }
   };
 
-  const handleDelete = async (id, isCable = false) => {
-    if (!window.confirm('Usunąć tę opcję?')) return;
+  const handleDelete = async (id, type, e) => {
+    if (e) e.stopPropagation();
+    if (!window.confirm('Usunąć tę opcję? Operacja jest nieodwracalna.')) return;
     try {
-      if (isCable) {
-         // Na przyszłość endpoint dla kabli, na razie blokujemy żeby przypadkowo nie skasować setek wpisów
-         alert('Usuwanie z katalogu kabli nie jest jeszcze włączone w tym widoku (za duże ryzyko).');
-         return;
-      }
-      
-      const res = await fetch(`/api/cable-dictionaries/${id}`, { method: 'DELETE' });
+      const url = type === 'cable' ? `/api/cables-catalog/${id}` : `/api/cable-dictionaries/${id}`;
+      const res = await fetch(url, { method: 'DELETE' });
       if (!res.ok) throw new Error('Nie udało się usunąć wpisu');
       await fetchData();
     } catch (err) {
@@ -137,13 +172,31 @@ export default function CableDictionariesPage() {
     }
   };
 
+  const toggleGroup = (groupName) => {
+    setExpandedCables(prev => ({
+      ...prev,
+      [groupName]: !prev[groupName]
+    }));
+  };
+
   const getFilteredItems = () => {
     if (selectedTab === 'cables') {
-      const items = cablesCatalog.all || [];
-      return items.filter(c => 
-        (c.name || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
-        (c.cross_section || '').toLowerCase().includes(searchQuery.toLowerCase())
-      );
+      const grouped = {};
+      const sq = searchQuery.toLowerCase();
+      
+      (cablesCatalog.all || []).forEach(c => {
+        const matchGroup = (c.name || '').toLowerCase().includes(sq);
+        const matchChild = (c.cross_section || '').toLowerCase().includes(sq);
+        
+        if (sq === '' || matchGroup || matchChild) {
+          if (!grouped[c.name]) grouped[c.name] = [];
+          grouped[c.name].push(c);
+        }
+      });
+      return Object.keys(grouped).sort().map(name => ({
+        name,
+        children: grouped[name].sort((a, b) => a.cross_section.localeCompare(b.cross_section))
+      }));
     } else {
       const items = dictionaries.filter(d => d.category === selectedTab);
       return items.filter(d => (d.value || '').toLowerCase().includes(searchQuery.toLowerCase()));
@@ -224,7 +277,7 @@ export default function CableDictionariesPage() {
               </>
             )}
             <button 
-              onClick={() => setIsModalOpen(true)}
+              onClick={openAddModal}
               className="flex-1 sm:flex-none bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 text-sm font-medium shadow-sm flex justify-center items-center gap-2"
             >
               <span className="text-xl leading-none -mt-0.5">+</span> Dodaj opcję
@@ -249,39 +302,70 @@ export default function CableDictionariesPage() {
             </div>
           ) : (
             <ul className="divide-y divide-gray-100 max-h-[600px] overflow-y-auto">
-              {filteredItems.map((item, index) => (
-                <li key={item.id || index} className="px-6 py-4 flex justify-between items-center hover:bg-gray-50 transition-colors group">
-                  {selectedTab === 'cables' ? (
-                    <div className="flex flex-col sm:flex-row gap-1 sm:gap-6 w-full">
-                      <span className="font-semibold text-gray-900 w-full sm:w-1/2">{item.name}</span>
-                      <span className="text-gray-600 text-sm sm:text-base">{item.cross_section}</span>
-                    </div>
-                  ) : (
-                    <span className="font-medium text-gray-900">{item.value}</span>
-                  )}
-                  
-                  {selectedTab !== 'cables' && (
-                    <button 
-                      onClick={() => handleDelete(item.id, selectedTab === 'cables')}
-                      className="text-red-500 hover:text-red-700 text-sm font-medium md:opacity-0 group-hover:opacity-100 transition-opacity ml-4"
-                    >
-                      Usuń
-                    </button>
-                  )}
-                </li>
-              ))}
+              {filteredItems.map((item, index) => {
+                if (selectedTab === 'cables') {
+                  const isExpanded = expandedCables[item.name];
+                  return (
+                    <li key={item.name} className="flex flex-col">
+                      <div 
+                        onClick={() => toggleGroup(item.name)}
+                        className="px-6 py-4 flex justify-between items-center hover:bg-indigo-50 transition-colors cursor-pointer group"
+                      >
+                        <div className="flex items-center gap-3">
+                          <svg className={`w-5 h-5 text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                          <span className="font-semibold text-gray-900">{item.name}</span>
+                          <span className="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full">{item.children.length}</span>
+                        </div>
+                        <button 
+                          onClick={(e) => openEditModal(item.name, 'cable_group', e)}
+                          className="text-indigo-600 hover:text-indigo-800 text-sm font-medium md:opacity-0 group-hover:opacity-100 transition-opacity ml-4 flex items-center gap-1"
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                          Edytuj nazwę
+                        </button>
+                      </div>
+                      
+                      {isExpanded && (
+                        <ul className="bg-gray-50 border-t border-gray-100 divide-y divide-gray-200 pl-12 pr-6 py-2">
+                          {item.children.map(child => (
+                            <li key={child.id} className="py-2 flex justify-between items-center hover:bg-gray-100 group">
+                              <span className="text-gray-700 text-sm font-medium">{child.cross_section}</span>
+                              <div className="flex gap-4 md:opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button onClick={(e) => openEditModal(child, 'cable', e)} className="text-indigo-600 hover:text-indigo-800 text-xs font-medium">Edytuj</button>
+                                <button onClick={(e) => handleDelete(child.id, 'cable', e)} className="text-red-500 hover:text-red-700 text-xs font-medium">Usuń</button>
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </li>
+                  );
+                } else {
+                  return (
+                    <li key={item.id} className="px-6 py-4 flex justify-between items-center hover:bg-gray-50 transition-colors group">
+                      <span className="font-medium text-gray-900">{item.value}</span>
+                      <div className="flex gap-4 md:opacity-0 group-hover:opacity-100 transition-opacity ml-4">
+                        <button onClick={() => openEditModal(item, 'dict')} className="text-indigo-600 hover:text-indigo-800 text-sm font-medium">Edytuj</button>
+                        <button onClick={() => handleDelete(item.id, 'dict')} className="text-red-500 hover:text-red-700 text-sm font-medium">Usuń</button>
+                      </div>
+                    </li>
+                  );
+                }
+              })}
             </ul>
           )}
         </div>
       </div>
 
-      {/* Modal Dodawania */}
+      {/* Modal Dodawania / Edycji */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden transform transition-all">
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
               <h2 className="text-lg font-bold text-gray-900">
-                Dodaj: {tabs.find(t => t.id === selectedTab)?.name}
+                {editMode ? 'Edytuj' : 'Dodaj'}: {tabs.find(t => t.id === selectedTab)?.name}
               </h2>
               <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600 rounded-full p-1 hover:bg-gray-200 transition-colors">
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -290,8 +374,23 @@ export default function CableDictionariesPage() {
               </button>
             </div>
             
-            <form onSubmit={handleAdd} className="p-6">
-              {selectedTab === 'cables' ? (
+            <form onSubmit={handleSubmit} className="p-6">
+              {editMode === 'cable_group' ? (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Główna nazwa kabla</label>
+                    <p className="text-xs text-gray-500 mb-2">Zmiana wpłynie na wszystkie przekroje przypisane do tej nazwy.</p>
+                    <input 
+                      type="text" 
+                      value={newCableName}
+                      onChange={e => setNewCableName(e.target.value)}
+                      placeholder="np. YAKY 0.6/1kV" 
+                      className="w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 py-2 px-3" 
+                      required 
+                    />
+                  </div>
+                </div>
+              ) : selectedTab === 'cables' ? (
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Nazwa kabla</label>

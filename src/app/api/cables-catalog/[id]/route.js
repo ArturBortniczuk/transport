@@ -5,16 +5,14 @@ export async function DELETE(request, { params }) {
   try {
     const { id } = params;
 
-    // Zamiast fizycznego usunięcia możemy zrobić soft-delete
-    await db('cable_dictionaries')
-      .where({ id })
-      .delete(); // lub update({ is_active: false })
+    // Soft delete lub hard delete - zrobimy hard delete na życzenie
+    await db('cables_catalog').where({ id }).del();
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Error deleting cable dictionary:', error);
+    console.error('Error deleting cable catalog entry:', error);
     return NextResponse.json({
-      error: 'Failed to delete cable dictionary'
+      error: 'Failed to delete cable catalog entry'
     }, { status: 500 });
   }
 }
@@ -24,22 +22,22 @@ export async function PUT(request, { params }) {
     const { id } = params;
     const data = await request.json();
 
-    if (!data.value) {
-      return NextResponse.json({ error: 'Wartość jest wymagana' }, { status: 400 });
+    if (!data.name || !data.cross_section) {
+      return NextResponse.json({ error: 'Nazwa i przekrój są wymagane' }, { status: 400 });
     }
 
-    await db('cable_dictionaries')
+    await db('cables_catalog')
       .where({ id })
       .update({
-        value: data.value,
-        updated_at: db.fn.now()
+        name: data.name,
+        cross_section: data.cross_section
       });
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Error updating cable dictionary:', error);
+    console.error('Error updating cable catalog entry:', error);
     return NextResponse.json({
-      error: 'Failed to update cable dictionary'
+      error: 'Failed to update cable catalog entry'
     }, { status: 500 });
   }
 }
