@@ -13,8 +13,6 @@ export async function GET() {
       .orderBy('cross_section', 'asc');
 
     // Grupowanie na serwerze:
-    // Zwrócimy obiekt: { uniqueNames: ['YAK', '...'], grouped: { 'YAK': ['1x35', ...], ... } }
-    
     const uniqueNames = [...new Set(cables.map(c => c.name))];
     const grouped = {};
     
@@ -32,6 +30,29 @@ export async function GET() {
     console.error('Error fetching cables catalog:', error);
     return NextResponse.json({
       error: 'Failed to fetch cables catalog'
+    }, { status: 500 });
+  }
+}
+
+export async function POST(request) {
+  try {
+    const data = await request.json();
+
+    if (!data.name || !data.cross_section) {
+      return NextResponse.json({ error: 'Nazwa i przekrój są wymagane' }, { status: 400 });
+    }
+
+    const [id] = await db('cables_catalog').insert({
+      name: data.name,
+      cross_section: data.cross_section,
+      is_active: true
+    }).returning('id');
+
+    return NextResponse.json({ success: true, id: typeof id === 'object' ? id.id : id });
+  } catch (error) {
+    console.error('Error creating cable catalog entry:', error);
+    return NextResponse.json({
+      error: 'Failed to create cable catalog entry'
     }, { status: 500 });
   }
 }

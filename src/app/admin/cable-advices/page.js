@@ -141,9 +141,48 @@ export default function CableDictionariesPage() {
               <h3 className="font-bold text-indigo-900">Katalog Kabli (Excel)</h3>
               <span className="bg-indigo-600 text-white text-xs px-2 py-1 rounded-full font-bold">{cablesCount}</span>
             </div>
-            <div className="p-4 text-sm text-gray-600">
+            <div className="p-4 text-sm text-gray-600 border-b border-gray-100">
               <p className="mb-2">Baza <strong>{cablesCount}</strong> modeli kabli oraz ich przekrojów została załadowana z pliku <code className="bg-gray-100 px-1 rounded">wszystkiekable.xlsx</code>.</p>
               <p>Zamiast ręcznego konfigurowania długich list, formularz Awizacji automatycznie przeszukuje i dopasowuje przekroje do wybranego modelu kabla.</p>
+            </div>
+            
+            <div className="p-4 bg-gray-50">
+              <h4 className="font-medium text-sm text-gray-800 mb-3">Dodaj nowy kabel ręcznie:</h4>
+              <form onSubmit={async (e) => {
+                e.preventDefault();
+                const form = e.target;
+                const name = form.cableName.value.trim();
+                const crossSection = form.cableCrossSection.value.trim();
+                
+                if (!name || !crossSection) return;
+                
+                try {
+                  const res = await fetch('/api/cables-catalog', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, cross_section: crossSection })
+                  });
+                  if (!res.ok) throw new Error('Nie udało się dodać kabla');
+                  
+                  form.reset();
+                  await fetchDictionaries();
+                  alert('Kabel został dodany pomyślnie!');
+                } catch (err) {
+                  alert(err.message);
+                }
+              }} className="space-y-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Nazwa kabla</label>
+                  <input type="text" name="cableName" placeholder="np. YAKY 0.6/1kV" className="w-full border-gray-300 rounded-md shadow-sm text-sm" required />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Przekrój</label>
+                  <input type="text" name="cableCrossSection" placeholder="np. 4x120" className="w-full border-gray-300 rounded-md shadow-sm text-sm" required />
+                </div>
+                <button type="submit" className="w-full bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 text-sm font-medium">
+                  Dodaj do katalogu
+                </button>
+              </form>
             </div>
           </div>
 
