@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import AdminCheck from '@/components/AdminCheck';
 import Link from 'next/link';
 
@@ -10,6 +10,7 @@ export default function CableDictionariesPage() {
   const [error, setError] = useState(null);
   const [selectedTab, setSelectedTab] = useState('cables');
   const [searchQuery, setSearchQuery] = useState('');
+  const fileInputRef = useRef(null);
   
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -59,10 +60,19 @@ export default function CableDictionariesPage() {
     }
   };
 
-  const handleImport = async () => {
+  const handleImport = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
     try {
       setImporting(true);
-      const res = await fetch('/api/cables-catalog/import', { method: 'POST' });
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await fetch('/api/cables-catalog/import', { 
+        method: 'POST',
+        body: formData 
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Nie udało się zaimportować');
       alert(data.message);
@@ -71,6 +81,7 @@ export default function CableDictionariesPage() {
       alert(err.message);
     } finally {
       setImporting(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -195,13 +206,22 @@ export default function CableDictionariesPage() {
           </div>
           <div className="flex gap-3 w-full sm:w-auto">
             {selectedTab === 'cables' && (cablesCatalog.all?.length === 0 || cablesCatalog.all?.length === undefined) && (
-              <button 
-                onClick={handleImport}
-                disabled={importing}
-                className="flex-1 sm:flex-none bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 text-sm font-medium shadow-sm disabled:opacity-50"
-              >
-                {importing ? 'Importowanie...' : 'Wymuś import z Excela'}
-              </button>
+              <>
+                <input 
+                  type="file" 
+                  ref={fileInputRef} 
+                  onChange={handleImport} 
+                  accept=".xlsx, .xls" 
+                  className="hidden" 
+                />
+                <button 
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={importing}
+                  className="flex-1 sm:flex-none bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 text-sm font-medium shadow-sm disabled:opacity-50"
+                >
+                  {importing ? 'Importowanie...' : 'Zaimportuj z Excela'}
+                </button>
+              </>
             )}
             <button 
               onClick={() => setIsModalOpen(true)}

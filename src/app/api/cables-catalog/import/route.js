@@ -4,15 +4,17 @@ import path from 'path';
 import fs from 'fs';
 import * as XLSX from 'xlsx';
 
-export async function POST() {
+export async function POST(request) {
   try {
-    const excelPath = path.join(process.cwd(), 'public', 'wszystkiekable.xlsx');
+    const formData = await request.formData();
+    const file = formData.get('file');
 
-    if (!fs.existsSync(excelPath)) {
-      return NextResponse.json({ error: 'Plik wszystkiekable.xlsx nie istnieje w folderze public' }, { status: 404 });
+    if (!file) {
+      return NextResponse.json({ error: 'Nie przesłano pliku' }, { status: 400 });
     }
 
-    const workbook = XLSX.readFile(excelPath);
+    const buffer = await file.arrayBuffer();
+    const workbook = XLSX.read(buffer, { type: 'buffer' });
     const sheetName = workbook.SheetNames.includes('Kable') ? 'Kable' : workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
     const data = XLSX.utils.sheet_to_json(worksheet);
