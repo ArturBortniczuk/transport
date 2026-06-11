@@ -319,10 +319,10 @@ export default function AdminPage() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                     </svg>
                   </div>
-                  <h3 className="ml-4 text-lg font-medium">Awizacja kabli</h3>
+                  <h3 className="ml-4 text-lg font-medium">Słowniki Awizacji Kabli</h3>
                 </div>
                 <p className="text-gray-600 mb-4">
-                  Zarządzaj dostawami kabli, planuj terminy i konfekcje.
+                  Zarządzaj słownikami dla dostaw, m.in. dostawcami, typami zamówień i miejscami.
                 </p>
                 <Link
                   href="/admin/cable-advices"

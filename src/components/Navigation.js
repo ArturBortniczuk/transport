@@ -182,7 +182,8 @@ export default function Navigation() {
       items: [
         { name: 'Dashboard', path: '/dashboard', icon: BarChart3 },
         { name: 'Oceny', path: '/oceny', icon: Star },
-        { name: 'Wycena transportu', path: '/wycena-transportu', icon: Calculator }
+        { name: 'Wycena transportu', path: '/wycena-transportu', icon: Calculator },
+        { name: 'Awizacje kabli', path: '/awizacje-kabli', icon: Package }
       ]
     },
     'transport-wlasny': {
