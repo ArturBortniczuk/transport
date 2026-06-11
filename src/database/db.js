@@ -548,6 +548,43 @@ const checkSpedycjeTable = async () => {
   }
 };
 
+// Funkcja sprawdzająca tabelę awizacji kabli
+const checkCableAdvicesTable = async () => {
+  try {
+    const tableExists = await db.schema.hasTable('cable_advices');
+    if (!tableExists) {
+      console.log('Tabela cable_advices nie istnieje');
+      return;
+    }
+
+    // Sprawdź kolumny
+    const columns = await db.raw(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'cable_advices' 
+      AND table_schema = 'public'
+    `);
+
+    const columnNames = columns.rows.map(row => row.column_name);
+
+    if (!columnNames.includes('cable_guidelines')) {
+      await db.schema.table('cable_advices', table => {
+        table.string('cable_guidelines');
+      });
+      console.log('Dodano kolumnę cable_guidelines do tabeli cable_advices');
+    }
+
+    if (!columnNames.includes('packagings_data')) {
+      await db.schema.table('cable_advices', table => {
+        table.text('packagings_data');
+      });
+      console.log('Dodano kolumnę packagings_data do tabeli cable_advices');
+    }
+  } catch (error) {
+    console.error('Błąd sprawdzania tabeli cable_advices:', error);
+  }
+};
+
 // Funkcja sprawdzająca czy tabela transportów ma odpowiednie referencje dla ocen
 const checkTransportsTableForRatings = async () => {
   try {
@@ -730,6 +767,7 @@ if (!isBuildPhase) {
       await showAllUsers();
       await checkTransportsTable();
       await checkSpedycjeTable();
+      await checkCableAdvicesTable();
 
       // Wywołania dla szczegółowych ocen:
       await checkTransportsTableForRatings();
