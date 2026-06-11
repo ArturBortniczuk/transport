@@ -8,7 +8,8 @@ export default function AdminPage() {
   const [adminAccess, setAdminAccess] = useState({
     isAdmin: false,
     packagings: false,
-    constructions: false
+    constructions: false,
+    cable_advices: false
   })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -27,7 +28,8 @@ export default function AdminPage() {
       setAdminAccess({
         isAdmin: data.isAdmin,
         packagings: data.isAdmin || data.permissions?.admin?.packagings,
-        constructions: data.isAdmin || data.permissions?.admin?.constructions
+        constructions: data.isAdmin || data.permissions?.admin?.constructions,
+        cable_advices: data.isAdmin || data.permissions?.admin?.cable_advices
       });
 
       // Ładuj użytkowników tylko jeśli ma uprawnienia administratora
@@ -84,7 +86,8 @@ export default function AdminPage() {
           },
           admin: {
             packagings: false,
-            constructions: false
+            constructions: false,
+            cable_advices: false
           }
         };
 
@@ -306,6 +309,31 @@ export default function AdminPage() {
             </div>
           )}
 
+          {/* Karta zarządzania awizacjami kabli - dla admina i użytkowników z uprawnieniami */}
+          {adminAccess.cable_advices && (
+            <div className="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300">
+              <div className="p-6">
+                <div className="flex items-center mb-4">
+                  <div className="bg-yellow-100 p-3 rounded-full">
+                    <svg className="w-6 h-6 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                  </div>
+                  <h3 className="ml-4 text-lg font-medium">Awizacja kabli</h3>
+                </div>
+                <p className="text-gray-600 mb-4">
+                  Zarządzaj dostawami kabli, planuj terminy i konfekcje.
+                </p>
+                <Link
+                  href="/admin/cable-advices"
+                  className="w-full inline-flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-yellow-600 hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500"
+                >
+                  Przejdź do zarządzania
+                </Link>
+              </div>
+            </div>
+          )}
+
           {/* Karta ustawień wyceny transportu - tylko dla admina */}
           {adminAccess.isAdmin && (
             <div className="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300">
@@ -494,6 +522,21 @@ export default function AdminPage() {
                         />
                         <label htmlFor={`admin-constructions-${user.email}`} className="text-sm text-gray-700">
                           Zarządzanie Budowami
+                        </label>
+                      </div>
+
+                      {/* Uprawnienia do modułu Awizacji Kabli */}
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          id={`admin-cable-advices-${user.email}`}
+                          checked={user.permissions?.admin?.cable_advices || false}
+                          onChange={() => handlePermissionChange(user.email, 'admin', 'cable_advices')}
+                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                          disabled={savingUserId === user.email}
+                        />
+                        <label htmlFor={`admin-cable-advices-${user.email}`} className="text-sm text-gray-700">
+                          Awizacja Kabli
                         </label>
                       </div>
                     </div>

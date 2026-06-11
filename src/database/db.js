@@ -273,6 +273,33 @@ const initializeDatabase = async () => {
       console.log('Tabela valuation_settings już istnieje.');
     }
 
+    // Tabela awizacji kabli
+    const cableAdvicesExists = await db.schema.hasTable('cable_advices');
+    if (!cableAdvicesExists) {
+      await db.schema.createTable('cable_advices', table => {
+        table.increments('id').primary();
+        table.string('supplier').notNullable(); // NKT, ELPAR, NEXANS
+        table.string('order_type').notNullable(); // ZD, ZDS, ZDH, ZDB
+        table.string('order_number').notNullable();
+        table.string('unloading_place').notNullable(); // WMS Zielonka, WMS Białystok
+        table.string('cable_voltage').notNullable(); // NN, WN
+        table.string('cable_type_details'); // PGE/Tauron/ENEA or specific name
+        table.float('quantity');
+        table.string('packaging'); // np ilość bębnów po ile metrów
+        table.string('destination'); // rynek, handlowiec, WMS
+        table.date('preliminary_date_from');
+        table.date('preliminary_date_to');
+        table.date('final_date_from');
+        table.date('final_date_to');
+        table.string('status').defaultTo('new');
+        table.timestamp('created_at').defaultTo(db.fn.now());
+        table.timestamp('updated_at').defaultTo(db.fn.now());
+      });
+      console.log('Tabela cable_advices została utworzona');
+    } else {
+      console.log('Tabela cable_advices już istnieje');
+    }
+
     return true;
   } catch (error) {
     console.error('Błąd inicjalizacji bazy danych:', error);

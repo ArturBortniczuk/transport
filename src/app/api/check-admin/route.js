@@ -53,7 +53,8 @@ export async function GET(request) {
     if (!permissions.admin) {
       permissions.admin = {
         packagings: false,
-        constructions: false
+        constructions: false,
+        cable_advices: false
       };
     }
     
