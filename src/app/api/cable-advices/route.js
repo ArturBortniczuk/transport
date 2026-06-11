@@ -30,9 +30,10 @@ export async function POST(request) {
     if (Array.isArray(data.packagings_data)) {
       calculatedQuantity = data.packagings_data.reduce((sum, item) => {
         const drums = parseInt(item.drums) || 0;
-        const length = parseInt(item.length) || 0;
+        const length = parseFloat(item.length?.toString().replace(',', '.')) || 0;
         return sum + (drums * length);
       }, 0);
+      calculatedQuantity = parseFloat(calculatedQuantity.toFixed(3));
       packagingsDataStr = JSON.stringify(data.packagings_data);
     } else {
       // Fallback jeśli ktoś wyśle jakoś inaczej

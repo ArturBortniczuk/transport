@@ -105,7 +105,7 @@ export default function AwizacjeKabliPage() {
     cable_voltage: dictionaries.cable_voltage[0]?.value || '',
     cable_guidelines: dictionaries.cable_guidelines[0]?.value || '',
     drums: 1, 
-    length: 1000, 
+    length: 1, // Domyślnie 1 km
     dest_type: 'Rynek', 
     dest_value: RYNKI[0] 
   });
@@ -147,11 +147,14 @@ export default function AwizacjeKabliPage() {
   };
 
   const calculateTotalQuantity = () => {
-    return formData.packagings_data.reduce((sum, item) => {
+    const sum = formData.packagings_data.reduce((sum, item) => {
       const drums = parseInt(item.drums) || 0;
-      const length = parseInt(item.length) || 0;
+      // Zmieniamy parse na float
+      const length = parseFloat(item.length?.toString().replace(',', '.')) || 0;
       return sum + (drums * length);
     }, 0);
+    // Zaokrąglenie do maksymalnie 3 miejsc po przecinku
+    return parseFloat(sum.toFixed(3));
   };
 
   const handleNewForm = () => {
@@ -360,7 +363,7 @@ export default function AwizacjeKabliPage() {
                   Kable i Konfekcja
                 </h3>
                 <span className="bg-indigo-600 text-white px-4 py-1.5 rounded-full font-bold text-sm shadow-sm">
-                  Łącznie: {calculateTotalQuantity()} m
+                  Łącznie: {calculateTotalQuantity()} km
                 </span>
               </div>
               
@@ -429,8 +432,8 @@ export default function AwizacjeKabliPage() {
                           <input type="number" min="1" value={pack.drums} onChange={(e) => handlePackagingChange(idx, 'drums', e.target.value)} className="w-full border-gray-300 rounded-md text-sm font-bold text-center text-indigo-900 shadow-sm focus:ring-indigo-500 focus:border-indigo-500" required />
                         </div>
                         <div className="w-1/2">
-                          <label className="block text-xs font-semibold text-gray-600 mb-1 uppercase">Długość (m)</label>
-                          <input type="number" min="1" value={pack.length} onChange={(e) => handlePackagingChange(idx, 'length', e.target.value)} className="w-full border-gray-300 rounded-md text-sm font-bold text-center text-indigo-900 shadow-sm focus:ring-indigo-500 focus:border-indigo-500" required />
+                          <label className="block text-xs font-semibold text-gray-600 mb-1 uppercase">Długość (km)</label>
+                          <input type="number" step="any" min="0.001" value={pack.length} onChange={(e) => handlePackagingChange(idx, 'length', e.target.value)} className="w-full border-gray-300 rounded-md text-sm font-bold text-center text-indigo-900 shadow-sm focus:ring-indigo-500 focus:border-indigo-500" required />
                         </div>
                       </div>
 
@@ -544,7 +547,7 @@ export default function AwizacjeKabliPage() {
                                   {p.cable_voltage && <span className="ml-2 text-xs text-indigo-500">[{p.cable_voltage}]</span>}
                                 </div>
                                 <div className="text-right">
-                                  <span className="font-bold text-indigo-700">{p.drums}x{p.length}m</span>
+                                  <span className="font-bold text-indigo-700">{p.drums}x{p.length}km</span>
                                 </div>
                               </div>
                               <div className="flex justify-between items-center text-xs">
@@ -558,7 +561,7 @@ export default function AwizacjeKabliPage() {
                         </div>
                         {displayPacks.length > 1 && (
                           <div className="text-right mt-2 text-xs font-bold text-gray-500 uppercase">
-                            Całkowita ilość: <span className="text-indigo-600">{advice.quantity}m</span>
+                            Całkowita ilość: <span className="text-indigo-600">{advice.quantity}km</span>
                           </div>
                         )}
                       </td>

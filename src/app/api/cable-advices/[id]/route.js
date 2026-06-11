@@ -12,9 +12,10 @@ export async function PUT(request, { params }) {
       if (Array.isArray(data.packagings_data)) {
         updateData.quantity = data.packagings_data.reduce((sum, item) => {
           const drums = parseInt(item.drums) || 0;
-          const length = parseInt(item.length) || 0;
+          const length = parseFloat(item.length?.toString().replace(',', '.')) || 0;
           return sum + (drums * length);
         }, 0);
+        updateData.quantity = parseFloat(updateData.quantity.toFixed(3));
         updateData.packagings_data = JSON.stringify(data.packagings_data);
       } else {
         updateData.packagings_data = typeof data.packagings_data === 'string' ? data.packagings_data : JSON.stringify(data.packagings_data);
