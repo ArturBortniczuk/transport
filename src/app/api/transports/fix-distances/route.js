@@ -135,7 +135,7 @@ export async function POST(request) {
             .where('id', transport.id)
             .update({ 
               distance: newDistance,
-              cost: newDistance * (transport.connected_transport_id ? 3.5 : 4.5)
+              cost: Math.round(newDistance * (transport.connected_transport_id ? 3.5 : 4.5))
             });
           console.log(`✓ Zaktualizowano transport ${transport.id} w bazie danych`);
         }

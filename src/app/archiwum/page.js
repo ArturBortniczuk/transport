@@ -452,10 +452,12 @@ export default function ArchiwumPage() {
       const rating = transportRatings[transport.id]
       const handlowiec = users.find(u => u.email === transport.requester_email);
       const distanceKm = transport.distance || 0;
-      // Używamy zapisanego kosztu w bazie (jeśli istnieje), w przeciwnym razie wyliczamy (dla kompatybilności wstecznej)
-      const calculatedCost = transport.cost !== undefined && transport.cost !== null 
-        ? parseFloat(transport.cost) 
-        : calculateTransportCost(distanceKm, transport.connected_transport_id);
+      // Zawsze upewniamy się, że to liczba całkowita
+      const calculatedCost = Math.round(
+        transport.cost !== undefined && transport.cost !== null 
+          ? parseFloat(transport.cost) 
+          : calculateTransportCost(distanceKm, transport.connected_transport_id)
+      );
       
       return {
         'Data transportu': format(new Date(transport.delivery_date), 'dd.MM.yyyy', { locale: pl }),
@@ -465,7 +467,7 @@ export default function ArchiwumPage() {
         'Magazyn': getMagazynName(transport.source_warehouse),
         'Rynek': getRynekNazwa(transport.market),  // DODAJ TĘ LINIĘ
         'Odległość (km)': distanceKm,
-        'Koszt transportu (PLN)': String(calculatedCost.toFixed(2)).replace('.', ','),
+        'Koszt transportu (PLN)': calculatedCost,
         'Firma': transport.client_name || '',
         'MPK': transport.mpk || '',
         'Handlowiec': handlowiec ? handlowiec.name : (transport.requester_name || ''),
@@ -488,10 +490,12 @@ export default function ArchiwumPage() {
       const summaryByMpk = filteredArchiwum.reduce((acc, transport) => {
         const mpk = transport.mpk || 'Brak MPK';
         const distance = transport.distance || 0;
-        // Używamy zapisanego kosztu, co przy okazji poprawia błąd braku przekazania connected_transport_id w starym kodzie
-        const cost = transport.cost !== undefined && transport.cost !== null 
-          ? parseFloat(transport.cost) 
-          : calculateTransportCost(distance, transport.connected_transport_id);
+        // Zawsze upewniamy się, że to liczba całkowita
+        const cost = Math.round(
+          transport.cost !== undefined && transport.cost !== null 
+            ? parseFloat(transport.cost) 
+            : calculateTransportCost(distance, transport.connected_transport_id)
+        );
         const handlowiec = users.find(u => u.email === transport.requester_email);
         const requesterName = handlowiec ? handlowiec.name : (transport.requester_name || 'Brak nazwy');
         
@@ -508,7 +512,7 @@ export default function ArchiwumPage() {
       const summaryData = Object.keys(summaryByMpk).map(mpk => ({
         'MPK': mpk,
         'Zamawiający': Array.from(summaryByMpk[mpk].requesters).join(', '),
-        'Łączny koszt (PLN)': String(summaryByMpk[mpk].totalCost.toFixed(2)).replace('.', ',')
+        'Łączny koszt (PLN)': summaryByMpk[mpk].totalCost
       }));
 
       // Filtrowanie dla nowych arkuszy

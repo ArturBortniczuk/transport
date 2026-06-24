@@ -125,7 +125,7 @@ export async function DELETE(request) {
             .where('id', t.id)
             .update({ 
               connected_transport_id: null,
-              cost: t.distance ? t.distance * 4.5 : null
+              cost: t.distance ? Math.round(t.distance * 4.5) : null
             })
         );
         await Promise.all(updatePromises);

@@ -143,9 +143,9 @@ export async function POST(request) {
       console.log('Data dostawy po formatowaniu:', transportData.delivery_date);
     }
     
-    // Oblicz koszt na podstawie dystansu (domyślnie stawka 4.5 dla nowych)
+    // Oblicz koszt na podstawie dystansu (domyślnie stawka 4.5 dla nowych) i zaokrąglij do liczby całkowitej
     if (transportData.distance) {
-      transportData.cost = transportData.distance * 4.5;
+      transportData.cost = Math.round(transportData.distance * 4.5);
     }
 
     console.log('Dane transportu do zapisania:', transportData);
@@ -276,11 +276,11 @@ export async function PUT(request) {
       updateData.completed_at = db.fn.now(); 
     }
     
-    // Wylicz na nowo koszt, jeśli zmieniono dystans
+    // Wylicz na nowo koszt, jeśli zmieniono dystans i zaokrąglij do liczby całkowitej
     if ('distance' in updateData) {
       const distanceToUse = updateData.distance;
       const rate = existingTransport.connected_transport_id ? 3.5 : 4.5;
-      updateData.cost = distanceToUse * rate;
+      updateData.cost = Math.round(distanceToUse * rate);
     }
     
     if (Object.keys(updateData).length === 0) {

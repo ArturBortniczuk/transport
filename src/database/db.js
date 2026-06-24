@@ -555,7 +555,7 @@ const checkTransportsTable = async () => {
 
     if (!columnNames.includes('cost')) {
       await db.schema.table('transports', table => {
-        table.decimal('cost', 10, 2);
+        table.integer('cost');
       });
       console.log('Dodano kolumnę cost do tabeli transports');
     }

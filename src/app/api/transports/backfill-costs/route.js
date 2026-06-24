@@ -26,7 +26,7 @@ export async function GET(request) {
       const updatePromises = batch.map(t => {
         const dist = t.distance || 0;
         const rate = t.connected_transport_id ? 3.5 : 4.5;
-        const calculatedCost = dist * rate;
+        const calculatedCost = Math.round(dist * rate);
         
         return db('transports')
           .where('id', t.id)

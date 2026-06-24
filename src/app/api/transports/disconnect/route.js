@@ -81,7 +81,7 @@ export async function POST(request) {
         .where('id', transportId)
         .update({ 
             connected_transport_id: null,
-            cost: transport.distance ? transport.distance * 4.5 : null
+            cost: transport.distance ? Math.round(transport.distance * 4.5) : null
         });
       
       console.log(`Rozłączono transport ${transportId} od jego źródła ${transport.connected_transport_id}`);
@@ -99,7 +99,7 @@ export async function POST(request) {
           .where('id', t.id)
           .update({ 
             connected_transport_id: null,
-            cost: t.distance ? t.distance * 4.5 : null
+            cost: t.distance ? Math.round(t.distance * 4.5) : null
           })
       );
       await Promise.all(updatePromises);
