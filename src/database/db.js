@@ -553,6 +553,13 @@ const checkTransportsTable = async () => {
       console.log('Dodano kolumnę client_name do tabeli transports');
     }
 
+    if (!columnNames.includes('cost')) {
+      await db.schema.table('transports', table => {
+        table.decimal('cost', 10, 2);
+      });
+      console.log('Dodano kolumnę cost do tabeli transports');
+    }
+
   } catch (error) {
     console.error('Błąd sprawdzania tabeli transports:', error);
   }

@@ -452,7 +452,10 @@ export default function ArchiwumPage() {
       const rating = transportRatings[transport.id]
       const handlowiec = users.find(u => u.email === transport.requester_email);
       const distanceKm = transport.distance || 0;
-      const calculatedCost = calculateTransportCost(distanceKm, transport.connected_transport_id);
+      // Używamy zapisanego kosztu w bazie (jeśli istnieje), w przeciwnym razie wyliczamy (dla kompatybilności wstecznej)
+      const calculatedCost = transport.cost !== undefined && transport.cost !== null 
+        ? parseFloat(transport.cost) 
+        : calculateTransportCost(distanceKm, transport.connected_transport_id);
       
       return {
         'Data transportu': format(new Date(transport.delivery_date), 'dd.MM.yyyy', { locale: pl }),
@@ -485,7 +488,10 @@ export default function ArchiwumPage() {
       const summaryByMpk = filteredArchiwum.reduce((acc, transport) => {
         const mpk = transport.mpk || 'Brak MPK';
         const distance = transport.distance || 0;
-        const cost = calculateTransportCost(distance);
+        // Używamy zapisanego kosztu, co przy okazji poprawia błąd braku przekazania connected_transport_id w starym kodzie
+        const cost = transport.cost !== undefined && transport.cost !== null 
+          ? parseFloat(transport.cost) 
+          : calculateTransportCost(distance, transport.connected_transport_id);
         const handlowiec = users.find(u => u.email === transport.requester_email);
         const requesterName = handlowiec ? handlowiec.name : (transport.requester_name || 'Brak nazwy');
         

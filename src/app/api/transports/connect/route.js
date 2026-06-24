@@ -87,11 +87,12 @@ export async function POST(request) {
       }, { status: 400 });
     }
     
-    // Zaktualizuj transport docelowy, ustawiając connected_transport_id
+    // Zaktualizuj transport docelowy, ustawiając connected_transport_id oraz przeliczając koszt na stawkę 3.5 PLN/km
     await db('transports')
       .where('id', targetTransportId)
       .update({ 
         connected_transport_id: sourceTransportId,
+        cost: targetTransport.distance ? targetTransport.distance * 3.5 : null,
         // Opcjonalnie, możemy również zaktualizować kierowcę, aby był taki sam jak w źródłowym
         driver_id: sourceTransport.driver_id
       });

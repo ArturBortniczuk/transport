@@ -70,7 +70,7 @@ export async function POST(request) {
     
     // Pobierz transporty w partiach
     const transports = await db('transports')
-      .select('id', 'source_warehouse', 'latitude', 'longitude', 'distance', 'destination_city')
+      .select('id', 'source_warehouse', 'latitude', 'longitude', 'distance', 'destination_city', 'connected_transport_id')
       .whereNotNull('latitude')
       .whereNotNull('longitude')
       .limit(batchSize)
@@ -133,7 +133,10 @@ export async function POST(request) {
         if (!dryRun) {
           await db('transports')
             .where('id', transport.id)
-            .update({ distance: newDistance });
+            .update({ 
+              distance: newDistance,
+              cost: newDistance * (transport.connected_transport_id ? 3.5 : 4.5)
+            });
           console.log(`✓ Zaktualizowano transport ${transport.id} w bazie danych`);
         }
         

@@ -116,13 +116,19 @@ export async function DELETE(request) {
       // 6. Sprawdzamy czy transport jest połączony z innymi transportami jako źródło
       const connectedTransports = await trx('transports')
         .where('connected_transport_id', id)
-        .select('id');
+        .select('id', 'distance');
       
       if (connectedTransports.length > 0) {
         // Aktualizujemy wszystkie transporty, które są powiązane z tym transportem
-        await trx('transports')
-          .where('connected_transport_id', id)
-          .update({ connected_transport_id: null });
+        const updatePromises = connectedTransports.map(t => 
+          trx('transports')
+            .where('id', t.id)
+            .update({ 
+              connected_transport_id: null,
+              cost: t.distance ? t.distance * 4.5 : null
+            })
+        );
+        await Promise.all(updatePromises);
         
         console.log(`Usunięto powiązania z ${connectedTransports.length} transportami`);
       }

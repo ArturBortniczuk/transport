@@ -79,7 +79,10 @@ export async function POST(request) {
     if (transport.connected_transport_id) {
       await db('transports')
         .where('id', transportId)
-        .update({ connected_transport_id: null });
+        .update({ 
+            connected_transport_id: null,
+            cost: transport.distance ? transport.distance * 4.5 : null
+        });
       
       console.log(`Rozłączono transport ${transportId} od jego źródła ${transport.connected_transport_id}`);
     } 
@@ -87,13 +90,19 @@ export async function POST(request) {
     // Sprawdzamy, czy jakieś transporty są połączone z tym
     const connectedTransports = await db('transports')
       .where('connected_transport_id', transportId)
-      .select('id');
+      .select('id', 'distance');
       
     if (connectedTransports.length > 0) {
       // Rozłączamy wszystkie transporty połączone z tym
-      await db('transports')
-        .where('connected_transport_id', transportId)
-        .update({ connected_transport_id: null });
+      const updatePromises = connectedTransports.map(t => 
+        db('transports')
+          .where('id', t.id)
+          .update({ 
+            connected_transport_id: null,
+            cost: t.distance ? t.distance * 4.5 : null
+          })
+      );
+      await Promise.all(updatePromises);
       
       console.log(`Rozłączono ${connectedTransports.length} transportów od źródła ${transportId}`);
     }

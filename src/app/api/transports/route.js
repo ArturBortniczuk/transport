@@ -143,6 +143,11 @@ export async function POST(request) {
       console.log('Data dostawy po formatowaniu:', transportData.delivery_date);
     }
     
+    // Oblicz koszt na podstawie dystansu (domyślnie stawka 4.5 dla nowych)
+    if (transportData.distance) {
+      transportData.cost = transportData.distance * 4.5;
+    }
+
     console.log('Dane transportu do zapisania:', transportData);
     
     // W PostgreSQL używamy returning('id') aby uzyskać ID nowego rekordu
@@ -269,6 +274,13 @@ export async function PUT(request) {
     // Dodaj datę zakończenia jeśli status zmieniony na completed
     if (status === 'completed') {
       updateData.completed_at = db.fn.now(); 
+    }
+    
+    // Wylicz na nowo koszt, jeśli zmieniono dystans
+    if ('distance' in updateData) {
+      const distanceToUse = updateData.distance;
+      const rate = existingTransport.connected_transport_id ? 3.5 : 4.5;
+      updateData.cost = distanceToUse * rate;
     }
     
     if (Object.keys(updateData).length === 0) {
