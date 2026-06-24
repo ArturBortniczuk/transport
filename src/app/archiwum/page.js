@@ -465,7 +465,7 @@ export default function ArchiwumPage() {
         'Magazyn': getMagazynName(transport.source_warehouse),
         'Rynek': getRynekNazwa(transport.market),  // DODAJ TĘ LINIĘ
         'Odległość (km)': distanceKm,
-        'Koszt transportu (PLN)': parseFloat(calculatedCost.toFixed(2)),
+        'Koszt transportu (PLN)': String(calculatedCost.toFixed(2)).replace('.', ','),
         'Firma': transport.client_name || '',
         'MPK': transport.mpk || '',
         'Handlowiec': handlowiec ? handlowiec.name : (transport.requester_name || ''),
@@ -508,7 +508,7 @@ export default function ArchiwumPage() {
       const summaryData = Object.keys(summaryByMpk).map(mpk => ({
         'MPK': mpk,
         'Zamawiający': Array.from(summaryByMpk[mpk].requesters).join(', '),
-        'Łączny koszt (PLN)': parseFloat(summaryByMpk[mpk].totalCost.toFixed(2))
+        'Łączny koszt (PLN)': String(summaryByMpk[mpk].totalCost.toFixed(2)).replace('.', ',')
       }));
 
       // Filtrowanie dla nowych arkuszy
