@@ -560,6 +560,19 @@ const checkTransportsTable = async () => {
       console.log('Dodano kolumnę cost do tabeli transports');
     }
 
+    if (!columnNames.includes('week_number')) {
+      try {
+        await db.raw(`ALTER TABLE transports ADD COLUMN week_number integer GENERATED ALWAYS AS (EXTRACT(WEEK FROM completed_at AT TIME ZONE 'UTC')) STORED;`);
+        console.log('Dodano kolumnę week_number do tabeli transports');
+      } catch (err) {
+        console.error('Błąd przy dodawaniu generowanej kolumny, fallback na zwykłą:', err.message);
+        await db.schema.table('transports', table => {
+          table.integer('week_number');
+        });
+        await db.raw(`UPDATE transports SET week_number = EXTRACT(WEEK FROM completed_at) WHERE completed_at IS NOT NULL;`);
+      }
+    }
+
   } catch (error) {
     console.error('Błąd sprawdzania tabeli transports:', error);
   }
@@ -625,6 +638,19 @@ const checkSpedycjeTable = async () => {
         table.text('responsible_constructions');
       });
       console.log('Dodano kolumnę responsible_constructions do tabeli spedycje');
+    }
+
+    if (!columnNames.includes('week_number')) {
+      try {
+        await db.raw(`ALTER TABLE spedycje ADD COLUMN week_number integer GENERATED ALWAYS AS (EXTRACT(WEEK FROM created_at AT TIME ZONE 'UTC')) STORED;`);
+        console.log('Dodano kolumnę week_number do tabeli spedycje');
+      } catch (err) {
+        console.error('Błąd przy dodawaniu generowanej kolumny, fallback na zwykłą:', err.message);
+        await db.schema.table('spedycje', table => {
+          table.integer('week_number');
+        });
+        await db.raw(`UPDATE spedycje SET week_number = EXTRACT(WEEK FROM created_at) WHERE created_at IS NOT NULL;`);
+      }
     }
   } catch (error) {
     console.error('Błąd sprawdzania tabeli spedycje:', error);
