@@ -432,6 +432,39 @@ export default function ArchiwumPage() {
   }
 
 
+  // Funkcja pobierająca MPK z obiektu transportu lub fallbacku do użytkownika/budowy
+  const getResolvedMPK = (transport) => {
+    if (transport?.mpk && String(transport.mpk).trim()) {
+      return String(transport.mpk).trim();
+    }
+
+    // 1. Sprawdź po requester_email w liście użytkowników
+    if (transport?.requester_email) {
+      const userByEmail = users.find(u => u.email && u.email.toLowerCase() === transport.requester_email.toLowerCase());
+      if (userByEmail?.mpk && String(userByEmail.mpk).trim()) {
+        return String(userByEmail.mpk).trim();
+      }
+    }
+
+    // 2. Sprawdź po requester_name w liście użytkowników
+    if (transport?.requester_name) {
+      const userByName = users.find(u => u.name && u.name.trim().toLowerCase() === transport.requester_name.trim().toLowerCase());
+      if (userByName?.mpk && String(userByName.mpk).trim()) {
+        return String(userByName.mpk).trim();
+      }
+    }
+
+    // 3. Sprawdź po client_name w słowniku budów
+    if (transport?.client_name) {
+      const construction = constructions.find(c => c.name && c.name.trim().toLowerCase() === transport.client_name.trim().toLowerCase());
+      if (construction?.mpk && String(construction.mpk).trim()) {
+        return String(construction.mpk).trim();
+      }
+    }
+
+    return '';
+  };
+
   const exportData = () => {
     if (filteredArchiwum.length === 0) {
       alert('Brak danych do eksportu')
@@ -450,8 +483,9 @@ export default function ArchiwumPage() {
     const dataToExport = filteredArchiwum.map(transport => {
       const driver = KIEROWCY.find(k => k.id === parseInt(transport.driver_id))
       const rating = transportRatings[transport.id]
-      const handlowiec = users.find(u => u.email === transport.requester_email);
+      const handlowiec = users.find(u => u.email === transport.requester_email || (transport.requester_name && u.name.trim().toLowerCase() === transport.requester_name.trim().toLowerCase()));
       const distanceKm = transport.distance || 0;
+      const resolvedMpk = getResolvedMPK(transport);
       // Zawsze upewniamy się, że to liczba całkowita
       const calculatedCost = Math.round(
         transport.cost !== undefined && transport.cost !== null 
@@ -469,7 +503,7 @@ export default function ArchiwumPage() {
         'Odległość (km)': distanceKm,
         'Koszt transportu (PLN)': calculatedCost,
         'Firma': transport.client_name || '',
-        'MPK': transport.mpk || '',
+        'MPK': resolvedMpk,
         'Handlowiec': handlowiec ? handlowiec.name : (transport.requester_name || ''),
         'Nr WZ': transport.wz_number || '',
         'Kierowca': driver ? driver.imie : '',
@@ -488,7 +522,7 @@ export default function ArchiwumPage() {
     } else {
       // Przygotowanie danych do podsumowania
       const summaryByMpk = filteredArchiwum.reduce((acc, transport) => {
-        const mpk = transport.mpk || 'Brak MPK';
+        const mpk = getResolvedMPK(transport) || 'Brak MPK';
         const distance = transport.distance || 0;
         // Zawsze upewniamy się, że to liczba całkowita
         const cost = Math.round(
@@ -496,7 +530,7 @@ export default function ArchiwumPage() {
             ? parseFloat(transport.cost) 
             : calculateTransportCost(distance, transport.connected_transport_id)
         );
-        const handlowiec = users.find(u => u.email === transport.requester_email);
+        const handlowiec = users.find(u => u.email === transport.requester_email || (transport.requester_name && u.name.trim().toLowerCase() === transport.requester_name.trim().toLowerCase()));
         const requesterName = handlowiec ? handlowiec.name : (transport.requester_name || 'Brak nazwy');
         
         if (!acc[mpk]) {
@@ -522,9 +556,9 @@ export default function ArchiwumPage() {
         return mpkMatch && nameMatch;
       });
 
-      const centraData = dataToExport.filter(item => item['Zamówił'].toLowerCase().includes('centrum'));
+      const centraData = dataToExport.filter(item => item['Zamówił'].toLowerCase().includes('centrum') || item.Handlowiec.toLowerCase().includes('centrum'));
 
-      const budowyData = dataToExport.filter(item => /^\d{3}-\d{2}-\d{2}\/\d{4}$/.test(item.MPK));
+      const budowyData = dataToExport.filter(item => /^\d{3}-\d{2}-\d{2}\/\d{4}$/.test(item.MPK) || item.MPK.startsWith('501-'));
 
       exportToXLSXWithMultipleSheets(dataToExport, summaryData, biuraData, centraData, budowyData, fileName)
     }
@@ -1560,11 +1594,11 @@ export default function ArchiwumPage() {
                                     <span className="ml-1">{transport.postal_code}</span>
                                   </div>
                                 )}
-                                {transport.mpk && (
+                                {getResolvedMPK(transport) && (
                                   <div className="flex items-center">
                                     <Hash size={14} className="text-gray-400 mr-2" />
                                     <span className="text-gray-600">MPK:</span>
-                                    <span className="ml-1">{transport.mpk}</span>
+                                    <span className="ml-1">{getResolvedMPK(transport)}</span>
                                   </div>
                                 )}
                                 {transport.wz_number && (

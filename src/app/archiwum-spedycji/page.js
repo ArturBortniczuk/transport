@@ -28,6 +28,8 @@ export default function ArchiwumSpedycjiPage() {
   const [marketFilter, setMarketFilter] = useState('')
   const [mpkOptions, setMpkOptions] = useState([])
   const [marketOptions, setMarketOptions] = useState([])
+  const [users, setUsers] = useState([])
+  const [constructions, setConstructions] = useState([])
 
   // Lista dostępnych lat i miesięcy
   const currentYear = new Date().getFullYear()
@@ -119,7 +121,33 @@ export default function ArchiwumSpedycjiPage() {
       }
     }
 
+    const fetchUsers = async () => {
+      try {
+        const response = await fetch('/api/users/list')
+        if (response.ok) {
+          const data = await response.json()
+          setUsers(data)
+        }
+      } catch (error) {
+        console.error('Błąd pobierania użytkowników:', error)
+      }
+    }
+
+    const fetchConstructions = async () => {
+      try {
+        const response = await fetch('/api/constructions')
+        if (response.ok) {
+          const data = await response.json()
+          setConstructions(data.constructions || [])
+        }
+      } catch (error) {
+        console.error('Błąd pobierania budów:', error)
+      }
+    }
+
     checkAdmin()
+    fetchUsers()
+    fetchConstructions()
     fetchArchiveData()
   }, [])
 
@@ -139,7 +167,7 @@ export default function ArchiwumSpedycjiPage() {
           setArchiwum(data.spedycje)
 
           // Zbierz unikalne wartości MPK dla filtra
-          const uniqueMpks = [...new Set(data.spedycje.map(item => item.mpk).filter(Boolean))]
+          const uniqueMpks = [...new Set(data.spedycje.map(item => getCurrentMPK(item)).filter(Boolean))]
           setMpkOptions(uniqueMpks)
 
           // PROPAGACJA INFORMACJI O POŁĄCZONYCH TRANSPORTACH
@@ -336,30 +364,64 @@ export default function ArchiwumSpedycjiPage() {
     return { description: '', weight: '' };
   }
 
+  const getCurrentMPK = (transport) => {
+    if (transport?.responsibleConstructions && transport.responsibleConstructions.length > 0) {
+      const constrMpk = transport.responsibleConstructions[0].mpk;
+      if (constrMpk && String(constrMpk).trim()) return String(constrMpk).trim();
+    }
+
+    if (transport?.mpk && String(transport.mpk).trim()) {
+      return String(transport.mpk).trim();
+    }
+
+    // Fallback 1: Szukaj po responsible_email / responsibleEmail
+    const respEmail = transport?.responsibleEmail || transport?.responsible_email;
+    if (respEmail) {
+      const user = users.find(u => u.email && u.email.toLowerCase() === respEmail.toLowerCase());
+      if (user?.mpk && String(user.mpk).trim()) return String(user.mpk).trim();
+    }
+
+    // Fallback 2: Szukaj po responsible_person / responsiblePerson
+    const respPerson = transport?.responsiblePerson || transport?.responsible_person;
+    if (respPerson) {
+      const user = users.find(u => u.name && u.name.trim().toLowerCase() === respPerson.trim().toLowerCase());
+      if (user?.mpk && String(user.mpk).trim()) return String(user.mpk).trim();
+    }
+
+    // Fallback 3: Szukaj po created_by_email / createdByEmail
+    const creatorEmail = transport?.createdByEmail || transport?.created_by_email;
+    if (creatorEmail) {
+      const user = users.find(u => u.email && u.email.toLowerCase() === creatorEmail.toLowerCase());
+      if (user?.mpk && String(user.mpk).trim()) return String(user.mpk).trim();
+    }
+
+    // Fallback 4: Szukaj po clientName / client_name w słowniku budów
+    const client = transport?.clientName || transport?.client_name;
+    if (client) {
+      const constr = constructions.find(c => c.name && c.name.trim().toLowerCase() === client.trim().toLowerCase());
+      if (constr?.mpk && String(constr.mpk).trim()) return String(constr.mpk).trim();
+    }
+
+    return '';
+  };
+
   const getResponsibleInfo = (transport) => {
-    if (transport.responsibleConstructions && transport.responsibleConstructions.length > 0) {
+    const currentMpk = getCurrentMPK(transport);
+    if (transport?.responsibleConstructions && transport.responsibleConstructions.length > 0) {
       const construction = transport.responsibleConstructions[0];
       return {
         name: construction.name,
         type: 'construction',
-        mpk: construction.mpk || ''
+        mpk: currentMpk || construction.mpk || ''
       };
     }
 
     return {
-      name: transport.responsiblePerson || transport.createdBy || 'Brak',
+      name: transport?.responsiblePerson || transport?.createdBy || 'Brak',
       type: 'person',
-      mpk: transport.mpk || ''
+      mpk: currentMpk || transport?.mpk || ''
     };
-  }
-
-  const getCurrentMPK = (transport) => {
-    if (transport.responsibleConstructions && transport.responsibleConstructions.length > 0) {
-      return transport.responsibleConstructions[0].mpk || transport.mpk || '';
-    }
-
-    return transport.mpk || '';
-  }
+  };
 
   const formatAddress = (address) => {
     if (!address) return 'Brak danych';

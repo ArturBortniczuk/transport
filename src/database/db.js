@@ -943,6 +943,110 @@ const checkKuriersTable = async () => {
   }
 };
 
+// Bezpieczne automatyczne uzupełnienie brakujących MPK w historycznych transportach
+const backfillMissingMpk = async () => {
+  if (isBuildPhase) return;
+  try {
+    const hasTransports = await db.schema.hasTable('transports');
+    const hasSpedycje = await db.schema.hasTable('spedycje');
+    const hasUsers = await db.schema.hasTable('users');
+    const hasConstructions = await db.schema.hasTable('constructions');
+
+    if (!hasUsers) return;
+
+    // 1. Pobierz użytkowników z przypisanym MPK
+    const usersWithMpk = await db('users')
+      .whereNotNull('mpk')
+      .whereNot('mpk', '')
+      .select('email', 'name', 'mpk');
+
+    // 2. Pobierz budowy z przypisanym MPK
+    let constructionsWithMpk = [];
+    if (hasConstructions) {
+      constructionsWithMpk = await db('constructions')
+        .whereNotNull('mpk')
+        .whereNot('mpk', '')
+        .select('name', 'mpk');
+    }
+
+    if (usersWithMpk.length === 0 && constructionsWithMpk.length === 0) return;
+
+    // Uzupełnij transports
+    if (hasTransports) {
+      const transportsWithoutMpk = await db('transports')
+        .where(function() {
+          this.whereNull('mpk').orWhere('mpk', '');
+        })
+        .select('id', 'requester_email', 'requester_name', 'client_name');
+
+      let updatedTransportsCount = 0;
+      for (const t of transportsWithoutMpk) {
+        let resolvedMpk = null;
+        if (t.requester_email) {
+          const u = usersWithMpk.find(user => user.email && user.email.toLowerCase() === t.requester_email.toLowerCase());
+          if (u?.mpk) resolvedMpk = u.mpk;
+        }
+        if (!resolvedMpk && t.requester_name) {
+          const u = usersWithMpk.find(user => user.name && user.name.trim().toLowerCase() === t.requester_name.trim().toLowerCase());
+          if (u?.mpk) resolvedMpk = u.mpk;
+        }
+        if (!resolvedMpk && t.client_name && constructionsWithMpk.length > 0) {
+          const c = constructionsWithMpk.find(con => con.name && con.name.trim().toLowerCase() === t.client_name.trim().toLowerCase());
+          if (c?.mpk) resolvedMpk = c.mpk;
+        }
+
+        if (resolvedMpk) {
+          await db('transports').where('id', t.id).update({ mpk: resolvedMpk });
+          updatedTransportsCount++;
+        }
+      }
+      if (updatedTransportsCount > 0) {
+        console.log(`[Backfill MPK] Uzupełniono MPK w ${updatedTransportsCount} historycznych transportach własnych`);
+      }
+    }
+
+    // Uzupełnij spedycje
+    if (hasSpedycje) {
+      const spedycjeWithoutMpk = await db('spedycje')
+        .where(function() {
+          this.whereNull('mpk').orWhere('mpk', '');
+        })
+        .select('id', 'responsible_email', 'responsible_person', 'created_by_email', 'created_by', 'client_name');
+
+      let updatedSpedycjeCount = 0;
+      for (const s of spedycjeWithoutMpk) {
+        let resolvedMpk = null;
+        const respEmail = s.responsible_email || s.created_by_email;
+        if (respEmail) {
+          const u = usersWithMpk.find(user => user.email && user.email.toLowerCase() === respEmail.toLowerCase());
+          if (u?.mpk) resolvedMpk = u.mpk;
+        }
+        if (!resolvedMpk) {
+          const respName = s.responsible_person || s.created_by;
+          if (respName) {
+            const u = usersWithMpk.find(user => user.name && user.name.trim().toLowerCase() === respName.trim().toLowerCase());
+            if (u?.mpk) resolvedMpk = u.mpk;
+          }
+        }
+        if (!resolvedMpk && s.client_name && constructionsWithMpk.length > 0) {
+          const c = constructionsWithMpk.find(con => con.name && con.name.trim().toLowerCase() === s.client_name.trim().toLowerCase());
+          if (c?.mpk) resolvedMpk = c.mpk;
+        }
+
+        if (resolvedMpk) {
+          await db('spedycje').where('id', s.id).update({ mpk: resolvedMpk });
+          updatedSpedycjeCount++;
+        }
+      }
+      if (updatedSpedycjeCount > 0) {
+        console.log(`[Backfill MPK] Uzupełniono MPK w ${updatedSpedycjeCount} historycznych zleceniach spedycji`);
+      }
+    }
+  } catch (error) {
+    console.error('Błąd podczas uzupełniania brakujących MPK:', error);
+  }
+};
+
 // Wykonaj inicjalizację asynchronicznie tylko jeśli nie jesteśmy w fazie budowania
 if (!isBuildPhase) {
   (async () => {
@@ -959,6 +1063,9 @@ if (!isBuildPhase) {
       // Wywołania dla szczegółowych ocen:
       await checkTransportsTableForRatings();
       await checkDetailedRatingsTable();
+
+      // Automatyczne uzupełnienie brakujących MPK w danych historycznych
+      await backfillMissingMpk();
 
       console.log('Wszystkie tabele zostały sprawdzone i zsynchronizowane pomyślnie');
     } catch (error) {
