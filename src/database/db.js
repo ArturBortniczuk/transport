@@ -907,6 +907,42 @@ const createRatingSummaryView = async () => {
   }
 };
 
+// Funkcja sprawdzająca i aktualizująca tabelę kuriers
+const checkKuriersTable = async () => {
+  try {
+    const tableExists = await db.schema.hasTable('kuriers');
+    if (!tableExists) {
+      console.log('Tabela kuriers nie istnieje - zostanie utworzona w initializeDatabase');
+      return;
+    }
+
+    const columns = await db.raw(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'kuriers' 
+      AND table_schema = 'public'
+    `);
+
+    const columnNames = columns.rows.map(row => row.column_name);
+
+    if (!columnNames.includes('order_data')) {
+      await db.schema.table('kuriers', table => {
+        table.text('order_data');
+      });
+      console.log('Dodano kolumnę order_data do tabeli kuriers');
+    }
+
+    if (!columnNames.includes('recipient_city')) {
+      await db.schema.table('kuriers', table => {
+        table.string('recipient_city');
+      });
+      console.log('Dodano kolumnę recipient_city do tabeli kuriers');
+    }
+  } catch (error) {
+    console.error('Błąd sprawdzania tabeli kuriers:', error);
+  }
+};
+
 // Wykonaj inicjalizację asynchronicznie tylko jeśli nie jesteśmy w fazie budowania
 if (!isBuildPhase) {
   (async () => {
@@ -918,16 +954,13 @@ if (!isBuildPhase) {
       await checkTransportsTable();
       await checkSpedycjeTable();
       await checkCableAdvicesTable();
+      await checkKuriersTable();
 
       // Wywołania dla szczegółowych ocen:
       await checkTransportsTableForRatings();
       await checkDetailedRatingsTable();
 
-      // NOWA MIGRACJA TABELI KURIERS
-      console.log('🚀 Uruchamiam migrację tabeli kuriers...');
-      await migrateKuriersTable();
-
-      console.log('Wszystkie tabele zostały sprawdzone i utworzone (łącznie z migracją kuriers)');
+      console.log('Wszystkie tabele zostały sprawdzone i zsynchronizowane pomyślnie');
     } catch (error) {
       console.error('Błąd inicjalizacji:', error);
     }

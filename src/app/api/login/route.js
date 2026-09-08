@@ -1,22 +1,33 @@
-// src/app/api/login/route.js
 import { NextResponse } from 'next/server';
 import db from '@/database/db';
 import { serialize } from 'cookie';
+import { verifyPassword, hashPassword, isBcryptHash, generateSessionToken } from '@/lib/auth';
 
 export async function POST(request) {
   try {
     const { email, password } = await request.json();
-    console.log('Próba logowania dla użytkownika:', email);
+    const normalizedEmail = email ? email.toLowerCase().trim() : '';
+    console.log('Próba logowania dla użytkownika:', normalizedEmail);
     
-    // Zmiana z SQLite na Knex
+    // Pobierz użytkownika po emailu
     const user = await db('users')
-      .where({ 
-        email: email, 
-        password: password 
-      })
+      .whereRaw('LOWER(email) = ?', [normalizedEmail])
       .first();
     
-    if (user) {
+    if (user && await verifyPassword(password, user.password)) {
+      // Automatyczna przezroczysta migracja hasła czystotekstowego do bcrypt
+      if (!isBcryptHash(user.password)) {
+        try {
+          const hashedPassword = await hashPassword(password);
+          await db('users')
+            .where({ email: user.email })
+            .update({ password: hashedPassword });
+          console.log(`Hasło użytkownika ${user.email} zostało automatycznie zmigrowane do bcrypt`);
+        } catch (hashError) {
+          console.error('Błąd podczas migracji hasła do bcrypt:', hashError);
+        }
+      }
+
       console.log('Zalogowano użytkownika:', {
         email: user.email,
         name: user.name,
@@ -27,20 +38,20 @@ export async function POST(request) {
       let permissions = {
         calendar: { 
           view: true,
-          edit: user.role === 'magazyn'  // Używamy user.role
+          edit: user.role === 'magazyn' || user.role === 'magazyn_bialystok' || user.role === 'magazyn_zielonka'
         },
         map: { 
           view: true 
         },
         transport: { 
-          markAsCompleted: user.role === 'magazyn' || user.is_admin === 1  // Używamy user.role i user.is_admin
+          markAsCompleted: user.role === 'magazyn' || user.role === 'magazyn_bialystok' || user.role === 'magazyn_zielonka' || user.is_admin === 1 || user.is_admin === true
         }
       };
       
       try {
         if (user.permissions) {
           // Scal domyślne uprawnienia z tymi z bazy
-          const parsedPermissions = JSON.parse(user.permissions);
+          const parsedPermissions = typeof user.permissions === 'string' ? JSON.parse(user.permissions) : user.permissions;
           permissions = {
             ...permissions,
             ...parsedPermissions
@@ -50,8 +61,8 @@ export async function POST(request) {
         console.error('Błąd parsowania uprawnień:', e);
       }
       
-      // Utwórz token sesji
-      const sessionToken = `session_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+      // Utwórz kryptograficznie bezpieczny token sesji
+      const sessionToken = generateSessionToken();
       
       // Ustaw ciasteczko HTTP-only
       const cookieOptions = {

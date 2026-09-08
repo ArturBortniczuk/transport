@@ -1,13 +1,22 @@
-// src/app/api/users/route.js
 import { NextResponse } from 'next/server';
 import db from '@/database/db';
 import { removeFromCache } from '@/utils/cache';
+import { validateSession } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export async function GET() {
+export async function GET(request) {
   try {
+    const authToken = request.cookies.get('authToken')?.value;
+    const userId = await validateSession(authToken);
+
+    if (!userId) {
+      return NextResponse.json({
+        error: 'Unauthorized'
+      }, { status: 401 });
+    }
+
     // Pobieranie listy użytkowników
     const users = await db('users')
       .select('name', 'position', 'email', 'permissions', 'role', 'mpk');

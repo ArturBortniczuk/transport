@@ -7,34 +7,112 @@ export default function KurierPage() {
   const [zamowienia, setZamowienia] = useState([])
   const [userRole, setUserRole] = useState(null)
   const [showForm, setShowForm] = useState(false)
+  const [loading, setLoading] = useState(true)
+
+  const fetchUserInfo = async () => {
+    try {
+      const res = await fetch('/api/user')
+      const data = await res.json()
+      if (data.isAuthenticated && data.user) {
+        setUserRole(data.user.role)
+      } else {
+        const localRole = localStorage.getItem('userRole')
+        setUserRole(localRole)
+      }
+    } catch {
+      const localRole = localStorage.getItem('userRole')
+      setUserRole(localRole)
+    }
+  }
+
+  const fetchZamowienia = async () => {
+    try {
+      setLoading(true)
+      const res = await fetch('/api/kuriers')
+      const data = await res.json()
+      if (data.success && Array.isArray(data.orders)) {
+        setZamowienia(data.orders)
+        localStorage.setItem('zamowieniaKurier', JSON.stringify(data.orders))
+        return
+      }
+      throw new Error(data.error || 'Błąd pobierania')
+    } catch (err) {
+      console.error('Błąd API kurierów, używam localStorage:', err)
+      const savedZamowienia = localStorage.getItem('zamowieniaKurier')
+      if (savedZamowienia) {
+        try {
+          setZamowienia(JSON.parse(savedZamowienia))
+        } catch (e) {
+          console.error('Błąd parsowania localStorage:', e)
+        }
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    const role = localStorage.getItem('userRole')
-    setUserRole(role)
-    
-    const savedZamowienia = localStorage.getItem('zamowieniaKurier')
-    if (savedZamowienia) {
-      setZamowienia(JSON.parse(savedZamowienia))
-    }
+    fetchUserInfo()
+    fetchZamowienia()
   }, [])
 
-  const handleDodajZamowienie = (noweZamowienie) => {
-    const zamowienieWithDetails = {
-      ...noweZamowienie,
-      id: Date.now(),
-      status: 'oczekujące',
-      dataDodania: new Date().toISOString(),
-      magazynZamawiajacy: userRole
-    }
+  const handleDodajZamowienie = async (noweZamowienie) => {
+    try {
+      const payload = {
+        ...noweZamowienie,
+        status: 'oczekujące',
+        magazynZamawiajacy: userRole
+      }
 
-    const updatedZamowienia = [...zamowienia, zamowienieWithDetails]
-    setZamowienia(updatedZamowienia)
-    localStorage.setItem('zamowieniaKurier', JSON.stringify(updatedZamowienia))
-    setShowForm(false) // Chowamy formularz po dodaniu zamówienia
+      const res = await fetch('/api/kuriers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+      const data = await res.json()
+
+      let createdOrder
+      if (data.success && data.order) {
+        createdOrder = data.order
+      } else {
+        createdOrder = {
+          ...payload,
+          id: Date.now(),
+          dataDodania: new Date().toISOString()
+        }
+      }
+
+      const updatedZamowienia = [createdOrder, ...zamowienia]
+      setZamowienia(updatedZamowienia)
+      localStorage.setItem('zamowieniaKurier', JSON.stringify(updatedZamowienia))
+      setShowForm(false)
+    } catch (error) {
+      console.error('Błąd dodawania zamówienia kuriera:', error)
+      const fallbackOrder = {
+        ...noweZamowienie,
+        id: Date.now(),
+        status: 'oczekujące',
+        dataDodania: new Date().toISOString(),
+        magazynZamawiajacy: userRole
+      }
+      const updatedZamowienia = [fallbackOrder, ...zamowienia]
+      setZamowienia(updatedZamowienia)
+      localStorage.setItem('zamowieniaKurier', JSON.stringify(updatedZamowienia))
+      setShowForm(false)
+    }
   }
 
   const handleZatwierdzZamowienie = async (zamowienieId) => {
-    // Tutaj później dodamy integrację z API DHL
+    try {
+      await fetch('/api/kuriers', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: zamowienieId, status: 'zatwierdzone' })
+      })
+    } catch (error) {
+      console.error('Błąd zatwierdzania w API:', error)
+    }
+
     const updatedZamowienia = zamowienia.map(zam =>
       zam.id === zamowienieId ? { ...zam, status: 'zatwierdzone' } : zam
     )
@@ -42,14 +120,21 @@ export default function KurierPage() {
     localStorage.setItem('zamowieniaKurier', JSON.stringify(updatedZamowienia))
   }
 
-  const handleUsunZamowienie = (zamowienieId) => {
+  const handleUsunZamowienie = async (zamowienieId) => {
+    try {
+      await fetch(`/api/kuriers?id=${zamowienieId}`, {
+        method: 'DELETE'
+      })
+    } catch (error) {
+      console.error('Błąd usuwania w API:', error)
+    }
+
     const updatedZamowienia = zamowienia.filter(zam => zam.id !== zamowienieId)
     setZamowienia(updatedZamowienia)
     localStorage.setItem('zamowieniaKurier', JSON.stringify(updatedZamowienia))
   }
 
-const canAddOrder = userRole === 'handlowiec' || userRole === 'magazyn'
-  const canRespond = userRole === 'magazyn'
+  const canAddOrder = userRole === 'handlowiec' || userRole === 'magazyn' || userRole === 'admin'
   
   return (
     <div className="max-w-6xl mx-auto">
@@ -69,12 +154,18 @@ const canAddOrder = userRole === 'handlowiec' || userRole === 'magazyn'
 
       {/* Lista zamówień jest zawsze widoczna */}
       <div className={`transition-all duration-500 ${showForm ? 'opacity-50' : 'opacity-100'}`}>
-        <ZamowieniaList
-          zamowienia={zamowienia}
-          onZatwierdz={handleZatwierdzZamowienie}
-          onUsun={handleUsunZamowienie}
-          userRole={userRole}
-        />
+        {loading ? (
+          <div className="bg-white rounded-xl shadow-lg p-8 text-center text-gray-500">
+            Ładowanie zamówień kuriera...
+          </div>
+        ) : (
+          <ZamowieniaList
+            zamowienia={zamowienia}
+            onZatwierdz={handleZatwierdzZamowienie}
+            onUsun={handleUsunZamowienie}
+            userRole={userRole}
+          />
+        )}
       </div>
 
       {/* Formularz jest wyświetlany jako modal po kliknięciu przycisku */}

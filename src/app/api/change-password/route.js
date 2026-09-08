@@ -1,6 +1,7 @@
 // src/app/api/change-password/route.js
 import { NextResponse } from 'next/server';
 import db from '@/database/db';
+import { validateSession, verifyPassword, hashPassword } from '@/lib/auth';
 
 export async function POST(request) {
   try {
@@ -8,51 +9,38 @@ export async function POST(request) {
     
     // Pobierz token z ciasteczka
     const authToken = request.cookies.get('authToken')?.value;
+    const email = await validateSession(authToken);
     
-    if (!authToken) {
+    if (!email) {
       return NextResponse.json({ 
         success: false, 
-        error: 'Użytkownik nie jest zalogowany' 
+        error: 'Użytkownik nie jest zalogowany lub sesja wygasła' 
       }, { status: 401 });
     }
     
-    // Pobierz ID użytkownika z sesji - zaktualizowane do Knex
-    const session = await db('sessions')
-      .where('token', authToken)
-      .whereRaw('expires_at > NOW()') // Używamy NOW() zamiast datetime('now')
-      .first();
-    
-    if (!session) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Sesja wygasła lub jest nieprawidłowa' 
-      }, { status: 401 });
-    }
-    
-    const email = session.user_id;
     console.log('Zmiana hasła dla:', email);
     
-    // Sprawdź obecne hasło - zaktualizowane do Knex
+    // Pobierz użytkownika
     const user = await db('users')
-      .where({ 
-        email: email, 
-        password: currentPassword 
-      })
+      .where({ email: email })
       .first();
 
-    if (!user) {
+    if (!user || !(await verifyPassword(currentPassword, user.password))) {
       return NextResponse.json({ 
         success: false, 
         error: 'Nieprawidłowe obecne hasło' 
       }, { status: 401 });
     }
 
-    // Wykonaj aktualizację - zaktualizowane do Knex
+    // Zahashuj nowe hasło
+    const hashedNewPassword = await hashPassword(newPassword);
+
+    // Wykonaj aktualizację
     const updated = await db('users')
       .where({ email: email })
       .update({ 
-        password: newPassword, 
-        first_login: 0 
+        password: hashedNewPassword, 
+        first_login: false 
       });
 
     if (updated === 0) {

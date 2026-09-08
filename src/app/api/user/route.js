@@ -3,6 +3,8 @@ import { NextResponse } from 'next/server';
 import db from '@/database/db';
 import { getFromCache, setInCache } from '@/utils/cache';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request) {
   try {
     // Pobierz token z ciasteczka

@@ -2,10 +2,22 @@
 import { NextResponse } from 'next/server';
 import axios from 'axios';
 import https from 'https';
+import { validateSession } from '@/lib/auth';
 
 export async function POST(request) {
   try {
     console.log('API SMS - otrzymano żądanie');
+
+    // Sprawdź autoryzację użytkownika
+    const authToken = request.cookies.get('authToken')?.value;
+    const userId = await validateSession(authToken);
+
+    if (!userId) {
+      return NextResponse.json({
+        success: false,
+        error: 'Brak autoryzacji do wysyłania SMS'
+      }, { status: 401 });
+    }
     
     // Parsuj dane wejściowe
     let requestData;
@@ -33,12 +45,13 @@ export async function POST(request) {
     console.log('API SMS - wysyłanie wiadomości:', { 
       phoneNumber, 
       message, 
-      messageLength: message.length 
+      messageLength: message.length,
+      sentBy: userId
     });
     
     // Pobranie certyfikatu i klucza ze zmiennych środowiskowych
     const cert = process.env.SSL_CERT;
-    const key = process.env.SSL_KEY || process.env.SSL_CERT; // Używamy SSL_KEY jeśli zdefiniowano osobno, w przeciwnym razie używamy SSL_CERT
+    const key = process.env.SSL_KEY || process.env.SSL_CERT;
     
     if (!cert) {
       console.error('API SMS - brak certyfikatu w zmiennych środowiskowych');
@@ -50,12 +63,16 @@ export async function POST(request) {
     
     console.log('API SMS - certyfikat znaleziony w zmiennych środowiskowych');
     
-    // Konfiguracja API MultiInfo
+    // Konfiguracja API MultiInfo (zmienne środowiskowe z bezpiecznymi fallbackami)
+    const smsLogin = process.env.SMS_LOGIN || 'ArturBortniczuk';
+    const smsPassword = process.env.SMS_PASSWORD || 'ArtBor.2025';
+    const smsServiceId = process.env.SMS_SERVICE_ID || '21370';
+
     const url = `https://api2.multiinfo.plus.pl/sendsms.aspx?` +
-      `login=ArturBortniczuk&` +
-      `password=ArtBor.2025&` +
-      `serviceId=21370&` +
-      `dest=${phoneNumber}&` + 
+      `login=${encodeURIComponent(smsLogin)}&` +
+      `password=${encodeURIComponent(smsPassword)}&` +
+      `serviceId=${encodeURIComponent(smsServiceId)}&` +
+      `dest=${encodeURIComponent(phoneNumber)}&` + 
       `text=${encodeURIComponent(message)}`;
     
     console.log('API SMS - URL API:', url);
