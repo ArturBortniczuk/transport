@@ -148,6 +148,21 @@ export async function POST(request) {
       transportData.cost = Math.round(transportData.distance * 4.5);
     }
 
+    // Sprawdź czy podano osobę odpowiedzialną i MPK
+    if (!transportData.requester_name || !String(transportData.requester_name).trim()) {
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Osoba odpowiedzialna (requester_name) jest wymagana do utworzenia transportu' 
+      }, { status: 400 });
+    }
+
+    if (!transportData.mpk || !String(transportData.mpk).trim()) {
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Numer MPK jest wymagany do utworzenia transportu' 
+      }, { status: 400 });
+    }
+
     console.log('Dane transportu do zapisania:', transportData);
     
     // W PostgreSQL używamy returning('id') aby uzyskać ID nowego rekordu

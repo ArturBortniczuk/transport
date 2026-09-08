@@ -15,6 +15,7 @@ export default function AdminPage() {
   const [error, setError] = useState(null)
   const [importStatus, setImportStatus] = useState('')
   const [savingUserId, setSavingUserId] = useState(null) // Dodane do śledzenia, który użytkownik jest zapisywany
+  const [mpkInputs, setMpkInputs] = useState({}) // Lokalne wartości pól MPK do edycji
 
   useEffect(() => {
     checkPermissions()
@@ -225,6 +226,48 @@ export default function AdminPage() {
     }
   };
 
+  const handleMpkChange = async (userId, newMpk) => {
+    try {
+      setSavingUserId(userId);
+      setImportStatus('Zapisywanie MPK...');
+
+      const response = await fetch('/api/users/mpk', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          userId,
+          mpk: newMpk
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Nie udało się zaktualizować MPK');
+      }
+
+      setUsers(users.map(user => {
+        if (user.email === userId) {
+          return {
+            ...user,
+            mpk: newMpk
+          };
+        }
+        return user;
+      }));
+
+      setImportStatus('Pomyślnie zaktualizowano MPK');
+      setTimeout(() => setImportStatus(''), 3000);
+    } catch (err) {
+      setError('Nie udało się zaktualizować MPK: ' + err.message);
+      console.error('Error updating MPK:', err);
+    } finally {
+      setSavingUserId(null);
+    }
+  };
+
   return (
     <AdminCheck>
       <div className="max-w-6xl mx-auto p-6">
@@ -368,14 +411,15 @@ export default function AdminPage() {
 
               {users.map((user) => (
                 <div key={user.email} className="mb-6 border p-4 rounded-lg hover:bg-gray-50 transition-colors">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                    {/* Dane osobowe i rola */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4 items-start">
+                    {/* Dane osobowe */}
                     <div>
                       <h3 className="font-medium text-lg">{user.name}</h3>
                       <p className="text-gray-600">{user.email}</p>
                       <p className="text-gray-500 text-sm">{user.position}</p>
                     </div>
 
+                    {/* Rola */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Rola</label>
                       <select
@@ -391,11 +435,45 @@ export default function AdminPage() {
                         <option value="magazyn_bialystok">Magazyn Białystok</option>
                       </select>
                       {savingUserId === user.email && (
-                        <span className="ml-2 text-xs text-blue-500">Zapisywanie...</span>
+                        <span className="text-xs text-blue-500 mt-1 block">Zapisywanie...</span>
                       )}
                     </div>
 
-                    <div className="flex items-center justify-end">
+                    {/* Numer MPK */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Numer MPK</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={mpkInputs[user.email] !== undefined ? mpkInputs[user.email] : (user.mpk || '')}
+                          onChange={(e) => setMpkInputs({ ...mpkInputs, [user.email]: e.target.value })}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              const val = mpkInputs[user.email] !== undefined ? mpkInputs[user.email] : (user.mpk || '');
+                              handleMpkChange(user.email, val);
+                            }
+                          }}
+                          placeholder="np. 522-01-184"
+                          className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+                          disabled={savingUserId === user.email}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const val = mpkInputs[user.email] !== undefined ? mpkInputs[user.email] : (user.mpk || '');
+                            handleMpkChange(user.email, val);
+                          }}
+                          disabled={savingUserId === user.email}
+                          className="px-3 py-1.5 bg-indigo-600 text-white rounded-md text-xs font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors whitespace-nowrap"
+                        >
+                          Zapisz
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Status admina */}
+                    <div className="flex items-center justify-end pt-5">
                       {savingUserId === user.email ? (
                         <span className="text-blue-500 bg-blue-50 px-3 py-1 rounded-full text-sm">
                           Zapisywanie zmian...

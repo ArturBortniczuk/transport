@@ -348,6 +348,17 @@ export default function KalendarzPage() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     
+    // Walidacja osoby odpowiedzialnej i numeru MPK
+    if (!nowyTransport.osobaZlecajaca || !nowyTransport.osobaZlecajaca.trim()) {
+      alert('Nie można dodać transportu: Wybierz osobę odpowiedzialną za transport!');
+      return;
+    }
+
+    if (!nowyTransport.mpk || !nowyTransport.mpk.trim()) {
+      alert('Nie można dodać transportu: Brak numeru MPK! Upewnij się, że osoba/budowa ma przypisany numer MPK.');
+      return;
+    }
+
     console.log('Dane transportu wysyłane do API:', {
       miasto: nowyTransport.miasto,
       osobaZlecajaca: nowyTransport.osobaZlecajaca,
@@ -583,6 +594,17 @@ export default function KalendarzPage() {
   const handleUpdateTransport = async (e) => {
     e.preventDefault()
     
+    // Walidacja osoby odpowiedzialnej i numeru MPK
+    if (!nowyTransport.osobaZlecajaca || !nowyTransport.osobaZlecajaca.trim()) {
+      alert('Nie można zapisać zmian: Wybierz osobę odpowiedzialną za transport!');
+      return;
+    }
+
+    if (!nowyTransport.mpk || !nowyTransport.mpk.trim()) {
+      alert('Nie można zapisać zmian: Brak numeru MPK! Upewnij się, że osoba/budowa ma przypisany numer MPK.');
+      return;
+    }
+    
     try {
       // Pozyskaj współrzędne miejsca docelowego za pomocą Google Geocoding API
       const coordinates = await getGoogleCoordinates(
@@ -615,6 +637,9 @@ export default function KalendarzPage() {
           driver_id: nowyTransport.kierowcaId,
           wz_number: nowyTransport.numerWZ,
           client_name: nowyTransport.nazwaKlienta,
+          requester_name: nowyTransport.osobaZlecajaca,
+          requester_email: nowyTransport.emailZlecajacego,
+          mpk: nowyTransport.mpk,
           market: nowyTransport.rynek,
           loading_level: nowyTransport.poziomZaladunku,
           notes: nowyTransport.informacje,

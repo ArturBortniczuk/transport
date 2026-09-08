@@ -200,6 +200,15 @@ export default function TransportForm({
     }
   }, [searchTerm, users])
 
+  // Synchronizacja pola wyszukiwania osoby z aktualnym stanem
+  useEffect(() => {
+    if (nowyTransport.osobaZlecajaca) {
+      setSearchTerm(nowyTransport.osobaZlecajaca);
+    } else if (!searchTerm) {
+      setSearchTerm('');
+    }
+  }, [nowyTransport.osobaZlecajaca]);
+
   // Efekt do aktualizacji nowyTransport przy wyborze transportu źródłowego
   useEffect(() => {
     if (selectedSourceTransport && connectToExistingTransport) {
@@ -787,7 +796,7 @@ export default function TransportForm({
                     {/* Pole wyszukiwania użytkowników (handlowców) */}
                     <div>
                       <label className={labelBaseClass}>
-                        Osoba odpowiedzialna
+                        Osoba odpowiedzialna <span className="text-red-500 font-bold">*</span>
                       </label>
                       {isLoadingUsers ? (
                         <div className="animate-pulse h-10 bg-gray-200 rounded"></div>
@@ -801,8 +810,8 @@ export default function TransportForm({
                               setShowUsersList(true)
                             }}
                             onFocus={() => setShowUsersList(true)}
-                            placeholder="Wpisz, aby wyszukać osobę"
-                            className={inputBaseClass}
+                            placeholder="Wpisz i wybierz osobę z listy..."
+                            className={`${inputBaseClass} ${!nowyTransport.osobaZlecajaca ? 'border-amber-400' : ''}`}
                             required
                           />
                           {showUsersList && (
@@ -812,20 +821,30 @@ export default function TransportForm({
                                   <div
                                     key={user.email}
                                     onClick={() => handleUserSelect(user)}
-                                    className="p-2 hover:bg-gray-100 cursor-pointer"
+                                    className="p-2 hover:bg-blue-50 cursor-pointer border-b last:border-0"
                                   >
-                                    <div className="font-medium">{user.name}</div>
-                                    {user.mpk && (
-                                      <div className="text-sm text-gray-500">MPK: {user.mpk}</div>
-                                    )}
+                                    <div className="font-medium text-gray-900">{user.name}</div>
+                                    <div className="text-xs text-gray-500 flex justify-between">
+                                      <span>{user.position || user.email}</span>
+                                      {user.mpk ? (
+                                        <span className="font-semibold text-blue-600">MPK: {user.mpk}</span>
+                                      ) : (
+                                        <span className="text-red-500 italic">Brak MPK</span>
+                                      )}
+                                    </div>
                                   </div>
                                 ))
                               ) : (
-                                <div className="p-2 text-gray-500">Brak wyników</div>
+                                <div className="p-2 text-gray-500 text-sm">Nie znaleziono użytkownika</div>
                               )}
                             </div>
                           )}
                         </div>
+                      )}
+                      {!nowyTransport.osobaZlecajaca && (
+                        <p className="mt-1 text-xs text-amber-600 font-medium">
+                          Wybierz osobę odpowiedzialną z listy podpowiedzi.
+                        </p>
                       )}
                     </div>
                   </>
@@ -834,7 +853,7 @@ export default function TransportForm({
                     {/* Wybór budowy */}
                     <div>
                       <label className={labelBaseClass}>
-                        Budowa
+                        Budowa <span className="text-red-500 font-bold">*</span>
                       </label>
                       <ConstructionSelector
                         value={selectedConstruction}
@@ -847,15 +866,26 @@ export default function TransportForm({
                 {/* Pole wyświetlające numer MPK */}
                 <div>
                   <label className={labelBaseClass}>
-                    MPK
+                    Numer MPK <span className="text-red-500 font-bold">*</span>
                   </label>
                   <input
                     type="text"
                     name="mpk"
                     value={nowyTransport.mpk || ''}
-                    className={inputBaseClass}
-                    readOnly
+                    onChange={handleInputChange}
+                    placeholder="Wybierz osobę z MPK lub wpisz numer (np. 522-01-184)"
+                    className={`${inputBaseClass} ${!nowyTransport.mpk ? 'border-red-400 bg-red-50' : 'bg-gray-50'}`}
+                    required
                   />
+                  {!nowyTransport.mpk ? (
+                    <p className="mt-1 text-xs text-red-600 font-semibold">
+                      ⚠️ Numer MPK jest wymagany do utworzenia transportu!
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-xs text-green-700">
+                      ✓ Przypisany numer MPK: <span className="font-semibold">{nowyTransport.mpk}</span>
+                    </p>
+                  )}
                 </div>
 
                 {/* Dodatkowe informacje o transporcie */}
