@@ -87,6 +87,8 @@ export default function AdminPage() {
   const [users, setUsers] = useState([])
   const [adminAccess, setAdminAccess] = useState({
     isAdmin: false,
+    users: false,
+    valuation: false,
     packagings: false,
     constructions: false,
     cable_advices: false
@@ -124,14 +126,18 @@ export default function AdminPage() {
       const response = await fetch('/api/check-admin')
       const data = await response.json()
 
+      const hasUserAccess = data.isAdmin || data.permissions?.admin?.users;
+
       setAdminAccess({
         isAdmin: data.isAdmin,
+        users: hasUserAccess,
+        valuation: data.isAdmin || data.permissions?.admin?.valuation,
         packagings: data.isAdmin || data.permissions?.admin?.packagings,
         constructions: data.isAdmin || data.permissions?.admin?.constructions,
         cable_advices: data.isAdmin || data.permissions?.admin?.cable_advices
       })
 
-      if (data.isAdmin) {
+      if (hasUserAccess) {
         fetchUsers()
       } else {
         setLoading(false)
@@ -183,6 +189,8 @@ export default function AdminPage() {
             sendOrder: false
           },
           admin: {
+            users: false,
+            valuation: false,
             packagings: false,
             constructions: false,
             cable_advices: false
@@ -439,6 +447,8 @@ export default function AdminPage() {
           'Odpowiadanie na Spedycje': perms.spedycja?.respond ? 'TAK' : 'NIE',
           'Wysyłanie Zlecenia': perms.spedycja?.sendOrder ? 'TAK' : 'NIE',
           // Uprawnienia administratora
+          'Zarządzanie Użytkownikami': perms.admin?.users ? 'TAK' : 'NIE',
+          'Ustawienia Wyceny': perms.admin?.valuation ? 'TAK' : 'NIE',
           'Moduł Opakowań': perms.admin?.packagings ? 'TAK' : 'NIE',
           'Moduł Budów': perms.admin?.constructions ? 'TAK' : 'NIE',
           'Moduł Awizacji Kabli': perms.admin?.cable_advices ? 'TAK' : 'NIE'
@@ -462,6 +472,8 @@ export default function AdminPage() {
         { wch: 18 }, // Dodawanie Spedycji
         { wch: 22 }, // Odpowiadanie
         { wch: 18 }, // Wysyłanie
+        { wch: 24 }, // Użytkownicy
+        { wch: 20 }, // Wycena
         { wch: 18 }, // Opakowania
         { wch: 18 }, // Budowy
         { wch: 22 }  // Awizacje kabli
@@ -521,7 +533,7 @@ export default function AdminPage() {
               </p>
             </div>
 
-            {adminAccess.isAdmin && (
+            {(adminAccess.isAdmin || adminAccess.users) && (
               <div className="flex items-center gap-3">
                 <button
                   onClick={exportUsersToXLSX}
@@ -596,7 +608,7 @@ export default function AdminPage() {
           )}
 
           {/* Ustawienia Wyceny */}
-          {adminAccess.isAdmin && (
+          {adminAccess.valuation && (
             <Link
               href="/admin/valuation"
               className="group relative bg-white p-5 rounded-2xl border border-gray-200/80 shadow-sm hover:shadow-md hover:border-purple-300 transition-all duration-200 flex flex-col justify-between overflow-hidden"
@@ -616,7 +628,7 @@ export default function AdminPage() {
         </div>
 
         {/* Sekcja Zarządzania Użytkownikami */}
-        {adminAccess.isAdmin && (
+        {adminAccess.users && (
           <div id="users-section" className="space-y-6">
             {/* Karty Statystyk KPI */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -745,6 +757,8 @@ export default function AdminPage() {
                       <option value="spedycja.add">Dodawanie Spedycji</option>
                       <option value="spedycja.respond">Odpowiadanie na Spedycje</option>
                       <option value="spedycja.sendOrder">Wysyłanie Zlecenia</option>
+                      <option value="admin.users">Dostęp: Zarządzanie Użytkownikami</option>
+                      <option value="admin.valuation">Dostęp: Ustawienia Wyceny</option>
                       <option value="admin.packagings">Dostęp: Opakowania</option>
                       <option value="admin.constructions">Dostęp: Budowy</option>
                       <option value="admin.cable_advices">Dostęp: Awizacja Kabli</option>
@@ -1042,6 +1056,38 @@ export default function AdminPage() {
                             Dostęp do modułów administratora
                           </div>
                           <div className="flex flex-wrap gap-2">
+                            {/* Zarządzanie Użytkownikami */}
+                            <button
+                              type="button"
+                              onClick={() => handlePermissionChange(user.email, 'admin', 'users')}
+                              disabled={isSaving}
+                              className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium border transition-all duration-150 ${
+                                user.permissions?.admin?.users
+                                  ? 'bg-purple-50 border-purple-300 text-purple-700 shadow-sm'
+                                  : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50 hover:border-gray-300'
+                              }`}
+                            >
+                              <Users className={`w-3.5 h-3.5 ${user.permissions?.admin?.users ? 'text-purple-600' : 'text-gray-400'}`} />
+                              <span>Zarządzanie Użytkownikami</span>
+                              {user.permissions?.admin?.users && <Check className="w-3.5 h-3.5 text-purple-600 ml-0.5" />}
+                            </button>
+
+                            {/* Ustawienia Wyceny */}
+                            <button
+                              type="button"
+                              onClick={() => handlePermissionChange(user.email, 'admin', 'valuation')}
+                              disabled={isSaving}
+                              className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium border transition-all duration-150 ${
+                                user.permissions?.admin?.valuation
+                                  ? 'bg-purple-50 border-purple-300 text-purple-700 shadow-sm'
+                                  : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50 hover:border-gray-300'
+                              }`}
+                            >
+                              <SlidersHorizontal className={`w-3.5 h-3.5 ${user.permissions?.admin?.valuation ? 'text-purple-600' : 'text-gray-400'}`} />
+                              <span>Ustawienia Wyceny</span>
+                              {user.permissions?.admin?.valuation && <Check className="w-3.5 h-3.5 text-purple-600 ml-0.5" />}
+                            </button>
+
                             {/* Opakowania */}
                             <button
                               type="button"

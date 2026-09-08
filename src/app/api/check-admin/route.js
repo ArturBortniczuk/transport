@@ -52,6 +52,8 @@ export async function GET(request) {
     // Jeśli nie ma sekcji admin w uprawnieniach, dodaj ją
     if (!permissions.admin) {
       permissions.admin = {
+        users: false,
+        valuation: false,
         packagings: false,
         constructions: false,
         cable_advices: false

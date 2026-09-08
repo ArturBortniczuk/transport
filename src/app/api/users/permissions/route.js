@@ -33,19 +33,30 @@ export async function PUT(request) {
       }, { status: 401 });
     }
     
-    // Sprawdź czy użytkownik jest adminem - zaktualizowane do Knex
+    // Sprawdź czy użytkownik jest adminem lub ma uprawnienia do zarządzania użytkownikami
     const admin = await db('users')
       .where('email', userId)
-      .select('is_admin')
+      .select('is_admin', 'role', 'permissions')
       .first();
+
+    let adminPerms = {};
+    try {
+      if (admin?.permissions) {
+        adminPerms = JSON.parse(admin.permissions);
+      }
+    } catch (e) {}
+
+    const isAdmin = Boolean(
+      admin?.is_admin === true || 
+      admin?.is_admin === 1 || 
+      admin?.is_admin === 't' || 
+      admin?.is_admin === 'TRUE' || 
+      admin?.is_admin === 'true' ||
+      admin?.role === 'admin' ||
+      adminPerms?.admin?.users === true
+    );
     
-    console.log('Sprawdzenie uprawnień admina:', {
-      userId,
-      isAdmin: admin?.is_admin,
-      typeOf: typeof admin?.is_admin 
-    });
-    
-    if (admin?.is_admin !== true && admin?.is_admin !== 1) {
+    if (!isAdmin) {
       return NextResponse.json({ 
         success: false, 
         error: 'Brak uprawnień administratora' 

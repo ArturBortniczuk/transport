@@ -35,8 +35,11 @@ export default function AdminCheck({ children, moduleType }) {
         // Jeśli nie określono moduleType (główna strona admina) 
         // ale ma jakiekolwiek uprawnienia admin
         else if (!moduleType && data.permissions?.admin && 
-                (data.permissions.admin.packagings || 
-                 data.permissions.admin.constructions)) {
+                (data.permissions.admin.users ||
+                 data.permissions.admin.valuation ||
+                 data.permissions.admin.packagings || 
+                 data.permissions.admin.constructions ||
+                 data.permissions.admin.cable_advices)) {
           console.log('Użytkownik ma częściowe uprawnienia administratora');
           hasAccess = true;
         }

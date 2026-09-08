@@ -407,12 +407,174 @@ export default function ArchiwumPage() {
     }
   }
 
+  const createKsiegowoscSheet = (dataToExport) => {
+    if (!dataToExport || dataToExport.length === 0) {
+      return XLSX.utils.json_to_sheet([]);
+    }
+
+    const totalCost = dataToExport.reduce((sum, item) => sum + (Number(item['Koszt transportu (PLN)']) || 0), 0);
+    const rowCount = dataToExport.length;
+    const totalRowIndex = rowCount + 2; // 1-based (Row 1: Header, Rows 2..N+1: Data, Row N+2: SUMA)
+
+    const ksiegowoscRows = dataToExport.map((item, idx) => {
+      const cost = Number(item['Koszt transportu (PLN)']) || 0;
+      const ratio = totalCost > 0 ? cost / totalCost : 0;
+      const mpk = item['MPK'] || '';
+      const firma = item['Firma'] || '';
+      const dataTrans = item['Data transportu'] || '';
+
+      return {
+        'Data transportu': dataTrans,
+        'Miasto': item['Miasto'],
+        'Kod pocztowy': item['Kod pocztowy'],
+        'Ulica': item['Ulica'],
+        'Magazyn': item['Magazyn'],
+        'Rynek': item['Rynek'],
+        'Odległość (km)': item['Odległość (km)'],
+        'Koszt transportu (PLN)': cost,
+        'Firma': firma,
+        'MPK': mpk,
+        'Handlowiec': item['Handlowiec'],
+        'Nr WZ': item['Nr WZ'],
+        'Kierowca': item['Kierowca'],
+        'Nr rejestracyjny': item['Nr rejestracyjny'],
+        'Zamówił': item['Zamówił'],
+        'Ocena (%)': item['Ocena (%)'],
+        'Liczba ocen': item['Liczba ocen'],
+        'Uwagi': item['Uwagi'],
+        'Udział w kosztach (%)': ratio,
+        'Opis księgowy': `Transport ${dataTrans} ${firma}`.trim(),
+        'Koszt wg kwoty bazowej (PLN)': cost,
+        'MPK-16': mpk ? `${mpk}-16` : '',
+        '743-MPK': mpk ? `743-${mpk}` : '',
+        'Wpisz kwotę bazową (PLN)': idx === 0 ? totalCost : ''
+      };
+    });
+
+    // Wiersz podsumowania SUMA
+    ksiegowoscRows.push({
+      'Data transportu': 'SUMA',
+      'Miasto': '',
+      'Kod pocztowy': '',
+      'Ulica': '',
+      'Magazyn': '',
+      'Rynek': '',
+      'Odległość (km)': dataToExport.reduce((sum, item) => sum + (Number(item['Odległość (km)']) || 0), 0),
+      'Koszt transportu (PLN)': totalCost,
+      'Firma': '',
+      'MPK': '',
+      'Handlowiec': '',
+      'Nr WZ': '',
+      'Kierowca': '',
+      'Nr rejestracyjny': '',
+      'Zamówił': '',
+      'Ocena (%)': '',
+      'Liczba ocen': '',
+      'Uwagi': '',
+      'Udział w kosztach (%)': 1.0,
+      'Opis księgowy': '',
+      'Koszt wg kwoty bazowej (PLN)': totalCost,
+      'MPK-16': '',
+      '743-MPK': '',
+      'Wpisz kwotę bazową (PLN)': ''
+    });
+
+    const ws = XLSX.utils.json_to_sheet(ksiegowoscRows);
+
+    // Dodanie dynamicznych formuł Excela
+    for (let idx = 0; idx < rowCount; idx++) {
+      const rowNum = idx + 2;
+
+      // S: Udział w kosztach (%) = H{rowNum}/$H${totalRowIndex}
+      const cellS = `S${rowNum}`;
+      if (ws[cellS]) {
+        ws[cellS].f = `H${rowNum}/$H$${totalRowIndex}`;
+        ws[cellS].z = '0.00%';
+      }
+
+      // T: Opis księgowy = "Transport " & A{rowNum} & " " & I{rowNum}
+      const cellT = `T${rowNum}`;
+      if (ws[cellT]) {
+        ws[cellT].f = `CONCATENATE("Transport ", A${rowNum}, " ", I${rowNum})`;
+      }
+
+      // U: Koszt wg kwoty bazowej = S{rowNum} * $X$2
+      const cellU = `U${rowNum}`;
+      if (ws[cellU]) {
+        ws[cellU].f = `S${rowNum}*$X$2`;
+        ws[cellU].z = '#,##0.00';
+      }
+
+      // V: MPK-16 = IF(J{rowNum}<>""; CONCATENATE(J${rowNum}, "-16"); "")
+      const cellV = `V${rowNum}`;
+      if (ws[cellV]) {
+        ws[cellV].f = `IF(J${rowNum}<>""; CONCATENATE(J${rowNum}, "-16"); "")`;
+      }
+
+      // W: 743-MPK = IF(J{rowNum}<>""; CONCATENATE("743-", J${rowNum}); "")
+      const cellW = `W${rowNum}`;
+      if (ws[cellW]) {
+        ws[cellW].f = `IF(J${rowNum}<>""; CONCATENATE("743-", J${rowNum}); "")`;
+      }
+    }
+
+    // Formuły dla wiersza SUMA
+    const sumH = `H${totalRowIndex}`;
+    if (ws[sumH]) {
+      ws[sumH].f = `SUM(H2:H${rowCount + 1})`;
+    }
+    const sumS = `S${totalRowIndex}`;
+    if (ws[sumS]) {
+      ws[sumS].f = `SUM(S2:S${rowCount + 1})`;
+      ws[sumS].z = '0.00%';
+    }
+    const sumU = `U${totalRowIndex}`;
+    if (ws[sumU]) {
+      ws[sumU].f = `SUM(U2:U${rowCount + 1})`;
+      ws[sumU].z = '#,##0.00';
+    }
+
+    // Szerokości kolumn
+    ws['!cols'] = [
+      { wch: 14 }, // A: Data transportu
+      { wch: 18 }, // B: Miasto
+      { wch: 12 }, // C: Kod pocztowy
+      { wch: 22 }, // D: Ulica
+      { wch: 14 }, // E: Magazyn
+      { wch: 16 }, // F: Rynek
+      { wch: 14 }, // G: Odległość
+      { wch: 22 }, // H: Koszt transportu (PLN)
+      { wch: 26 }, // I: Firma
+      { wch: 16 }, // J: MPK
+      { wch: 22 }, // K: Handlowiec
+      { wch: 14 }, // L: Nr WZ
+      { wch: 16 }, // M: Kierowca
+      { wch: 16 }, // N: Nr rejestracyjny
+      { wch: 24 }, // O: Zamówił
+      { wch: 12 }, // P: Ocena (%)
+      { wch: 12 }, // Q: Liczba ocen
+      { wch: 20 }, // R: Uwagi
+      { wch: 22 }, // S: Udział w kosztach (%)
+      { wch: 34 }, // T: Opis księgowy
+      { wch: 28 }, // U: Koszt wg kwoty bazowej (PLN)
+      { wch: 18 }, // V: MPK-16
+      { wch: 18 }, // W: 743-MPK
+      { wch: 32 }  // X: Wpisz kwotę bazową (PLN)
+    ];
+
+    return ws;
+  };
+
   const exportToXLSXWithMultipleSheets = (mainData, summaryData, biuraData, centraData, budowyData, fileName) => {
     const wb = XLSX.utils.book_new();
     
     // Arkusz z transportami
     const ws_main = XLSX.utils.json_to_sheet(mainData);
     XLSX.utils.book_append_sheet(wb, ws_main, "Transporty");
+
+    // Arkusz dla księgowości
+    const ws_ksiegowosc = createKsiegowoscSheet(mainData);
+    XLSX.utils.book_append_sheet(wb, ws_ksiegowosc, "Dla księgowości");
     
     // Arkusz z podsumowaniem
     const ws_summary = XLSX.utils.json_to_sheet(summaryData);
