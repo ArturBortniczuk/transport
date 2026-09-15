@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
  
 export function middleware(request) {
-  // Sprawdź, czy użytkownik jest zalogowany przez ciasteczko HTTP-only
-  const authToken = request.cookies.get('authToken')?.value
+  // Sprawdź, czy użytkownik jest zalogowany przez SSO (eltron_auth_token) lub legacy (authToken)
+  const authToken = request.cookies.get('eltron_auth_token')?.value || request.cookies.get('authToken')?.value;
   
   // Publiczne ścieżki, dostępne bez logowania
   const publicPaths = ['/login', '/']

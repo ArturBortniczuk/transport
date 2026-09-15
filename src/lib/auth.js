@@ -67,11 +67,85 @@ export async function validateSession(authToken) {
 
 /**
  * Pobiera dane zalogowanego użytkownika na podstawie ciasteczka z żądania Next.js
+/**
+ * Pobiera dane zalogowanego użytkownika na podstawie ciasteczka Supabase SSO (eltron_auth_token)
+ * lub legacy ciasteczka authToken.
  * @param {Request} request
  * @returns {Promise<{ isAuthenticated: boolean, user: object|null }>}
  */
 export async function getSessionUser(request) {
   try {
+    // 1. Sprawdź ciasteczko Supabase SSO (eltron_auth_token)
+    const eltronAuthCookie = request.cookies.get('eltron_auth_token')?.value;
+    if (eltronAuthCookie) {
+      try {
+        let tokenData = null;
+        try {
+          tokenData = JSON.parse(decodeURIComponent(eltronAuthCookie));
+        } catch {
+          tokenData = JSON.parse(eltronAuthCookie);
+        }
+
+        const accessToken = tokenData?.access_token || (Array.isArray(tokenData) ? tokenData[0] : null);
+        const email = (tokenData?.user?.email || '').toLowerCase().trim();
+
+        if (email) {
+          // Pobierz użytkownika i uprawnienia z bazy (lub Supabase)
+          let userRow = await db('profiles')
+            .whereRaw('LOWER(email) = ?', [email])
+            .first()
+            .catch(() => null);
+
+          let userPerm = null;
+          if (userRow) {
+            userPerm = await db('user_app_permissions')
+              .where({ user_id: userRow.id, app_id: 'transport' })
+              .first()
+              .catch(() => null);
+          }
+
+          // Jeśli brak w profiles, sprawdź legacy users
+          if (!userRow) {
+            userRow = await db('users')
+              .whereRaw('LOWER(email) = ?', [email])
+              .first()
+              .catch(() => null);
+          }
+
+          const role = userPerm?.is_active ? userPerm.role : (userRow?.role || 'pracownik');
+          const isSuperAdmin = email === 'a.bortniczuk@grupaeltron.pl';
+          const isAdmin = isSuperAdmin || role === 'admin' || userRow?.is_admin === true || userRow?.role === 'admin';
+
+          let permissions = {
+            calendar: { 
+              view: true,
+              edit: ['admin', 'koordynator', 'magazyn', 'magazyn_bialystok', 'magazyn_zielonka'].includes(role) || isAdmin
+            },
+            map: { view: true },
+            transport: { 
+              markAsCompleted: ['admin', 'koordynator', 'magazyn', 'magazyn_bialystok', 'magazyn_zielonka', 'kierowca'].includes(role) || isAdmin
+            }
+          };
+
+          return {
+            isAuthenticated: true,
+            user: {
+              email: email,
+              name: userRow?.name || tokenData?.user?.user_metadata?.full_name || email.split('@')[0],
+              position: userRow?.position || '',
+              role: role,
+              permissions: permissions,
+              mpk: userRow?.mpk || '',
+              isAdmin: isAdmin
+            }
+          };
+        }
+      } catch (supabaseTokenErr) {
+        console.warn('Błąd parsowania tokenu Supabase SSO:', supabaseTokenErr.message);
+      }
+    }
+
+    // 2. Fallback: Legacy token sesji (authToken)
     const authToken = request.cookies.get('authToken')?.value;
     if (!authToken) {
       return { isAuthenticated: false, user: null };
@@ -129,3 +203,4 @@ export async function getSessionUser(request) {
     return { isAuthenticated: false, user: null };
   }
 }
+

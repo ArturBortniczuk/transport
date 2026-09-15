@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import db from '@/database/db';
 import { serialize } from 'cookie';
 import { verifyPassword, hashPassword, isBcryptHash, generateSessionToken } from '@/lib/auth';
+import { supabase } from '@/lib/supabaseClient';
 
 export async function POST(request) {
   try {
@@ -9,107 +10,153 @@ export async function POST(request) {
     const normalizedEmail = email ? email.toLowerCase().trim() : '';
     console.log('Próba logowania dla użytkownika:', normalizedEmail);
     
-    // Pobierz użytkownika po emailu
-    const user = await db('users')
-      .whereRaw('LOWER(email) = ?', [normalizedEmail])
-      .first();
-    
-    if (user && await verifyPassword(password, user.password)) {
-      // Automatyczna przezroczysta migracja hasła czystotekstowego do bcrypt
-      if (!isBcryptHash(user.password)) {
-        try {
-          const hashedPassword = await hashPassword(password);
-          await db('users')
-            .where({ email: user.email })
-            .update({ password: hashedPassword });
-          console.log(`Hasło użytkownika ${user.email} zostało automatycznie zmigrowane do bcrypt`);
-        } catch (hashError) {
-          console.error('Błąd podczas migracji hasła do bcrypt:', hashError);
-        }
-      }
+    let authenticatedUser = null;
+    let supabaseSession = null;
 
-      console.log('Zalogowano użytkownika:', {
-        email: user.email,
-        name: user.name,
-        role: user.role
+    // 1. Spróbuj zalogować przez Supabase Auth
+    try {
+      const { data: sbData, error: sbError } = await supabase.auth.signInWithPassword({
+        email: normalizedEmail,
+        password: password
       });
-      
-      // Zadeklaruj permissions przed użyciem
-      let permissions = {
-        calendar: { 
-          view: true,
-          edit: user.role === 'magazyn' || user.role === 'magazyn_bialystok' || user.role === 'magazyn_zielonka'
-        },
-        map: { 
-          view: true 
-        },
-        transport: { 
-          markAsCompleted: user.role === 'magazyn' || user.role === 'magazyn_bialystok' || user.role === 'magazyn_zielonka' || user.is_admin === 1 || user.is_admin === true
-        }
-      };
-      
-      try {
-        if (user.permissions) {
-          // Scal domyślne uprawnienia z tymi z bazy
-          const parsedPermissions = typeof user.permissions === 'string' ? JSON.parse(user.permissions) : user.permissions;
-          permissions = {
-            ...permissions,
-            ...parsedPermissions
-          };
-        }
-      } catch (e) {
-        console.error('Błąd parsowania uprawnień:', e);
-      }
-      
-      // Utwórz kryptograficznie bezpieczny token sesji
-      const sessionToken = generateSessionToken();
-      
-      // Ustaw ciasteczko HTTP-only
-      const cookieOptions = {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
-        maxAge: 60 * 60 * 24 * 7, // 7 dni
-        path: '/'
-      };
-      
-      // Zapisz sesję w bazie danych
-      try {
-        // Upewnij się, że tabela sessions istnieje (powinno to być już obsługiwane w db.js)
-        await db('sessions').insert({
-          token: sessionToken,
-          user_id: user.email,
-          expires_at: db.raw("NOW() + INTERVAL '7 days' ")
-        });
+
+      if (!sbError && sbData?.user) {
+        supabaseSession = sbData.session;
         
-        console.log('Sesja zapisana dla użytkownika:', user.email);
-      } catch (error) {
-        console.error('Błąd zapisywania sesji:', error);
+        // Pobierz uprawnienie do Transportu
+        const { data: perm } = await supabase
+          .from('user_app_permissions')
+          .select('role, is_active')
+          .eq('user_id', sbData.user.id)
+          .eq('app_id', 'transport')
+          .maybeSingle();
+
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', sbData.user.id)
+          .maybeSingle();
+
+        const role = perm?.is_active ? perm.role : (profile?.role === 'admin' ? 'admin' : 'pracownik');
+        const isSuperAdmin = normalizedEmail === 'a.bortniczuk@grupaeltron.pl';
+        const isAdmin = isSuperAdmin || role === 'admin' || profile?.role === 'admin';
+
+        authenticatedUser = {
+          email: normalizedEmail,
+          name: profile?.name || sbData.user.user_metadata?.full_name || normalizedEmail.split('@')[0],
+          role: role,
+          mpk: profile?.mpk || '',
+          isAdmin: isAdmin,
+          permissions: {
+            calendar: { 
+              view: true,
+              edit: ['admin', 'koordynator', 'magazyn', 'magazyn_bialystok', 'magazyn_zielonka'].includes(role) || isAdmin
+            },
+            map: { view: true },
+            transport: { 
+              markAsCompleted: ['admin', 'koordynator', 'magazyn', 'magazyn_bialystok', 'magazyn_zielonka', 'kierowca'].includes(role) || isAdmin
+            }
+          }
+        };
       }
+    } catch (sbErr) {
+      console.warn('Próba logowania Supabase nie powiodła się, sprawdzam bazę lokalną/Neon:', sbErr.message);
+    }
+
+    // 2. Jeśli Supabase nie zwrócił użytkownika, sprawdź tabelę users (legacy / Neon)
+    if (!authenticatedUser) {
+      const user = await db('users')
+        .whereRaw('LOWER(email) = ?', [normalizedEmail])
+        .first();
       
-      // Przygotuj ciasteczka
-      const authCookie = serialize('authToken', sessionToken, cookieOptions);
-      const roleCookie = serialize('userRole', user.role, { ...cookieOptions, httpOnly: false });
-      
-      // Dodaj nowe ciasteczko przechowujące email użytkownika (niezbędne do sprawdzania utworzycieli transportów)
-      const emailCookie = serialize('userEmail', user.email, { ...cookieOptions, httpOnly: false });
-      
-      const response = NextResponse.json({ 
-        success: true,
-        user: {
+      if (user && await verifyPassword(password, user.password)) {
+        if (!isBcryptHash(user.password)) {
+          try {
+            const hashedPassword = await hashPassword(password);
+            await db('users')
+              .where({ email: user.email })
+              .update({ password: hashedPassword });
+          } catch (hashError) {
+            console.error('Błąd podczas migracji hasła do bcrypt:', hashError);
+          }
+        }
+
+        let permissions = {
+          calendar: { 
+            view: true,
+            edit: user.role === 'magazyn' || user.role === 'magazyn_bialystok' || user.role === 'magazyn_zielonka'
+          },
+          map: { view: true },
+          transport: { 
+            markAsCompleted: user.role === 'magazyn' || user.role === 'magazyn_bialystok' || user.role === 'magazyn_zielonka' || user.is_admin === 1 || user.is_admin === true
+          }
+        };
+        
+        try {
+          if (user.permissions) {
+            const parsedPermissions = typeof user.permissions === 'string' ? JSON.parse(user.permissions) : user.permissions;
+            permissions = { ...permissions, ...parsedPermissions };
+          }
+        } catch (e) {
+          console.error('Błąd parsowania uprawnień:', e);
+        }
+
+        authenticatedUser = {
+          email: user.email,
           name: user.name,
-          email: user.email, // Dodajemy email do odpowiedzi
           role: user.role,
           permissions: permissions,
-          mpk: user.mpk || ''
-        }
-      });
+          mpk: user.mpk || '',
+          isAdmin: user.is_admin === 1 || user.is_admin === true || user.role === 'admin'
+        };
+      }
+    }
+
+    if (authenticatedUser) {
+      const sessionToken = generateSessionToken();
+      const isProduction = process.env.NODE_ENV === 'production';
       
-      // Dodaj ciasteczka do odpowiedzi
+      const cookieOptions = {
+        httpOnly: true,
+        secure: isProduction,
+        sameSite: 'lax',
+        maxAge: 60 * 60 * 24 * 7,
+        path: '/'
+      };
+
+      // Zapisz sesję w bazie
+      try {
+        await db('sessions').insert({
+          token: sessionToken,
+          user_id: authenticatedUser.email,
+          expires_at: db.raw("NOW() + INTERVAL '7 days' ")
+        });
+      } catch (error) {
+        console.error('Błąd zapisywania sesji:', error.message);
+      }
+
+      const authCookie = serialize('authToken', sessionToken, cookieOptions);
+      const roleCookie = serialize('userRole', authenticatedUser.role, { ...cookieOptions, httpOnly: false });
+      const emailCookie = serialize('userEmail', authenticatedUser.email, { ...cookieOptions, httpOnly: false });
+
+      const response = NextResponse.json({ 
+        success: true,
+        user: authenticatedUser
+      });
+
       response.headers.append('Set-Cookie', authCookie);
       response.headers.append('Set-Cookie', roleCookie);
-      response.headers.append('Set-Cookie', emailCookie); // Dodajemy nowe ciasteczko z emailem
-      
+      response.headers.append('Set-Cookie', emailCookie);
+
+      // Jeśli mamy sesję Supabase, zapisz ciasteczko SSO eltron_auth_token
+      if (supabaseSession) {
+        const ssoCookie = serialize('eltron_auth_token', JSON.stringify(supabaseSession), {
+          ...cookieOptions,
+          httpOnly: false
+        });
+        response.headers.append('Set-Cookie', ssoCookie);
+      }
+
       return response;
     }
     
@@ -129,3 +176,4 @@ export async function POST(request) {
     });
   }
 }
+
