@@ -2,62 +2,35 @@
 export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
-import db from '@/database/db';
+import { getSessionUser } from '@/lib/auth';
 
 export async function GET(request) {
   try {
-    // Pobierz token z ciasteczka
-    const authToken = request.cookies.get('authToken')?.value;
+    const session = await getSessionUser(request);
     
-    if (!authToken) {
+    if (!session?.isAuthenticated || !session?.user) {
       return NextResponse.json({ isAdmin: false, permissions: null });
     }
     
-    // Pobierz ID użytkownika z sesji
-    const session = await db('sessions')
-      .where('token', authToken)
-      .whereRaw('expires_at > NOW()')
-      .select('user_id')
-      .first();
-    
-    if (!session) {
-      return NextResponse.json({ isAdmin: false, permissions: null });
-    }
-    
-    // Sprawdź czy użytkownik jest adminem i pobierz jego uprawnienia
-    const user = await db('users')
-      .where('email', session.user_id)
-      .select('is_admin', 'role', 'permissions', 'email')
-      .first();
-    
-    // Obsłuż różne możliwe formaty wartości boolean
-    const isAdminValue = 
-      user?.is_admin === true || 
-      user?.is_admin === 1 || 
-      user?.is_admin === 't' || 
-      user?.is_admin === 'TRUE' || 
-      user?.is_admin === 'true' ||
-      user?.role === 'admin';
-    
-    // Parsowanie uprawnień
-    let permissions = {};
-    try {
-      if (user?.permissions) {
-        permissions = JSON.parse(user.permissions);
-      }
-    } catch (error) {
-      console.error('Błąd parsowania uprawnień:', error);
-    }
-    
-    // Jeśli nie ma sekcji admin w uprawnieniach, dodaj ją
+    const user = session.user;
+    const isSuperAdmin = user.email === 'a.bortniczuk@grupaeltron.pl';
+    const isAdminValue = isSuperAdmin || user.isAdmin === true || user.role === 'admin';
+
+    let permissions = user.permissions || {};
     if (!permissions.admin) {
       permissions.admin = {
-        users: false,
-        valuation: false,
-        packagings: false,
-        constructions: false,
-        cable_advices: false
+        users: isAdminValue,
+        valuation: isAdminValue,
+        packagings: isAdminValue,
+        constructions: isAdminValue,
+        cable_advices: isAdminValue
       };
+    } else if (isAdminValue) {
+      permissions.admin.users = true;
+      permissions.admin.valuation = true;
+      permissions.admin.packagings = true;
+      permissions.admin.constructions = true;
+      permissions.admin.cable_advices = true;
     }
     
     return NextResponse.json({ 
@@ -69,3 +42,4 @@ export async function GET(request) {
     return NextResponse.json({ isAdmin: false, permissions: null });
   }
 }
+

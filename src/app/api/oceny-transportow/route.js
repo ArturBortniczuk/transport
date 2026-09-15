@@ -1,38 +1,20 @@
 import { NextResponse } from 'next/server'
 import db from '@/database/db'
+import { validateSession } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic';
 
-const validateSession = async (authToken) => {
-  if (!authToken) {
-    return null
-  }
-  
-  try {
-    const session = await db('sessions')
-      .where('token', authToken)
-      .whereRaw('expires_at > NOW()')
-      .select('user_id')
-      .first()
-    
-    return session?.user_id
-  } catch (error) {
-    console.error('Session validation error:', error)
-    return null
-  }
-}
-
 export async function GET(request) {
-  try {
-    const authToken = request.cookies.get('authToken')?.value
-    const userId = await validateSession(authToken)
-    
-    if (!userId) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Unauthorized' 
-      }, { status: 401 })
-    }
+  try {
+    const authToken = request.cookies.get('authToken')?.value
+    const userId = await validateSession(request) || await validateSession(authToken)
+    
+    if (!userId) {
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Unauthorized' 
+      }, { status: 401 })
+    }
 
     const { searchParams } = new URL(request.url)
     const type = searchParams.get('type')

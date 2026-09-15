@@ -3,49 +3,17 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import db from '@/database/db';
-
-// Pomocnicza funkcja do weryfikacji sesji
-const validateSession = async (authToken) => {
-  if (!authToken) {
-    return null;
-  }
-  
-  const session = await db('sessions')
-    .where('token', authToken)
-    .whereRaw('expires_at > NOW()')
-    .select('user_id')
-    .first();
-  
-  return session?.user_id;
-};
+import { validateSession, getSessionUser } from '@/lib/auth';
 
 // Funkcja sprawdzająca, czy użytkownik ma uprawnienia do zarządzania budowami
-const hasConstructionsAccess = async (userId) => {
-  if (!userId) return false;
-  
-  const user = await db('users')
-    .where('email', userId)
-    .select('is_admin', 'permissions')
-    .first();
-  
-  // Sprawdź czy jest adminem
-  const isAdmin = user?.is_admin === true || user?.is_admin === 1 || 
-                  user?.is_admin === 't' || user?.is_admin === 'TRUE' || 
-                  user?.is_admin === 'true';
-  
-  if (isAdmin) return true;
-  
-  // Sprawdź uprawnienia
-  let permissions = {};
-  try {
-    if (user?.permissions) {
-      permissions = JSON.parse(user.permissions);
-    }
-  } catch (error) {
-    console.error('Błąd parsowania uprawnień:', error);
+const hasConstructionsAccess = async (request) => {
+  const sessionUser = await getSessionUser(request);
+  if (!sessionUser?.isAuthenticated || !sessionUser?.user) return false;
+  const user = sessionUser.user;
+  if (user.isAdmin || user.email === 'a.bortniczuk@grupaeltron.pl' || user.role === 'admin') {
+    return true;
   }
-  
-  return permissions?.admin?.constructions === true;
+  return user.permissions?.admin?.constructions === true;
 };
 
 // Pobieranie listy budów
@@ -53,7 +21,7 @@ export async function GET(request) {
   try {
     // Sprawdź autoryzację
     const authToken = request.cookies.get('authToken')?.value;
-    const userId = await validateSession(authToken);
+    const userId = await validateSession(request) || await validateSession(authToken);
     
     if (!userId) {
       return NextResponse.json({ 
@@ -81,7 +49,7 @@ export async function PUT(request) {
   try {
     // Sprawdź autoryzację
     const authToken = request.cookies.get('authToken')?.value;
-    const userId = await validateSession(authToken);
+    const userId = await validateSession(request) || await validateSession(authToken);
     
     if (!userId) {
       return NextResponse.json({ 
@@ -90,7 +58,7 @@ export async function PUT(request) {
     }
     
     // Sprawdź, czy użytkownik ma uprawnienia
-    const hasAccess = await hasConstructionsAccess(userId);
+    const hasAccess = await hasConstructionsAccess(request);
     
     if (!hasAccess) {
       return NextResponse.json({ 
@@ -123,7 +91,7 @@ export async function POST(request) {
   try {
     // Sprawdź autoryzację
     const authToken = request.cookies.get('authToken')?.value;
-    const userId = await validateSession(authToken);
+    const userId = await validateSession(request) || await validateSession(authToken);
     
     if (!userId) {
       return NextResponse.json({ 
@@ -132,7 +100,7 @@ export async function POST(request) {
     }
     
     // Sprawdź, czy użytkownik ma uprawnienia
-    const hasAccess = await hasConstructionsAccess(userId);
+    const hasAccess = await hasConstructionsAccess(request);
     
     if (!hasAccess) {
       return NextResponse.json({ 
@@ -175,7 +143,7 @@ export async function DELETE(request) {
   try {
     // Sprawdź autoryzację
     const authToken = request.cookies.get('authToken')?.value;
-    const userId = await validateSession(authToken);
+    const userId = await validateSession(request) || await validateSession(authToken);
     
     if (!userId) {
       return NextResponse.json({ 
@@ -184,7 +152,7 @@ export async function DELETE(request) {
     }
     
     // Sprawdź, czy użytkownik ma uprawnienia
-    const hasAccess = await hasConstructionsAccess(userId);
+    const hasAccess = await hasConstructionsAccess(request);
     
     if (!hasAccess) {
       return NextResponse.json({ 

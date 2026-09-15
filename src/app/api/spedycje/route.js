@@ -1,22 +1,10 @@
 // src/app/api/spedycje/route.js - KOMPLETNY PLIK Z POWIADOMIENIAMI EMAIL
+export const dynamic = 'force-dynamic';
+
 import { NextResponse } from 'next/server';
 import db from '@/database/db';
 import nodemailer from 'nodemailer';
-
-// Funkcja pomocnicza do weryfikacji sesji
-const validateSession = async (authToken) => {
-  if (!authToken) {
-    return null;
-  }
-
-  const session = await db('sessions')
-    .where('token', authToken)
-    .whereRaw('expires_at > NOW()')
-    .select('user_id')
-    .first();
-
-  return session?.user_id;
-};
+import { validateSession } from '@/lib/auth';
 
 // Funkcja wysyłania powiadomienia o odpowiedzi na spedycję
 const sendResponseNotification = async (spedycjaData, responseData) => {
@@ -255,7 +243,7 @@ const sendResponseNotification = async (spedycjaData, responseData) => {
 export async function GET(request) {
   try {
     const authToken = request.cookies.get('authToken')?.value;
-    const userId = await validateSession(authToken);
+    const userId = await validateSession(request) || await validateSession(authToken);
 
     if (!userId) {
       return NextResponse.json({
@@ -387,7 +375,7 @@ export async function GET(request) {
 export async function POST(request) {
   try {
     const authToken = request.cookies.get('authToken')?.value;
-    const userId = await validateSession(authToken);
+    const userId = await validateSession(request) || await validateSession(authToken);
 
     if (!userId) {
       return NextResponse.json({
@@ -585,7 +573,7 @@ const createResponsesForConnectedTransports = async (connectedTransports, mainRe
 export async function PUT(request) {
   try {
     const authToken = request.cookies.get('authToken')?.value;
-    const userId = await validateSession(authToken);
+    const userId = await validateSession(request) || await validateSession(authToken);
 
     if (!userId) {
       return NextResponse.json({
@@ -682,7 +670,7 @@ export async function PUT(request) {
 export async function DELETE(request) {
   try {
     const authToken = request.cookies.get('authToken')?.value;
-    const userId = await validateSession(authToken);
+    const userId = await validateSession(request) || await validateSession(authToken);
 
     if (!userId) {
       return NextResponse.json({

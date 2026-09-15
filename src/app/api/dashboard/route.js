@@ -1,27 +1,10 @@
 // src/app/api/dashboard/route.js
+export const dynamic = 'force-dynamic';
+
 import { NextResponse } from 'next/server';
 import db from '@/database/db';
 import { KIEROWCY } from '@/app/kalendarz/constants';
-
-// Funkcja pomocnicza do weryfikacji sesji
-const validateSession = async (authToken) => {
-  if (!authToken || !db) {
-    return null;
-  }
-
-  try {
-    const session = await db('sessions')
-      .where('token', authToken)
-      .whereRaw('expires_at > NOW()')
-      .select('user_id')
-      .first();
-
-    return session?.user_id;
-  } catch (error) {
-    console.error('Błąd walidacji sesji:', error);
-    return null;
-  }
-};
+import { getSessionUser } from '@/lib/auth';
 
 // Funkcja pobierająca nazwę kierowcy
 const getDriverName = (driverId) => {
@@ -43,28 +26,17 @@ export async function GET(request) {
     console.log('=== START GET /api/dashboard ===');
 
     // Sprawdzamy uwierzytelnienie
-    const authToken = request.cookies.get('authToken')?.value;
-    const userId = await validateSession(authToken);
+    const sessionResult = await getSessionUser(request);
 
-    if (!userId) {
+    if (!sessionResult?.isAuthenticated || !sessionResult?.user) {
       return NextResponse.json({
         success: false,
         error: 'Unauthorized'
       }, { status: 401 });
     }
 
-    // Pobierz dane użytkownika
-    const user = await db('users')
-      .where('email', userId)
-      .select('role', 'name', 'permissions', 'mpk')
-      .first();
-
-    if (!user) {
-      return NextResponse.json({
-        success: false,
-        error: 'User not found'
-      }, { status: 404 });
-    }
+    const user = sessionResult.user;
+    const userId = user.email;
 
     // Sprawdź uprawnienia
     const isAdmin = user.role === 'admin';

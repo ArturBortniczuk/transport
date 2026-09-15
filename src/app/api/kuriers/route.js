@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 export async function GET(request) {
   try {
     const authToken = request.cookies.get('authToken')?.value;
-    const userId = await validateSession(authToken);
+    const userId = await validateSession(request) || await validateSession(authToken);
 
     if (!userId) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
@@ -62,7 +62,7 @@ export async function GET(request) {
 export async function POST(request) {
   try {
     const authToken = request.cookies.get('authToken')?.value;
-    const userId = await validateSession(authToken);
+    const userId = await validateSession(request) || await validateSession(authToken);
 
     if (!userId) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
@@ -115,7 +115,7 @@ export async function POST(request) {
 export async function PATCH(request) {
   try {
     const authToken = request.cookies.get('authToken')?.value;
-    const userId = await validateSession(authToken);
+    const userId = await validateSession(request) || await validateSession(authToken);
 
     if (!userId) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
@@ -147,7 +147,7 @@ export async function PATCH(request) {
 export async function DELETE(request) {
   try {
     const authToken = request.cookies.get('authToken')?.value;
-    const userId = await validateSession(authToken);
+    const userId = await validateSession(request) || await validateSession(authToken);
 
     if (!userId) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });

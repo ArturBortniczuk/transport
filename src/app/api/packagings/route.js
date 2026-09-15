@@ -1,28 +1,16 @@
 // src/app/api/packagings/route.js
+export const dynamic = 'force-dynamic';
+
 import { NextResponse } from 'next/server';
 import db from '@/database/db';
-
-// Funkcja pomocnicza do weryfikacji sesji
-const validateSession = async (authToken) => {
-  if (!authToken) {
-    return null;
-  }
-  
-  const session = await db('sessions')
-    .where('token', authToken)
-    .whereRaw('expires_at > NOW()')
-    .select('user_id')
-    .first();
-  
-  return session?.user_id;
-};
+import { validateSession } from '@/lib/auth';
 
 // GET /api/packagings
 export async function GET(request) {
   try {
     // Sprawdzamy uwierzytelnienie
     const authToken = request.cookies.get('authToken')?.value;
-    const userId = await validateSession(authToken);
+    const userId = await validateSession(request) || await validateSession(authToken);
     
     if (!userId) {
       return NextResponse.json({ 
