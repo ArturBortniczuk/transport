@@ -2,10 +2,12 @@ import { NextResponse } from 'next/server'
  
 export function middleware(request) {
   // Sprawdź, czy użytkownik posiada ciasteczko SSO lub token sesji
-  const hasAuth = !!(
-    request.cookies.get('eltron_auth_token')?.value || 
-    request.cookies.get('sb-vwnjmcxwqrfykeexocqi-auth-token')?.value || 
-    request.cookies.get('authToken')?.value
+  const allCookies = request.cookies.getAll();
+  const hasAuth = allCookies.some(c => 
+    c.name.includes('eltron_auth_token') || 
+    c.name.includes('auth-token') || 
+    c.name === 'authToken' ||
+    c.name.startsWith('sb-')
   );
   
   const pathname = request.nextUrl.pathname;
