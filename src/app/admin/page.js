@@ -630,6 +630,36 @@ export default function AdminPage() {
         {/* Sekcja Zarządzania Użytkownikami */}
         {adminAccess.users && (
           <div id="users-section" className="space-y-6">
+            {/* Baner Centralnego Portalu IAM */}
+            <div className="bg-gradient-to-r from-indigo-50/90 via-purple-50/60 to-brand-50/60 border border-indigo-200/80 rounded-2xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-2xs">
+              <div className="flex items-start gap-3.5">
+                <div className="p-2.5 rounded-xl bg-indigo-600 text-white shadow-md shadow-indigo-600/20 shrink-0 mt-0.5">
+                  <Shield className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2">
+                    <span>Centralne Zarządzanie Tożsamością i Dostępem (IAM)</span>
+                    <span className="text-[10px] bg-indigo-100 text-indigo-800 font-extrabold px-2 py-0.5 rounded-full">
+                      narzedzia.grupaeltron.pl
+                    </span>
+                  </h3>
+                  <p className="text-xs text-gray-600 mt-0.5 max-w-2xl">
+                    Tworzenie ról, szablonów uprawnień oraz przypisywanie dostępów do Transportu, Opakowań i Rur odbywa się w centralnym Portalu Narzędzi.
+                  </p>
+                </div>
+              </div>
+
+              <a
+                href="https://narzedzia.grupaeltron.pl"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs text-white bg-indigo-600 hover:bg-indigo-700 active:scale-95 shadow-md shadow-indigo-600/20 transition-all shrink-0 cursor-pointer"
+              >
+                <span>Otwórz Kreator Ról w Portalu</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            </div>
+
             {/* Karty Statystyk KPI */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               {/* Łącznie */}

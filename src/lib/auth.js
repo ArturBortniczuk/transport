@@ -182,10 +182,10 @@ export async function getSessionUser(request) {
       const isCoordinator = roleLower.includes('koordynator') || (neonUser?.role && neonUser.role.toLowerCase().includes('koordynator'));
       const isDriver = roleLower.includes('kierowca') || emailLower.includes('kierowca');
 
-      // Parsuj własne uprawnienia jeśli istnieją
+      // Parsuj własne uprawnienia jeśli istnieją (z user_app_permissions, users lub profiles)
       let customPerms = {};
       try {
-        const rawPerms = neonUser?.permissions || userRow?.permissions;
+        const rawPerms = userPerm?.permissions || neonUser?.permissions || userRow?.permissions;
         if (rawPerms) {
           customPerms = typeof rawPerms === 'string' ? JSON.parse(rawPerms) : rawPerms;
         }
