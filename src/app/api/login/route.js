@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import db from '@/database/db';
 import { serialize } from 'cookie';
-import { verifyPassword, hashPassword, isBcryptHash, generateSessionToken } from '@/lib/auth';
-import { supabase } from '@/lib/supabaseClient';
+import { verifyPassword, hashPassword, isBcryptHash } from '@/lib/auth';
+import { supabase, supabaseAdmin } from '@/lib/supabaseClient';
 
 export async function POST(request) {
   try {
@@ -49,12 +49,21 @@ export async function POST(request) {
           isAdmin: isAdmin,
           permissions: {
             calendar: { 
-              view: true,
+              view: true, 
               edit: ['admin', 'koordynator', 'magazyn', 'magazyn_bialystok', 'magazyn_zielonka'].includes(role) || isAdmin
             },
             map: { view: true },
             transport: { 
               markAsCompleted: ['admin', 'koordynator', 'magazyn', 'magazyn_bialystok', 'magazyn_zielonka', 'kierowca'].includes(role) || isAdmin
+            },
+            spedycja: {
+              view: true,
+              sendOrder: true,
+              edit: true
+            },
+            admin: {
+              packagings: isAdmin,
+              constructions: isAdmin
             }
           }
         };
@@ -63,13 +72,16 @@ export async function POST(request) {
       console.warn('Próba logowania Supabase nie powiodła się, sprawdzam bazę lokalną/Neon:', sbErr.message);
     }
 
-    // 2. Jeśli Supabase nie zwrócił użytkownika, sprawdź tabelę users (legacy / Neon)
+    // 2. Jeśli Supabase nie zwrócił użytkownika, sprawdź tabelę users (Neon / hashe bcrypt / hasła jawne)
     if (!authenticatedUser) {
       const user = await db('users')
         .whereRaw('LOWER(email) = ?', [normalizedEmail])
         .first();
       
       if (user && await verifyPassword(password, user.password)) {
+        console.log(`✅ Uwierzytelniono hasło w Neon dla: ${normalizedEmail}`);
+
+        // Zaktualizuj hash bcrypt w Neon jeśli hasło było czystotekstowe
         if (!isBcryptHash(user.password)) {
           try {
             const hashedPassword = await hashPassword(password);
@@ -81,14 +93,66 @@ export async function POST(request) {
           }
         }
 
+        // Automatyczna synchronizacja hasła do Supabase Auth
+        try {
+          const { data: profile } = await supabaseAdmin
+            .from('profiles')
+            .select('id, email')
+            .eq('email', normalizedEmail)
+            .maybeSingle();
+
+          let authUserId = profile?.id;
+
+          if (!authUserId && password.length >= 6) {
+            const { data: createdAuth } = await supabaseAdmin.auth.admin.createUser({
+              email: normalizedEmail,
+              password: password,
+              email_confirm: true,
+              user_metadata: {
+                name: user.name,
+                companyName: 'Grupa Eltron',
+                role: user.is_admin ? 'admin' : (user.role || 'Specjalista'),
+                status: 'approved',
+                rodoAccepted: true
+              }
+            });
+            authUserId = createdAuth?.user?.id;
+          } else if (authUserId && password.length >= 6) {
+            await supabaseAdmin.auth.admin.updateUserById(authUserId, {
+              password: password,
+              email_confirm: true
+            });
+          }
+
+          // Teraz zaloguj do Supabase Auth aby uzyskać token sesji SSO
+          const { data: sbData } = await supabase.auth.signInWithPassword({
+            email: normalizedEmail,
+            password: password
+          });
+          if (sbData?.session) {
+            supabaseSession = sbData.session;
+          }
+        } catch (syncErr) {
+          console.warn('Ostrzeżenie przy synchronizacji hasła do Supabase Auth:', syncErr.message);
+        }
+
         let permissions = {
           calendar: { 
-            view: true,
-            edit: user.role === 'magazyn' || user.role === 'magazyn_bialystok' || user.role === 'magazyn_zielonka'
+            view: true, 
+            edit: ['admin', 'koordynator', 'magazyn', 'magazyn_bialystok', 'magazyn_zielonka'].includes(user.role) || Boolean(user.is_admin)
           },
           map: { view: true },
           transport: { 
-            markAsCompleted: user.role === 'magazyn' || user.role === 'magazyn_bialystok' || user.role === 'magazyn_zielonka' || user.is_admin === 1 || user.is_admin === true
+            markAsCompleted: ['admin', 'koordynator', 'magazyn', 'magazyn_bialystok', 'magazyn_zielonka', 'kierowca'].includes(user.role) || Boolean(user.is_admin)
+          },
+          spedycja: {
+            view: true,
+            sendOrder: true,
+            edit: true
+          },
+          admin: {
+            packagings: Boolean(user.is_admin) || user.role === 'admin',
+            constructions: Boolean(user.is_admin) || user.role === 'admin'
           }
         };
         
@@ -113,9 +177,7 @@ export async function POST(request) {
     }
 
     if (authenticatedUser) {
-      const sessionToken = generateSessionToken();
       const isProduction = process.env.NODE_ENV === 'production';
-      
       const host = request.headers.get('host') || '';
       const domain = host.includes('grupaeltron.pl') ? '.grupaeltron.pl' : undefined;
 
@@ -123,19 +185,19 @@ export async function POST(request) {
         httpOnly: true,
         secure: isProduction,
         sameSite: 'lax',
-        maxAge: 60 * 60 * 24 * 30,
+        maxAge: 60 * 60 * 24 * 30, // 30 dni
         path: '/',
         ...(domain ? { domain } : {})
       };
 
-
-      const authCookie = serialize('authToken', sessionToken, cookieOptions);
+      // Ustaw authToken na email użytkownika (bezstanowa walidacja)
+      const authCookie = serialize('authToken', authenticatedUser.email, cookieOptions);
       const roleCookie = serialize('userRole', authenticatedUser.role, { ...cookieOptions, httpOnly: false });
       const emailCookie = serialize('userEmail', authenticatedUser.email, { ...cookieOptions, httpOnly: false });
 
       const response = NextResponse.json({ 
-        success: true,
-        user: authenticatedUser
+        success: true, 
+        user: authenticatedUser 
       });
 
       response.headers.append('Set-Cookie', authCookie);
@@ -145,6 +207,19 @@ export async function POST(request) {
       // Jeśli mamy sesję Supabase, zapisz ciasteczko SSO eltron_auth_token
       if (supabaseSession) {
         const ssoCookie = serialize('eltron_auth_token', JSON.stringify(supabaseSession), {
+          ...cookieOptions,
+          httpOnly: false
+        });
+        response.headers.append('Set-Cookie', ssoCookie);
+      } else {
+        // Fallback SSO token dla aplikacji
+        const fallbackSession = {
+          user: { id: authenticatedUser.email, email: authenticatedUser.email },
+          access_token: 'sso_' + Buffer.from(JSON.stringify({ email: authenticatedUser.email })).toString('base64'),
+          token_type: 'bearer',
+          expires_in: 3600 * 24 * 30
+        };
+        const ssoCookie = serialize('eltron_auth_token', JSON.stringify(fallbackSession), {
           ...cookieOptions,
           httpOnly: false
         });

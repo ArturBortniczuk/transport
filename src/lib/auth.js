@@ -70,12 +70,20 @@ export async function validateSession(tokenOrRequest) {
   return null;
 }
 
-function extractEmailFromCookie(cookieValue) {
+export function extractEmailFromCookie(cookieValue) {
   if (!cookieValue) return null;
   try {
     let raw = cookieValue;
-    if (typeof raw === 'string' && raw.startsWith('base64-')) {
-      raw = Buffer.from(raw.slice(7), 'base64').toString('utf-8');
+    if (typeof raw === 'string') {
+      const trimmed = raw.trim();
+      if (trimmed.includes('@') && !trimmed.includes('{') && !trimmed.includes('[')) {
+        return trimmed.toLowerCase();
+      }
+      if (trimmed.startsWith('base64-')) {
+        raw = Buffer.from(trimmed.slice(7), 'base64').toString('utf-8');
+      } else if (trimmed.startsWith('sso_')) {
+        raw = Buffer.from(trimmed.slice(4), 'base64').toString('utf-8');
+      }
     }
     let data = null;
     try {
@@ -91,11 +99,17 @@ function extractEmailFromCookie(cookieValue) {
     if (data?.email) return data.email.toLowerCase().trim();
     
     const token = data?.access_token || (Array.isArray(data) ? data[0] : (typeof data === 'string' ? data : null));
-    if (token && typeof token === 'string' && token.includes('.')) {
-      const parts = token.split('.');
-      if (parts.length === 3) {
-        const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf-8'));
-        if (payload?.email) return payload.email.toLowerCase().trim();
+    if (token && typeof token === 'string') {
+      if (token.startsWith('sso_')) {
+        const decoded = JSON.parse(Buffer.from(token.slice(4), 'base64').toString('utf-8'));
+        if (decoded?.email) return decoded.email.toLowerCase().trim();
+      }
+      if (token.includes('.')) {
+        const parts = token.split('.');
+        if (parts.length === 3) {
+          const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf-8'));
+          if (payload?.email) return payload.email.toLowerCase().trim();
+        }
       }
     }
   } catch (e) {
@@ -106,19 +120,26 @@ function extractEmailFromCookie(cookieValue) {
 
 /**
  * Pobiera dane zalogowanego użytkownika na podstawie ciasteczka Supabase SSO (eltron_auth_token)
- * lub legacy ciasteczka authToken.
+ * lub ciasteczka authToken / userEmail.
  * @param {Request} request
  * @returns {Promise<{ isAuthenticated: boolean, user: object|null }>}
  */
 export async function getSessionUser(request) {
   try {
-    // 1. Sprawdź ciasteczka Supabase SSO
+    // 1. Sprawdź ciasteczka Supabase SSO oraz tokeny
     const ssoCookie = 
       request.cookies.get('eltron_auth_token')?.value || 
       request.cookies.get('sb-vwnjmcxwqrfykeexocqi-auth-token')?.value ||
-      request.cookies.get('sb-access-token')?.value;
+      request.cookies.get('sb-access-token')?.value ||
+      request.cookies.get('authToken')?.value;
 
-    const ssoEmail = extractEmailFromCookie(ssoCookie);
+    let ssoEmail = extractEmailFromCookie(ssoCookie);
+    if (!ssoEmail) {
+      const userEmailCookie = request.cookies.get('userEmail')?.value;
+      if (userEmailCookie && userEmailCookie.includes('@')) {
+        ssoEmail = userEmailCookie.toLowerCase().trim();
+      }
+    }
 
     if (ssoEmail) {
       // Pobierz użytkownika z profiles (lub legacy users)
@@ -166,6 +187,13 @@ export async function getSessionUser(request) {
         }
       };
 
+      try {
+        if (userRow?.permissions) {
+          const parsed = typeof userRow.permissions === 'string' ? JSON.parse(userRow.permissions) : userRow.permissions;
+          permissions = { ...permissions, ...parsed };
+        }
+      } catch (e) {}
+
       return {
         isAuthenticated: true,
         user: {
@@ -180,62 +208,9 @@ export async function getSessionUser(request) {
       };
     }
 
-    // 2. Fallback: Legacy token sesji (authToken)
-    const authToken = request.cookies.get('authToken')?.value;
-    if (!authToken) {
-      return { isAuthenticated: false, user: null };
-    }
-
-    const userId = await validateSession(authToken);
-    if (!userId) {
-      return { isAuthenticated: false, user: null };
-    }
-
-    const user = await db('users')
-      .where('email', userId)
-      .select('email', 'name', 'position', 'role', 'permissions', 'mpk', 'is_admin')
-      .first();
-
-    if (!user) {
-      return { isAuthenticated: false, user: null };
-    }
-
-    let permissions = {};
-    try {
-      if (user.permissions && typeof user.permissions === 'string') {
-        permissions = JSON.parse(user.permissions);
-      } else if (typeof user.permissions === 'object') {
-        permissions = user.permissions;
-      }
-    } catch (e) {
-      console.error('Błąd parsowania uprawnień w getSessionUser:', e);
-      permissions = {};
-    }
-
-    const isAdmin = Boolean(
-      user.is_admin === true ||
-      user.is_admin === 1 ||
-      user.is_admin === 't' ||
-      user.is_admin === 'TRUE' ||
-      user.is_admin === 'true' ||
-      user.role === 'admin'
-    );
-
-    return {
-      isAuthenticated: true,
-      user: {
-        email: user.email,
-        name: user.name,
-        position: user.position,
-        role: user.role,
-        permissions: permissions,
-        mpk: user.mpk || '',
-        isAdmin: isAdmin
-      }
-    };
+    return { isAuthenticated: false, user: null };
   } catch (error) {
     console.error('Błąd getSessionUser:', error);
     return { isAuthenticated: false, user: null };
   }
 }
-
