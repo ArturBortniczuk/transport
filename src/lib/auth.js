@@ -65,8 +65,40 @@ export async function validateSession(authToken) {
   }
 }
 
-/**
- * Pobiera dane zalogowanego użytkownika na podstawie ciasteczka z żądania Next.js
+function extractEmailFromCookie(cookieValue) {
+  if (!cookieValue) return null;
+  try {
+    let raw = cookieValue;
+    if (typeof raw === 'string' && raw.startsWith('base64-')) {
+      raw = Buffer.from(raw.slice(7), 'base64').toString('utf-8');
+    }
+    let data = null;
+    try {
+      data = JSON.parse(decodeURIComponent(raw));
+    } catch {
+      try {
+        data = JSON.parse(raw);
+      } catch {
+        data = raw;
+      }
+    }
+    if (data?.user?.email) return data.user.email.toLowerCase().trim();
+    if (data?.email) return data.email.toLowerCase().trim();
+    
+    const token = data?.access_token || (Array.isArray(data) ? data[0] : (typeof data === 'string' ? data : null));
+    if (token && typeof token === 'string' && token.includes('.')) {
+      const parts = token.split('.');
+      if (parts.length === 3) {
+        const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf-8'));
+        if (payload?.email) return payload.email.toLowerCase().trim();
+      }
+    }
+  } catch (e) {
+    console.warn('Error extracting email from cookie:', e.message);
+  }
+  return null;
+}
+
 /**
  * Pobiera dane zalogowanego użytkownika na podstawie ciasteczka Supabase SSO (eltron_auth_token)
  * lub legacy ciasteczka authToken.
@@ -75,74 +107,63 @@ export async function validateSession(authToken) {
  */
 export async function getSessionUser(request) {
   try {
-    // 1. Sprawdź ciasteczko Supabase SSO (eltron_auth_token)
-    const eltronAuthCookie = request.cookies.get('eltron_auth_token')?.value;
-    if (eltronAuthCookie) {
-      try {
-        let tokenData = null;
-        try {
-          tokenData = JSON.parse(decodeURIComponent(eltronAuthCookie));
-        } catch {
-          tokenData = JSON.parse(eltronAuthCookie);
-        }
+    // 1. Sprawdź ciasteczka Supabase SSO
+    const ssoCookie = 
+      request.cookies.get('eltron_auth_token')?.value || 
+      request.cookies.get('sb-vwnjmcxwqrfykeexocqi-auth-token')?.value ||
+      request.cookies.get('sb-access-token')?.value;
 
-        const accessToken = tokenData?.access_token || (Array.isArray(tokenData) ? tokenData[0] : null);
-        const email = (tokenData?.user?.email || '').toLowerCase().trim();
+    const ssoEmail = extractEmailFromCookie(ssoCookie);
 
-        if (email) {
-          // Pobierz użytkownika i uprawnienia z bazy (lub Supabase)
-          let userRow = await db('profiles')
-            .whereRaw('LOWER(email) = ?', [email])
-            .first()
-            .catch(() => null);
+    if (ssoEmail) {
+      // Pobierz użytkownika z profiles (lub legacy users)
+      let userRow = await db('profiles')
+        .whereRaw('LOWER(email) = ?', [ssoEmail])
+        .first()
+        .catch(() => null);
 
-          let userPerm = null;
-          if (userRow) {
-            userPerm = await db('user_app_permissions')
-              .where({ user_id: userRow.id, app_id: 'transport' })
-              .first()
-              .catch(() => null);
-          }
-
-          // Jeśli brak w profiles, sprawdź legacy users
-          if (!userRow) {
-            userRow = await db('users')
-              .whereRaw('LOWER(email) = ?', [email])
-              .first()
-              .catch(() => null);
-          }
-
-          const role = userPerm?.is_active ? userPerm.role : (userRow?.role || 'pracownik');
-          const isSuperAdmin = email === 'a.bortniczuk@grupaeltron.pl';
-          const isAdmin = isSuperAdmin || role === 'admin' || userRow?.is_admin === true || userRow?.role === 'admin';
-
-          let permissions = {
-            calendar: { 
-              view: true,
-              edit: ['admin', 'koordynator', 'magazyn', 'magazyn_bialystok', 'magazyn_zielonka'].includes(role) || isAdmin
-            },
-            map: { view: true },
-            transport: { 
-              markAsCompleted: ['admin', 'koordynator', 'magazyn', 'magazyn_bialystok', 'magazyn_zielonka', 'kierowca'].includes(role) || isAdmin
-            }
-          };
-
-          return {
-            isAuthenticated: true,
-            user: {
-              email: email,
-              name: userRow?.name || tokenData?.user?.user_metadata?.full_name || email.split('@')[0],
-              position: userRow?.position || '',
-              role: role,
-              permissions: permissions,
-              mpk: userRow?.mpk || '',
-              isAdmin: isAdmin
-            }
-          };
-        }
-      } catch (supabaseTokenErr) {
-        console.warn('Błąd parsowania tokenu Supabase SSO:', supabaseTokenErr.message);
+      let userPerm = null;
+      if (userRow) {
+        userPerm = await db('user_app_permissions')
+          .where({ user_id: userRow.id, app_id: 'transport' })
+          .first()
+          .catch(() => null);
       }
+
+      if (!userRow) {
+        userRow = await db('users')
+          .whereRaw('LOWER(email) = ?', [ssoEmail])
+          .first()
+          .catch(() => null);
+      }
+
+      const role = userPerm?.is_active ? userPerm.role : (userRow?.role || 'pracownik');
+      const isSuperAdmin = ssoEmail === 'a.bortniczuk@grupaeltron.pl';
+      const isAdmin = isSuperAdmin || role === 'admin' || userRow?.is_admin === true || userRow?.role === 'admin';
+
+      let permissions = {
+        calendar: { 
+          view: true, 
+          edit: ['admin', 'koordynator', 'magazyn', 'magazyn_bialystok', 'magazyn_zielonka'].includes(role) || isAdmin 
+        },
+        map: { view: true },
+        transport: { 
+          markAsCompleted: ['admin', 'koordynator', 'magazyn', 'magazyn_bialystok', 'magazyn_zielonka', 'kierowca'].includes(role) || isAdmin 
+        }
+      };
+
+      return {
+        isAuthenticated: true,
+        user: {
+          email: ssoEmail,
+          name: userRow?.name || ssoEmail.split('@')[0],
+          position: userRow?.position || '',
+          role: role,
+          permissions: permissions,
+          mpk: userRow?.mpk || '',
+          isAdmin: isAdmin
+        }
+      };
     }
 
     // 2. Fallback: Legacy token sesji (authToken)

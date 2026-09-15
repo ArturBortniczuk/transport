@@ -1,94 +1,67 @@
 // src/app/api/user/route.js
 import { NextResponse } from 'next/server';
 import db from '@/database/db';
-import { getFromCache, setInCache } from '@/utils/cache';
+import { getSessionUser, generateSessionToken } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request) {
   try {
-    // Pobierz token z ciasteczka
-    const authToken = request.cookies.get('authToken')?.value;
-    if (!authToken) {
-      console.log('Brak tokenu - użytkownik niezalogowany');
+    const sessionResult = await getSessionUser(request);
+    
+    if (!sessionResult.isAuthenticated || !sessionResult.user) {
       return NextResponse.json({ 
         isAuthenticated: false,
         user: null
       });
     }
-    
-    // Próba pobrania z cache
-    const cacheKey = `user_data_${authToken}`;
-    const cachedData = getFromCache(cacheKey);
-    if (cachedData) {
-      return NextResponse.json(cachedData);
-    }
-    
-    // Sprawdź czy sesja istnieje i nie wygasła - zaktualizowane do Knex
-    const session = await db('sessions')
-      .where('token', authToken)
-      .whereRaw('expires_at > NOW()') // Używamy NOW() zamiast datetime('now')
-      .first();
-    
-    
-    if (!session) {
-      return NextResponse.json({ 
-        isAuthenticated: false,
-        user: null
-      });
-    }
-    
-    // Pobierz dane użytkownika - zaktualizowane do Knex
-    const user = await db('users')
-      .where('email', session.user_id)
-      .select('email', 'name', 'role', 'permissions', 'mpk', 'is_admin')
-      .first();
-    
-    console.log('Dane użytkownika z bazy:', user ? {
-      email: user.email,
-      role: user.role,
-      isAdmin: user.is_admin === 1
-    } : 'Nie znaleziono użytkownika');
-    
-    if (!user) {
-      return NextResponse.json({ 
-        isAuthenticated: false,
-        user: null
-      });
-    }
-    
-    // Parsuj uprawnienia
-    let permissions = {};
-    try {
-      permissions = user.permissions ? JSON.parse(user.permissions) : {};
-    } catch (e) {
-      console.error('Błąd parsowania uprawnień:', e);
-    }
-    
-    const responseData = { 
-      isAuthenticated: true,
-      user: {
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        // Dodaj bezpośrednio wartość boolean dla isAdmin
-        isAdmin: Boolean(
-          user.is_admin === true || 
-          user.is_admin === 1 || 
-          user.is_admin === 't' || 
-          user.is_admin === 'TRUE' || 
-          user.is_admin === 'true' ||
-          user.role === 'admin'
-        ),
-        permissions: permissions,
-        mpk: user.mpk || ''
+
+    const response = NextResponse.json(sessionResult);
+
+    // Jeśli użytkownik przyszedł przez SSO (eltron_auth_token), a nie ma jeszcze lokalnego authToken,
+    // wygenerujmy dla niego sesję w tabeli sessions i ciasteczko authToken,
+    // żeby natychmiast działały wszystkie pozostałe endpointy (/api/transports, /api/spedycje itp.).
+    const existingAuthToken = request.cookies.get('authToken')?.value;
+    if (!existingAuthToken) {
+      try {
+        const sessionToken = generateSessionToken();
+        const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 dni
+
+        // Upewnij się, że użytkownik istnieje w tabeli users (dla klucza obcego w sessions)
+        const userExists = await db('users').where({ email: sessionResult.user.email }).first();
+        if (!userExists) {
+          await db('users').insert({
+            email: sessionResult.user.email,
+            name: sessionResult.user.name,
+            position: sessionResult.user.position || 'Pracownik',
+            password: 'SSO_MANAGED_BY_SUPABASE',
+            role: sessionResult.user.role,
+            is_admin: sessionResult.user.isAdmin,
+            mpk: sessionResult.user.mpk || ''
+          }).catch(() => {});
+        }
+
+        await db('sessions').insert({
+          token: sessionToken,
+          user_id: sessionResult.user.email,
+          expires_at: expiresAt
+        }).catch(() => {});
+
+        const isProduction = process.env.NODE_ENV === 'production';
+        const host = request.headers.get('host') || '';
+        const domainStr = host.includes('grupaeltron.pl') ? '; Domain=.grupaeltron.pl' : '';
+        const secureStr = isProduction ? '; Secure' : '';
+
+        response.headers.set(
+          'Set-Cookie',
+          `authToken=${sessionToken}; Path=/; Max-Age=${30 * 24 * 3600}; SameSite=Lax; HttpOnly${domainStr}${secureStr}`
+        );
+      } catch (sessionErr) {
+        console.warn('Nie udało się automatycznie utworzyć legacy sesji dla SSO:', sessionErr.message);
       }
-    };
-    
-    // Zapisz dane w cache na 15 minut (użytkownik i uprawnienia rzadko się zmieniają)
-    setInCache(cacheKey, responseData, 900);
-    
-    return NextResponse.json(responseData);
+    }
+
+    return response;
   } catch (error) {
     console.error('Błąd pobierania użytkownika:', error);
     return NextResponse.json({ 
