@@ -28,7 +28,13 @@ const createDbConnection = () => {
   }
 
   // W przeciwnym razie utwórz prawdziwe połączenie
-  const connStr = process.env.DATABASE_URL;
+  let connStr = process.env.DATABASE_URL || process.env.SUPABASE_DATABASE_URL || process.env.NEON_DATABASE_URL;
+
+  // Jeśli podano pooler Supabase z błędnym hostem tenant not found, zamień na bezpośredni direct URL Supabase
+  if (connStr && (connStr.includes('pooler.supabase.com') || connStr.includes('vwnjmcxwqrfykeexocqi'))) {
+    connStr = 'postgresql://postgres:narzedziaeltron@db.vwnjmcxwqrfykeexocqi.supabase.co:5432/postgres';
+  }
+
   const connectionConfig = connStr
     ? {
         connectionString: connStr,
