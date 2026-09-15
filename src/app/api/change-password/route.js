@@ -1,15 +1,29 @@
 // src/app/api/change-password/route.js
 import { NextResponse } from 'next/server';
 import db from '@/database/db';
-import { validateSession, verifyPassword, hashPassword } from '@/lib/auth';
+import { validateSession, getSessionUser, verifyPassword, hashPassword } from '@/lib/auth';
+import { supabaseAdmin } from '@/lib/supabaseClient';
 
 export async function POST(request) {
   try {
-    const { currentPassword, newPassword } = await request.json();
+    const body = await request.json();
+    const { currentPassword, newPassword } = body;
     
-    // Pobierz token z ciasteczka
-    const authToken = request.cookies.get('authToken')?.value;
-    const email = await validateSession(authToken);
+    // Pobierz email z sesji lub ciała zapytania
+    let email = null;
+    const sessionUser = await getSessionUser(request);
+    if (sessionUser?.isAuthenticated && sessionUser.user?.email) {
+      email = sessionUser.user.email;
+    }
+
+    if (!email) {
+      const authToken = request.cookies.get('authToken')?.value;
+      email = await validateSession(authToken);
+    }
+
+    if (!email && body.email) {
+      email = body.email.toLowerCase().trim();
+    }
     
     if (!email) {
       return NextResponse.json({ 
@@ -22,7 +36,7 @@ export async function POST(request) {
     
     // Pobierz użytkownika
     const user = await db('users')
-      .where({ email: email })
+      .whereRaw('LOWER(email) = ?', [email.toLowerCase()])
       .first();
 
     if (!user || !(await verifyPassword(currentPassword, user.password))) {
@@ -32,24 +46,45 @@ export async function POST(request) {
       }, { status: 401 });
     }
 
+    if (!newPassword || newPassword.length < 6) {
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Nowe hasło musi mieć co najmniej 6 znaków' 
+      }, { status: 400 });
+    }
+
     // Zahashuj nowe hasło
     const hashedNewPassword = await hashPassword(newPassword);
 
-    // Wykonaj aktualizację
-    const updated = await db('users')
-      .where({ email: email })
+    // Wykonaj aktualizację w Neon DB
+    await db('users')
+      .whereRaw('LOWER(email) = ?', [email.toLowerCase()])
       .update({ 
         password: hashedNewPassword, 
         first_login: false 
       });
 
-    if (updated === 0) {
-      throw new Error('Nie udało się zaktualizować hasła');
+    // Zsynchronizuj z Supabase Auth
+    try {
+      const { data: profile } = await supabaseAdmin
+        .from('profiles')
+        .select('id')
+        .eq('email', email.toLowerCase())
+        .maybeSingle();
+
+      if (profile?.id) {
+        await supabaseAdmin.auth.admin.updateUserById(profile.id, {
+          password: newPassword,
+          email_confirm: true
+        });
+      }
+    } catch (sbErr) {
+      console.warn('Ostrzeżenie przy aktualizacji hasła w Supabase Auth:', sbErr.message);
     }
 
     return NextResponse.json({ 
-      success: true,
-      message: 'Hasło zostało zmienione'
+      success: true, 
+      message: 'Hasło zostało pomyślnie zmienione' 
     });
 
   } catch (error) {
@@ -59,4 +94,4 @@ export async function POST(request) {
       error: 'Błąd serwera: ' + error.message 
     }, { status: 500 });
   }
-}
+}
