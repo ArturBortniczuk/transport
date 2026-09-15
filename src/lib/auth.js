@@ -156,6 +156,15 @@ export async function getSessionUser(request) {
         map: { view: true },
         transport: { 
           markAsCompleted: ['admin', 'koordynator', 'magazyn', 'magazyn_bialystok', 'magazyn_zielonka', 'kierowca'].includes(role) || isAdmin 
+        },
+        spedycja: {
+          view: true,
+          sendOrder: true,
+          edit: true
+        },
+        admin: {
+          packagings: isAdmin,
+          constructions: isAdmin
         }
       };
 

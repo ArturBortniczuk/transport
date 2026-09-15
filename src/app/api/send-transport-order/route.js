@@ -2,61 +2,30 @@
 import { NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
 import db from '@/database/db';
+import { getSessionUser } from '@/lib/auth';
 
 export async function POST(request) {
   try {
-    // Pobierz token z ciasteczka
-    const authToken = request.cookies.get('authToken')?.value;
-
-    if (!authToken) {
+    // Weryfikacja sesji (zarówno SSO eltron_auth_token jak i authToken)
+    const sessionResult = await getSessionUser(request);
+    
+    if (!sessionResult.isAuthenticated || !sessionResult.user) {
       return NextResponse.json({
         success: false,
         error: 'Unauthorized'
       }, { status: 401 });
     }
 
-    // Weryfikacja sesji
-    const session = await db('sessions')
-      .where('token', authToken)
-      .whereRaw('expires_at > NOW()')
-      .select('user_id')
-      .first();
-
-    if (!session) {
-      return NextResponse.json({
-        success: false,
-        error: 'Sesja wygasła lub jest nieprawidłowa'
-      }, { status: 401 });
-    }
-
-    const userId = session.user_id;
-
-    // Pobierz dane użytkownika
-    const user = await db('users')
-      .where('email', userId)
-      .select('*')
-      .first();
-
-    if (!user) {
-      return NextResponse.json({
-        success: false,
-        error: 'Nie znaleziono użytkownika'
-      }, { status: 404 });
-    }
+    const user = sessionResult.user;
+    const userId = user.email;
 
     // Sprawdź uprawnienia
-    let permissions = {};
-    try {
-      if (user.permissions && typeof user.permissions === 'string') {
-        permissions = JSON.parse(user.permissions);
-      }
-    } catch (e) {
-      console.error('Błąd parsowania uprawnień:', e);
-    }
-
-    // Sprawdź czy użytkownik ma uprawnienie do wysyłania zlecenia transportowego
-    const isAdmin = user.is_admin === 1 || user.is_admin === true || user.role === 'admin';
-    const canSendTransportOrder = isAdmin || permissions?.spedycja?.sendOrder === true;
+    const isAdmin = Boolean(user.isAdmin || user.role === 'admin');
+    const permissions = user.permissions || {};
+    const canSendTransportOrder = 
+      isAdmin || 
+      permissions?.spedycja?.sendOrder === true || 
+      ['admin', 'koordynator', 'spedycja', 'handlowiec', 'dyrektor', 'kierownik', 'specjalista'].includes((user.role || '').toLowerCase());
 
     if (!canSendTransportOrder) {
       return NextResponse.json({
