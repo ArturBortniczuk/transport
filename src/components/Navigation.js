@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import ChangePassword from './ChangePassword'
+import AppSwitcher from './AppSwitcher'
 import {
   ChevronDown,
   Truck,
@@ -349,8 +350,13 @@ export default function Navigation() {
               </div>
             ))}
 
+            {/* App Switcher for Ecosystem */}
+            <div className="ml-2">
+              <AppSwitcher />
+            </div>
+
             {/* User Menu */}
-            <div className="relative ml-6" ref={el => dropdownRefs.current['user-menu'] = el}>
+            <div className="relative ml-2" ref={el => dropdownRefs.current['user-menu'] = el}>
               <button
                 onClick={() => toggleDropdown('user-menu')}
                 className="text-blue-100 hover:text-white px-3 py-2 text-sm font-medium transition-custom flex items-center space-x-2"

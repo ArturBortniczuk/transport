@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import AppSwitcher from './AppSwitcher'
 import { 
   Package, Calendar, Archive, Settings, Bell, User, 
   LogOut, Menu, X, Bug, Shield, Activity, BarChart3,
@@ -205,6 +206,9 @@ export default function Header() {
                 <Bell className="w-5 h-5" />
                 <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
               </button>
+
+              {/* App Switcher */}
+              <AppSwitcher />
 
               {/* User Menu */}
               <div className="relative">
