@@ -1,26 +1,7 @@
 // src/app/api/spedition-comments/route.js - API dla komentarzy spedycji
 import { NextResponse } from 'next/server'
 import db from '@/database/db'
-
-// Funkcja pomocnicza do weryfikacji sesji i pobrania emaila
-const getUserEmailFromToken = async (authToken) => {
-  if (!authToken) {
-    return null
-  }
-  
-  try {
-    const session = await db('sessions')
-      .where('token', authToken)
-      .whereRaw('expires_at > NOW()')
-      .select('user_id')
-      .first()
-    
-    return session?.user_id || null
-  } catch (error) {
-    console.error('Błąd walidacji sesji:', error)
-    return null
-  }
-}
+import { validateSession } from '@/lib/auth'
 
 // Funkcja sprawdzająca czy tabela istnieje
 const tableExists = async (tableName) => {
@@ -87,18 +68,11 @@ export async function POST(request) {
     
     const authToken = request.cookies.get('authToken')?.value
     
-    if (!authToken) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Brak autoryzacji' 
-      }, { status: 401 })
-    }
-
-    const userEmail = await getUserEmailFromToken(authToken)
+    const userEmail = await validateSession(request) || await validateSession(authToken)
     if (!userEmail) {
       return NextResponse.json({ 
         success: false, 
-        error: 'Nieprawidłowa sesja' 
+        error: 'Nieprawidłowa sesja lub brak autoryzacji' 
       }, { status: 401 })
     }
 

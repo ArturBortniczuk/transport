@@ -1,43 +1,21 @@
 // src/app/api/transport-ratings/comment/route.js
 import { NextResponse } from 'next/server'
 import db from '@/database/db'
-
-// Funkcja pomocnicza do weryfikacji sesji i pobrania emaila
-const getUserEmailFromToken = async (authToken) => {
-  if (!authToken) {
-    return null;
-  }
-  
-  try {
-    const session = await db('sessions')
-      .where('token', authToken)
-      .whereRaw('expires_at > NOW()')
-      .select('user_id')
-      .first();
-    
-    return session?.user_id || null;
-  } catch (error) {
-    console.error('Błąd walidacji sesji:', error)
-    return null
-  }
-};
+import { validateSession } from '@/lib/auth'
 
 export async function POST(request) {
   try {
     console.log('Comment endpoint called');
     
-    const authToken = request.cookies.get('authToken')?.value
-    console.log('AuthToken in comment:', authToken ? 'Exists' : 'Missing');
+    const authToken = request.cookies.get('authToken')?.value;
+    const userEmail = await validateSession(request) || await validateSession(authToken);
     
-    if (!authToken) {
+    if (!userEmail) {
       return NextResponse.json({ 
         success: false, 
-        error: 'Brak autoryzacji' 
-      }, { status: 401 })
+        error: 'Brak autoryzacji lub nieprawidłowa sesja' 
+      }, { status: 401 });
     }
-
-    const userEmail = await getUserEmailFromToken(authToken);
-    console.log('UserEmail in comment:', userEmail);
     
     if (!userEmail) {
       return NextResponse.json({ 

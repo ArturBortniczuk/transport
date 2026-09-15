@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import db from '@/database/db';
 import nodemailer from 'nodemailer';
+import { validateSession } from '@/lib/auth';
 
 // Konfiguracja transportera email
 const transporter = nodemailer.createTransport({
@@ -13,19 +14,6 @@ const transporter = nodemailer.createTransport({
     pass: process.env.SMTP_PASSWORD,
   },
 });
-
-// Funkcja walidacji sesji
-const validateSession = async (authToken) => {
-  if (!authToken) return null;
-
-  const session = await db('sessions')
-    .where('token', authToken)
-    .whereRaw('expires_at > NOW()')
-    .select('user_id')
-    .first();
-
-  return session?.user_id;
-};
 
 // Funkcja wysyłająca powiadomienie email
 const sendNewRequestNotification = async (requestData) => {

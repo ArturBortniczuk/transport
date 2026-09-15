@@ -2,27 +2,13 @@
 import { NextResponse } from 'next/server';
 import db from '@/database/db';
 import { removeFromCache } from '@/utils/cache';
-
-// Funkcja pomocnicza do weryfikacji sesji
-const validateSession = async (authToken) => {
-  if (!authToken) {
-    return null;
-  }
-  
-  const session = await db('sessions')
-    .where('token', authToken)
-    .whereRaw('expires_at > NOW()')
-    .select('user_id')
-    .first();
-  
-  return session?.user_id;
-};
+import { validateSession } from '@/lib/auth';
 
 export async function PUT(request) {
   try {
     // Sprawdzamy uwierzytelnienie
     const authToken = request.cookies.get('authToken')?.value;
-    const userId = await validateSession(authToken);
+    const userId = await validateSession(request) || await validateSession(authToken);
     
     if (!userId) {
       return NextResponse.json({ 

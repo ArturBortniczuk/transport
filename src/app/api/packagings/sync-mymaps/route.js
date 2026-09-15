@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import db from '@/database/db';
 import { getGoogleCoordinates } from '../../../services/geocoding-google';
 import { XMLParser } from 'fast-xml-parser';
+import { getSessionUser } from '@/lib/auth';
 
 // Funkcja pomocnicza do sprawdzania czy kolumna istnieje
 async function hasColumn(tableName, columnName) {
@@ -360,79 +361,26 @@ export async function POST(request) {
         isAuthenticated = true;
         console.log('Uwierzytelnienie przez nagłówek X-Cron-Auth');
       } else {
-        const authToken = request.cookies.get('authToken')?.value;
-        
-        if (!authToken) {
-          console.log('Brak tokenu uwierzytelniającego');
+        const sessionResult = await getSessionUser(request);
+        if (!sessionResult.isAuthenticated || !sessionResult.user) {
+          console.log('Brak autoryzacji lub sesja wygasła');
           return NextResponse.json({ 
             success: false, 
-            error: 'Brak tokenu uwierzytelniającego' 
+            error: 'Brak autoryzacji' 
           }, { status: 401 });
         }
-        
-        // Zwiększamy timeout na zapytanie do bazy danych
-        const sessionTimeout = 30000; // 30 sekund na operację
-        let session = null;
-        
-        try {
-          session = await Promise.race([
-            db('sessions')
-              .where('token', authToken)
-              .whereRaw('expires_at > NOW()')
-              .select('user_id')
-              .first(),
-            new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('Timeout podczas sprawdzania sesji')), sessionTimeout)
-            )
-          ]);
-        } catch (dbError) {
-          console.error('Błąd dostępu do bazy danych:', dbError);
+
+        const isAdmin = sessionResult.user.isAdmin || sessionResult.user.role === 'admin';
+        if (!isAdmin) {
+          console.log('Użytkownik nie jest administratorem');
           return NextResponse.json({ 
             success: false, 
-            error: 'Błąd podczas weryfikacji sesji: ' + dbError.message 
-          }, { status: 500 });
+            error: 'Brak uprawnień administratora' 
+          }, { status: 403 });
         }
         
-        if (!session) {
-          console.log('Sesja wygasła lub jest nieprawidłowa');
-          return NextResponse.json({ 
-            success: false, 
-            error: 'Sesja wygasła lub jest nieprawidłowa' 
-          }, { status: 401 });
-        }
-        
-        const userId = session.user_id;
-        
-        // Sprawdź czy użytkownik jest adminem
-        let user = null;
-        try {
-          user = await Promise.race([
-            db('users')
-              .where('email', userId)
-              .select('is_admin')
-              .first(),
-            new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('Timeout podczas sprawdzania uprawnień')), sessionTimeout)
-            )
-          ]);
-        } catch (userError) {
-          console.error('Błąd dostępu do danych użytkownika:', userError);
-          return NextResponse.json({ 
-            success: false, 
-            error: 'Błąd podczas weryfikacji uprawnień: ' + userError.message 
-          }, { status: 500 });
-        }
-        
-        if (!user) {
-          console.log('Nie znaleziono użytkownika');
-          return NextResponse.json({ 
-            success: false, 
-            error: 'Nie znaleziono użytkownika' 
-          }, { status: 401 });
-        }
-        
-        isAuthenticated = user.is_admin === true || user.is_admin === 1;
-        console.log(`Uwierzytelnienie dla użytkownika ${userId}: ${isAuthenticated ? 'sukces' : 'brak uprawnień'}`);
+        isAuthenticated = true;
+        userId = sessionResult.user.email;
       }
 
       if (!isAuthenticated) {

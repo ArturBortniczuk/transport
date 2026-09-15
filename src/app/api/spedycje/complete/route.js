@@ -2,21 +2,7 @@
 import { NextResponse } from 'next/server';
 import db from '@/database/db';
 import nodemailer from 'nodemailer';
-
-// Funkcja pomocnicza do weryfikacji sesji
-const validateSession = async (authToken) => {
-  if (!authToken) {
-    return null;
-  }
-  
-  const session = await db('sessions')
-    .where('token', authToken)
-    .whereRaw('expires_at > NOW()')
-    .select('user_id')
-    .first();
-  
-  return session?.user_id;
-};
+import { validateSession } from '@/lib/auth';
 
 // Funkcja wysyłania powiadomienia o ukończeniu spedycji
 const sendCompletionNotification = async (spedycjaData) => {

@@ -1,25 +1,11 @@
 // src/app/api/transport-ratings-bulk/route.js - Z CACHE
 import { NextResponse } from 'next/server';
 import db from '@/database/db';
+import { validateSession } from '@/lib/auth';
 
 // Cache w pamięci - w produkcji można użyć Redis
 const ratingsCache = new Map()
 const CACHE_TTL = 5 * 60 * 1000 // 5 minut cache
-
-// Funkcja pomocnicza do weryfikacji sesji
-const validateSession = async (authToken) => {
-  if (!authToken) {
-    return null;
-  }
-  
-  const session = await db('sessions')
-    .where('token', authToken)
-    .whereRaw('expires_at > NOW()')
-    .select('user_id')
-    .first();
-  
-  return session?.user_id;
-};
 
 // Funkcja do obliczania procentów na podstawie szczegółowych ocen
 const calculateDetailedPercentage = async (transportId) => {

@@ -1,21 +1,7 @@
 // src/app/api/transport-ratings/route.js
 import { NextResponse } from 'next/server';
 import db from '@/database/db';
-
-// Funkcja pomocnicza do weryfikacji sesji
-const validateSession = async (authToken) => {
-  if (!authToken) {
-    return null;
-  }
-  
-  const session = await db('sessions')
-    .where('token', authToken)
-    .whereRaw('expires_at > NOW()')
-    .select('user_id')
-    .first();
-  
-  return session?.user_id;
-};
+import { validateSession } from '@/lib/auth';
 
 // GET /api/transport-ratings?transportId=X
 export async function GET(request) {

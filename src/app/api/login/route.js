@@ -128,16 +128,6 @@ export async function POST(request) {
         ...(domain ? { domain } : {})
       };
 
-      // Zapisz sesję w bazie
-      try {
-        await db('sessions').insert({
-          token: sessionToken,
-          user_id: authenticatedUser.email,
-          expires_at: db.raw("NOW() + INTERVAL '7 days' ")
-        });
-      } catch (error) {
-        console.error('Błąd zapisywania sesji:', error.message);
-      }
 
       const authCookie = serialize('authToken', sessionToken, cookieOptions);
       const roleCookie = serialize('userRole', authenticatedUser.role, { ...cookieOptions, httpOnly: false });

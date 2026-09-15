@@ -81,17 +81,6 @@ const initializeDatabase = async () => {
       });
     }
 
-    // Tabela sesji
-    const sessionsExists = await db.schema.hasTable('sessions');
-    if (!sessionsExists) {
-      await db.schema.createTable('sessions', table => {
-        table.string('token').primary();
-        table.string('user_id').notNullable();
-        table.timestamp('expires_at').notNullable();
-        table.timestamp('created_at').defaultTo(db.fn.now());
-        table.foreign('user_id').references('email').inTable('users');
-      });
-    }
 
     // Tabela transportów
     const transportsExists = await db.schema.hasTable('transports');

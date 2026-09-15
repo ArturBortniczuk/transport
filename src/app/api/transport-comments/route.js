@@ -2,24 +2,7 @@
 import { NextResponse } from 'next/server'
 import db from '@/database/db'
 import nodemailer from 'nodemailer'
-
-// Funkcja pomocnicza do weryfikacji sesji
-const getUserEmailFromToken = async (authToken) => {
-  if (!authToken) return null;
-
-  try {
-    const session = await db('sessions')
-      .where('token', authToken)
-      .whereRaw('expires_at > NOW()')
-      .select('user_id')
-      .first();
-
-    return session?.user_id || null;
-  } catch (error) {
-    console.error('Błąd walidacji sesji:', error)
-    return null
-  }
-};
+import { validateSession } from '@/lib/auth'
 
 // Funkcja sprawdzania czy tabela istnieje
 const tableExists = async (tableName) => {
@@ -297,21 +280,14 @@ export async function POST(request) {
   try {
     console.log('🔔 Rozpoczynanie dodawania komentarza z powiadomieniami...');
 
-    const authToken = request.cookies.get('authToken')?.value
+    const authToken = request.cookies.get('authToken')?.value;
+    const userEmail = await validateSession(request) || await validateSession(authToken);
 
-    if (!authToken) {
-      return NextResponse.json({
-        success: false,
-        error: 'Brak autoryzacji'
-      }, { status: 401 })
-    }
-
-    const userEmail = await getUserEmailFromToken(authToken);
     if (!userEmail) {
       return NextResponse.json({
         success: false,
-        error: 'Nieprawidłowa sesja'
-      }, { status: 401 })
+        error: 'Nieprawidłowa sesja lub brak autoryzacji'
+      }, { status: 401 });
     }
 
     const { transportId, comment } = await request.json()

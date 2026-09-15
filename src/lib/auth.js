@@ -52,24 +52,22 @@ export async function validateSession(tokenOrRequest) {
   }
 
   // Jeśli przekazano obiekt Request (Next.js)
-  if (typeof tokenOrRequest === 'object' && tokenOrRequest.cookies) {
+  if (typeof tokenOrRequest === 'object' && (tokenOrRequest.cookies || tokenOrRequest.headers)) {
     const sessionUser = await getSessionUser(tokenOrRequest);
     return sessionUser?.isAuthenticated ? sessionUser.user?.email : null;
   }
 
-  // Jeśli przekazano string (token)
-  try {
-    const session = await db('sessions')
-      .where('token', tokenOrRequest)
-      .whereRaw('expires_at > NOW()')
-      .select('user_id')
-      .first();
-
-    return session?.user_id || null;
-  } catch (error) {
-    console.error('Błąd walidacji sesji:', error);
-    return null;
+  // Jeśli przekazano string (np. email, JWT lub string ciasteczka)
+  if (typeof tokenOrRequest === 'string') {
+    const str = tokenOrRequest.trim();
+    if (str.includes('@') && !str.includes('{') && !str.includes('[')) {
+      return str.toLowerCase();
+    }
+    const extracted = extractEmailFromCookie(str);
+    if (extracted) return extracted;
   }
+
+  return null;
 }
 
 function extractEmailFromCookie(cookieValue) {
