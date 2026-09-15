@@ -29,7 +29,7 @@ const APPS = [
   {
     id: 'transport',
     name: 'Strona transportowa',
-    url: 'https://www.transport.grupaeltron.pl',
+    url: 'https://transport.grupaeltron.pl',
     icon: Truck,
     iconBg: 'bg-emerald-100 text-emerald-600',
     isCurrent: true
