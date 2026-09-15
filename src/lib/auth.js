@@ -216,10 +216,28 @@ export async function getSessionUser(request) {
         }
       };
 
-      if (customPerms?.calendar) permissions.calendar = { ...permissions.calendar, ...customPerms.calendar };
-      if (customPerms?.transport) permissions.transport = { ...permissions.transport, ...customPerms.transport };
-      if (customPerms?.spedycja) permissions.spedycja = { ...permissions.spedycja, ...customPerms.spedycja };
-      if (customPerms?.admin) permissions.admin = { ...permissions.admin, ...customPerms.admin };
+      // Głębokie łączenie uprawnień ze wszystkimi modułami z customPerms (z Portalu Narzędzi)
+      permissions = {
+        ...customPerms,
+        ...permissions,
+        calendar: { ...permissions.calendar, ...(customPerms?.calendar || {}) },
+        transport: { ...permissions.transport, ...(customPerms?.transport || {}) },
+        transport_requests: { 
+          add: true,
+          view_own: true,
+          view_all: isWarehouse || isAdmin || isCoordinator,
+          approve: isWarehouse || isAdmin || isCoordinator,
+          ...(customPerms?.transport_requests || {}) 
+        },
+        spedycja: { ...permissions.spedycja, ...(customPerms?.spedycja || {}) },
+        courier: { view: true, add: true, ...(customPerms?.courier || {}) },
+        valuation: { calculator: true, history: true, ...(customPerms?.valuation || {}) },
+        coordinator: { view: isCoordinator || isAdmin, import_csv: isCoordinator || isAdmin, ...(customPerms?.coordinator || {}) },
+        cable_advices: { view: isWarehouse || isAdmin, manage: isWarehouse || isAdmin, ...(customPerms?.cable_advices || {}) },
+        archive: { view: true, export: isWarehouse || isAdmin || isCoordinator, delete: isAdmin, ...(customPerms?.archive || {}) },
+        ratings: { view: true, rate: true, ...(customPerms?.ratings || {}) },
+        admin: { ...permissions.admin, ...(customPerms?.admin || {}) }
+      };
 
       if (isWarehouse || isAdmin || isCoordinator) {
         permissions.calendar.edit = true;
