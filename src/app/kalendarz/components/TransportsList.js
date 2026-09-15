@@ -70,28 +70,29 @@ export default function TransportsList({
 
   // Funkcja pomocnicza do sprawdzania, czy użytkownik może edytować ten transport
   const canEditTransport = (transport) => {
-    // Admin może zawsze edytować
-    if (userRole === 'admin') return true;
+    // 1. Admin może zawsze edytować
+    if (userRole === 'admin' || userEmail === 'a.bortniczuk@grupaeltron.pl') return true;
     
-    // Sprawdź czy użytkownik ma rolę magazynu
-    const isMagazynRole = userRole === 'magazyn' || 
-                         userRole?.startsWith('magazyn_') ||
-                         userRole === 'magazyn_bialystok' ||
-                         userRole === 'magazyn_zielonka';
-    
-    // Sprawdzamy czy użytkownik ma odpowiednie uprawnienia
+    // 2. Jeśli użytkownik ma ogólne uprawnienie do edycji kalendarza
     const hasPermission = userPermissions?.calendar?.edit === true;
     
-    // Dla roli magazynu sprawdzamy, czy to jego magazyn
-    const isCorrectMagazyn = transport.zrodlo === 'bialystok' && 
-                           (userRole === 'magazyn_bialystok' || userRole === 'magazyn') ||
-                           transport.zrodlo === 'zielonka' && 
-                           (userRole === 'magazyn_zielonka' || userRole === 'magazyn');
+    // 3. Sprawdź czy użytkownik to Magazyn / Koordynator / Kierownik
+    const roleLower = (userRole || '').toLowerCase();
+    const emailLower = (userEmail || '').toLowerCase();
+    const isMagazyn = 
+      roleLower.includes('magazyn') || 
+      roleLower.includes('koordynator') ||
+      roleLower.includes('kierownik') ||
+      emailLower.includes('magazyn');
+
+    if (isMagazyn || hasPermission) return true;
+
+    // 4. Twórca transportu może edytować swój transport
+    if (transport?.emailZlecajacego && emailLower && transport.emailZlecajacego.toLowerCase() === emailLower) {
+      return true;
+    }
     
-    // Sprawdzamy czy transport został utworzony przez tego użytkownika
-    const isCreator = transport.emailZlecajacego === userEmail;
-    
-    return hasPermission && (isCreator || isCorrectMagazyn);
+    return false;
   };
   
   console.log('Uprawnienia w TransportsList:', {

@@ -39,13 +39,36 @@ export default function TransportForm({
   const [wzBuffer, setWzBuffer] = useState('')
   const [isAddingWZ, setIsAddingWZ] = useState(false)
 
-  // ✅ Funkcja sprawdzająca, czy użytkownik może edytować transport
+  // ✅ Funkcja sprawdzająca, czy użytkownik może dodawać / edytować transport
   const canEditTransport = (transport) => {
-    // Albo użytkownik ma uprawnienie calendar.edit,
-    // albo jest adminem, albo jest twórcą transportu
-    return userPermissions?.calendar?.edit === true || 
-           userRole === 'admin' || 
-           transport?.emailZlecajacego === currentUserEmail;
+    // 1. Admin ma zawsze pełne uprawnienia
+    if (userRole === 'admin' || currentUserEmail === 'a.bortniczuk@grupaeltron.pl') return true;
+
+    // 2. Jeśli użytkownik ma uprawnienie calendar.edit
+    if (userPermissions?.calendar?.edit === true) return true;
+
+    // 3. Magazyn / Koordynator / Kierownik ma pełny dostęp
+    const roleLower = (userRole || '').toLowerCase();
+    const emailLower = (currentUserEmail || '').toLowerCase();
+    const isMagazyn = 
+      roleLower.includes('magazyn') || 
+      roleLower.includes('koordynator') ||
+      roleLower.includes('kierownik') ||
+      emailLower.includes('magazyn');
+
+    if (isMagazyn) return true;
+
+    // 4. Jeśli tworzymy nowy transport (brak transport.id)
+    if (!transport || !transport.id) {
+      return true;
+    }
+
+    // 5. Jeśli użytkownik jest twórcą tego transportu
+    if (transport.emailZlecajacego && emailLower && transport.emailZlecajacego.toLowerCase() === emailLower) {
+      return true;
+    }
+
+    return false;
   };
 
   // FUNKCJE dla skanowania WZ

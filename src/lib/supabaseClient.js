@@ -104,7 +104,14 @@ export async function getTransportUserProfile() {
     .maybeSingle();
 
   const role = perm?.is_active ? perm.role : (profile?.role === 'admin' ? 'admin' : 'pracownik');
-  const isAdmin = role === 'admin' || profile?.role === 'admin' || userEmail === 'a.bortniczuk@grupaeltron.pl';
+  const roleLower = (role || '').toLowerCase();
+  const isAdmin = roleLower === 'admin' || profile?.role === 'admin' || userEmail === 'a.bortniczuk@grupaeltron.pl';
+  const isWarehouse = 
+    userEmail.includes('magazyn') || 
+    roleLower.includes('magazyn') || 
+    (profile?.role && profile.role.toLowerCase().includes('magazyn'));
+  const isCoordinator = roleLower.includes('koordynator');
+  const isDriver = roleLower.includes('kierowca') || userEmail.includes('kierowca');
 
   return {
     id: user.id,
@@ -117,12 +124,13 @@ export async function getTransportUserProfile() {
     permissions: {
       calendar: { 
         view: true,
-        edit: ['admin', 'koordynator', 'magazyn'].includes(role) || isAdmin
+        edit: isAdmin || isWarehouse || isCoordinator || ['kierownik', 'dyrektor'].includes(roleLower)
       },
       map: { view: true },
       transport: { 
-        markAsCompleted: ['admin', 'koordynator', 'magazyn', 'kierowca'].includes(role) || isAdmin
+        markAsCompleted: isAdmin || isWarehouse || isCoordinator || isDriver
       }
     }
   };
 }
+

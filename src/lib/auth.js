@@ -142,8 +142,13 @@ export async function getSessionUser(request) {
     }
 
     if (ssoEmail) {
-      // Pobierz użytkownika z profiles (lub legacy users)
+      // Pobierz użytkownika z profiles oraz z users (dla uprawnień i MPK)
       let userRow = await db('profiles')
+        .whereRaw('LOWER(email) = ?', [ssoEmail])
+        .first()
+        .catch(() => null);
+
+      let neonUser = await db('users')
         .whereRaw('LOWER(email) = ?', [ssoEmail])
         .first()
         .catch(() => null);
@@ -156,57 +161,85 @@ export async function getSessionUser(request) {
           .catch(() => null);
       }
 
-      if (!userRow) {
-        userRow = await db('users')
-          .whereRaw('LOWER(email) = ?', [ssoEmail])
-          .first()
-          .catch(() => null);
+      if (!userRow && neonUser) {
+        userRow = neonUser;
       }
 
-      const role = userPerm?.is_active ? userPerm.role : (userRow?.role || 'pracownik');
-      const isSuperAdmin = ssoEmail === 'a.bortniczuk@grupaeltron.pl';
-      const isAdmin = isSuperAdmin || role === 'admin' || userRow?.is_admin === true || userRow?.role === 'admin';
+      const rawRole = userPerm?.is_active ? userPerm.role : (neonUser?.role || userRow?.role || 'pracownik');
+      const roleLower = (rawRole || '').toLowerCase();
+      const emailLower = ssoEmail.toLowerCase();
+      const isSuperAdmin = emailLower === 'a.bortniczuk@grupaeltron.pl';
+      const isAdmin = isSuperAdmin || roleLower === 'admin' || userRow?.is_admin === true || neonUser?.is_admin === true;
+
+      // Sprawdź czy to rola magazynowa
+      const isWarehouse = 
+        emailLower.includes('magazyn') ||
+        roleLower.includes('magazyn') ||
+        (userRow?.role && userRow.role.toLowerCase().includes('magazyn')) ||
+        (neonUser?.role && neonUser.role.toLowerCase().includes('magazyn')) ||
+        (neonUser?.position && neonUser.position.toLowerCase().includes('magazyn'));
+
+      const isCoordinator = roleLower.includes('koordynator') || (neonUser?.role && neonUser.role.toLowerCase().includes('koordynator'));
+      const isDriver = roleLower.includes('kierowca') || emailLower.includes('kierowca');
+
+      // Parsuj własne uprawnienia jeśli istnieją
+      let customPerms = {};
+      try {
+        const rawPerms = neonUser?.permissions || userRow?.permissions;
+        if (rawPerms) {
+          customPerms = typeof rawPerms === 'string' ? JSON.parse(rawPerms) : rawPerms;
+        }
+      } catch (e) {}
+
+      const canEditCalendar = isAdmin || isWarehouse || isCoordinator || ['kierownik', 'dyrektor'].includes(roleLower) || customPerms?.calendar?.edit === true;
+      const canCompleteTransport = isAdmin || isWarehouse || isCoordinator || isDriver || customPerms?.transport?.markAsCompleted === true;
 
       let permissions = {
         calendar: { 
           view: true, 
-          edit: ['admin', 'koordynator', 'magazyn', 'magazyn_bialystok', 'magazyn_zielonka'].includes(role) || isAdmin 
+          edit: canEditCalendar 
         },
         map: { view: true },
         transport: { 
-          markAsCompleted: ['admin', 'koordynator', 'magazyn', 'magazyn_bialystok', 'magazyn_zielonka', 'kierowca'].includes(role) || isAdmin 
+          markAsCompleted: canCompleteTransport 
         },
         spedycja: {
           view: true,
-          sendOrder: true,
-          edit: true
+          sendOrder: customPerms?.spedycja?.sendOrder ?? true,
+          edit: customPerms?.spedycja?.edit ?? true,
+          add: customPerms?.spedycja?.add ?? true,
+          respond: customPerms?.spedycja?.respond ?? true
         },
         admin: {
-          packagings: isAdmin,
-          constructions: isAdmin
+          packagings: isAdmin || customPerms?.admin?.packagings === true,
+          constructions: isAdmin || customPerms?.admin?.constructions === true
         }
       };
 
-      try {
-        if (userRow?.permissions) {
-          const parsed = typeof userRow.permissions === 'string' ? JSON.parse(userRow.permissions) : userRow.permissions;
-          permissions = { ...permissions, ...parsed };
-        }
-      } catch (e) {}
+      if (customPerms?.calendar) permissions.calendar = { ...permissions.calendar, ...customPerms.calendar };
+      if (customPerms?.transport) permissions.transport = { ...permissions.transport, ...customPerms.transport };
+      if (customPerms?.spedycja) permissions.spedycja = { ...permissions.spedycja, ...customPerms.spedycja };
+      if (customPerms?.admin) permissions.admin = { ...permissions.admin, ...customPerms.admin };
+
+      if (isWarehouse || isAdmin || isCoordinator) {
+        permissions.calendar.edit = true;
+        permissions.transport.markAsCompleted = true;
+      }
 
       return {
         isAuthenticated: true,
         user: {
           email: ssoEmail,
-          name: userRow?.name || ssoEmail.split('@')[0],
-          position: userRow?.position || '',
-          role: role,
+          name: userRow?.name || neonUser?.name || ssoEmail.split('@')[0],
+          position: userRow?.position || neonUser?.position || '',
+          role: rawRole,
           permissions: permissions,
-          mpk: userRow?.mpk || '',
+          mpk: userRow?.mpk || neonUser?.mpk || '',
           isAdmin: isAdmin
         }
       };
     }
+
 
     return { isAuthenticated: false, user: null };
   } catch (error) {
