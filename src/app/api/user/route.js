@@ -16,6 +16,16 @@ export async function GET(request) {
       });
     }
 
+    const userRole = (sessionResult.user.role || '').toLowerCase();
+    if (userRole === 'client' || userRole === 'klient') {
+      return NextResponse.json({
+        isAuthenticated: false,
+        isClient: true,
+        user: null,
+        redirectUrl: 'https://www.opakowania.grupaeltron.pl/dashboard'
+      });
+    }
+
     const response = NextResponse.json(sessionResult);
 
     // Jeśli użytkownik przyszedł przez SSO (eltron_auth_token), a nie ma jeszcze lokalnego authToken,

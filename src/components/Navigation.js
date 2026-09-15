@@ -67,6 +67,11 @@ export default function Navigation() {
 
       console.log('Odpowiedź z API:', data);
 
+      if (data.isClient || (data.user && (data.user.role === 'client' || data.user.role === 'klient'))) {
+        window.location.replace('https://www.opakowania.grupaeltron.pl/dashboard');
+        return;
+      }
+
       setIsLoggedIn(data.isAuthenticated);
       if (data.isAuthenticated && data.user) {
         const role = data.user.role;
