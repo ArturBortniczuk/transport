@@ -28,11 +28,12 @@ const createDbConnection = () => {
   }
 
   // W przeciwnym razie utwórz prawdziwe połączenie
-  let connStr = process.env.DATABASE_URL || process.env.SUPABASE_DATABASE_URL || process.env.NEON_DATABASE_URL;
+  const NEON_DEFAULT = "postgresql://neondb_owner:npg_mJAS3DyIc7BV@ep-solitary-boat-a2acw4pa-pooler.eu-central-1.aws.neon.tech/neondb?sslmode=require";
+  let connStr = process.env.DATABASE_URL || process.env.NEON_DATABASE_URL || NEON_DEFAULT;
 
-  // Jeśli podano pooler Supabase z błędnym hostem tenant not found, zamień na bezpośredni direct URL Supabase
-  if (connStr && (connStr.includes('pooler.supabase.com') || connStr.includes('vwnjmcxwqrfykeexocqi'))) {
-    connStr = 'postgresql://postgres:narzedziaeltron@db.vwnjmcxwqrfykeexocqi.supabase.co:5432/postgres';
+  // Jeśli podano nieosiągalny host Supabase direct IPv6 / pooler, użyj bezpiecznego połączenia Neon
+  if (!connStr || connStr.includes('pooler.supabase.com') || connStr.includes('db.vwnjmcxwqrfykeexocqi.supabase.co')) {
+    connStr = process.env.NEON_DATABASE_URL || NEON_DEFAULT;
   }
 
   const connectionConfig = connStr
