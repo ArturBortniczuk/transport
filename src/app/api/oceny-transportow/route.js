@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import db from '@/database/db'
 
+export const dynamic = 'force-dynamic';
+
 const validateSession = async (authToken) => {
   if (!authToken) {
     return null

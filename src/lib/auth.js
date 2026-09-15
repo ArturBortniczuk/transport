@@ -42,18 +42,25 @@ export function generateSessionToken() {
 }
 
 /**
- * Weryfikacja tokenu sesji w bazie danych
- * @param {string} authToken
+ * Weryfikacja tokenu sesji w bazie danych lub z ciasteczka SSO
+ * @param {string|Request} tokenOrRequest
  * @returns {Promise<string|null>} email użytkownika lub null
  */
-export async function validateSession(authToken) {
-  if (!authToken) {
+export async function validateSession(tokenOrRequest) {
+  if (!tokenOrRequest) {
     return null;
   }
 
+  // Jeśli przekazano obiekt Request (Next.js)
+  if (typeof tokenOrRequest === 'object' && tokenOrRequest.cookies) {
+    const sessionUser = await getSessionUser(tokenOrRequest);
+    return sessionUser?.isAuthenticated ? sessionUser.user?.email : null;
+  }
+
+  // Jeśli przekazano string (token)
   try {
     const session = await db('sessions')
-      .where('token', authToken)
+      .where('token', tokenOrRequest)
       .whereRaw('expires_at > NOW()')
       .select('user_id')
       .first();

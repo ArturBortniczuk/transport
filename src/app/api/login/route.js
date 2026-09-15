@@ -116,12 +116,16 @@ export async function POST(request) {
       const sessionToken = generateSessionToken();
       const isProduction = process.env.NODE_ENV === 'production';
       
+      const host = request.headers.get('host') || '';
+      const domain = host.includes('grupaeltron.pl') ? '.grupaeltron.pl' : undefined;
+
       const cookieOptions = {
         httpOnly: true,
         secure: isProduction,
         sameSite: 'lax',
-        maxAge: 60 * 60 * 24 * 7,
-        path: '/'
+        maxAge: 60 * 60 * 24 * 30,
+        path: '/',
+        ...(domain ? { domain } : {})
       };
 
       // Zapisz sesję w bazie

@@ -28,12 +28,20 @@ const createDbConnection = () => {
   }
 
   // W przeciwnym razie utwórz prawdziwe połączenie
+  const connStr = process.env.DATABASE_URL;
+  const connectionConfig = connStr
+    ? {
+        connectionString: connStr,
+        ssl: { rejectUnauthorized: false }
+      }
+    : undefined;
+
   return knex({
     client: 'pg',
-    connection: process.env.DATABASE_URL,
+    connection: connectionConfig,
     pool: {
       min: 0,
-      max: 1 // Redukcja dla środowiska serverless
+      max: 5
     },
     acquireConnectionTimeout: 30000
   });
@@ -1047,8 +1055,8 @@ const backfillMissingMpk = async () => {
   }
 };
 
-// Wykonaj inicjalizację asynchronicznie tylko jeśli nie jesteśmy w fazie budowania
-if (!isBuildPhase) {
+// Inicjalizacja schematu bazy (wywoływana tylko na żądanie, baza Supabase jest już w pełni zainicjalizowana)
+if (process.env.RUN_DB_INIT === 'true') {
   (async () => {
     try {
       await initializeDatabase();
@@ -1059,14 +1067,9 @@ if (!isBuildPhase) {
       await checkSpedycjeTable();
       await checkCableAdvicesTable();
       await checkKuriersTable();
-
-      // Wywołania dla szczegółowych ocen:
       await checkTransportsTableForRatings();
       await checkDetailedRatingsTable();
-
-      // Automatyczne uzupełnienie brakujących MPK w danych historycznych
       await backfillMissingMpk();
-
       console.log('Wszystkie tabele zostały sprawdzone i zsynchronizowane pomyślnie');
     } catch (error) {
       console.error('Błąd inicjalizacji:', error);

@@ -1,16 +1,27 @@
 'use client'
 import Link from 'next/link'
 import { useState, useEffect, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { Calendar, Map, Users, Truck, Settings, TrendingUp } from 'lucide-react'
 
 export default function Home() {
+  const router = useRouter()
   const [isVisible, setIsVisible] = useState(false)
   const canvasRef = useRef(null)
   const requestRef = useRef(null)
   
   useEffect(() => {
     setIsVisible(true)
+
+    fetch('/api/user')
+      .then(res => res.json())
+      .then(data => {
+        if (data.isAuthenticated && data.user) {
+          router.replace('/kalendarz')
+        }
+      })
+      .catch(() => {})
     
     // Efekt elektryczności na tle
     const canvas = canvasRef.current

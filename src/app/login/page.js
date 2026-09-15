@@ -9,6 +9,22 @@ const LoginPage = () => {
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
 
+  useEffect(() => {
+    // Automatyczne przekierowanie jeśli użytkownik jest zalogowany przez SSO lub sesję
+    fetch('/api/user')
+      .then(res => res.json())
+      .then(data => {
+        if (data.isAuthenticated && data.user) {
+          if (data.user.role === 'admin' || data.user.isAdmin) {
+            router.replace('/admin')
+          } else {
+            router.replace('/kalendarz')
+          }
+        }
+      })
+      .catch(() => {})
+  }, [router])
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setIsLoading(true)
