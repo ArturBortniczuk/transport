@@ -262,7 +262,7 @@ export async function GET(request) {
     const raterEmail = searchParams.get('raterEmail');
 
     const authToken = request.cookies.get('authToken')?.value;
-    const userId = await validateSession(authToken);
+    const userId = (await validateSession(request)) || (await validateSession(authToken));
 
     if (!transportId) {
       return NextResponse.json({
@@ -385,7 +385,7 @@ export async function GET(request) {
 export async function POST(request) {
   try {
     const authToken = request.cookies.get('authToken')?.value;
-    const userId = await validateSession(authToken);
+    const userId = (await validateSession(request)) || (await validateSession(authToken));
 
     if (!userId) {
       return NextResponse.json({
@@ -644,7 +644,7 @@ const sendResolutionNotification = async (transport, rating, resolution) => {
 export async function PUT(request) {
   try {
     const authToken = request.cookies.get('authToken')?.value;
-    const userId = await validateSession(authToken);
+    const userId = (await validateSession(request)) || (await validateSession(authToken));
 
     if (!userId) {
       return NextResponse.json({

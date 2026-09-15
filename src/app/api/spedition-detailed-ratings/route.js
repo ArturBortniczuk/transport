@@ -340,7 +340,7 @@ export async function GET(request) {
     const raterEmail = searchParams.get('raterEmail')
 
     const authToken = request.cookies.get('authToken')?.value
-    const userId = await validateSession(authToken)
+    const userId = (await validateSession(request)) || (await validateSession(authToken))
 
     if (!speditionId) {
       return NextResponse.json({
@@ -471,7 +471,7 @@ export async function GET(request) {
 export async function POST(request) {
   try {
     const authToken = request.cookies.get('authToken')?.value
-    const userId = await validateSession(authToken)
+    const userId = (await validateSession(request)) || (await validateSession(authToken))
 
     if (!userId) {
       return NextResponse.json({
@@ -677,7 +677,7 @@ export async function POST(request) {
 export async function PUT(request) {
   try {
     const authToken = request.cookies.get('authToken')?.value
-    const userId = await validateSession(authToken)
+    const userId = (await validateSession(request)) || (await validateSession(authToken))
 
     if (!userId) {
       return NextResponse.json({

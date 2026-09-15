@@ -61,7 +61,7 @@ export async function POST(request) {
   try {
     // Sprawdzamy uwierzytelnienie
     const authToken = request.cookies.get('authToken')?.value;
-    const userId = await validateSession(authToken);
+    const userId = (await validateSession(request)) || (await validateSession(authToken));
     
     if (!userId) {
       return NextResponse.json({ 
@@ -249,7 +249,7 @@ export async function POST(request) {
 export async function DELETE(request) {
   try {
     const authToken = request.cookies.get('authToken')?.value;
-    const userId = await validateSession(authToken);
+    const userId = (await validateSession(request)) || (await validateSession(authToken));
     
     if (!userId) {
       return NextResponse.json({ 

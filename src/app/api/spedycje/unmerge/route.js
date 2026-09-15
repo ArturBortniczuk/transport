@@ -52,7 +52,7 @@ export async function POST(request) {
     
     // Sprawdzamy uwierzytelnienie
     const authToken = request.cookies.get('authToken')?.value;
-    const userId = await validateSession(authToken);
+    const userId = (await validateSession(request)) || (await validateSession(authToken));
     
     if (!userId) {
       console.log('Brak autoryzacji');

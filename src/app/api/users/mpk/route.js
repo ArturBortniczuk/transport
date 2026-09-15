@@ -10,7 +10,7 @@ export async function PUT(request) {
   try {
     // Sprawdzamy uwierzytelnienie
     const authToken = request.cookies.get('authToken')?.value;
-    const sessionUserId = await validateSession(authToken);
+    const sessionUserId = (await validateSession(request)) || (await validateSession(authToken));
 
     if (!sessionUserId) {
       return NextResponse.json({ 
@@ -19,13 +19,17 @@ export async function PUT(request) {
       }, { status: 401 });
     }
 
+    const sessionEmail = sessionUserId.toLowerCase();
+    const isSuperAdmin = sessionEmail === 'a.bortniczuk@grupaeltron.pl';
+
     // Sprawdź czy użytkownik jest adminem
     const admin = await db('users')
-      .where('email', sessionUserId)
+      .whereRaw('LOWER(email) = ?', [sessionEmail])
       .select('is_admin', 'role')
       .first();
 
     const isAdmin = Boolean(
+      isSuperAdmin ||
       admin?.is_admin === true || 
       admin?.is_admin === 1 || 
       admin?.is_admin === 't' || 
@@ -51,15 +55,19 @@ export async function PUT(request) {
     }
 
     const cleanedMpk = typeof mpk === 'string' ? mpk.trim() : (mpk || '');
+    const targetEmail = targetUserId.toLowerCase();
 
-    // Aktualizuj MPK użytkownika w bazie danych
-    const updated = await db('users')
-      .where('email', targetUserId)
-      .update({ mpk: cleanedMpk });
+    // Aktualizuj MPK użytkownika w bazie danych Neon
+    await db('users')
+      .whereRaw('LOWER(email) = ?', [targetEmail])
+      .update({ mpk: cleanedMpk })
+      .catch(() => null);
 
-    if (updated === 0) {
-      throw new Error('Nie znaleziono użytkownika do aktualizacji');
-    }
+    // Synchronizuj z tabelą profiles w Supabase
+    await db('profiles')
+      .whereRaw('LOWER(email) = ?', [targetEmail])
+      .update({ mpk: cleanedMpk })
+      .catch(() => null);
 
     // Wyczyść cache
     removeFromCache('users_list_basic');

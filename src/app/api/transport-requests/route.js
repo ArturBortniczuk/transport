@@ -385,7 +385,7 @@ export async function GET(request) {
     const authToken = request.cookies.get('authToken')?.value;
     console.log('AuthToken:', authToken ? 'Present' : 'Missing');
 
-    const userId = await validateSession(authToken);
+    const userId = (await validateSession(request)) || (await validateSession(authToken));
     console.log('UserId:', userId);
 
     if (!userId) {
@@ -481,7 +481,7 @@ export async function POST(request) {
   try {
     console.log('=== START POST /api/transport-requests ===');
     const authToken = request.cookies.get('authToken')?.value;
-    const userId = await validateSession(authToken);
+    const userId = (await validateSession(request)) || (await validateSession(authToken));
 
     if (!userId) {
       return NextResponse.json({
@@ -757,7 +757,7 @@ export async function PUT(request) {
   try {
     console.log('=== START PUT /api/transport-requests ===');
     const authToken = request.cookies.get('authToken')?.value;
-    const userId = await validateSession(authToken);
+    const userId = (await validateSession(request)) || (await validateSession(authToken));
 
     if (!userId) {
       return NextResponse.json({
