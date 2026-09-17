@@ -1,5 +1,6 @@
 // src/lib/auth.js
 import db from '@/database/db';
+import { supabaseAdmin } from './supabaseClient';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 
@@ -142,30 +143,42 @@ export async function getSessionUser(request) {
     }
 
     if (ssoEmail) {
-      // Pobierz użytkownika z profiles oraz z users (dla uprawnień i MPK)
-      let userRow = await db('profiles')
-        .whereRaw('LOWER(email) = ?', [ssoEmail])
-        .first()
-        .catch(() => null);
-
-      let neonUser = await db('users')
-        .whereRaw('LOWER(email) = ?', [ssoEmail])
-        .first()
-        .catch(() => null);
-
+      // 1. Pobierz użytkownika z profiles oraz z user_app_permissions bezpośrednio z Supabase
+      let userRow = null;
       let userPerm = null;
-      if (userRow) {
-        userPerm = await db('user_app_permissions')
-          .where({ user_id: userRow.id, app_id: 'transport' })
+
+      try {
+        const { data: profile } = await supabaseAdmin
+          .from('profiles')
+          .select('*')
+          .ilike('email', ssoEmail)
+          .maybeSingle();
+
+        if (profile) {
+          userRow = profile;
+          const { data: perm } = await supabaseAdmin
+            .from('user_app_permissions')
+            .select('*')
+            .eq('user_id', profile.id)
+            .eq('app_id', 'transport')
+            .maybeSingle();
+          userPerm = perm;
+        }
+      } catch (err) {
+        console.error('Błąd pobierania profilu z Supabase:', err);
+      }
+
+      // 2. Fallback do tabeli users (Neon/lokalna) jeśli brak w profiles
+      let neonUser = null;
+      if (!userRow) {
+        neonUser = await db('users')
+          .whereRaw('LOWER(email) = ?', [ssoEmail])
           .first()
           .catch(() => null);
+        if (neonUser) userRow = neonUser;
       }
 
-      if (!userRow && neonUser) {
-        userRow = neonUser;
-      }
-
-      const rawRole = userPerm?.is_active ? userPerm.role : (neonUser?.role || userRow?.role || 'pracownik');
+      const rawRole = (userPerm?.is_active && userPerm.role) ? userPerm.role : (neonUser?.role || userRow?.role || 'pracownik');
       const roleLower = (rawRole || '').toLowerCase();
       const emailLower = ssoEmail.toLowerCase();
       const isSuperAdmin = emailLower === 'a.bortniczuk@grupaeltron.pl';
@@ -173,16 +186,15 @@ export async function getSessionUser(request) {
 
       // Sprawdź czy to rola magazynowa
       const isWarehouse = 
-        emailLower.includes('magazyn') ||
         roleLower.includes('magazyn') ||
-        (userRow?.role && userRow.role.toLowerCase().includes('magazyn')) ||
-        (neonUser?.role && neonUser.role.toLowerCase().includes('magazyn')) ||
+        emailLower.includes('magazyn') ||
+        (userRow?.position && userRow.position.toLowerCase().includes('magazyn')) ||
         (neonUser?.position && neonUser.position.toLowerCase().includes('magazyn'));
 
       const isCoordinator = roleLower.includes('koordynator') || (neonUser?.role && neonUser.role.toLowerCase().includes('koordynator'));
       const isDriver = roleLower.includes('kierowca') || emailLower.includes('kierowca');
 
-      // Parsuj własne uprawnienia jeśli istnieją (z user_app_permissions, users lub profiles)
+      // Parsuj własne uprawnienia jeśli istnieją (z user_app_permissions z Supabase)
       let customPerms = {};
       try {
         const rawPerms = userPerm?.permissions || neonUser?.permissions || userRow?.permissions;
@@ -191,62 +203,88 @@ export async function getSessionUser(request) {
         }
       } catch (e) {}
 
-      const canEditCalendar = isAdmin || isWarehouse || isCoordinator || ['kierownik', 'dyrektor'].includes(roleLower) || customPerms?.calendar?.edit === true;
-      const canCompleteTransport = isAdmin || isWarehouse || isCoordinator || isDriver || customPerms?.transport?.markAsCompleted === true;
+      // Sprawdź obecność grup w customPerms
+      const hasCustomCalendar = customPerms && customPerms.calendar !== undefined;
+      const hasCustomTransport = customPerms && customPerms.transport !== undefined;
+      const hasCustomRequests = customPerms && customPerms.transport_requests !== undefined;
+      const hasCustomSpedycja = customPerms && customPerms.spedycja !== undefined;
+
+      const canEditCalendar = hasCustomCalendar && customPerms.calendar?.edit !== undefined
+        ? Boolean(customPerms.calendar.edit)
+        : (isAdmin || isWarehouse || isCoordinator || ['kierownik', 'dyrektor'].includes(roleLower));
+
+      const canCompleteTransport = hasCustomTransport && customPerms.transport?.markAsCompleted !== undefined
+        ? Boolean(customPerms.transport.markAsCompleted)
+        : (isAdmin || isWarehouse || isCoordinator || isDriver);
 
       let permissions = {
         calendar: { 
           view: true, 
-          edit: canEditCalendar 
+          edit: canEditCalendar,
+          reschedule: hasCustomCalendar && customPerms.calendar?.reschedule !== undefined ? Boolean(customPerms.calendar.reschedule) : canEditCalendar,
+          assign_packagings: hasCustomCalendar && customPerms.calendar?.assign_packagings !== undefined ? Boolean(customPerms.calendar.assign_packagings) : canEditCalendar,
+          connect_routes: hasCustomCalendar && customPerms.calendar?.connect_routes !== undefined ? Boolean(customPerms.calendar.connect_routes) : canEditCalendar
         },
         map: { view: true },
         transport: { 
           markAsCompleted: canCompleteTransport 
         },
+        // Wnioski transportowe: magazynierzy i koordynatorzy mają domyślnie zatwierdzanie, handlowcy dodawanie
+        transport_requests: {
+          add: hasCustomRequests && customPerms.transport_requests?.add !== undefined ? Boolean(customPerms.transport_requests.add) : true,
+          view_own: hasCustomRequests && customPerms.transport_requests?.view_own !== undefined ? Boolean(customPerms.transport_requests.view_own) : true,
+          view_all: hasCustomRequests && customPerms.transport_requests?.view_all !== undefined ? Boolean(customPerms.transport_requests.view_all) : (isWarehouse || isAdmin || isCoordinator),
+          approve: hasCustomRequests && customPerms.transport_requests?.approve !== undefined ? Boolean(customPerms.transport_requests.approve) : (isWarehouse || isAdmin || isCoordinator)
+        },
+        // Transport zewnętrzny (zlecenia Handlowiec -> Logistyk):
+        // Magazynier i kierowca NIE odpowiadają ani nie zamykają zleceń zewnętrznych (respond: false)!
+        // Handlowiec może dodawać (add: true). Logistyk / Koordynator / Admin odpowiada i zamyka (respond: true).
         spedycja: {
-          view: true,
-          sendOrder: customPerms?.spedycja?.sendOrder ?? true,
-          edit: customPerms?.spedycja?.edit ?? true,
-          add: customPerms?.spedycja?.add ?? true,
-          respond: customPerms?.spedycja?.respond ?? true
+          view: hasCustomSpedycja && customPerms.spedycja?.view !== undefined ? Boolean(customPerms.spedycja.view) : true,
+          add: hasCustomSpedycja && customPerms.spedycja?.add !== undefined ? Boolean(customPerms.spedycja.add) : (isAdmin || isCoordinator || (!isWarehouse && !isDriver)),
+          respond: hasCustomSpedycja && customPerms.spedycja?.respond !== undefined ? Boolean(customPerms.spedycja.respond) : (isAdmin || isCoordinator),
+          sendOrder: hasCustomSpedycja && customPerms.spedycja?.sendOrder !== undefined ? Boolean(customPerms.spedycja.sendOrder) : (isAdmin || isCoordinator),
+          cmr: hasCustomSpedycja && customPerms.spedycja?.cmr !== undefined ? Boolean(customPerms.spedycja.cmr) : (isAdmin || isCoordinator),
+          unmerge: hasCustomSpedycja && customPerms.spedycja?.unmerge !== undefined ? Boolean(customPerms.spedycja.unmerge) : (isAdmin || isCoordinator)
+        },
+        courier: {
+          view: customPerms?.courier?.view !== undefined ? Boolean(customPerms.courier.view) : true,
+          add: customPerms?.courier?.add !== undefined ? Boolean(customPerms.courier.add) : true
+        },
+        valuation: {
+          calculator: customPerms?.valuation?.calculator !== undefined ? Boolean(customPerms.valuation.calculator) : true,
+          history: customPerms?.valuation?.history !== undefined ? Boolean(customPerms.valuation.history) : true
+        },
+        coordinator: {
+          view: customPerms?.coordinator?.view !== undefined ? Boolean(customPerms.coordinator.view) : (isCoordinator || isAdmin),
+          import_csv: customPerms?.coordinator?.import_csv !== undefined ? Boolean(customPerms.coordinator.import_csv) : (isCoordinator || isAdmin)
+        },
+        cable_advices: {
+          view: customPerms?.cable_advices?.view !== undefined ? Boolean(customPerms.cable_advices.view) : (isWarehouse || isAdmin),
+          manage: customPerms?.cable_advices?.manage !== undefined ? Boolean(customPerms.cable_advices.manage) : (isWarehouse || isAdmin)
+        },
+        archive: {
+          view: customPerms?.archive?.view !== undefined ? Boolean(customPerms.archive.view) : true,
+          export: customPerms?.archive?.export !== undefined ? Boolean(customPerms.archive.export) : (isWarehouse || isAdmin || isCoordinator),
+          delete: customPerms?.archive?.delete !== undefined ? Boolean(customPerms.archive.delete) : isAdmin
+        },
+        ratings: {
+          view: customPerms?.ratings?.view !== undefined ? Boolean(customPerms.ratings.view) : true,
+          rate: customPerms?.ratings?.rate !== undefined ? Boolean(customPerms.ratings.rate) : true
         },
         admin: {
-          packagings: isAdmin || customPerms?.admin?.packagings === true,
-          constructions: isAdmin || customPerms?.admin?.constructions === true
+          users: customPerms?.admin?.users !== undefined ? Boolean(customPerms.admin.users) : isAdmin,
+          valuation: customPerms?.admin?.valuation !== undefined ? Boolean(customPerms.admin.valuation) : isAdmin,
+          packagings: customPerms?.admin?.packagings !== undefined ? Boolean(customPerms.admin.packagings) : isAdmin,
+          constructions: customPerms?.admin?.constructions !== undefined ? Boolean(customPerms.admin.constructions) : isAdmin,
+          cable_advices: customPerms?.admin?.cable_advices !== undefined ? Boolean(customPerms.admin.cable_advices) : isAdmin
         }
       };
-
-      // Głębokie łączenie uprawnień ze wszystkimi modułami z customPerms (z Portalu Narzędzi)
-      permissions = {
-        ...customPerms,
-        ...permissions,
-        calendar: { ...permissions.calendar, ...(customPerms?.calendar || {}) },
-        transport: { ...permissions.transport, ...(customPerms?.transport || {}) },
-        transport_requests: { 
-          add: true,
-          view_own: true,
-          view_all: isWarehouse || isAdmin || isCoordinator,
-          approve: isWarehouse || isAdmin || isCoordinator,
-          ...(customPerms?.transport_requests || {}) 
-        },
-        spedycja: { ...permissions.spedycja, ...(customPerms?.spedycja || {}) },
-        courier: { view: true, add: true, ...(customPerms?.courier || {}) },
-        valuation: { calculator: true, history: true, ...(customPerms?.valuation || {}) },
-        coordinator: { view: isCoordinator || isAdmin, import_csv: isCoordinator || isAdmin, ...(customPerms?.coordinator || {}) },
-        cable_advices: { view: isWarehouse || isAdmin, manage: isWarehouse || isAdmin, ...(customPerms?.cable_advices || {}) },
-        archive: { view: true, export: isWarehouse || isAdmin || isCoordinator, delete: isAdmin, ...(customPerms?.archive || {}) },
-        ratings: { view: true, rate: true, ...(customPerms?.ratings || {}) },
-        admin: { ...permissions.admin, ...(customPerms?.admin || {}) }
-      };
-
-      if (isWarehouse || isAdmin || isCoordinator) {
-        permissions.calendar.edit = true;
-        permissions.transport.markAsCompleted = true;
-      }
 
       return {
         isAuthenticated: true,
         user: {
+          id: userRow?.id,
           email: ssoEmail,
           name: userRow?.name || neonUser?.name || ssoEmail.split('@')[0],
           position: userRow?.position || neonUser?.position || '',
@@ -256,6 +294,7 @@ export async function getSessionUser(request) {
           isAdmin: isAdmin
         }
       };
+    }
     }
 
 
