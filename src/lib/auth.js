@@ -295,8 +295,6 @@ export async function getSessionUser(request) {
         }
       };
     }
-    }
-
 
     return { isAuthenticated: false, user: null };
   } catch (error) {
