@@ -24,8 +24,7 @@ export async function POST(request) {
     const permissions = user.permissions || {};
     const canSendTransportOrder = 
       isAdmin || 
-      permissions?.spedycja?.sendOrder === true || 
-      ['admin', 'koordynator', 'spedycja', 'handlowiec', 'dyrektor', 'kierownik', 'specjalista'].includes((user.role || '').toLowerCase());
+      permissions?.spedycja?.sendOrder === true;
 
     if (!canSendTransportOrder) {
       return NextResponse.json({

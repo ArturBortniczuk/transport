@@ -1,7 +1,6 @@
-// src/app/api/transport-ratings/route.js
 import { NextResponse } from 'next/server';
 import db from '@/database/db';
-import { validateSession } from '@/lib/auth';
+import { getSessionUser } from '@/lib/auth';
 
 // GET /api/transport-ratings?transportId=X
 export async function GET(request) {
@@ -46,16 +45,24 @@ export async function GET(request) {
 // POST /api/transport-ratings
 export async function POST(request) {
   try {
-    // Sprawdzamy uwierzytelnienie
-    const authToken = request.cookies.get('authToken')?.value;
-    const userId = (await validateSession(request)) || (await validateSession(authToken));
+    const session = await getSessionUser(request);
     
-    if (!userId) {
+    if (!session?.isAuthenticated || !session?.user) {
       return NextResponse.json({ 
         success: false, 
         error: 'Unauthorized' 
       }, { status: 401 });
     }
+    
+    const user = session.user;
+    const canRate = user.isAdmin || user.permissions?.ratings?.rate === true;
+    if (!canRate) {
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Brak uprawnień do wystawiania ocen' 
+      }, { status: 403 });
+    }
+    const userId = user.email;
     
     // Pobierz dane oceny z żądania
     const ratingData = await request.json();
@@ -117,19 +124,6 @@ export async function POST(request) {
         success: false, 
         error: 'Ten transport został już oceniony przez inną osobę i nie może być oceniony ponownie' 
       }, { status: 400 });
-    }
-        
-    // Pobierz dane użytkownika
-    const user = await db('users')
-      .where('email', userId)
-      .select('name', 'email')
-      .first();
-    
-    if (!user) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Nie znaleziono użytkownika' 
-      }, { status: 404 });
     }
     
     // Sprawdź czy transport istnieje

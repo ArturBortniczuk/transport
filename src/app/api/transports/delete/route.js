@@ -1,7 +1,7 @@
 // src/app/api/transports/delete/route.js
 import { NextResponse } from 'next/server';
 import db from '@/database/db';
-import { validateSession } from '@/lib/auth';
+import { getSessionUser } from '@/lib/auth';
 
 export async function DELETE(request) {
   try {
@@ -17,34 +17,21 @@ export async function DELETE(request) {
     }
     
     // Sprawdzamy uwierzytelnienie
-    const authToken = request.cookies.get('authToken')?.value;
-    const userId = await validateSession(request) || await validateSession(authToken);
-    
-    if (!userId) {
+    const session = await getSessionUser(request);
+    if (!session?.isAuthenticated || !session?.user) {
       return NextResponse.json({ 
         success: false, 
         error: 'Unauthorized' 
       }, { status: 401 });
     }
     
-    // Sprawdź uprawnienia użytkownika
-    const user = await db('users')
-      .where('email', userId)
-      .select('is_admin', 'role', 'permissions')
-      .first();
+    const user = session.user;
+    const canDelete = user.isAdmin || user.permissions?.archive?.delete === true;
     
-    // Sprawdź czy użytkownik ma uprawnienia administratora
-    const isAdmin = user.is_admin === true || 
-                  user.is_admin === 1 || 
-                  user.is_admin === 't' || 
-                  user.is_admin === 'TRUE' ||
-                  user.is_admin === 'true' ||
-                  user.role === 'admin';
-    
-    if (!isAdmin) {
+    if (!canDelete) {
       return NextResponse.json({ 
         success: false, 
-        error: 'Admin privileges required' 
+        error: 'Brak uprawnień do usuwania transportów' 
       }, { status: 403 });
     }
     

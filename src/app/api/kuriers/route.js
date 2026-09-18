@@ -1,17 +1,22 @@
-// src/app/api/kuriers/route.js
 import { NextResponse } from 'next/server';
 import db from '@/database/db';
-import { validateSession } from '@/lib/auth';
+import { getSessionUser } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request) {
   try {
-    const authToken = request.cookies.get('authToken')?.value;
-    const userId = await validateSession(request) || await validateSession(authToken);
+    const session = await getSessionUser(request);
 
-    if (!userId) {
+    if (!session?.isAuthenticated || !session?.user) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const user = session.user;
+    const canView = user.isAdmin || user.permissions?.courier?.view !== false;
+
+    if (!canView) {
+      return NextResponse.json({ success: false, error: 'Brak uprawnień do przeglądania przesyłek kurierskich' }, { status: 403 });
     }
 
     const { searchParams } = new URL(request.url);
@@ -61,11 +66,17 @@ export async function GET(request) {
 
 export async function POST(request) {
   try {
-    const authToken = request.cookies.get('authToken')?.value;
-    const userId = await validateSession(request) || await validateSession(authToken);
+    const session = await getSessionUser(request);
 
-    if (!userId) {
+    if (!session?.isAuthenticated || !session?.user) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const user = session.user;
+    const canAdd = user.isAdmin || user.permissions?.courier?.add === true;
+
+    if (!canAdd) {
+      return NextResponse.json({ success: false, error: 'Brak uprawnień do zamawiania kuriera' }, { status: 403 });
     }
 
     const orderData = await request.json();
@@ -83,7 +94,7 @@ export async function POST(request) {
     const [inserted] = await db('kuriers')
       .insert({
         status: status,
-        created_by_email: userId,
+        created_by_email: user.email,
         recipient_name: recipientName,
         recipient_address: recipientAddress,
         recipient_city: recipientCity,
@@ -114,11 +125,17 @@ export async function POST(request) {
 
 export async function PATCH(request) {
   try {
-    const authToken = request.cookies.get('authToken')?.value;
-    const userId = await validateSession(request) || await validateSession(authToken);
+    const session = await getSessionUser(request);
 
-    if (!userId) {
+    if (!session?.isAuthenticated || !session?.user) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const user = session.user;
+    const canManage = user.isAdmin || user.permissions?.courier?.add === true;
+
+    if (!canManage) {
+      return NextResponse.json({ success: false, error: 'Brak uprawnień do aktualizacji zamówienia kuriera' }, { status: 403 });
     }
 
     const { id, status } = await request.json();
@@ -130,7 +147,7 @@ export async function PATCH(request) {
     const updateData = { status: status };
     if (status === 'zatwierdzone' || status === 'zrealizowane') {
       updateData.completed_at = db.fn.now();
-      updateData.completed_by = userId;
+      updateData.completed_by = user.email;
     }
 
     await db('kuriers')
@@ -146,11 +163,17 @@ export async function PATCH(request) {
 
 export async function DELETE(request) {
   try {
-    const authToken = request.cookies.get('authToken')?.value;
-    const userId = await validateSession(request) || await validateSession(authToken);
+    const session = await getSessionUser(request);
 
-    if (!userId) {
+    if (!session?.isAuthenticated || !session?.user) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const user = session.user;
+    const canDelete = user.isAdmin || user.permissions?.archive?.delete === true;
+
+    if (!canDelete) {
+      return NextResponse.json({ success: false, error: 'Brak uprawnień do usuwania zamówienia kuriera' }, { status: 403 });
     }
 
     const { searchParams } = new URL(request.url);

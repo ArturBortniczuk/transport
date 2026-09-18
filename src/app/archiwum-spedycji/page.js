@@ -10,6 +10,9 @@ export default function ArchiwumSpedycjiPage() {
   const [archiwum, setArchiwum] = useState([])
   const [filteredArchiwum, setFilteredArchiwum] = useState([])
   const [isAdmin, setIsAdmin] = useState(false)
+  const [canExport, setCanExport] = useState(false)
+  const [canDelete, setCanDelete] = useState(false)
+  const [canView, setCanView] = useState(true)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [deleteStatus, setDeleteStatus] = useState(null)
@@ -109,14 +112,23 @@ export default function ArchiwumSpedycjiPage() {
   }
 
   useEffect(() => {
-    // Sprawdź czy użytkownik jest administratorem
     const checkAdmin = async () => {
       try {
-        const response = await fetch('/api/check-admin')
-        const data = await response.json()
-        setIsAdmin(data.isAdmin)
+        const response = await fetch('/api/user')
+        if (response.ok) {
+          const data = await response.json()
+          if (data.isAuthenticated && data.user) {
+            const u = data.user;
+            const admin = Boolean(u.isAdmin || u.role === 'admin');
+            const perms = u.permissions || {};
+            setIsAdmin(admin);
+            setCanView(admin || perms.archive?.view !== false);
+            setCanExport(admin || perms.archive?.export === true);
+            setCanDelete(admin || perms.archive?.delete === true);
+          }
+        }
       } catch (error) {
-        console.error('Błąd sprawdzania uprawnień administratora:', error)
+        console.error('Błąd sprawdzania uprawnień:', error)
         setIsAdmin(false)
       }
     }
@@ -544,6 +556,10 @@ export default function ArchiwumSpedycjiPage() {
   }
 
   const exportData = () => {
+    if (!canExport) {
+      alert('Brak uprawnień do eksportu danych')
+      return
+    }
     if (filteredArchiwum.length === 0) {
       alert('Brak danych do eksportu')
       return
@@ -1045,8 +1061,12 @@ export default function ArchiwumSpedycjiPage() {
     )
   }
 
-  if (error) {
-    return <div className="text-red-500 text-center p-4 bg-red-50 rounded-lg">{error}</div>
+  if (!canView) {
+    return (
+      <div className="max-w-7xl mx-auto p-12 text-center text-red-600 bg-white rounded-xl shadow-lg">
+        Brak uprawnień do przeglądania archiwum spedycji
+      </div>
+    )
   }
 
   return (
@@ -1191,9 +1211,9 @@ export default function ArchiwumSpedycjiPage() {
               </select>
               <button
                 onClick={exportData}
-                disabled={filteredArchiwum.length === 0}
+                disabled={filteredArchiwum.length === 0 || !canExport}
                 className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center"
-                title="Eksportuj dane"
+                title={canExport ? "Eksportuj dane" : "Brak uprawnień do eksportu"}
               >
                 <Download size={18} className="mr-1" />
                 Eksportuj
@@ -1309,7 +1329,7 @@ export default function ArchiwumSpedycjiPage() {
                         )}
                       </button>
 
-                      {isAdmin && (
+                      {(isAdmin || canDelete) && (
                         <button
                           type="button"
                           className="px-3 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"

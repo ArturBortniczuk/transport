@@ -21,6 +21,8 @@ export default function AwizacjeKabliPage() {
   const [showForm, setShowForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingAdvice, setEditingAdvice] = useState(null);
+  const [canView, setCanView] = useState(true);
+  const [canManage, setCanManage] = useState(false);
 
   const RYNKI = ["Mazowiecki", "Podlaski", "Śląski", "Dolnośląski", "Wielkopolski", "Małopolski", "Lubelski", "Pomorski", "Zachodniopomorski"];
 
@@ -47,12 +49,24 @@ export default function AwizacjeKabliPage() {
     try {
       setLoading(true);
       
-      const [advicesRes, dictRes, usersRes, cablesRes] = await Promise.all([
+      const [userRes, advicesRes, dictRes, usersRes, cablesRes] = await Promise.all([
+        fetch('/api/user'),
         fetch('/api/cable-advices'),
         fetch('/api/cable-dictionaries'),
         fetch('/api/users'),
         fetch('/api/cables-catalog')
       ]);
+
+      if (userRes.ok) {
+        const userData = await userRes.json();
+        if (userData.isAuthenticated && userData.user) {
+          const u = userData.user;
+          const isAdmin = Boolean(u.isAdmin);
+          const perms = u.permissions || {};
+          setCanView(isAdmin || perms.cable_advices?.view !== false);
+          setCanManage(isAdmin || Boolean(perms.cable_advices?.manage));
+        }
+      }
       
       if (!advicesRes.ok || !dictRes.ok) throw new Error('Nie udało się pobrać danych');
       
@@ -266,19 +280,29 @@ export default function AwizacjeKabliPage() {
     try { return JSON.parse(dataStr); } catch (e) { return []; }
   };
 
+  if (!canView) {
+    return (
+      <div className="max-w-7xl mx-auto p-12 text-center text-red-600 bg-white rounded-xl shadow-lg">
+        Brak uprawnień do przeglądania awizacji kabli
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-7xl mx-auto p-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-900">Awizacje Kabli</h1>
-        <button
-          onClick={() => {
-            if (showForm) setShowForm(false);
-            else handleNewForm();
-          }}
-          className="bg-indigo-600 text-white px-6 py-2.5 rounded-lg shadow-sm font-medium hover:bg-indigo-700 transition-colors"
-        >
-          {showForm ? 'Powrót do listy' : '+ Dodaj Awizację'}
-        </button>
+        {canManage && (
+          <button
+            onClick={() => {
+              if (showForm) setShowForm(false);
+              else handleNewForm();
+            }}
+            className="bg-indigo-600 text-white px-6 py-2.5 rounded-lg shadow-sm font-medium hover:bg-indigo-700 transition-colors"
+          >
+            {showForm ? 'Powrót do listy' : '+ Dodaj Awizację'}
+          </button>
+        )}
       </div>
 
       {error && (
@@ -582,10 +606,14 @@ export default function AwizacjeKabliPage() {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium align-top">
-                        <div className="flex flex-col gap-2 items-end">
-                          <button onClick={() => handleEdit(advice)} className="text-indigo-600 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded transition-colors w-20 text-center">Edytuj</button>
-                          <button onClick={() => handleDelete(advice.id)} className="text-red-600 hover:text-red-900 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded transition-colors w-20 text-center">Usuń</button>
-                        </div>
+                        {canManage ? (
+                          <div className="flex flex-col gap-2 items-end">
+                            <button onClick={() => handleEdit(advice)} className="text-indigo-600 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded transition-colors w-20 text-center">Edytuj</button>
+                            <button onClick={() => handleDelete(advice.id)} className="text-red-600 hover:text-red-900 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded transition-colors w-20 text-center">Usuń</button>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-gray-400">Tylko podgląd</span>
+                        )}
                       </td>
                     </tr>
                   )

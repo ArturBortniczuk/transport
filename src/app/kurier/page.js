@@ -6,6 +6,9 @@ import ZamowieniaList from './components/ZamowieniaList'
 export default function KurierPage() {
   const [zamowienia, setZamowienia] = useState([])
   const [userRole, setUserRole] = useState(null)
+  const [userInfo, setUserInfo] = useState(null)
+  const [canView, setCanView] = useState(true)
+  const [canAddOrder, setCanAddOrder] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [loading, setLoading] = useState(true)
 
@@ -14,7 +17,12 @@ export default function KurierPage() {
       const res = await fetch('/api/user')
       const data = await res.json()
       if (data.isAuthenticated && data.user) {
+        setUserInfo(data.user)
         setUserRole(data.user.role)
+        const isAdmin = Boolean(data.user.isAdmin);
+        const permissions = data.user.permissions || {};
+        setCanView(isAdmin || permissions.courier?.view !== false);
+        setCanAddOrder(isAdmin || Boolean(permissions.courier?.add));
       } else {
         const localRole = localStorage.getItem('userRole')
         setUserRole(localRole)
@@ -134,8 +142,14 @@ export default function KurierPage() {
     localStorage.setItem('zamowieniaKurier', JSON.stringify(updatedZamowienia))
   }
 
-  const canAddOrder = userRole === 'handlowiec' || userRole === 'magazyn' || userRole === 'admin'
-  
+  if (!canView) {
+    return (
+      <div className="max-w-6xl mx-auto p-12 text-center text-red-600 bg-white rounded-xl shadow-lg">
+        Brak uprawnień do przeglądania przesyłek kurierskich
+      </div>
+    )
+  }
+
   return (
     <div className="max-w-6xl mx-auto">
       <div className="mb-8 flex justify-between items-center">

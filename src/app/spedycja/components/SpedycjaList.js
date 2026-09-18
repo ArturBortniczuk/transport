@@ -12,6 +12,7 @@ export default function SpedycjaList({
   onMarkAsCompleted,
   onCreateOrder,
   canSendOrder,
+  canCMR,
   onEdit,
   currentUserEmail
 }) {
@@ -850,14 +851,16 @@ export default function SpedycjaList({
                       )}
 
                       <div className="mt-5 flex space-x-3">
-                        <button
-                          type="button"
-                          className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors flex items-center gap-2"
-                          onClick={() => generateCMR(zamowienie)}
-                        >
-                          <FileText size={16} />
-                          Generuj CMR
-                        </button>
+                        {canCMR && (
+                          <button
+                            type="button"
+                            className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors flex items-center gap-2"
+                            onClick={() => generateCMR(zamowienie)}
+                          >
+                            <FileText size={16} />
+                            Generuj CMR
+                          </button>
+                        )}
                         {zamowienie.response && !showArchive && canSendOrder && (
                           <button
                             type="button"

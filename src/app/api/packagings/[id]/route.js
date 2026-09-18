@@ -3,16 +3,13 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import db from '@/database/db';
-import { validateSession } from '@/lib/auth';
+import { getSessionUser } from '@/lib/auth';
 
 // GET /api/packagings/:id
 export async function GET(request, { params }) {
   try {
-    // Sprawdzamy uwierzytelnienie
-    const authToken = request.cookies.get('authToken')?.value;
-    const userId = await validateSession(request) || await validateSession(authToken);
-    
-    if (!userId) {
+    const session = await getSessionUser(request);
+    if (!session?.isAuthenticated || !session?.user) {
       return NextResponse.json({ 
         success: false, 
         error: 'Unauthorized' 

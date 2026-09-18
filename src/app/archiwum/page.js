@@ -42,6 +42,10 @@ export default function ArchiwumPage() {
   const [archiwum, setArchiwum] = useState([])
   const [filteredArchiwum, setFilteredArchiwum] = useState([])
   const [isAdmin, setIsAdmin] = useState(false)
+  const [canExport, setCanExport] = useState(false)
+  const [canDelete, setCanDelete] = useState(false)
+  const [canRate, setCanRate] = useState(false)
+  const [canView, setCanView] = useState(true)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [deleteStatus, setDeleteStatus] = useState(null)
@@ -102,8 +106,17 @@ export default function ArchiwumPage() {
         const response = await fetch('/api/user')
         if (response.ok) {
           const data = await response.json()
-          setIsAdmin(data.isAuthenticated && data.user && (data.user.isAdmin || data.user.role === 'admin'))
-          setCurrentUserEmail(data.user?.email || '')
+          if (data.isAuthenticated && data.user) {
+            const u = data.user;
+            const admin = Boolean(u.isAdmin || u.role === 'admin');
+            const perms = u.permissions || {};
+            setIsAdmin(admin);
+            setCurrentUserEmail(u.email || '');
+            setCanView(admin || perms.archive?.view !== false);
+            setCanExport(admin || perms.archive?.export === true);
+            setCanDelete(admin || perms.archive?.delete === true);
+            setCanRate(admin || perms.ratings?.rate === true);
+          }
         }
       } catch (error) {
         console.error('Błąd sprawdzania uprawnień:', error)
@@ -362,6 +375,10 @@ export default function ArchiwumPage() {
   }
 
   const handleOpenRatingModal = (transport) => {
+    if (!canRate) {
+      alert('Brak uprawnień do wystawiania ocen');
+      return;
+    }
     setSelectedTransport(transport)
     setShowRatingModal(true)
   }
@@ -828,20 +845,22 @@ export default function ArchiwumPage() {
     return (
       <div className="flex flex-col space-y-1">
         {/* Jeden przycisk dla wszystkich akcji */}
-        <button
-          onClick={() => handleOpenRatingModal(transport)}
-          className={`flex items-center px-3 py-1 rounded-md hover:opacity-80 transition-colors text-sm ${
-            hasMainRating 
-              ? 'bg-blue-100 text-blue-700' 
-              : 'bg-green-100 text-green-700'
-          }`}
-        >
-          <MessageSquare size={14} className="mr-1" />
-          {hasMainRating 
-            ? (userHasMainRating ? 'Edytuj ocenę/komentarz' : 'Dodaj komentarz') 
-            : 'Oceń transport'
-          }
-        </button>
+        {canRate && (
+          <button
+            onClick={() => handleOpenRatingModal(transport)}
+            className={`flex items-center px-3 py-1 rounded-md hover:opacity-80 transition-colors text-sm ${
+              hasMainRating 
+                ? 'bg-blue-100 text-blue-700' 
+                : 'bg-green-100 text-green-700'
+            }`}
+          >
+            <MessageSquare size={14} className="mr-1" />
+            {hasMainRating 
+              ? (userHasMainRating ? 'Edytuj ocenę/komentarz' : 'Dodaj komentarz') 
+              : 'Oceń transport'
+            }
+          </button>
+        )}
       </div>
     )
   }
@@ -1415,8 +1434,12 @@ export default function ArchiwumPage() {
     )
   }
 
-  if (error) {
-    return <div className="text-red-500 text-center p-4 bg-red-50 rounded-lg">{error}</div>
+  if (!canView) {
+    return (
+      <div className="max-w-7xl mx-auto p-12 text-center text-red-600 bg-white rounded-xl shadow-lg">
+        Brak uprawnień do przeglądania archiwum
+      </div>
+    )
   }
 
   return (
@@ -1640,12 +1663,16 @@ export default function ArchiwumPage() {
                   <option value="xlsx">Excel</option>
                   <option value="csv">CSV</option>
                 </select>
-                <button
-                  onClick={exportData}
-                  className="px-3 py-1 bg-purple-600 text-white rounded text-sm hover:bg-purple-700"
-                >
-                  Eksportuj
-                </button>
+                {canExport ? (
+                  <button
+                    onClick={exportData}
+                    className="px-3 py-1 bg-purple-600 text-white rounded text-sm hover:bg-purple-700"
+                  >
+                    Eksportuj
+                  </button>
+                ) : (
+                  <span className="text-xs text-gray-400">Brak uprawnień</span>
+                )}
               </div>
             </div>
           </div>
@@ -1723,7 +1750,7 @@ export default function ArchiwumPage() {
                             {expandedRows[transport.id] ? 'Ukryj' : 'Szczegóły'}
                           </button>
 
-                          {isAdmin && (
+                          {(isAdmin || canDelete) && (
                             <button
                               onClick={() => handleDeleteTransport(transport.id)}
                               className="flex items-center px-2 py-1 text-red-600 hover:text-red-900 rounded-md hover:bg-red-100 transition-colors text-sm"

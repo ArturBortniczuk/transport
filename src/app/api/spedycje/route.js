@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import db from '@/database/db';
 import nodemailer from 'nodemailer';
-import { validateSession } from '@/lib/auth';
+import { getSessionUser } from '@/lib/auth';
 
 // Funkcja wysyłania powiadomienia o odpowiedzi na spedycję
 const sendResponseNotification = async (spedycjaData, responseData) => {
@@ -242,14 +242,23 @@ const sendResponseNotification = async (spedycjaData, responseData) => {
 // Pobieranie wszystkich spedycji
 export async function GET(request) {
   try {
-    const authToken = request.cookies.get('authToken')?.value;
-    const userId = await validateSession(request) || await validateSession(authToken);
+    const session = await getSessionUser(request);
 
-    if (!userId) {
+    if (!session?.isAuthenticated || !session?.user) {
       return NextResponse.json({
         success: false,
         error: 'Unauthorized'
       }, { status: 401 });
+    }
+
+    const user = session.user;
+    const canView = user.isAdmin || user.permissions?.spedycja?.view !== false;
+
+    if (!canView) {
+      return NextResponse.json({
+        success: false,
+        error: 'Brak uprawnień do przeglądania zleceń spedycji'
+      }, { status: 403 });
     }
 
     const { searchParams } = new URL(request.url);
@@ -374,25 +383,28 @@ export async function GET(request) {
 // Dodawanie nowej spedycji
 export async function POST(request) {
   try {
-    const authToken = request.cookies.get('authToken')?.value;
-    const userId = await validateSession(request) || await validateSession(authToken);
+    const session = await getSessionUser(request);
 
-    if (!userId) {
+    if (!session?.isAuthenticated || !session?.user) {
       return NextResponse.json({
         success: false,
         error: 'Unauthorized'
       }, { status: 401 });
     }
 
+    const user = session.user;
+    const canAdd = user.isAdmin || user.permissions?.spedycja?.add === true;
+
+    if (!canAdd) {
+      return NextResponse.json({
+        success: false,
+        error: 'Brak uprawnień do dodawania zleceń spedycji'
+      }, { status: 403 });
+    }
+
     const spedycjaData = await request.json();
-
-    const user = await db('users')
-      .whereRaw('LOWER(email) = ?', [userId.toLowerCase()])
-      .select('name')
-      .first()
-      .catch(() => null);
-
-    const creatorName = user?.name || spedycjaData.createdBy || userId.split('@')[0];
+    const userId = user.email;
+    const creatorName = user.name || spedycjaData.createdBy || userId.split('@')[0];
 
     const currentDate = new Date();
     const month = (currentDate.getMonth() + 1).toString().padStart(2, '0');
@@ -575,38 +587,17 @@ const createResponsesForConnectedTransports = async (connectedTransports, mainRe
 // Aktualizacja spedycji (odpowiedź) - Z POWIADOMIENIAMI EMAIL
 export async function PUT(request) {
   try {
-    const authToken = request.cookies.get('authToken')?.value;
-    const userId = await validateSession(request) || await validateSession(authToken);
+    const session = await getSessionUser(request);
 
-    if (!userId) {
+    if (!session?.isAuthenticated || !session?.user) {
       return NextResponse.json({
         success: false,
         error: 'Unauthorized'
       }, { status: 401 });
     }
 
-    const { id, ...data } = await request.json();
-    console.log('Otrzymane dane odpowiedzi:', { id, ...data });
-
-    const user = await db('users')
-      .whereRaw('LOWER(email) = ?', [userId.toLowerCase()])
-      .select('role', 'permissions', 'is_admin')
-      .first()
-      .catch(() => null);
-
-    let permissions = {};
-    try {
-      if (user?.permissions && typeof user.permissions === 'string') {
-        permissions = JSON.parse(user.permissions);
-      } else if (user?.permissions) {
-        permissions = user.permissions;
-      }
-    } catch (e) {
-      console.error('Błąd parsowania uprawnień:', e);
-    }
-
-    const isAdmin = user?.is_admin === 1 || user?.is_admin === true || (user?.role && user.role.toLowerCase().includes('admin')) || userId.toLowerCase() === 'a.bortniczuk@grupaeltron.pl';
-    const canRespondToSpedycja = isAdmin || permissions?.spedycja?.respond === true;
+    const user = session.user;
+    const canRespondToSpedycja = user.isAdmin || user.permissions?.spedycja?.respond === true;
 
     if (!canRespondToSpedycja) {
       return NextResponse.json({
@@ -614,6 +605,9 @@ export async function PUT(request) {
         error: 'Brak uprawnień do odpowiadania na zlecenia spedycji'
       }, { status: 403 });
     }
+
+    const { id, ...data } = await request.json();
+    console.log('Otrzymane dane odpowiedzi:', { id, ...data });
 
     const responseData = {
       ...data,
@@ -675,28 +669,22 @@ export async function PUT(request) {
 // Usuwanie zlecenia spedycji (tylko admin)
 export async function DELETE(request) {
   try {
-    const authToken = request.cookies.get('authToken')?.value;
-    const userId = await validateSession(request) || await validateSession(authToken);
+    const session = await getSessionUser(request);
 
-    if (!userId) {
+    if (!session?.isAuthenticated || !session?.user) {
       return NextResponse.json({
         success: false,
         error: 'Unauthorized'
       }, { status: 401 });
     }
 
-    const isAdmin = await db('users')
-      .whereRaw('LOWER(email) = ?', [userId.toLowerCase()])
-      .where(function() {
-        this.where('is_admin', true).orWhere('role', 'admin').orWhere('role', 'Administrator');
-      })
-      .first()
-      .catch(() => null) || userId.toLowerCase() === 'a.bortniczuk@grupaeltron.pl';
+    const user = session.user;
+    const canDelete = user.isAdmin || user.permissions?.archive?.delete === true;
 
-    if (!isAdmin) {
+    if (!canDelete) {
       return NextResponse.json({
         success: false,
-        error: 'Brak uprawnień administratora'
+        error: 'Brak uprawnień do usuwania zleceń spedycji'
       }, { status: 403 });
     }
 

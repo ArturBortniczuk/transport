@@ -32,11 +32,7 @@ export default function Navigation() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
-  const [adminAccess, setAdminAccess] = useState({
-    isFullAdmin: false,
-    packagings: false,
-    constructions: false
-  })
+  const [userPermissions, setUserPermissions] = useState(null)
   const [userRole, setUserRole] = useState(null)
   const [userName, setUserName] = useState('')
   const [showChangePassword, setShowChangePassword] = useState(false)
@@ -96,17 +92,7 @@ export default function Navigation() {
           normalizedRole === 'admin';
 
         setIsAdmin(adminStatus);
-
-        const permissions = data.user.permissions || {};
-        const hasUsersAccess = permissions.admin?.users === true || adminStatus;
-        const hasPackagingsAccess = permissions.admin?.packagings === true || adminStatus;
-        const hasConstructionsAccess = permissions.admin?.constructions === true || adminStatus;
-
-        setAdminAccess({
-          isFullAdmin: hasUsersAccess,
-          packagings: hasPackagingsAccess,
-          constructions: hasConstructionsAccess
-        });
+        setUserPermissions(data.user.permissions || {});
       }
     } catch (error) {
       console.error('Błąd pobierania danych użytkownika:', error);
@@ -160,11 +146,7 @@ export default function Navigation() {
       setUserRole(null);
       setUserName('');
       setIsAdmin(false);
-      setAdminAccess({
-        isFullAdmin: false,
-        packagings: false,
-        constructions: false
-      });
+      setUserPermissions(null);
 
       window.dispatchEvent(new Event('auth-state-changed'));
       router.push('/login');
@@ -180,69 +162,139 @@ export default function Navigation() {
   const isActive = (path) => pathname === path;
   const isDropdownActive = (paths) => paths.some(path => pathname.startsWith(path));
 
+  const perms = userPermissions || {};
+
+  // Narzędzia items:
+  const narzedziaItems = [
+    { name: 'Dashboard', path: '/dashboard', icon: BarChart3 },
+    ...(isAdmin || perms.ratings?.view !== false
+      ? [{ name: 'Oceny', path: '/oceny', icon: Star }]
+      : []
+    ),
+    ...(isAdmin || perms.valuation?.calculator !== false
+      ? [{ name: 'Wycena transportu', path: '/wycena-transportu', icon: Calculator }]
+      : []
+    ),
+    ...(isAdmin || perms.cable_advices?.view === true
+      ? [{ name: 'Awizacje kabli', path: '/awizacje-kabli', icon: Package }]
+      : []
+    )
+  ];
+
+  // Transport własny items:
+  const canViewAllRequests = isAdmin || perms.transport_requests?.view_all === true || perms.transport_requests?.approve === true;
+  const canViewOwnRequests = !canViewAllRequests && (perms.transport_requests?.view_own !== false || perms.transport_requests?.add !== false);
+
+  const transportWlasnyItems = [
+    ...(isAdmin || perms.calendar?.view !== false
+      ? [{ name: 'Kalendarz', path: '/kalendarz', icon: Calendar }]
+      : []
+    ),
+    ...(isAdmin || perms.archive?.view !== false
+      ? [{ name: 'Archiwum', path: '/archiwum', icon: Archive }]
+      : []
+    ),
+    ...(isAdmin || perms.map?.view !== false
+      ? [{ name: 'Mapa', path: '/mapa', icon: Map }]
+      : []
+    ),
+    ...(canViewOwnRequests
+      ? [{ name: 'Moje wnioski', path: '/moje-wnioski', icon: FileText }]
+      : []
+    ),
+    ...(canViewAllRequests
+      ? [{ name: 'Wnioski transportowe', path: '/wnioski-transportowe', icon: FileText }]
+      : []
+    )
+  ];
+
+  // Transport zewnętrzny items:
+  const transportZewnetrznyItems = [
+    ...(isAdmin || perms.spedycja?.view !== false
+      ? [{ name: 'Spedycja', path: '/spedycja', icon: Send }]
+      : []
+    ),
+    ...(isAdmin || perms.archive?.view !== false
+      ? [{ name: 'Archiwum spedycji', path: '/archiwum-spedycji', icon: Archive }]
+      : []
+    ),
+    ...(isAdmin || perms.courier?.view !== false
+      ? [{ name: 'Kurier', path: '/kurier', icon: Package }]
+      : []
+    ),
+    ...(isAdmin || perms.map?.view !== false
+      ? [{ name: 'Mapa spedycji', path: '/mapa', icon: Map }]
+      : []
+    )
+  ];
+
+  // Admin items:
+  const hasAdminUsers = isAdmin || perms.admin?.users === true;
+  const hasAdminPackagings = isAdmin || perms.admin?.packagings === true;
+  const hasAdminConstructions = isAdmin || perms.admin?.constructions === true;
+  const hasAdminValuation = isAdmin || perms.admin?.valuation === true;
+  const hasAdminCableAdvices = isAdmin || perms.admin?.cable_advices === true;
+  const hasCoordinatorView = isAdmin || perms.coordinator?.view === true || userRole === 'koordynator';
+
+  const adminItems = [
+    ...(hasAdminUsers
+      ? [{ name: 'Zarządzanie użytkownikami', path: '/admin', icon: Users }]
+      : []
+    ),
+    ...(hasAdminPackagings
+      ? [{ name: 'Zarządzanie opakowaniami', path: '/admin/packagings', icon: Package }]
+      : []
+    ),
+    ...(hasAdminConstructions
+      ? [{ name: 'Zarządzanie budowami', path: '/admin/constructions', icon: Building2 }]
+      : []
+    ),
+    ...(hasAdminValuation
+      ? [{ name: 'Ustawienia wyceny', path: '/admin/valuation', icon: Calculator }]
+      : []
+    ),
+    ...(hasAdminCableAdvices
+      ? [{ name: 'Słowniki awizacji kabli', path: '/admin/cable-advices', icon: Package }]
+      : []
+    ),
+    ...(hasCoordinatorView
+      ? [{ name: 'Panel koordynatora', path: '/koordynator', icon: ListFilter }]
+      : []
+    )
+  ];
+
   // Struktura menu
-  const menuStructure = {
-    'narzedzia': {
+  const menuStructure = {};
+
+  if (narzedziaItems.length > 0) {
+    menuStructure['narzedzia'] = {
       title: 'Narzędzia',
       icon: Activity,
-      items: [
-        { name: 'Dashboard', path: '/dashboard', icon: BarChart3 },
-        { name: 'Oceny', path: '/oceny', icon: Star },
-        { name: 'Wycena transportu', path: '/wycena-transportu', icon: Calculator },
-        { name: 'Awizacje kabli', path: '/awizacje-kabli', icon: Package }
-      ]
-    },
-    'transport-wlasny': {
+      items: narzedziaItems
+    };
+  }
+
+  if (transportWlasnyItems.length > 0) {
+    menuStructure['transport-wlasny'] = {
       title: 'Transport własny',
       icon: Truck,
-      items: [
-        { name: 'Kalendarz', path: '/kalendarz', icon: Calendar },
-        { name: 'Archiwum', path: '/archiwum', icon: Archive },
-        { name: 'Mapa', path: '/mapa', icon: Map },
-        ...(userRole === 'handlowiec'
-          ? [{ name: 'Moje wnioski', path: '/moje-wnioski', icon: FileText }]
-          : []
-        ),
-        ...(userRole === 'magazyn' || userRole?.startsWith('magazyn_') || userRole === 'admin' || userRole === 'koordynator'
-          ? [{ name: 'Wnioski transportowe', path: '/wnioski-transportowe', icon: FileText }]
-          : []
-        )
-      ]
-    },
-    'transport-zewnetrzny': {
+      items: transportWlasnyItems
+    };
+  }
+
+  if (transportZewnetrznyItems.length > 0) {
+    menuStructure['transport-zewnetrzny'] = {
       title: 'Transport zewnętrzny',
       icon: Building2,
-      items: [
-        { name: 'Spedycja', path: '/spedycja', icon: Send },
-        { name: 'Archiwum spedycji', path: '/archiwum-spedycji', icon: Archive },
-        { name: 'Kurier', path: '/kurier', icon: Package },
-        { name: 'Mapa spedycji', path: '/mapa', icon: Map }
-      ]
-    }
-  };
+      items: transportZewnetrznyItems
+    };
+  }
 
-  if (adminAccess.isFullAdmin || adminAccess.packagings || adminAccess.constructions || userRole === 'koordynator') {
+  if (adminItems.length > 0) {
     menuStructure['panel-admin'] = {
       title: 'Panel Administratora',
       icon: Settings,
-      items: [
-        ...(adminAccess.isFullAdmin
-          ? [{ name: 'Zarządzanie użytkownikami', path: '/admin', icon: Users }]
-          : []
-        ),
-        ...(adminAccess.packagings
-          ? [{ name: 'Zarządzanie opakowaniami', path: '/admin/packagings', icon: Package }]
-          : []
-        ),
-        ...(adminAccess.constructions
-          ? [{ name: 'Zarządzanie budowami', path: '/admin/constructions', icon: Building2 }]
-          : []
-        ),
-        ...(userRole === 'koordynator' || userRole === 'admin'
-          ? [{ name: 'Panel koordynatora', path: '/koordynator', icon: ListFilter }]
-          : []
-        )
-      ]
+      items: adminItems
     };
   }
 

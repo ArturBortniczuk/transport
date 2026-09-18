@@ -15,6 +15,7 @@ export default function SpedycjaPage() {
   const [canAddOrder, setCanAddOrder] = useState(false);
   const [canRespond, setCanRespond] = useState(false);
   const [canSendOrder, setCanSendOrder] = useState(false);
+  const [canCMR, setCanCMR] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [selectedZamowienie, setSelectedZamowienie] = useState(null);
   const [showArchive, setShowArchive] = useState(false);
@@ -58,10 +59,12 @@ export default function SpedycjaPage() {
             setCanAddOrder(true);
             setCanRespond(true);
             setCanSendOrder(true);
+            setCanCMR(true);
           } else {
             setCanAddOrder(Boolean(permissions.spedycja?.add));
             setCanRespond(Boolean(permissions.spedycja?.respond));
             setCanSendOrder(Boolean(permissions.spedycja?.sendOrder));
+            setCanCMR(Boolean(permissions.spedycja?.cmr));
           }
         }
       } catch (error) {
@@ -389,6 +392,7 @@ export default function SpedycjaPage() {
               onMarkAsCompleted={handleMarkAsCompleted}
               onCreateOrder={handleCreateOrder}
               canSendOrder={canSendOrder}
+              canCMR={canCMR}
               onEdit={handleEdit}
               currentUserEmail={currentUserEmail}
             />

@@ -455,6 +455,7 @@ export default function MojeWnioskiPage() {
   const [showForm, setShowForm] = useState(false)
   const [editingRequest, setEditingRequest] = useState(null)
   const [userInfo, setUserInfo] = useState(null)
+  const canAddRequest = userInfo?.isAdmin || userInfo?.permissions?.transport_requests?.add === true;
 
   const [transportType, setTransportType] = useState('standard');
   const [recipientType, setRecipientType] = useState('construction');
@@ -563,6 +564,10 @@ export default function MojeWnioskiPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!editingRequest && !canAddRequest) {
+      alert('Brak uprawnień do składania wniosków transportowych');
+      return;
+    }
     if (!validateForm()) return;
 
     setSubmitting(true);
@@ -769,7 +774,7 @@ export default function MojeWnioskiPage() {
           <p className="mt-2 text-gray-600">Złóż wniosek o transport własny dla wybranej budowy lub handlowca</p>
         </div>
 
-        {!showForm && (
+        {!showForm && canAddRequest && (
           <div className="mb-6">
             <button
               onClick={() => {

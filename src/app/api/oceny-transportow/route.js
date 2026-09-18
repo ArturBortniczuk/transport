@@ -1,19 +1,26 @@
 import { NextResponse } from 'next/server'
 import db from '@/database/db'
-import { validateSession } from '@/lib/auth'
+import { getSessionUser } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request) {
   try {
-    const authToken = request.cookies.get('authToken')?.value
-    const userId = await validateSession(request) || await validateSession(authToken)
-    
-    if (!userId) {
+    const session = await getSessionUser(request)
+    if (!session?.isAuthenticated || !session?.user) {
       return NextResponse.json({ 
         success: false, 
         error: 'Unauthorized' 
       }, { status: 401 })
+    }
+
+    const user = session.user
+    const canView = user.isAdmin || user.permissions?.ratings?.view !== false
+    if (!canView) {
+      return NextResponse.json({
+        success: false,
+        error: 'Brak uprawnień do przeglądania ocen transportów'
+      }, { status: 403 })
     }
 
     const { searchParams } = new URL(request.url)

@@ -1,8 +1,22 @@
 import { NextResponse } from 'next/server';
 import db from '@/database/db';
+import { getSessionUser } from '@/lib/auth';
 
 export async function POST(request) {
     try {
+        const session = await getSessionUser(request);
+        if (!session?.isAuthenticated || !session?.user) {
+            return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+        }
+
+        const user = session.user;
+        const canCalculate = user.isAdmin || user.permissions?.valuation?.calculator !== false;
+        if (!canCalculate) {
+            return NextResponse.json({ success: false, error: 'Brak uprawnień do kalkulatora wycen transportu' }, { status: 403 });
+        }
+
+        const canViewHistory = user.isAdmin || user.permissions?.valuation?.history !== false;
+
         const data = await request.json();
         const {
             sourceCity,
@@ -59,93 +73,79 @@ export async function POST(request) {
                             totalSurcharge += SEASONAL_SURCHARGE;
                         }
 
-                        const netPrice = baseGeodisCost * (1 + totalSurcharge);
-                        const grossPrice = netPrice * 1.23;
-
-                        geodisCost = {
-                            basePrice: baseGeodisCost,
-                            fuelSurcharge: baseGeodisCost * FUEL_SURCHARGE,
-                            seasonalSurcharge: isSeasonal ? baseGeodisCost * SEASONAL_SURCHARGE : 0,
-                            netPrice: netPrice,
-                            grossPrice: grossPrice,
-                            isSeasonal
-                        };
+                        geodisCost = baseGeodisCost * (1 + totalSurcharge);
+                        geodisCost = Math.round(geodisCost * 100) / 100;
                     }
                 }
-            }
-
-            if (!geodisCost) {
-                return NextResponse.json({ error: 'Nie można wycenić kuriera. Sprawdź czy podana waga mieści się w przedziałach dla tej palety.' }, { status: 400 });
             }
 
             return NextResponse.json({
                 success: true,
                 mode: 'kurier',
-                geodisCost: geodisCost
+                geodisCost
             });
         }
 
-        // ------------------ TRYB WŁASNY / SPEDYCJA ------------------
-
-        if (!sourceCity || !destinationCity || distanceKm === undefined) {
-            return NextResponse.json({ error: 'Brakujące parametry kalkulacji transportu (miasto początkowe, docelowe)' }, { status: 400 });
+        // ------------------ TRYB TRANSPORT WŁASNY ------------------
+        if (!sourceCity || !destinationCity || !distanceKm) {
+            return NextResponse.json({ error: 'Brak wymaganych danych do obliczeń (miasta, dystans).' }, { status: 400 });
         }
 
-        let breakdown = [];
-        let ratePerKm = 0;
-        let carTypeMsg = "";
-
-        const numLength = parseFloat(length) || 0;
-        const numWeight = parseFloat(weight) || 0;
-
-        // Określanie stawki za kilometr na podstawie wymiarów i wagi
-        if (numWeight > 9000) {
-            // Waga powyżej 9 ton - wymusza zestaw i stawkę 4.5
-            ratePerKm = 4.5;
-            carTypeMsg = "Zestaw (waga > 9t): 4.7 PLN/km";
-        } else if (numWeight > 1100 || numLength > 8) {
-            // Waga > 1100kg lub dł > 8m -> trzeba zestaw, chociaż dł > 8m = zestaw stawka 4.5 według wytycznych? 
-            // "pomiędzy 5 a 8 damy 3,5zł, a powyżej 4,5zł/km."
-            if (numLength > 8) {
-                ratePerKm = 4.7;
-                carTypeMsg = "Zestaw (długość > 8m): 4.7 PLN/km";
-            } else {
-                ratePerKm = 3.7;
-                carTypeMsg = "Solówka (waga > 1100kg): 3.7 PLN/km";
-            }
-        } else if (numLength > 5 && numLength <= 8) {
-            ratePerKm = 3.7;
-            carTypeMsg = "Solówka (5m - 8m): 3.7 PLN/km";
-        } else {
-            // Poniżej lub 5m i waga do 1100kg
-            ratePerKm = 2.2;
-            carTypeMsg = "Bus (≤ 5m, waga ≤ 1100kg): 2.2 PLN/km";
+        // 1. Stawka bazowa za kilometr
+        let baseRatePerKm = 3.5;
+        if (distanceKm > 300) {
+            baseRatePerKm = 3.2;
         }
 
-        breakdown.push({ name: `Wyliczenie stawki kilometrowej (${carTypeMsg})`, value: null });
+        let estimatedCost = distanceKm * baseRatePerKm;
+        const breakdown = [
+            { name: `Stawka bazowa (${baseRatePerKm} PLN/km)`, value: distanceKm * baseRatePerKm }
+        ];
 
-        // Oblicz podstawowy koszt
-        let distanceCost = distanceKm * ratePerKm;
-
-        // Minimalny koszt
-        if (distanceCost < 500) {
-            distanceCost = 500;
-            breakdown.push({ name: 'Dopłata do minimalnej kwoty zamówienia (500 PLN)', value: null });
+        // 2. Dopłata za masę (> 3 tony)
+        const numWeight = parseFloat(weight);
+        if (numWeight && numWeight > 3000) {
+            const extraWeight = numWeight - 3000;
+            const extraWeightBlocks = Math.ceil(extraWeight / 1000);
+            const weightSurcharge = extraWeightBlocks * (0.2 * distanceKm);
+            estimatedCost += weightSurcharge;
+            breakdown.push({ name: `Dopłata za masę > 3t (${extraWeightBlocks}t x 0.2 PLN/km)`, value: weightSurcharge });
         }
 
-        let estimatedCost = distanceCost;
+        // 3. Dopłata za długość (> 4m)
+        const numLength = parseFloat(length);
+        if (numLength && numLength > 4) {
+            const extraLength = numLength - 4;
+            const extraLengthBlocks = Math.ceil(extraLength);
+            const lengthSurcharge = extraLengthBlocks * (0.3 * distanceKm);
+            estimatedCost += lengthSurcharge;
+            breakdown.push({ name: `Dopłata za długość > 4m (${extraLengthBlocks}m x 0.3 PLN/km)`, value: lengthSurcharge });
+        }
 
-        // Dopłata za pilność (stała kwota)
+        // 4. Dopłata sezonowa (wrzesień - grudzień)
+        const targetDate = deliveryDateStr ? new Date(deliveryDateStr) : new Date();
+        const month = targetDate.getMonth() + 1; // 1-12
+        if (month >= 9 && month <= 12) {
+            const seasonalSurcharge = estimatedCost * 0.10;
+            estimatedCost += seasonalSurcharge;
+            breakdown.push({ name: `Dopłata sezonowa IX-XII (+10%)`, value: seasonalSurcharge });
+        }
+
+        // 5. Dopłata za czas (na jutro vs na dzisiaj)
         if (deliveryDateStr) {
-            const deliveryDate = new Date(deliveryDateStr);
             const today = new Date();
-            const diffTime = deliveryDate.getTime() - today.getTime();
+            today.setHours(0, 0, 0, 0);
+
+            const delivery = new Date(deliveryDateStr);
+            delivery.setHours(0, 0, 0, 0);
+
+            const diffTime = delivery.getTime() - today.getTime();
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
             if (diffDays === 0) {
                 // Na dzisiaj
-                estimatedCost += 300;
-                breakdown.push({ name: `Dopłata za transport na dziś`, value: null });
+                estimatedCost += 500;
+                breakdown.push({ name: `Dopłata za transport na dzisiaj`, value: null });
             } else if (diffDays === 1) {
                 // Na jutro
                 estimatedCost += 200;
@@ -156,106 +156,106 @@ export async function POST(request) {
         // Zaokrąglenie kosztu w góre do pełnych dziesiątek
         estimatedCost = Math.ceil(estimatedCost / 10) * 10;
 
-        // 6. Szukaj podobnych transportów własnych
-        const normalizedSource = sourceCity.toLowerCase().replace('ł', 'l');
+        let historyData = null;
 
-        const similarOwnTransports = await db('transports')
-            .where(function () {
-                this.whereRaw('LOWER(source_warehouse) LIKE ?', [`%${normalizedSource}%`])
-                    .orWhereRaw('LOWER(source_warehouse) LIKE ?', [`%${sourceCity.toLowerCase()}%`])
-            })
-            .andWhereRaw('LOWER(destination_city) LIKE ?', [`%${destinationCity.toLowerCase()}%`])
-            .orderBy('id', 'desc')
-            .limit(5);
+        if (canViewHistory) {
+            // 6. Szukaj podobnych transportów własnych
+            const normalizedSource = sourceCity.toLowerCase().replace('ł', 'l');
 
-        // 7. Szukaj podobnych spedycji
-        let speditionPercentage = 0.2; // 20% domyślnie dla <= 300km
-        let minDistance, maxDistance;
+            const similarOwnTransports = await db('transports')
+                .where(function () {
+                    this.whereRaw('LOWER(source_warehouse) LIKE ?', [`%${normalizedSource}%`])
+                        .orWhereRaw('LOWER(source_warehouse) LIKE ?', [`%${sourceCity.toLowerCase()}%`])
+                })
+                .andWhereRaw('LOWER(destination_city) LIKE ?', [`%${destinationCity.toLowerCase()}%`])
+                .orderBy('id', 'desc')
+                .limit(5);
 
-        if (distanceKm > 300) {
-            speditionPercentage = 0.1; // 10% dla > 300km
-        }
+            // 7. Szukaj podobnych spedycji
+            let speditionPercentage = 0.2; // 20% domyślnie dla <= 300km
+            let minDistance, maxDistance;
 
-        minDistance = Math.round(distanceKm * (1 - speditionPercentage));
-        maxDistance = Math.round(distanceKm * (1 + speditionPercentage));
+            if (distanceKm > 300) {
+                speditionPercentage = 0.1; // 10% dla > 300km
+            }
 
-        const similarSpeditionsRaw = await db('spedycje')
-            .whereBetween('distance_km', [minDistance, maxDistance])
-            .orderBy('id', 'desc')
-            .limit(5);
+            minDistance = Math.round(distanceKm * (1 - speditionPercentage));
+            maxDistance = Math.round(distanceKm * (1 + speditionPercentage));
 
-        // Parsowanie JSONów dla spedycji, aby odczytać info o towarze
-        let similarSpeditions = similarSpeditionsRaw.map(s => {
-            let goodsInfo = null;
-            let mergedInfo = null;
+            const similarSpeditionsRaw = await db('spedycje')
+                .whereBetween('distance_km', [minDistance, maxDistance])
+                .orderBy('id', 'desc')
+                .limit(5);
 
-            try {
-                if (s.order_data) {
-                    const orderData = typeof s.order_data === 'string' ? JSON.parse(s.order_data) : s.order_data;
-                    if (orderData.towar || orderData.waga) {
-                        goodsInfo = {
-                            description: orderData.towar || '',
-                            weight: orderData.waga ? `${orderData.waga} kg` : ''
-                        };
+            // Parsowanie JSONów dla spedycji, aby odczytać info o towarze
+            let similarSpeditions = similarSpeditionsRaw.map(s => {
+                let goodsInfo = null;
+                let mergedInfo = null;
+
+                try {
+                    if (s.order_data) {
+                        const orderData = typeof s.order_data === 'string' ? JSON.parse(s.order_data) : s.order_data;
+                        if (orderData.towar || orderData.waga) {
+                            goodsInfo = {
+                                description: orderData.towar || '',
+                                weight: orderData.waga ? `${orderData.waga} kg` : ''
+                            };
+                        }
                     }
+                } catch (e) {
+                    console.error("Error parsing order_data for spedition ID " + s.id, e);
                 }
-            } catch (e) {
-                console.error("Error parsing order_data for spedition ID " + s.id, e);
-            }
 
-            try {
-                if (s.merged_transports) mergedInfo = JSON.parse(s.merged_transports);
-            } catch (e) {
-                console.error("Error parsing merged_transports for spedition ID " + s.id, e);
-            }
-
-            return {
-                ...s,
-                parsedGoods: goodsInfo,
-                parsedMerged: mergedInfo,
-                searchPercentage: speditionPercentage * 100 // do info w UI
-            };
-        });
-
-        // Filtracja: ukryj spedycje bez opisu towaru i stawki
-        similarSpeditions = similarSpeditions.filter(s => {
-            let hasPrice = false;
-            try {
-                if (s.response_data) {
-                    const data = typeof s.response_data === 'string' ? JSON.parse(s.response_data) : s.response_data;
-                    const cost = data.deliveryPrice || data.costPerTransport || data.responseCost || data?.responseCost?.[0] || data?.[0]?.responseCost;
-                    if (cost) hasPrice = true;
+                try {
+                    if (s.merged_transports) mergedInfo = JSON.parse(s.merged_transports);
+                } catch (e) {
+                    console.error("Error parsing merged_transports for spedition ID " + s.id, e);
                 }
-            } catch (e) { }
 
-            const hasGoodsInfo = s.parsedGoods && (s.parsedGoods.description || s.parsedGoods.weight);
+                return {
+                    ...s,
+                    parsedGoods: goodsInfo,
+                    parsedMerged: mergedInfo,
+                    searchPercentage: speditionPercentage * 100
+                };
+            });
 
-            // "nie mają opisu towaru albo stawki" -> muszą mieć obydwie rzeczy
-            return hasPrice && hasGoodsInfo;
-        });
+            // Filtracja: ukryj spedycje bez opisu towaru i stawki
+            similarSpeditions = similarSpeditions.filter(s => {
+                let hasPrice = false;
+                try {
+                    if (s.response_data) {
+                        const data = typeof s.response_data === 'string' ? JSON.parse(s.response_data) : s.response_data;
+                        const cost = data.deliveryPrice || data.costPerTransport || data.responseCost || data?.responseCost?.[0] || data?.[0]?.responseCost;
+                        if (cost) hasPrice = true;
+                    }
+                } catch (e) { }
 
-        // Jeśli brakuje nam wyników po filtracji, można by dociągnąć więcej, ale zostawmy to jako proste filtrowanie
-        // Podmiana historycznych
-        const enhancedOwnTransports = similarOwnTransports.map(t => {
-            return {
-                ...t,
-                // Stała stawka 3.5 PLN za km wg wytycznych użytkownika dla historii, nie uwzględnia nowej dynamicznej stawki ani daty.
-                // Do wcześniejszego wyświetlania historii dodaliśmy zaokrąglenie, zostawmy je dla ładnego podglądu lub pokażmy czyste mnożenie:
-                estimatedCost: Math.ceil((distanceKm * 3.5) / 10) * 10,
-                distance_km: Math.round(distanceKm)
+                const hasGoodsInfo = s.parsedGoods && (s.parsedGoods.description || s.parsedGoods.weight);
+                return hasPrice && hasGoodsInfo;
+            });
+
+            const enhancedOwnTransports = similarOwnTransports.map(t => {
+                return {
+                    ...t,
+                    estimatedCost: Math.ceil((distanceKm * 3.5) / 10) * 10,
+                    distance_km: Math.round(distanceKm)
+                };
+            });
+
+            historyData = {
+                ownTransports: enhancedOwnTransports,
+                speditions: similarSpeditions,
+                speditionPercentage: speditionPercentage * 100
             };
-        });
+        }
 
         return NextResponse.json({
             success: true,
             mode: 'wlasny',
             estimatedCost: estimatedCost,
             breakdown,
-            history: {
-                ownTransports: enhancedOwnTransports, // Tutaj można zostawić enhanced z dystansem
-                speditions: similarSpeditions,
-                speditionPercentage: speditionPercentage * 100
-            }
+            history: historyData
         });
 
     } catch (error) {

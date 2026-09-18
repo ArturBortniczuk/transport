@@ -1,8 +1,19 @@
 import { NextResponse } from 'next/server';
 import db from '@/database/db';
+import { getSessionUser } from '@/lib/auth';
 
 export async function PUT(request, { params }) {
   try {
+    const session = await getSessionUser(request);
+    if (!session?.isAuthenticated || !session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const user = session.user;
+    const canManage = user.isAdmin || user.permissions?.cable_advices?.manage === true;
+    if (!canManage) {
+      return NextResponse.json({ error: 'Brak uprawnień do edycji awizacji kabli' }, { status: 403 });
+    }
+
     const { id } = params;
     const data = await request.json();
 
@@ -37,6 +48,16 @@ export async function PUT(request, { params }) {
 
 export async function DELETE(request, { params }) {
   try {
+    const session = await getSessionUser(request);
+    if (!session?.isAuthenticated || !session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const user = session.user;
+    const canManage = user.isAdmin || user.permissions?.cable_advices?.manage === true;
+    if (!canManage) {
+      return NextResponse.json({ error: 'Brak uprawnień do usuwania awizacji kabli' }, { status: 403 });
+    }
+
     const { id } = params;
 
     await db('cable_advices')

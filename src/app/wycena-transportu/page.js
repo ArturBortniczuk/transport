@@ -21,6 +21,31 @@ export default function WycenaTransportu() {
     const [loading, setLoading] = useState(false);
     const [result, setResult] = useState(null);
     const [error, setError] = useState('');
+    const [canCalculate, setCanCalculate] = useState(true);
+    const [canViewHistory, setCanViewHistory] = useState(true);
+    const [userLoaded, setUserLoaded] = useState(false);
+
+    useEffect(() => {
+        fetchUserInfo();
+    }, []);
+
+    const fetchUserInfo = async () => {
+        try {
+            const res = await fetch('/api/user');
+            if (res.ok) {
+                const data = await res.json();
+                if (data.success && data.user) {
+                    const perms = data.user.permissions || {};
+                    setCanCalculate(data.user.isAdmin || perms.valuation?.calculator !== false);
+                    setCanViewHistory(data.user.isAdmin || perms.valuation?.history !== false);
+                }
+            }
+        } catch (e) {
+            console.error('Błąd pobierania danych użytkownika:', e);
+        } finally {
+            setUserLoaded(true);
+        }
+    };
 
     // Google Maps autocompletes
     const sourceInputRef = useRef(null);
@@ -163,6 +188,18 @@ export default function WycenaTransportu() {
             setLoading(false);
         }
     };
+
+    if (userLoaded && !canCalculate) {
+        return (
+            <div className="container mx-auto px-4 py-16 max-w-lg text-center">
+                <div className="bg-white p-8 rounded-xl shadow-md border border-gray-100">
+                    <Calculator className="mx-auto h-12 w-12 text-red-500 mb-4" />
+                    <h2 className="text-xl font-bold text-gray-800 mb-2">Brak uprawnień</h2>
+                    <p className="text-gray-600">Nie posiadasz uprawnień do korzystania z kalkulatora wyceny transportu.</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="container mx-auto px-4 py-8 max-w-6xl">
@@ -378,7 +415,8 @@ export default function WycenaTransportu() {
                                         </div>
                                     </div>
 
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    {canViewHistory && result.history && (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         <div className="bg-white p-5 rounded-lg shadow border border-gray-100">
                                             <h3 className="text-lg font-medium mb-4 flex items-center text-blue-800">
                                                 <Truck className="w-5 h-5 mr-2" /> Podobne Trasowo (Własne)
@@ -460,6 +498,7 @@ export default function WycenaTransportu() {
                                             )}
                                         </div>
                                     </div>
+                                    )}
                                 </>
                             )}
 

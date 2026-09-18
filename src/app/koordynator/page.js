@@ -54,8 +54,10 @@ export default function KoordynatorPage() {
 
         const role = data.user.role;
         const isAdmin = data.user.isAdmin === true || data.user.isAdmin === 'true' || data.user.role === 'admin';
+        const permissions = data.user.permissions || {};
+        const canView = isAdmin || role === 'koordynator' || permissions.coordinator?.view === true;
         
-        if (role !== 'koordynator' && !isAdmin) {
+        if (!canView) {
           router.push('/dashboard');
           return;
         }
@@ -365,6 +367,7 @@ export default function KoordynatorPage() {
         </div>
 
         {!file ? (
+          (user?.isAdmin || user?.role === 'admin' || user?.permissions?.coordinator?.import_csv !== false) ? (
           /* Strefa D&D */
           <div 
             className={`
@@ -394,6 +397,11 @@ export default function KoordynatorPage() {
               />
             </label>
           </div>
+          ) : (
+            <div className="mt-8 bg-gray-50 p-8 rounded-xl border border-gray-200 text-center text-gray-500">
+              Brak uprawnień do importu plików CSV. Skontaktuj się z administratorem.
+            </div>
+          )
         ) : (
           /* Panel danych */
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">

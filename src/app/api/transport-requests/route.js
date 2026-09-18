@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server';
 import db from '@/database/db';
 import nodemailer from 'nodemailer';
-import { validateSession } from '@/lib/auth';
+import { getSessionUser } from '@/lib/auth';
 
 // Konfiguracja transportera email
 const transporter = nodemailer.createTransport({
@@ -381,14 +381,9 @@ const ensureTableExists = async () => {
 // GET - Pobieranie wniosków transportowych
 export async function GET(request) {
   try {
-    console.log('=== START GET /api/transport-requests ===');
-    const authToken = request.cookies.get('authToken')?.value;
-    console.log('AuthToken:', authToken ? 'Present' : 'Missing');
+    const session = await getSessionUser(request);
 
-    const userId = (await validateSession(request)) || (await validateSession(authToken));
-    console.log('UserId:', userId);
-
-    if (!userId) {
+    if (!session?.isAuthenticated || !session?.user) {
       return NextResponse.json({
         success: false,
         error: 'Unauthorized'
@@ -403,40 +398,25 @@ export async function GET(request) {
       }, { status: 500 });
     }
 
-    const user = await db('users')
-      .where('email', userId)
-      .select('role', 'name', 'permissions')
-      .first();
+    const user = session.user;
+    const permissions = user.permissions || {};
+    const isAdmin = Boolean(user.isAdmin);
+    const canViewAll = isAdmin || permissions?.transport_requests?.view_all === true || permissions?.transport_requests?.approve === true;
+    const canViewOwn = isAdmin || permissions?.transport_requests?.view_own !== false;
 
-    console.log('User data:', user);
-
-    if (!user) {
+    if (!canViewAll && !canViewOwn) {
       return NextResponse.json({
         success: false,
-        error: 'User not found'
-      }, { status: 404 });
+        error: 'Brak uprawnień do przeglądania wniosków'
+      }, { status: 403 });
     }
 
-    let permissions = {};
-    try {
-      if (user.permissions && typeof user.permissions === 'string') {
-        permissions = JSON.parse(user.permissions);
-      }
-    } catch (e) {
-      console.error('Błąd parsowania uprawnień:', e);
-      permissions = {};
-    }
-
-    const isAdmin = user.role === 'admin';
-    const isMagazyn = user.role === 'magazyn' || user.role?.startsWith('magazyn_');
-    const canViewAll = isAdmin || isMagazyn || permissions?.transport_requests?.approve === true;
-
-    console.log('User permissions:', { isAdmin, isMagazyn, canViewAll });
+    console.log('User permissions:', { isAdmin, canViewAll, canViewOwn });
 
     let query = db('transport_requests');
 
     if (!canViewAll) {
-      query = query.where('requester_email', userId);
+      query = query.where('requester_email', user.email);
     }
 
     const { searchParams } = new URL(request.url);
@@ -479,11 +459,9 @@ export async function GET(request) {
 // POST - Dodawanie nowego wniosku transportowego
 export async function POST(request) {
   try {
-    console.log('=== START POST /api/transport-requests ===');
-    const authToken = request.cookies.get('authToken')?.value;
-    const userId = (await validateSession(request)) || (await validateSession(authToken));
+    const session = await getSessionUser(request);
 
-    if (!userId) {
+    if (!session?.isAuthenticated || !session?.user) {
       return NextResponse.json({
         success: false,
         error: 'Unauthorized'
@@ -498,46 +476,12 @@ export async function POST(request) {
       }, { status: 500 });
     }
 
-    const user = await db('users')
-      .where('email', userId)
-      .select('role', 'name', 'permissions')
-      .first();
+    const user = session.user;
+    const permissions = user.permissions || {};
+    const isAdmin = Boolean(user.isAdmin);
+    const canAddRequests = isAdmin || permissions?.transport_requests?.add === true;
 
-    if (!user) {
-      return NextResponse.json({
-        success: false,
-        error: 'User not found'
-      }, { status: 404 });
-    }
-
-    const safeStringify = (obj) => {
-      const seen = new WeakSet();
-      return JSON.stringify(obj, (key, value) => {
-        if (typeof value === "object" && value !== null) {
-          if (seen.has(value)) {
-            return "[Circular]";
-          }
-          seen.add(value);
-        }
-        return value;
-      }, 2);
-    };
-
-    let permissions = {};
-    try {
-      if (user.permissions && typeof user.permissions === 'string') {
-        permissions = JSON.parse(user.permissions);
-      }
-    } catch (e) {
-      console.error('Błąd parsowania uprawnień:', e);
-      permissions = {};
-    }
-
-    const isAdmin = user.role === 'admin';
-    const isHandlowiec = user.role === 'handlowiec';
-    const canAddRequests = isAdmin || isHandlowiec || permissions?.transport_requests?.add === true;
-
-    console.log('Permission check:', { isAdmin, isHandlowiec, canAddRequests });
+    console.log('Permission check:', { isAdmin, canAddRequests });
 
     if (!canAddRequests) {
       return NextResponse.json({
@@ -624,9 +568,20 @@ export async function POST(request) {
       }
     }
 
+    const safeStringify = (obj) => {
+      const seen = new WeakSet();
+      return JSON.stringify(obj, (key, value) => {
+        if (typeof value === "object" && value !== null) {
+          if (seen.has(value)) return "[Circular]";
+          seen.add(value);
+        }
+        return value;
+      }, 2);
+    };
+
     // TWORZENIE OBIEKTU ZAPISU
     const newRequest = {
-      requester_email: userId,
+      requester_email: user.email,
       requester_name: user.name,
       delivery_date: requestData.delivery_date,
       status: 'pending',
@@ -729,7 +684,7 @@ export async function POST(request) {
     const emailResult = await sendNewRequestNotification({
       ...insertedRequest,
       requester_name: user.name,
-      requester_email: userId
+      requester_email: user.email
     });
     console.log('📬 Wynik wysyłki emaila:', emailResult.message);
 
@@ -755,11 +710,9 @@ export async function POST(request) {
 // PUT - Aktualizacja wniosku (akceptacja/odrzucenie lub edycja)
 export async function PUT(request) {
   try {
-    console.log('=== START PUT /api/transport-requests ===');
-    const authToken = request.cookies.get('authToken')?.value;
-    const userId = (await validateSession(request)) || (await validateSession(authToken));
+    const session = await getSessionUser(request);
 
-    if (!userId) {
+    if (!session?.isAuthenticated || !session?.user) {
       return NextResponse.json({
         success: false,
         error: 'Unauthorized'
@@ -774,17 +727,9 @@ export async function PUT(request) {
       }, { status: 500 });
     }
 
-    const user = await db('users')
-      .where('email', userId)
-      .select('role', 'name', 'permissions')
-      .first();
-
-    if (!user) {
-      return NextResponse.json({
-        success: false,
-        error: 'User not found'
-      }, { status: 404 });
-    }
+    const user = session.user;
+    const permissions = user.permissions || {};
+    const isAdmin = Boolean(user.isAdmin);
 
     const updateData = await request.json();
     const { requestId, action, ...data } = updateData;
@@ -811,18 +756,7 @@ export async function PUT(request) {
 
     // Logika akceptacji/odrzucenia lub edycji
     if (action === 'approve' || action === 'reject') {
-      let permissions = {};
-      try {
-        if (user.permissions && typeof user.permissions === 'string') {
-          permissions = JSON.parse(user.permissions);
-        }
-      } catch (e) {
-        console.error('Błąd parsowania uprawnień:', e);
-      }
-
-      const isAdmin = user.role === 'admin';
-      const isMagazyn = user.role === 'magazyn' || user.role?.startsWith('magazyn_');
-      const canApprove = isAdmin || isMagazyn || permissions?.transport_requests?.approve === true;
+      const canApprove = isAdmin || permissions?.transport_requests?.approve === true;
 
       if (!canApprove) {
         return NextResponse.json({
@@ -975,7 +909,7 @@ export async function PUT(request) {
       });
 
     } else if (action === 'edit') {
-      if (existingRequest.requester_email !== userId) {
+      if (existingRequest.requester_email !== user.email && !isAdmin) {
         return NextResponse.json({
           success: false,
           error: 'Nie możesz edytować cudzych wniosków'

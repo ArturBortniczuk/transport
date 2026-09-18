@@ -1,7 +1,6 @@
-// src/app/api/spedycje/unmerge/route.js
 import { NextResponse } from 'next/server';
 import db from '@/database/db';
-import { validateSession } from '@/lib/auth';
+import { getSessionUser } from '@/lib/auth';
 
 // POPRAWIONA FUNKCJA: Generowanie sekwencyjnych numerów zamówień dla rozdzielanych transportów
 const generateOrderNumbersForUnmerge = async (count) => {
@@ -50,11 +49,9 @@ export async function POST(request) {
   try {
     console.log('=== ROZPOCZYNAM ROZŁĄCZANIE TRANSPORTÓW ===');
     
-    // Sprawdzamy uwierzytelnienie
-    const authToken = request.cookies.get('authToken')?.value;
-    const userId = (await validateSession(request)) || (await validateSession(authToken));
+    const session = await getSessionUser(request);
     
-    if (!userId) {
+    if (!session?.isAuthenticated || !session?.user) {
       console.log('Brak autoryzacji');
       return NextResponse.json({ 
         success: false, 
@@ -62,31 +59,14 @@ export async function POST(request) {
       }, { status: 401 });
     }
     
-    console.log('Użytkownik autoryzowany:', userId);
+    const user = session.user;
+    const canUnmerge = user.isAdmin || user.permissions?.spedycja?.unmerge === true;
     
-    // Sprawdzamy czy użytkownik ma uprawnienia administracyjne
-    const user = await db('users')
-      .where('email', userId)
-      .select('role', 'permissions', 'is_admin', 'name')
-      .first();
-    
-    if (!user) {
-      console.log('Użytkownik nie znaleziony');
+    if (!canUnmerge) {
+      console.log('Brak uprawnień do rozłączania transportów');
       return NextResponse.json({ 
         success: false, 
-        error: 'Użytkownik nie znaleziony' 
-      }, { status: 404 });
-    }
-    
-    console.log('Dane użytkownika:', user);
-    
-    const isAdmin = user.is_admin === 1 || user.is_admin === true || user.role === 'admin';
-    
-    if (!isAdmin) {
-      console.log('Brak uprawnień administratora');
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Brak uprawnień administratora do rozłączania transportów' 
+        error: 'Brak uprawnień do rozłączania transportów' 
       }, { status: 403 });
     }
     

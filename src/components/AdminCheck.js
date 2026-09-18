@@ -3,15 +3,17 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
-export default function AdminCheck({ children, moduleType }) {
+export default function AdminCheck({ children, moduleType, requiredPermission }) {
   const router = useRouter()
   const [isVerified, setIsVerified] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
 
+  const mod = moduleType || requiredPermission
+
   useEffect(() => {
     const checkAdminAccess = async () => {
       try {
-        console.log(`Sprawdzanie uprawnień administratora dla modułu: ${moduleType || 'wszystkie'}`);
+        console.log(`Sprawdzanie uprawnień administratora dla modułu: ${mod || 'wszystkie'}`);
         
         // Pobierz informacje z API
         const response = await fetch('/api/check-admin');
@@ -27,14 +29,14 @@ export default function AdminCheck({ children, moduleType }) {
           console.log('Użytkownik ma pełne uprawnienia administratora');
           hasAccess = true;
         } 
-        // Sprawdź uprawnienia do konkretnego modułu, jeśli określono moduleType
-        else if (moduleType && data.permissions?.admin?.[moduleType]) {
-          console.log(`Użytkownik ma uprawnienia do modułu ${moduleType}`);
+        // Sprawdź uprawnienia do konkretnego modułu, jeśli określono mod
+        else if (mod && data.permissions?.admin?.[mod]) {
+          console.log(`Użytkownik ma uprawnienia do modułu ${mod}`);
           hasAccess = true;
         }
-        // Jeśli nie określono moduleType (główna strona admina) 
+        // Jeśli nie określono modułu (główna strona admina) 
         // ale ma jakiekolwiek uprawnienia admin
-        else if (!moduleType && data.permissions?.admin && 
+        else if (!mod && data.permissions?.admin && 
                 (data.permissions.admin.users ||
                  data.permissions.admin.valuation ||
                  data.permissions.admin.packagings || 
@@ -59,7 +61,7 @@ export default function AdminCheck({ children, moduleType }) {
     };
 
     checkAdminAccess();
-  }, [router, moduleType]);
+  }, [router, mod]);
 
   // Pokaż zawartość dopiero po zweryfikowaniu uprawnień
   if (isLoading) {

@@ -3,16 +3,13 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import db from '@/database/db';
-import { validateSession } from '@/lib/auth';
+import { getSessionUser } from '@/lib/auth';
 
 // GET /api/packagings
 export async function GET(request) {
   try {
-    // Sprawdzamy uwierzytelnienie
-    const authToken = request.cookies.get('authToken')?.value;
-    const userId = await validateSession(request) || await validateSession(authToken);
-    
-    if (!userId) {
+    const session = await getSessionUser(request);
+    if (!session?.isAuthenticated || !session?.user) {
       return NextResponse.json({ 
         success: false, 
         error: 'Unauthorized' 
@@ -52,15 +49,21 @@ export async function GET(request) {
 // POST /api/packagings
 export async function POST(request) {
   try {
-    // Sprawdzamy uwierzytelnienie
-    const authToken = request.cookies.get('authToken')?.value;
-    const userId = (await validateSession(request)) || (await validateSession(authToken));
-    
-    if (!userId) {
+    const session = await getSessionUser(request);
+    if (!session?.isAuthenticated || !session?.user) {
       return NextResponse.json({ 
         success: false, 
         error: 'Unauthorized' 
       }, { status: 401 });
+    }
+
+    const user = session.user;
+    const canManage = user.isAdmin || user.permissions?.admin?.packagings === true || user.permissions?.calendar?.assign_packagings === true;
+    if (!canManage) {
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Brak uprawnień do zarządzania opakowaniami' 
+      }, { status: 403 });
     }
     
     const packagingData = await request.json();
@@ -85,15 +88,21 @@ export async function POST(request) {
 // PUT /api/packagings
 export async function PUT(request) {
   try {
-    // Sprawdzamy uwierzytelnienie
-    const authToken = request.cookies.get('authToken')?.value;
-    const userId = (await validateSession(request)) || (await validateSession(authToken));
-    
-    if (!userId) {
+    const session = await getSessionUser(request);
+    if (!session?.isAuthenticated || !session?.user) {
       return NextResponse.json({ 
         success: false, 
         error: 'Unauthorized' 
       }, { status: 401 });
+    }
+
+    const user = session.user;
+    const canManage = user.isAdmin || user.permissions?.admin?.packagings === true || user.permissions?.calendar?.assign_packagings === true;
+    if (!canManage) {
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Brak uprawnień do edycji opakowań' 
+      }, { status: 403 });
     }
     
     const { id, ...packagingData } = await request.json();

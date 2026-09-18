@@ -1,11 +1,22 @@
 import { NextResponse } from 'next/server';
 import db from '@/database/db';
+import { getSessionUser } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export async function GET() {
+export async function GET(request) {
   try {
+    const session = await getSessionUser(request);
+    if (!session?.isAuthenticated || !session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const user = session.user;
+    const canView = user.isAdmin || user.permissions?.cable_advices?.view !== false;
+    if (!canView) {
+      return NextResponse.json({ error: 'Brak uprawnień do przeglądania awizacji kabli' }, { status: 403 });
+    }
+
     const advices = await db('cable_advices')
       .select('*')
       .orderBy('created_at', 'desc');
@@ -21,6 +32,16 @@ export async function GET() {
 
 export async function POST(request) {
   try {
+    const session = await getSessionUser(request);
+    if (!session?.isAuthenticated || !session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const user = session.user;
+    const canManage = user.isAdmin || user.permissions?.cable_advices?.manage === true;
+    if (!canManage) {
+      return NextResponse.json({ error: 'Brak uprawnień do dodawania awizacji kabli' }, { status: 403 });
+    }
+
     const data = await request.json();
 
     // Oblicz całkowitą ilość na podstawie packagings_data

@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server';
 import db from '@/database/db';
 import nodemailer from 'nodemailer';
-import { validateSession } from '@/lib/auth';
+import { getSessionUser } from '@/lib/auth';
 
 // Funkcja wysyłania powiadomienia o ukończeniu spedycji
 const sendCompletionNotification = async (spedycjaData) => {
@@ -303,48 +303,17 @@ const sendCompletionNotification = async (spedycjaData) => {
 
 export async function POST(request) {
   try {
-    // Sprawdzamy uwierzytelnienie
-    const authToken = request.cookies.get('authToken')?.value;
-    const userId = (await validateSession(request)) || (await validateSession(authToken));
+    const session = await getSessionUser(request);
     
-    if (!userId) {
+    if (!session?.isAuthenticated || !session?.user) {
       return NextResponse.json({ 
         success: false, 
         error: 'Unauthorized' 
       }, { status: 401 });
     }
     
-    // Sprawdzamy czy użytkownik ma uprawnienia
-    const user = await db('users')
-      .where('email', userId)
-      .select('role', 'name', 'permissions', 'is_admin')
-      .first();
-    
-    // Sprawdź uprawnienia użytkownika
-    let permissions = {};
-    let isAdmin = false;
-    
-    // Sprawdź czy użytkownik jest adminem
-    if (user) {
-      isAdmin = user.is_admin === true || 
-                user.is_admin === 1 || 
-                user.is_admin === 't' || 
-                user.is_admin === 'TRUE' ||
-                user.is_admin === 'true' ||
-                user.role === 'admin';
-      
-      // Próba parsowania uprawnień jeśli są w formie stringa
-      try {
-        if (user.permissions && typeof user.permissions === 'string') {
-          permissions = JSON.parse(user.permissions);
-        }
-      } catch (e) {
-        console.error('Error parsing permissions:', e);
-        permissions = {};
-      }
-    }
-
-    const canComplete = isAdmin || permissions?.spedycja?.respond === true;
+    const user = session.user;
+    const canComplete = user.isAdmin || user.permissions?.spedycja?.respond === true;
 
     if (!canComplete) {
       return NextResponse.json({ 

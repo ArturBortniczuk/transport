@@ -62,6 +62,9 @@ export default function OcenyPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [users, setUsers] = useState([])
+  const [currentUser, setCurrentUser] = useState(null)
+  const [canView, setCanView] = useState(true)
+  const [canRate, setCanRate] = useState(false)
 
   // Filtry
   const [dateRange, setDateRange] = useState('week')
@@ -83,8 +86,28 @@ export default function OcenyPage() {
   const [refreshBadges, setRefreshBadges] = useState(0)
 
   useEffect(() => {
+    fetchUserInfo()
     fetchUsers()
   }, [])
+
+  const fetchUserInfo = async () => {
+    try {
+      const res = await fetch('/api/user')
+      if (res.ok) {
+        const data = await res.json()
+        if (data.success && data.user) {
+          setCurrentUser(data.user)
+          const perms = data.user.permissions || {}
+          const hasView = data.user.isAdmin || perms.ratings?.view !== false
+          const hasRate = data.user.isAdmin || perms.ratings?.rate === true
+          setCanView(hasView)
+          setCanRate(hasRate)
+        }
+      }
+    } catch (e) {
+      console.error('Błąd pobierania danych użytkownika:', e)
+    }
+  }
 
   useEffect(() => {
     const today = new Date()
@@ -305,6 +328,10 @@ export default function OcenyPage() {
   })
 
   const handleOpenRatingModal = (transport) => {
+    if (!transport.has_rating && !canRate) {
+      alert('Brak uprawnień do wystawiania ocen.')
+      return
+    }
     setSelectedTransport(transport)
     setShowRatingModal(true)
   }
@@ -334,6 +361,16 @@ export default function OcenyPage() {
 
   const getUsersByMarket = (marketName) => {
     return users.filter(u => u.market === marketName)
+  }
+
+  if (!canView) {
+    return (
+      <div className="p-8 text-center bg-white rounded-lg shadow">
+        <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+        <h2 className="text-xl font-bold text-gray-900 mb-2">Brak uprawnień</h2>
+        <p className="text-gray-600">Nie posiadasz uprawnień do przeglądania ocen transportów.</p>
+      </div>
+    )
   }
 
   if (loading && transports.length === 0) {
@@ -605,6 +642,7 @@ export default function OcenyPage() {
                 getMagazynName={getMagazynName}
                 getDriverName={getDriverName}
                 refreshBadges={refreshBadges}
+                canRate={canRate}
               />
             ) : (
               <TransportSpedycyjnyTable
@@ -612,6 +650,7 @@ export default function OcenyPage() {
                 onRate={handleOpenRatingModal}
                 getMagazynName={getMagazynName}
                 refreshBadges={refreshBadges}
+                canRate={canRate}
               />
             )}
           </div>
@@ -638,7 +677,7 @@ export default function OcenyPage() {
   )
 }
 
-function TransportWlasnyTable({ transports, onRate, getMagazynName, getDriverName, refreshBadges }) {
+function TransportWlasnyTable({ transports, onRate, getMagazynName, getDriverName, refreshBadges, canRate }) {
   const safeFormatDate = (dateString) => {
     if (!dateString) return '-'
     try {
@@ -732,13 +771,15 @@ function TransportWlasnyTable({ transports, onRate, getMagazynName, getDriverNam
                   <Star className="w-4 h-4 mr-1 fill-current" />
                   <span className="underline">Zobacz ocenę</span>
                 </button>
-              ) : (
+              ) : canRate ? (
                 <button
                   onClick={() => onRate(transport)}
                   className="px-3 py-1 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 transition-colors"
                 >
                   Oceń
                 </button>
+              ) : (
+                <span className="text-xs text-gray-400 italic">Brak oceny</span>
               )}
             </td>
           </tr>
@@ -748,7 +789,7 @@ function TransportWlasnyTable({ transports, onRate, getMagazynName, getDriverNam
   )
 }
 
-function TransportSpedycyjnyTable({ transports, onRate, getMagazynName, refreshBadges }) {
+function TransportSpedycyjnyTable({ transports, onRate, getMagazynName, refreshBadges, canRate }) {
   const safeFormatDate = (dateString) => {
     if (!dateString) return '-'
     try {
@@ -861,13 +902,15 @@ function TransportSpedycyjnyTable({ transports, onRate, getMagazynName, refreshB
                     <Star className="w-4 h-4 mr-1 fill-current" />
                     <span className="underline">Zobacz ocenę</span>
                   </button>
-                ) : (
+                ) : canRate ? (
                   <button
                     onClick={() => onRate(transport)}
                     className="px-3 py-1 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 transition-colors"
                   >
                     Oceń
                   </button>
+                ) : (
+                  <span className="text-xs text-gray-400 italic">Brak oceny</span>
                 )}
               </td>
             </tr>

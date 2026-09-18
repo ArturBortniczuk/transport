@@ -35,6 +35,7 @@ export default function WnioskiTransportowePage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [userInfo, setUserInfo] = useState(null)
+  const canApprove = userInfo?.isAdmin === true || userInfo?.role === 'admin' || userInfo?.permissions?.transport_requests?.approve === true;
   const [selectedRequest, setSelectedRequest] = useState(null)
   const [showApprovalModal, setShowApprovalModal] = useState(false)
   const [showRejectionModal, setShowRejectionModal] = useState(false)
@@ -56,17 +57,16 @@ export default function WnioskiTransportowePage() {
         if (data.isAuthenticated && data.user) {
           setUserInfo(data.user)
           
-          const role = data.user.role
-          const permissions = data.user.permissions || {}
+          const isAdmin = data.user.isAdmin === true || data.user.role === 'admin';
+          const permissions = data.user.permissions || {};
           
-          const canManageRequests = 
-            role === 'admin' ||
-            role === 'magazyn' ||
-            role?.startsWith('magazyn_') ||
-            permissions?.transport_requests?.approve === true
+          const canViewAll = 
+            isAdmin ||
+            permissions?.transport_requests?.view_all === true ||
+            permissions?.transport_requests?.approve === true;
           
-          if (!canManageRequests) {
-            setError('Brak uprawnień do zarządzania wnioskami transportowymi')
+          if (!canViewAll) {
+            setError('Brak uprawnień do zarządzania wnioskami transportowymi');
           }
         } else {
           setError('Brak autoryzacji')
@@ -639,7 +639,7 @@ export default function WnioskiTransportowePage() {
                   )}
 
                   {/* Akcje */}
-                  {request.status === 'pending' && (
+                  {request.status === 'pending' && canApprove && (
                     <div className="mt-4 flex space-x-2">
                       <button
                         onClick={() => {
