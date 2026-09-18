@@ -28,7 +28,20 @@ const createDbConnection = () => {
 
   // Połączenie z bazą produkcyjną Supabase (przez Pooler IPv4 / Direct IPv6)
   const SUPABASE_DEFAULT = "postgresql://postgres.vwnjmcxwqrfykeexocqi:narzedziaeltron@aws-1-eu-central-1.pooler.supabase.com:5432/postgres";
-  const connStr = process.env.DATABASE_URL || process.env.SUPABASE_DATABASE_URL || SUPABASE_DEFAULT;
+  let connStr = process.env.DATABASE_URL || process.env.SUPABASE_DATABASE_URL || SUPABASE_DEFAULT;
+
+  // Korekta klastra poolera: projekt vwnjmcxwqrfykeexocqi znajduje się na klastrze aws-1 w regionie eu-central-1.
+  // Jeśli w zmiennych środowiskowych Vercela wpisano aws-0, zamieniamy automatycznie na właściwy aws-1.
+  if (connStr.includes('vwnjmcxwqrfykeexocqi') && connStr.includes('aws-0-eu-central-1')) {
+    console.log('[DB] Automatyczna korekta hosta poolera z aws-0 na aws-1');
+    connStr = connStr.replace('aws-0-eu-central-1', 'aws-1-eu-central-1');
+  }
+
+  // Zabezpieczenie przed starym adresem bazy Neon w zmiennych Vercela
+  if (connStr.includes('neon.tech') || connStr.includes('ep-')) {
+    console.log('[DB] Wykryto stary adres bazy Neon w zmiennych - przełączanie na Supabase');
+    connStr = SUPABASE_DEFAULT;
+  }
 
   const connectionConfig = {
     connectionString: connStr,
