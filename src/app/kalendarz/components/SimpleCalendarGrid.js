@@ -12,7 +12,8 @@ export default function SimpleCalendarGrid({
   onDateSelect, 
   currentMonth, 
   transporty,
-  filtryAktywne // Dodajemy props z filtrami
+  filtryAktywne, // Dodajemy props z filtrami
+  canRescheduleCalendar = true
 }) {
   const [selected, setSelected] = useState(null)
   const [hoverInfo, setHoverInfo] = useState(null)
@@ -155,14 +156,14 @@ export default function SimpleCalendarGrid({
                         key={transport.id} 
                         draggableId={transport.id.toString()} 
                         index={index}
-                        isDragDisabled={isCompleted}
+                        isDragDisabled={isCompleted || !canRescheduleCalendar}
                       >
                         {(provided, snapshot) => (
                           <div
                             ref={provided.innerRef}
                             {...provided.draggableProps}
                             {...provided.dragHandleProps}
-                            className={`relative ${snapshot.isDragging ? 'opacity-50' : ''}`}
+                            className={`relative ${snapshot.isDragging ? 'opacity-50' : ''} ${canRescheduleCalendar && !isCompleted ? 'cursor-grab' : 'cursor-default'}`}
                             onMouseEnter={() => setHoverInfo(transport.id)}
                             onMouseLeave={() => setHoverInfo(null)}
                           >

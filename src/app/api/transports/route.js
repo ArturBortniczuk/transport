@@ -1,15 +1,15 @@
 import { NextResponse } from 'next/server';
 import db from '@/database/db';
 import { getFromCache, setInCache } from '@/utils/cache';
-import { validateSession } from '@/lib/auth';
+import { validateSession, getSessionUser } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request) {
   try {
     // Sprawdzamy uwierzytelnienie
-    const authToken = request.cookies.get('authToken')?.value;
-    const userId = await validateSession(request) || await validateSession(authToken);
+    const session = await getSessionUser(request);
+    const userId = session?.isAuthenticated ? session.user?.email : await validateSession(request);
     
     if (!userId) {
       return NextResponse.json({ 
@@ -76,37 +76,21 @@ export async function GET(request) {
 export async function POST(request) {
   try {
     // Sprawdzamy uwierzytelnienie
-    const authToken = request.cookies.get('authToken')?.value;
-    const userId = await validateSession(request) || await validateSession(authToken);
-    
-    if (!userId) {
+    const session = await getSessionUser(request);
+    if (!session?.isAuthenticated || !session.user) {
       return NextResponse.json({ 
         success: false, 
         error: 'Unauthorized' 
       }, { status: 401 });
     }
     
-    // Sprawdź uprawnienia użytkownika
-    const user = await db('users')
-      .where('email', userId)
-      .select('role', 'permissions')
-      .first();
-    
-    let canEditCalendar = false;
-    try {
-      if (user.permissions) {
-        const permissions = JSON.parse(user.permissions);
-        canEditCalendar = permissions?.calendar?.edit === true;
-      }
-    } catch (e) {
-      console.error('Błąd parsowania uprawnień:', e);
-    }
+    const canEditCalendar = session.user.isAdmin === true || session.user.permissions?.calendar?.edit === true;
     
     // Tylko użytkownicy z uprawnieniami mogą dodawać transporty
     if (!canEditCalendar) {
       return NextResponse.json({ 
         success: false, 
-        error: 'Brak uprawnień do dodawania transportów' 
+        error: 'Brak uprawnień do dodawania transportów w kalendarzu' 
       }, { status: 403 });
     }
     
@@ -188,37 +172,21 @@ export async function POST(request) {
 export async function PUT(request) {
   try {
     // Sprawdzamy uwierzytelnienie
-    const authToken = request.cookies.get('authToken')?.value;
-    const userId = await validateSession(request) || await validateSession(authToken);
-    
-    if (!userId) {
+    const session = await getSessionUser(request);
+    if (!session?.isAuthenticated || !session.user) {
       return NextResponse.json({ 
         success: false, 
         error: 'Unauthorized' 
       }, { status: 401 });
     }
     
-    // Pobierz dane transportu i dane użytkownika
+    // Pobierz dane transportu
     const { id, status, ...transportData } = await request.json();
     
-    // Sprawdź uprawnienia użytkownika
-    const user = await db('users')
-      .where('email', userId)
-      .select('role', 'permissions')
-      .first();
-    
-    let canEditCalendar = false;
-    let canMarkAsCompleted = false;
-    
-    try {
-      if (user.permissions) {
-        const permissions = JSON.parse(user.permissions);
-        canEditCalendar = permissions?.calendar?.edit === true;
-        canMarkAsCompleted = permissions?.transport?.markAsCompleted === true;
-      }
-    } catch (e) {
-      console.error('Błąd parsowania uprawnień:', e);
-    }
+    const isAdmin = session.user.isAdmin === true;
+    const canEditCalendar = isAdmin || session.user.permissions?.calendar?.edit === true;
+    const canRescheduleCalendar = isAdmin || session.user.permissions?.calendar?.reschedule === true || canEditCalendar;
+    const canMarkAsCompleted = isAdmin || session.user.permissions?.transport?.markAsCompleted === true;
     
     // Jeśli zmienia status na completed, sprawdź uprawnienia
     if (status === 'completed' && !canMarkAsCompleted) {
@@ -229,11 +197,21 @@ export async function PUT(request) {
     }
     
     // Jeśli edytuje inne dane, sprawdź uprawnienia
-    if (Object.keys(transportData).length > 0 && !canEditCalendar) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Brak uprawnień do edycji transportów' 
-      }, { status: 403 });
+    if (Object.keys(transportData).length > 0) {
+      const isOnlyReschedule = Object.keys(transportData).length === 1 && 'delivery_date' in transportData;
+      if (isOnlyReschedule) {
+        if (!canRescheduleCalendar) {
+          return NextResponse.json({ 
+            success: false, 
+            error: 'Brak uprawnień do zmiany terminu transportu' 
+          }, { status: 403 });
+        }
+      } else if (!canEditCalendar) {
+        return NextResponse.json({ 
+          success: false, 
+          error: 'Brak uprawnień do edycji transportów' 
+        }, { status: 403 });
+      }
     }
     
     // ZMIANA: Najpierw pobierz istniejący transport
@@ -331,31 +309,15 @@ export async function PUT(request) {
 export async function DELETE(request) {
   try {
     // Sprawdzamy uwierzytelnienie
-    const authToken = request.cookies.get('authToken')?.value;
-    const userId = await validateSession(request) || await validateSession(authToken);
-    
-    if (!userId) {
+    const session = await getSessionUser(request);
+    if (!session?.isAuthenticated || !session.user) {
       return NextResponse.json({ 
         success: false, 
         error: 'Unauthorized' 
       }, { status: 401 });
     }
     
-    // Sprawdź uprawnienia użytkownika
-    const user = await db('users')
-      .where('email', userId)
-      .select('role', 'permissions')
-      .first();
-    
-    let canEditCalendar = false;
-    try {
-      if (user.permissions) {
-        const permissions = JSON.parse(user.permissions);
-        canEditCalendar = permissions?.calendar?.edit === true;
-      }
-    } catch (e) {
-      console.error('Błąd parsowania uprawnień:', e);
-    }
+    const canEditCalendar = session.user.isAdmin === true || session.user.permissions?.calendar?.edit === true;
     
     // Tylko osoby z uprawnieniami mogą usuwać transporty
     if (!canEditCalendar) {

@@ -29,6 +29,15 @@ export default function KalendarzPage() {
   const [userName, setUserName] = useState('')
   const [connectingTransport, setConnectingTransport] = useState(null)
   const [showConnectModal, setShowConnectModal] = useState(false)
+
+  // Wyliczone uprawnienia użytkownika dla modułu Kalendarz
+  const isAdmin = userRole === 'admin' || userEmail === 'a.bortniczuk@grupaeltron.pl';
+  const canEditCalendar = isAdmin || userPermissions?.calendar?.edit === true;
+  const canRescheduleCalendar = isAdmin || userPermissions?.calendar?.reschedule === true;
+  const canAssignPackagings = isAdmin || userPermissions?.calendar?.assign_packagings === true;
+  const canConnectRoutes = isAdmin || userPermissions?.calendar?.connect_routes === true;
+  const canMarkAsCompleted = isAdmin || userPermissions?.transport?.markAsCompleted === true;
+
   const [nowyTransport, setNowyTransport] = useState({
     miasto: '',
     kodPocztowy: '',
@@ -81,6 +90,10 @@ export default function KalendarzPage() {
     // Jeśli przeciągnięto opakowanie na datę w kalendarzu
     if (source.droppableId === 'packagings-list' && 
         destination.droppableId.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      if (!canAssignPackagings) {
+        alert('Nie posiadasz uprawnień do planowania odbioru opakowań.');
+        return;
+      }
       console.log('Przeciągnięto opakowanie na datę:', destination.droppableId);
       
       // Znajdź opakowanie po ID
@@ -103,6 +116,10 @@ export default function KalendarzPage() {
     // Jeśli przeciągnięto transport między datami w kalendarzu
     else if (destination.droppableId.match(/^\d{4}-\d{2}-\d{2}$/) && 
              source.droppableId.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      if (!canRescheduleCalendar) {
+        alert('Nie posiadasz uprawnień do zmiany terminów transportów (Drag & Drop).');
+        return;
+      }
       console.log('Przeciągnięto transport między datami:', source.droppableId, '->', destination.droppableId);
       
       // Pobierz transport
@@ -173,6 +190,10 @@ export default function KalendarzPage() {
   };
 
   const handleConnectTransport = (transport) => {
+    if (!canConnectRoutes) {
+      alert('Nie posiadasz uprawnień do łączenia tras wielopunktowych.');
+      return;
+    }
     setConnectingTransport(transport);
     setShowConnectModal(true);
   };
@@ -348,6 +369,11 @@ export default function KalendarzPage() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     
+    if (!canEditCalendar) {
+      alert('Nie posiadasz uprawnień do dodawania transportów w kalendarzu.');
+      return;
+    }
+    
     // Walidacja osoby odpowiedzialnej i numeru MPK
     if (!nowyTransport.osobaZlecajaca || !nowyTransport.osobaZlecajaca.trim()) {
       alert('Nie można dodać transportu: Wybierz osobę odpowiedzialną za transport!');
@@ -505,6 +531,11 @@ export default function KalendarzPage() {
     }
   }
   const handleZakonczTransport = async (dateKey, transportId) => {
+    if (!canMarkAsCompleted) {
+      alert('Nie posiadasz uprawnień do oznaczania transportów jako zrealizowane.');
+      return;
+    }
+
     try {
       // Dodaj potwierdzenie przed oznaczenem jako zrealizowane
       if (!confirm('Czy na pewno chcesz oznaczyć ten transport jako zrealizowany? Transport zostanie zarchiwizowany.')) {
@@ -584,6 +615,10 @@ export default function KalendarzPage() {
   }
   
   const handleEditTransport = (transport) => {
+    if (!canEditCalendar) {
+      alert('Nie posiadasz uprawnień do edycji transportów.');
+      return;
+    }
     setEdytowanyTransport(transport)
     setNowyTransport({
       ...transport,
@@ -593,6 +628,11 @@ export default function KalendarzPage() {
   
   const handleUpdateTransport = async (e) => {
     e.preventDefault()
+    
+    if (!canEditCalendar) {
+      alert('Nie posiadasz uprawnień do edycji transportów.');
+      return;
+    }
     
     // Walidacja osoby odpowiedzialnej i numeru MPK
     if (!nowyTransport.osobaZlecajaca || !nowyTransport.osobaZlecajaca.trim()) {
@@ -688,11 +728,19 @@ export default function KalendarzPage() {
   }
 
   const handlePrzeniesDoPrzenoszenia = (transport) => {
+    if (!canRescheduleCalendar) {
+      alert('Nie posiadasz uprawnień do zmiany terminów transportów.');
+      return;
+    }
     setPrzenoszonyTransport(transport)
   }
 
   const handlePrzenoszenieTransportu = async (options) => {
     if (!options) return;
+    if (!canRescheduleCalendar) {
+      alert('Nie posiadasz uprawnień do zmiany terminów transportów.');
+      return;
+    }
     
     const { id, newDate } = options;
     
@@ -726,6 +774,11 @@ export default function KalendarzPage() {
 
   // Funkcja do obsługi upuszczenia opakowania na datę
   const handlePackagingDrop = async (packaging, dateKey) => {
+    if (!canAssignPackagings) {
+      alert('Nie posiadasz uprawnień do planowania odbioru opakowań.');
+      return;
+    }
+
     // Sprawdź, czy dateKey jest poprawne
     console.log("Upuszczono opakowanie na datę:", dateKey, "Opakowanie:", packaging);
     
@@ -778,6 +831,10 @@ export default function KalendarzPage() {
 
   // Nowa funkcja do obsługi przenoszenia transportu przez drag & drop
    const handleTransportMove = (transport, newDateKey) => {
+     if (!canRescheduleCalendar) {
+       alert('Nie posiadasz uprawnień do zmiany terminów transportów.');
+       return;
+     }
      setConfirmModal({
        isOpen: true,
        transport,
@@ -799,40 +856,6 @@ export default function KalendarzPage() {
      start: startOfWeek(startOfMonth(currentMonth), { weekStartsOn: 1 }),
      end: endOfWeek(endOfMonth(currentMonth), { weekStartsOn: 1 })
    });
-   
-   useEffect(() => {
-     const fetchUserPermissions = async () => {
-       try {
-         const response = await fetch('/api/user');
-         const data = await response.json();
-         
-         if (data.isAuthenticated && data.user) {
-           setUserPermissions(data.user.permissions || {});
-         }
-       } catch (error) {
-         console.error('Błąd pobierania uprawnień użytkownika:', error);
-       }
-     };
-     
-     fetchUserPermissions();
-   }, []);
-   
-   // Funkcja sprawdzająca, czy użytkownik może dodawać transporty
-   const canAddTransport = () => {
-     console.log('Sprawdzam uprawnienia:', {
-       calendarEdit: userPermissions?.calendar?.edit, 
-       userRole, 
-       userId
-     });
-     
-     const isMagazynRole = userRole === 'magazyn' || 
-                          userRole?.startsWith('magazyn_') ||
-                          userRole === 'magazyn_bialystok' ||
-                          userRole === 'magazyn_zielonka';
-     
-     // Użytkownicy z rolą magazynu lub admini mają uprawnienia
-     return userPermissions?.calendar?.edit === true || userRole === 'admin';
-   };
   
    // Funkcja do zapisywania lokalizacji w localStorage
    const saveLocationToStorage = (transportData) => {
@@ -914,62 +937,90 @@ export default function KalendarzPage() {
            setFiltryAktywne={setFiltryAktywne}
          />
   
-         {/* Dodajemy komponent do wyświetlania opakowań do odbioru - bez onDragEnd */}
-         <PackagingsList />
-  
-         <SimpleCalendarGrid 
-           daysInMonth={daysInMonth}
-           onDateSelect={handleDateClick}
-           currentMonth={currentMonth}
-           transporty={transporty}
-           filtryAktywne={filtryAktywne}
-         />
-         
-         <TransportsList
-           selectedDate={selectedDate}
-           transporty={transporty}
-           userRole={userRole}
-           userEmail={userEmail}
-           onZakonczTransport={handleZakonczTransport}
-           onEditTransport={handleEditTransport}
-           onPrzeniesDoPrzenoszenia={handlePrzeniesDoPrzenoszenia}
-           onConnectTransport={handleConnectTransport}
-           filtryAktywne={filtryAktywne}
-         />
-  
-         {selectedDate && (
-           <>
-             <div>
-               <div className="space-y-2">
-                 {transporty[format(selectedDate, 'yyyy-MM-dd')]?.filter(t => {
-                   const pasujeMagazyn = !filtryAktywne.magazyn || t.zrodlo === filtryAktywne.magazyn;
-                   const pasujeKierowca = !filtryAktywne.kierowca || t.kierowcaId === filtryAktywne.kierowca;
-                   const pasujeRynek = !filtryAktywne.rynek || t.rynek === filtryAktywne.rynek;
-                   return pasujeMagazyn && pasujeKierowca && pasujeRynek && t.status === 'aktywny';
-                 }).map(t => (
-                   <div key={t.id} className="border p-2 rounded">
-                     {t.miasto} - {t.kodPocztowy}
-                   </div>
-                 ))}
-               </div>
-             </div>
-             
-             <TransportForm
-               selectedDate={selectedDate}
-               nowyTransport={nowyTransport}
-               handleInputChange={handleInputChange}
-               handleSubmit={handleSubmit}
-               edytowanyTransport={edytowanyTransport}
-               handleUpdateTransport={handleUpdateTransport}
-               setEdytowanyTransport={setEdytowanyTransport}
-               setNowyTransport={setNowyTransport}
-               userPermissions={userPermissions}
-               transporty={transporty}
-               currentUserEmail={userEmail}
-               userName={userName || localStorage.getItem('userName') || userEmail}
-             />
-           </>
-         )}
+          {/* Dodajemy komponent do wyświetlania opakowań do odbioru - bez onDragEnd */}
+          <PackagingsList canAssignPackagings={canAssignPackagings} />
+
+          <SimpleCalendarGrid 
+            daysInMonth={daysInMonth}
+            onDateSelect={handleDateClick}
+            currentMonth={currentMonth}
+            transporty={transporty}
+            filtryAktywne={filtryAktywne}
+            canRescheduleCalendar={canRescheduleCalendar}
+          />
+          
+          <TransportsList
+            selectedDate={selectedDate}
+            transporty={transporty}
+            userRole={userRole}
+            userEmail={userEmail}
+            userPermissions={userPermissions}
+            canEditCalendar={canEditCalendar}
+            canRescheduleCalendar={canRescheduleCalendar}
+            canConnectRoutes={canConnectRoutes}
+            canMarkAsCompleted={canMarkAsCompleted}
+            onZakonczTransport={handleZakonczTransport}
+            onEditTransport={handleEditTransport}
+            onPrzeniesDoPrzenoszenia={handlePrzeniesDoPrzenoszenia}
+            onConnectTransport={handleConnectTransport}
+            filtryAktywne={filtryAktywne}
+          />
+
+          {selectedDate && (
+            (canEditCalendar || edytowanyTransport) ? (
+              <>
+                <div>
+                  <div className="space-y-2">
+                    {transporty[format(selectedDate, 'yyyy-MM-dd')]?.filter(t => {
+                      const pasujeMagazyn = !filtryAktywne.magazyn || t.zrodlo === filtryAktywne.magazyn;
+                      const pasujeKierowca = !filtryAktywne.kierowca || t.kierowcaId === filtryAktywne.kierowca;
+                      const pasujeRynek = !filtryAktywne.rynek || t.rynek === filtryAktywne.rynek;
+                      return pasujeMagazyn && pasujeKierowca && pasujeRynek && t.status === 'aktywny';
+                    }).map(t => (
+                      <div key={t.id} className="border p-2 rounded">
+                        {t.miasto} - {t.kodPocztowy}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                
+                <TransportForm
+                  selectedDate={selectedDate}
+                  nowyTransport={nowyTransport}
+                  handleInputChange={handleInputChange}
+                  handleSubmit={handleSubmit}
+                  edytowanyTransport={edytowanyTransport}
+                  handleUpdateTransport={handleUpdateTransport}
+                  setEdytowanyTransport={setEdytowanyTransport}
+                  setNowyTransport={setNowyTransport}
+                  userPermissions={userPermissions}
+                  userRole={userRole}
+                  transporty={transporty}
+                  currentUserEmail={userEmail}
+                  userName={userName || (typeof window !== 'undefined' ? localStorage.getItem('userName') : '') || userEmail}
+                />
+              </>
+            ) : (
+              <div className="mt-6 p-4 rounded-xl border border-blue-200 bg-blue-50 text-blue-900 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div>
+                  <h4 className="text-sm font-semibold flex items-center gap-1.5">
+                    <span>📅</span>
+                    Wybrany dzień: {format(selectedDate, 'd MMMM yyyy', { locale: pl })}
+                  </h4>
+                  <p className="text-xs text-blue-700 mt-1">
+                    Twoja rola (<span className="font-medium">{userRole || 'Handlowiec'}</span>) posiada uprawnienia do podglądu kalendarza floty.
+                    Aby złożyć zapotrzebowanie na transport towaru, skorzystaj z formularza wniosków.
+                  </p>
+                </div>
+                <a 
+                  href="/moje-wnioski" 
+                  className="px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow transition-colors whitespace-nowrap"
+                >
+                  Złóż wniosek transportowy &rarr;
+                </a>
+              </div>
+            )
+          )}
          
          {przenoszonyTransport && (
            <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">

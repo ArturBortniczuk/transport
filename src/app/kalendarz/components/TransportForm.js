@@ -47,27 +47,6 @@ export default function TransportForm({
     // 2. Jeśli użytkownik ma uprawnienie calendar.edit
     if (userPermissions?.calendar?.edit === true) return true;
 
-    // 3. Magazyn / Koordynator / Kierownik ma pełny dostęp
-    const roleLower = (userRole || '').toLowerCase();
-    const emailLower = (currentUserEmail || '').toLowerCase();
-    const isMagazyn = 
-      roleLower.includes('magazyn') || 
-      roleLower.includes('koordynator') ||
-      roleLower.includes('kierownik') ||
-      emailLower.includes('magazyn');
-
-    if (isMagazyn) return true;
-
-    // 4. Jeśli tworzymy nowy transport (brak transport.id)
-    if (!transport || !transport.id) {
-      return true;
-    }
-
-    // 5. Jeśli użytkownik jest twórcą tego transportu
-    if (transport.emailZlecajacego && emailLower && transport.emailZlecajacego.toLowerCase() === emailLower) {
-      return true;
-    }
-
     return false;
   };
 
@@ -932,7 +911,8 @@ export default function TransportForm({
           <div className="mt-6 flex gap-4">
             <button
               type="submit"
-              className="flex-1 py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200"
+              disabled={!canEditTransport(edytowanyTransport)}
+              className="flex-1 py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200"
             >
               {edytowanyTransport ? 'Zapisz zmiany' : 'Dodaj transport'}
             </button>

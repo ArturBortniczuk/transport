@@ -1,38 +1,24 @@
 import { NextResponse } from 'next/server';
 import db from '@/database/db';
-import { validateSession } from '@/lib/auth';
+import { getSessionUser } from '@/lib/auth';
 
 export async function POST(request) {
   try {
     // Sprawdzamy uwierzytelnienie
-    const authToken = request.cookies.get('authToken')?.value;
-    const userId = await validateSession(request) || await validateSession(authToken);
-    
-    if (!userId) {
+    const session = await getSessionUser(request);
+    if (!session?.isAuthenticated || !session.user) {
       return NextResponse.json({ 
         success: false, 
         error: 'Unauthorized' 
       }, { status: 401 });
     }
     
-    // Sprawdź uprawnienia użytkownika
-    const user = await db('users')
-      .where('email', userId)
-      .select('role', 'permissions')
-      .first();
-    
-    let canEditCalendar = false;
-    try {
-      if (user.permissions) {
-        const permissions = JSON.parse(user.permissions);
-        canEditCalendar = permissions?.calendar?.edit === true;
-      }
-    } catch (e) {
-      console.error('Błąd parsowania uprawnień:', e);
-    }
+    const canConnect = session.user.isAdmin === true || 
+                       session.user.permissions?.calendar?.connect_routes === true ||
+                       session.user.permissions?.calendar?.edit === true;
     
     // Tylko użytkownicy z uprawnieniami mogą rozłączać transporty
-    if (!canEditCalendar) {
+    if (!canConnect) {
       return NextResponse.json({ 
         success: false, 
         error: 'Brak uprawnień do rozłączania transportów' 

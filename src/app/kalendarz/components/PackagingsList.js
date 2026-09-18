@@ -6,7 +6,7 @@ import { Package, RefreshCw, Info } from 'lucide-react'
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
 
-export default function PackagingsList() {
+export default function PackagingsList({ canAssignPackagings = true }) {
   const [packagings, setPackagings] = useState([])
   const [isExpanded, setIsExpanded] = useState(false) // Zmienione na false - domyślnie zwinięte
   const [isLoading, setIsLoading] = useState(true)
@@ -129,6 +129,7 @@ export default function PackagingsList() {
                       key={packaging.id}
                       draggableId={packaging.id.toString()}
                       index={index}
+                      isDragDisabled={!canAssignPackagings}
                     >
                       {(provided, snapshot) => (
                         <div
@@ -138,7 +139,7 @@ export default function PackagingsList() {
                           className={`
                             relative p-2 border rounded text-xs
                             ${snapshot.isDragging ? 'shadow-lg bg-blue-100 z-10' : 'hover:bg-blue-50 bg-white'}
-                            cursor-grab transition-all
+                            ${canAssignPackagings ? 'cursor-grab' : 'cursor-default'} transition-all
                           `}
                         >
                           <div className="flex justify-between items-start">

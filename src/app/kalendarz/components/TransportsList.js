@@ -9,6 +9,11 @@ export default function TransportsList({
   transporty,
   userRole,
   userEmail,
+  userPermissions: propUserPermissions,
+  canEditCalendar: propCanEditCalendar,
+  canRescheduleCalendar: propCanRescheduleCalendar,
+  canConnectRoutes: propCanConnectRoutes,
+  canMarkAsCompleted: propCanMarkAsCompleted,
   onZakonczTransport,
   onEditTransport,
   onPrzeniesDoPrzenoszenia,
@@ -40,20 +45,22 @@ export default function TransportsList({
     return pasujeMagazyn && pasujeKierowca && pasujePojazd && pasujeRynek;
   });
   
-  const [userPermissions, setUserPermissions] = useState({});
-  const [isLoading, setIsLoading] = useState(true);
+  const [userPermissions, setUserPermissions] = useState(propUserPermissions || {});
+  const [isLoading, setIsLoading] = useState(false);
   
-  // Pobierz uprawnienia z API zamiast localStorage
+  // Pobierz uprawnienia z API jeśli brak propUserPermissions
   useEffect(() => {
+    if (propUserPermissions && Object.keys(propUserPermissions).length > 0) {
+      setUserPermissions(propUserPermissions);
+      return;
+    }
     async function fetchUserPermissions() {
       try {
         const response = await fetch('/api/user');
         const data = await response.json();
         
-        console.log('Dane użytkownika z API:', data);
         if (data.isAuthenticated && data.user) {
           setUserPermissions(data.user.permissions || {});
-          console.log('Pobrane uprawnienia:', data.user.permissions);
         }
       } catch (error) {
         console.error('Błąd pobierania uprawnień użytkownika:', error);
@@ -63,36 +70,17 @@ export default function TransportsList({
     }
 
     fetchUserPermissions();
-  }, []);
+  }, [propUserPermissions]);
 
-  const canEdit = userPermissions?.calendar?.edit === true || userRole === 'admin';
-  const canMarkAsCompleted = userPermissions?.transport?.markAsCompleted === true || userRole === 'admin';
+  const isAdmin = userRole === 'admin' || userEmail === 'a.bortniczuk@grupaeltron.pl';
+  const canEdit = propCanEditCalendar !== undefined ? propCanEditCalendar : (isAdmin || userPermissions?.calendar?.edit === true);
+  const canReschedule = propCanRescheduleCalendar !== undefined ? propCanRescheduleCalendar : (isAdmin || userPermissions?.calendar?.reschedule === true);
+  const canConnect = propCanConnectRoutes !== undefined ? propCanConnectRoutes : (isAdmin || userPermissions?.calendar?.connect_routes === true);
+  const canMarkAsCompleted = propCanMarkAsCompleted !== undefined ? propCanMarkAsCompleted : (isAdmin || userPermissions?.transport?.markAsCompleted === true);
 
   // Funkcja pomocnicza do sprawdzania, czy użytkownik może edytować ten transport
   const canEditTransport = (transport) => {
-    // 1. Admin może zawsze edytować
-    if (userRole === 'admin' || userEmail === 'a.bortniczuk@grupaeltron.pl') return true;
-    
-    // 2. Jeśli użytkownik ma ogólne uprawnienie do edycji kalendarza
-    const hasPermission = userPermissions?.calendar?.edit === true;
-    
-    // 3. Sprawdź czy użytkownik to Magazyn / Koordynator / Kierownik
-    const roleLower = (userRole || '').toLowerCase();
-    const emailLower = (userEmail || '').toLowerCase();
-    const isMagazyn = 
-      roleLower.includes('magazyn') || 
-      roleLower.includes('koordynator') ||
-      roleLower.includes('kierownik') ||
-      emailLower.includes('magazyn');
-
-    if (isMagazyn || hasPermission) return true;
-
-    // 4. Twórca transportu może edytować swój transport
-    if (transport?.emailZlecajacego && emailLower && transport.emailZlecajacego.toLowerCase() === emailLower) {
-      return true;
-    }
-    
-    return false;
+    return canEdit;
   };
   
   console.log('Uprawnienia w TransportsList:', {
@@ -291,7 +279,7 @@ export default function TransportsList({
                         </div>
                         
                         {/* Przycisk do rozłączania transportów */}
-                        {canEdit && (
+                        {canConnect && (
                           <button
                             onClick={() => handleDisconnectTransport(transport.id)}
                             className="mt-2 px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
@@ -353,29 +341,29 @@ export default function TransportsList({
                       )}
                       
                       {canEditTransport(transport) && (
-                        <>
-                          <button
-                            onClick={() => onEditTransport(transport)}
-                            className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                          >
-                            Edytuj
-                          </button>
-                          <button
-                            onClick={() => onPrzeniesDoPrzenoszenia(transport)}
-                            className="px-4 py-2 text-sm bg-yellow-600 text-white rounded hover:bg-yellow-700 transition-colors"
-                          >
-                            Przenieś
-                          </button>
-                          {/* Nowy przycisk do łączenia transportów */}
-                          {canBeConnected(transport) && onConnectTransport && (
-                            <button
-                              onClick={() => onConnectTransport(transport)}
-                              className="px-4 py-2 text-sm bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors"
-                            >
-                              Połącz
-                            </button>
-                          )}
-                        </>
+                        <button
+                          onClick={() => onEditTransport(transport)}
+                          className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                        >
+                          Edytuj
+                        </button>
+                      )}
+                      {canReschedule && (
+                        <button
+                          onClick={() => onPrzeniesDoPrzenoszenia(transport)}
+                          className="px-4 py-2 text-sm bg-yellow-600 text-white rounded hover:bg-yellow-700 transition-colors"
+                        >
+                          Przenieś
+                        </button>
+                      )}
+                      {/* Nowy przycisk do łączenia transportów */}
+                      {canConnect && canBeConnected(transport) && onConnectTransport && (
+                        <button
+                          onClick={() => onConnectTransport(transport)}
+                          className="px-4 py-2 text-sm bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors"
+                        >
+                          Połącz
+                        </button>
                       )}
                     </div>
                   )}
