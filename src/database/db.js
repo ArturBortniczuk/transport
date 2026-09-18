@@ -3,12 +3,11 @@ import knex from 'knex';
 import * as XLSX from 'xlsx';
 import fs from 'fs';
 import path from 'path';
-import { neon } from '@neondatabase/serverless';
 
 // Sprawdź, czy jesteśmy w fazie budowania
 const isBuildPhase = process.env.NODE_ENV === 'production' && typeof window === 'undefined' && !process.env.NEXT_RUNTIME;
 
-// Funkcja do tworzenia połączenia z bazą danych
+// Funkcja do tworzenia połączenia z bazą danych Supabase (PostgreSQL)
 const createDbConnection = () => {
   // Jeśli jesteśmy w fazie budowania, zwróć mock zamiast prawdziwego połączenia
   if (isBuildPhase) {
@@ -27,28 +26,21 @@ const createDbConnection = () => {
     };
   }
 
-  // W przeciwnym razie utwórz prawdziwe połączenie
-  const NEON_DEFAULT = "postgresql://neondb_owner:npg_mJAS3DyIc7BV@ep-solitary-boat-a2acw4pa-pooler.eu-central-1.aws.neon.tech/neondb?sslmode=require";
-  let connStr = process.env.DATABASE_URL || process.env.NEON_DATABASE_URL || NEON_DEFAULT;
+  // Połączenie z bazą produkcyjną Supabase (przez Pooler IPv4 / Direct IPv6)
+  const SUPABASE_DEFAULT = "postgresql://postgres.vwnjmcxwqrfykeexocqi:narzedziaeltron@aws-1-eu-central-1.pooler.supabase.com:5432/postgres";
+  const connStr = process.env.DATABASE_URL || process.env.SUPABASE_DATABASE_URL || SUPABASE_DEFAULT;
 
-  // Jeśli podano nieosiągalny host Supabase direct IPv6 / pooler, użyj bezpiecznego połączenia Neon
-  if (!connStr || connStr.includes('pooler.supabase.com') || connStr.includes('db.vwnjmcxwqrfykeexocqi.supabase.co')) {
-    connStr = process.env.NEON_DATABASE_URL || NEON_DEFAULT;
-  }
-
-  const connectionConfig = connStr
-    ? {
-        connectionString: connStr,
-        ssl: { rejectUnauthorized: false }
-      }
-    : undefined;
+  const connectionConfig = {
+    connectionString: connStr,
+    ssl: { rejectUnauthorized: false }
+  };
 
   return knex({
     client: 'pg',
     connection: connectionConfig,
     pool: {
       min: 0,
-      max: 5
+      max: 10
     },
     acquireConnectionTimeout: 30000
   });

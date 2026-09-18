@@ -57,8 +57,8 @@ export async function PUT(request) {
     const cleanedMpk = typeof mpk === 'string' ? mpk.trim() : (mpk || '');
     const targetEmail = targetUserId.toLowerCase();
 
-    // Aktualizuj MPK użytkownika w bazie danych Neon
-    await db('users')
+    // Aktualizuj MPK użytkownika w bazie danych Supabase
+    await db('profiles')
       .whereRaw('LOWER(email) = ?', [targetEmail])
       .update({ mpk: cleanedMpk })
       .catch(() => null);

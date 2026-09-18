@@ -1,8 +1,8 @@
 // src/app/api/change-password/route.js
 import { NextResponse } from 'next/server';
 import db from '@/database/db';
-import { validateSession, getSessionUser, verifyPassword, hashPassword } from '@/lib/auth';
-import { supabaseAdmin } from '@/lib/supabaseClient';
+import { validateSession, getSessionUser } from '@/lib/auth';
+import { supabase, supabaseAdmin } from '@/lib/supabaseClient';
 
 export async function POST(request) {
   try {
@@ -33,18 +33,6 @@ export async function POST(request) {
     }
     
     console.log('Zmiana hasła dla:', email);
-    
-    // Pobierz użytkownika
-    const user = await db('users')
-      .whereRaw('LOWER(email) = ?', [email.toLowerCase()])
-      .first();
-
-    if (!user || !(await verifyPassword(currentPassword, user.password))) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Nieprawidłowe obecne hasło' 
-      }, { status: 401 });
-    }
 
     if (!newPassword || newPassword.length < 6) {
       return NextResponse.json({ 
@@ -53,33 +41,27 @@ export async function POST(request) {
       }, { status: 400 });
     }
 
-    // Zahashuj nowe hasło
-    const hashedNewPassword = await hashPassword(newPassword);
+    // Weryfikacja obecnego hasła w Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      email: email.toLowerCase(),
+      password: currentPassword
+    });
 
-    // Wykonaj aktualizację w Neon DB
-    await db('users')
-      .whereRaw('LOWER(email) = ?', [email.toLowerCase()])
-      .update({ 
-        password: hashedNewPassword, 
-        first_login: false 
-      });
+    if (authError || !authData?.user) {
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Nieprawidłowe obecne hasło' 
+      }, { status: 401 });
+    }
 
-    // Zsynchronizuj z Supabase Auth
-    try {
-      const { data: profile } = await supabaseAdmin
-        .from('profiles')
-        .select('id')
-        .eq('email', email.toLowerCase())
-        .maybeSingle();
+    // Aktualizacja hasła w Supabase Auth
+    const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(authData.user.id, {
+      password: newPassword,
+      email_confirm: true
+    });
 
-      if (profile?.id) {
-        await supabaseAdmin.auth.admin.updateUserById(profile.id, {
-          password: newPassword,
-          email_confirm: true
-        });
-      }
-    } catch (sbErr) {
-      console.warn('Ostrzeżenie przy aktualizacji hasła w Supabase Auth:', sbErr.message);
+    if (updateError) {
+      throw new Error(updateError.message);
     }
 
     return NextResponse.json({ 

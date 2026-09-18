@@ -168,36 +168,36 @@ export async function getSessionUser(request) {
         console.error('Błąd pobierania profilu z Supabase:', err);
       }
 
-      // 2. Fallback do tabeli users (Neon/lokalna) jeśli brak w profiles
-      let neonUser = null;
+      // 2. Fallback do widoku users jeśli profil nie został znaleziony przez maybeSingle
+      let fallbackUser = null;
       if (!userRow) {
-        neonUser = await db('users')
+        fallbackUser = await db('users')
           .whereRaw('LOWER(email) = ?', [ssoEmail])
           .first()
           .catch(() => null);
-        if (neonUser) userRow = neonUser;
+        if (fallbackUser) userRow = fallbackUser;
       }
 
-      const rawRole = (userPerm?.is_active && userPerm.role) ? userPerm.role : (neonUser?.role || userRow?.role || 'pracownik');
+      const rawRole = (userPerm?.is_active && userPerm.role) ? userPerm.role : (fallbackUser?.role || userRow?.role || 'pracownik');
       const roleLower = (rawRole || '').toLowerCase();
       const emailLower = ssoEmail.toLowerCase();
       const isSuperAdmin = emailLower === 'a.bortniczuk@grupaeltron.pl';
-      const isAdmin = isSuperAdmin || roleLower === 'admin' || userRow?.is_admin === true || neonUser?.is_admin === true;
+      const isAdmin = isSuperAdmin || roleLower === 'admin' || userRow?.is_admin === true || fallbackUser?.is_admin === true;
 
       // Sprawdź czy to rola magazynowa
       const isWarehouse = 
         roleLower.includes('magazyn') ||
         emailLower.includes('magazyn') ||
         (userRow?.position && userRow.position.toLowerCase().includes('magazyn')) ||
-        (neonUser?.position && neonUser.position.toLowerCase().includes('magazyn'));
+        (fallbackUser?.position && fallbackUser.position.toLowerCase().includes('magazyn'));
 
-      const isCoordinator = roleLower.includes('koordynator') || (neonUser?.role && neonUser.role.toLowerCase().includes('koordynator'));
+      const isCoordinator = roleLower.includes('koordynator') || (fallbackUser?.role && fallbackUser.role.toLowerCase().includes('koordynator'));
       const isDriver = roleLower.includes('kierowca') || emailLower.includes('kierowca');
 
       // Parsuj własne uprawnienia jeśli istnieją (z user_app_permissions z Supabase)
       let customPerms = {};
       try {
-        const rawPerms = userPerm?.permissions || neonUser?.permissions || userRow?.permissions;
+        const rawPerms = userPerm?.permissions || fallbackUser?.permissions || userRow?.permissions;
         if (rawPerms) {
           customPerms = typeof rawPerms === 'string' ? JSON.parse(rawPerms) : rawPerms;
         }
@@ -286,11 +286,11 @@ export async function getSessionUser(request) {
         user: {
           id: userRow?.id,
           email: ssoEmail,
-          name: userRow?.name || neonUser?.name || ssoEmail.split('@')[0],
-          position: userRow?.position || neonUser?.position || '',
+          name: userRow?.name || fallbackUser?.name || ssoEmail.split('@')[0],
+          position: userRow?.position || fallbackUser?.position || '',
           role: rawRole,
           permissions: permissions,
-          mpk: userRow?.mpk || neonUser?.mpk || '',
+          mpk: userRow?.mpk || fallbackUser?.mpk || '',
           isAdmin: isAdmin
         }
       };

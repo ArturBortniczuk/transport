@@ -80,33 +80,11 @@ export default function SpedycjaPage() {
         console.log('Pobrane dane z API:', data.spedycje);
         setZamowienia(data.spedycje);
       } else {
-        // Próbujemy pobrać dane z localStorage dla kompatybilności
-        const savedData = localStorage.getItem('zamowieniaSpedycja');
-        if (savedData) {
-          const parsedData = JSON.parse(savedData);
-          const filteredData = showArchive 
-            ? parsedData.filter(item => item.status === 'completed')
-            : parsedData.filter(item => item.status === 'new');
-          setZamowienia(filteredData);
-          return;
-        }
-        
         throw new Error(data.error || 'Błąd pobierania danych');
       }
     } catch (error) {
       console.error('Błąd pobierania danych spedycji:', error);
-      
-      // Próbujemy pobrać dane z localStorage dla kompatybilności
-      const savedData = localStorage.getItem('zamowieniaSpedycja');
-      if (savedData) {
-        const parsedData = JSON.parse(savedData);
-        const filteredData = showArchive 
-          ? parsedData.filter(item => item.status === 'completed')
-          : parsedData.filter(item => item.status === 'new');
-        setZamowienia(filteredData);
-      } else {
-        setError('Wystąpił problem podczas pobierania danych. Spróbuj ponownie później.');
-      }
+      setError('Wystąpił problem podczas pobierania danych z bazy. Spróbuj ponownie później.');
     } finally {
       setIsLoading(false);
     }
@@ -116,48 +94,26 @@ export default function SpedycjaPage() {
     try {
       console.log('Dodawanie nowego zamówienia:', noweZamowienie);
       
-      // Najpierw spróbuj zapisać do API
-      try {
-        const response = await fetch('/api/spedycje', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(noweZamowienie)
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-          // Odświeżamy listę po dodaniu
-          fetchSpedycje();
-          setShowForm(false);
-          showOperationMessage('Zamówienie spedycji zostało pomyślnie dodane', 'success');
-          return;
-        }
-      } catch (apiError) {
-        console.error('Błąd API, używam localStorage:', apiError);
+      const response = await fetch('/api/spedycje', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(noweZamowienie)
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        fetchSpedycje();
+        setShowForm(false);
+        showOperationMessage(`Zamówienie spedycji (${data.orderNumber || ''}) zostało pomyślnie dodane do bazy danych`, 'success');
+      } else {
+        throw new Error(data.error || 'Nie udało się zapisać zlecenia na serwerze');
       }
-      
-      // Zapisz do localStorage jeśli API zawiedzie
-      const zamowienieWithDetails = {
-        ...noweZamowienie,
-        id: Date.now(),
-        status: 'new',
-        createdAt: new Date().toISOString()
-      };
-
-      const savedData = localStorage.getItem('zamowieniaSpedycja');
-      const currentZamowienia = savedData ? JSON.parse(savedData) : [];
-      const updatedZamowienia = [...currentZamowienia, zamowienieWithDetails];
-      localStorage.setItem('zamowieniaSpedycja', JSON.stringify(updatedZamowienia));
-      
-      fetchSpedycje();
-      setShowForm(false);
-      showOperationMessage('Zamówienie spedycji zostało dodane (lokalnie)', 'success');
     } catch (error) {
       console.error('Błąd dodawania zlecenia:', error);
-      showOperationMessage('Wystąpił błąd podczas dodawania zlecenia', 'error');
+      showOperationMessage('Błąd zapisu w bazie danych: ' + error.message, 'error');
     }
   };
 
@@ -208,60 +164,35 @@ export default function SpedycjaPage() {
     try {
       console.log('Odpowiedź na zamówienie ID:', zamowienieId, 'Dane odpowiedzi:', response);
       
-      // Najpierw spróbuj użyć API
-      try {
-        const responseApi = await fetch('/api/spedycje', {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            id: zamowienieId,
-            ...response
-          })
-        });
-        
-        const data = await responseApi.json();
-        
-        if (data.success) {
-          setShowForm(false);
-          fetchSpedycje();
-          
-          // Pokaż komunikat z informacją o automatycznych odpowiedziach
-          if (data.message && data.message.includes('połączonych transportów')) {
-            showOperationMessage(data.message, 'success');
-          } else {
-            showOperationMessage('Odpowiedź została pomyślnie zapisana', 'success');
-          }
-          return;
-        }
-      } catch (apiError) {
-        console.error('Błąd API, używam localStorage:', apiError);
-      }
+      const responseApi = await fetch('/api/spedycje', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          id: zamowienieId,
+          ...response
+        })
+      });
       
-      // Aktualizuj w localStorage jeśli API zawiedzie
-      const savedData = localStorage.getItem('zamowieniaSpedycja');
-      if (savedData) {
-        const zamowienia = JSON.parse(savedData);
-        const updatedZamowienia = zamowienia.map(zam => {
-          if (zam.id === zamowienieId) {
-            return { 
-              ...zam, 
-              response,
-            };
-          }
-          return zam;
-        });
-        
-        localStorage.setItem('zamowieniaSpedycja', JSON.stringify(updatedZamowienia));
+      const data = await responseApi.json();
+      
+      if (data.success) {
+        setShowForm(false);
         fetchSpedycje();
-        showOperationMessage('Odpowiedź została zapisana (lokalnie)', 'success');
+        
+        // Pokaż komunikat z informacją o automatycznych odpowiedziach
+        if (data.message && data.message.includes('połączonych transportów')) {
+          showOperationMessage(data.message, 'success');
+        } else {
+          showOperationMessage('Odpowiedź została pomyślnie zapisana w bazie', 'success');
+        }
+      } else {
+        throw new Error(data.error || 'Błąd zapisywania odpowiedzi w bazie');
       }
-      
-      setShowForm(false);
     } catch (error) {
       console.error('Błąd odpowiedzi na zlecenie:', error);
-      showOperationMessage('Wystąpił błąd podczas zapisywania odpowiedzi', 'error');
+      showOperationMessage('Wystąpił błąd podczas zapisywania odpowiedzi: ' + error.message, 'error');
     }
   };
 
@@ -341,56 +272,25 @@ export default function SpedycjaPage() {
 
   const handleMarkAsCompleted = async (id) => {
     try {
-      // Najpierw spróbuj użyć API
-      try {
-        const response = await fetch('/api/spedycje/complete', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ id })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-          fetchSpedycje(); // Odśwież listę
-          showOperationMessage('Zlecenie zostało oznaczone jako zrealizowane', 'success');
-          return;
-        }
-      } catch (apiError) {
-        console.error('Błąd API, używam localStorage:', apiError);
-      }
+      const response = await fetch('/api/spedycje/complete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ id })
+      });
       
-      // Jeśli API zawiedzie, użyj localStorage
-      const savedData = localStorage.getItem('zamowieniaSpedycja');
-      if (savedData) {
-        const zamowienia = JSON.parse(savedData);
-        const updatedZamowienia = zamowienia.map(zam => {
-          if (zam.id === id) {
-            return { 
-              ...zam, 
-              status: 'completed',
-              completedAt: new Date().toISOString(),
-              // Dodajemy minimalne informacje o odpowiedzi
-              response: {
-                ...(zam.response || {}), // Zachowujemy istniejącą odpowiedź, jeśli istnieje
-                completedManually: true,
-                completedBy: 'Admin',
-                completedAt: new Date().toISOString()
-              }
-            };
-          }
-          return zam;
-        });
-        
-        localStorage.setItem('zamowieniaSpedycja', JSON.stringify(updatedZamowienia));
-        fetchSpedycje();
-        showOperationMessage('Zlecenie zostało oznaczone jako zrealizowane (lokalnie)', 'success');
+      const data = await response.json();
+      
+      if (data.success) {
+        fetchSpedycje(); // Odśwież listę
+        showOperationMessage('Zlecenie zostało oznaczone jako zrealizowane w bazie', 'success');
+      } else {
+        throw new Error(data.error || 'Nie udało się oznaczyć jako zrealizowane');
       }
     } catch (error) {
       console.error('Błąd oznaczania jako zrealizowane:', error);
-      showOperationMessage('Wystąpił błąd podczas oznaczania zlecenia jako zrealizowane', 'error');
+      showOperationMessage('Błąd oznaczania jako zrealizowane: ' + error.message, 'error');
     }
   };
 

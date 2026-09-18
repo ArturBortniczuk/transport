@@ -69,19 +69,19 @@ export async function POST(request) {
         };
       }
     } catch (sbErr) {
-      console.warn('Próba logowania Supabase nie powiodła się, sprawdzam bazę lokalną/Neon:', sbErr.message);
+      console.warn('Próba logowania Supabase nie powiodła się:', sbErr.message);
     }
 
-    // 2. Jeśli Supabase nie zwrócił użytkownika, sprawdź tabelę users (Neon / hashe bcrypt / hasła jawne)
+    // 2. Jeśli Supabase Auth nie zwrócił użytkownika, sprawdź widok users
     if (!authenticatedUser) {
       const user = await db('users')
         .whereRaw('LOWER(email) = ?', [normalizedEmail])
         .first();
       
-      if (user && await verifyPassword(password, user.password)) {
-        console.log(`✅ Uwierzytelniono hasło w Neon dla: ${normalizedEmail}`);
+      if (user && user.password && await verifyPassword(password, user.password)) {
+        console.log(`✅ Uwierzytelniono hasło dla: ${normalizedEmail}`);
 
-        // Zaktualizuj hash bcrypt w Neon jeśli hasło było czystotekstowe
+        // Zaktualizuj hash bcrypt jeśli hasło było czystotekstowe
         if (!isBcryptHash(user.password)) {
           try {
             const hashedPassword = await hashPassword(password);
