@@ -1,4 +1,7 @@
 // src/app/api/users/list/route.js
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 import { NextResponse } from 'next/server';
 import db from '@/database/db';
 import { getFromCache, setInCache } from '@/utils/cache';
@@ -13,15 +16,14 @@ export async function GET() {
       return NextResponse.json(cachedUsers);
     }
     
-    // Pobieranie listy użytkowników - zaktualizowane do Knex
+    // Pobieranie listy użytkowników (tylko pracownicy, bez klientów zewnętrznych)
     const users = await db('users')
-      .select('name', 'email', 'mpk', 'role');
+      .select('name', 'email', 'mpk', 'role')
+      .whereNotIn('role', ['client', 'klient'])
+      .orderBy('name', 'asc');
 
-    // Dodaj logi, aby sprawdzić, czy MPK jest prawidłowo zwracane
-    console.log('Przykład użytkownika zwróconego przez API:', users[0]);
-
-    // Zapisz w cache na 15 minut
-    setInCache(cacheKey, users, 900);
+    // Zapisz w cache na 60 sekund (zamiast 15 minut)
+    setInCache(cacheKey, users, 60);
 
     return NextResponse.json(users);
   } catch (error) {

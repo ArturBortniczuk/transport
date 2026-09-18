@@ -17,9 +17,11 @@ export async function GET(request) {
       }, { status: 401 });
     }
 
-    // Pobieranie listy użytkowników
+    // Pobieranie listy użytkowników (tylko pracownicy, bez klientów zewnętrznych)
     const users = await db('users')
-      .select('name', 'position', 'email', 'permissions', 'role', 'mpk');
+      .select('name', 'position', 'email', 'permissions', 'role', 'mpk')
+      .whereNotIn('role', ['client', 'klient'])
+      .orderBy('name', 'asc');
 
     if (!users || users.length === 0) {
       throw new Error('Nie znaleziono użytkowników');
