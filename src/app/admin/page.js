@@ -45,6 +45,19 @@ const ROLE_LABELS = {
   kierowca: 'Kierowca'
 }
 
+function normalizeRole(rawRole) {
+  if (!rawRole) return 'handlowiec';
+  const lower = String(rawRole).toLowerCase().trim();
+  if (lower === 'admin' || lower.includes('administrator')) return 'admin';
+  if (lower.includes('koordynator') || lower.includes('dyspozytor')) return 'koordynator';
+  if (lower.includes('magazynier zielonka') || lower === 'magazyn_zielonka') return 'magazyn_zielonka';
+  if (lower.includes('magazynier białystok') || lower.includes('magazynier bialystok') || lower === 'magazyn_bialystok') return 'magazyn_bialystok';
+  if (lower.includes('magazyn')) return 'magazyn';
+  if (lower.includes('kierowca')) return 'kierowca';
+  if (lower.includes('handlowiec') || lower.includes('pracownik') || lower.includes('specjalista') || lower.includes('pozostałe') || lower.includes('pozostale')) return 'handlowiec';
+  return lower;
+}
+
 // Kolory badge'ów dla ról
 const ROLE_COLORS = {
   admin: 'bg-purple-100 text-purple-800 border-purple-200',
@@ -176,12 +189,14 @@ export default function AdminPage() {
           console.error('Błąd parsowania uprawnień dla użytkownika:', user.email, e)
         }
 
+        const normalizedRole = normalizeRole(user.role);
+
         const defaultPermissions = {
           calendar: {
-            edit: user.role === 'magazyn' || user.role === 'magazyn_bialystok' || user.role === 'magazyn_zielonka'
+            edit: normalizedRole === 'magazyn' || normalizedRole === 'magazyn_bialystok' || normalizedRole === 'magazyn_zielonka' || normalizedRole === 'admin'
           },
           transport: {
-            markAsCompleted: user.role === 'magazyn' || user.role === 'magazyn_bialystok' || user.role === 'magazyn_zielonka'
+            markAsCompleted: normalizedRole === 'magazyn' || normalizedRole === 'magazyn_bialystok' || normalizedRole === 'magazyn_zielonka' || normalizedRole === 'admin'
           },
           spedycja: {
             add: false,
@@ -189,16 +204,17 @@ export default function AdminPage() {
             sendOrder: false
           },
           admin: {
-            users: false,
-            valuation: false,
-            packagings: false,
-            constructions: false,
-            cable_advices: false
+            users: normalizedRole === 'admin',
+            valuation: normalizedRole === 'admin',
+            packagings: normalizedRole === 'admin',
+            constructions: normalizedRole === 'admin',
+            cable_advices: normalizedRole === 'admin'
           }
         }
 
         return {
           ...user,
+          role: normalizedRole,
           permissions: {
             ...defaultPermissions,
             ...permissions
@@ -755,6 +771,7 @@ export default function AdminPage() {
                       <option value="admin">Administrator</option>
                       <option value="koordynator">Koordynator</option>
                       <option value="handlowiec">Handlowiec</option>
+                      <option value="magazyn">Magazyn</option>
                       <option value="magazyn_zielonka">Magazyn Zielonka</option>
                       <option value="magazyn_bialystok">Magazyn Białystok</option>
                       <option value="kierowca">Kierowca</option>
@@ -936,6 +953,7 @@ export default function AdminPage() {
                             <option value="admin">Administrator</option>
                             <option value="koordynator">Koordynator</option>
                             <option value="handlowiec">Handlowiec</option>
+                            <option value="magazyn">Magazyn</option>
                             <option value="magazyn_zielonka">Magazyn Zielonka</option>
                             <option value="magazyn_bialystok">Magazyn Białystok</option>
                             <option value="kierowca">Kierowca</option>

@@ -120,6 +120,22 @@ export function extractEmailFromCookie(cookieValue) {
 }
 
 /**
+ * Normalizuje nazwy ról pomiędzy Narzędziownikiem (portal) a aplikacją Transport.
+ */
+export function normalizeTransportRole(rawRole) {
+  if (!rawRole) return 'handlowiec';
+  const lower = String(rawRole).toLowerCase().trim();
+  if (lower === 'admin' || lower.includes('administrator')) return 'admin';
+  if (lower.includes('koordynator') || lower.includes('dyspozytor')) return 'koordynator';
+  if (lower.includes('magazynier białystok') || lower.includes('magazynier bialystok') || lower === 'magazyn_bialystok') return 'magazyn_bialystok';
+  if (lower.includes('magazynier zielonka') || lower === 'magazyn_zielonka') return 'magazyn_zielonka';
+  if (lower.includes('magazyn')) return 'magazyn';
+  if (lower.includes('kierowca')) return 'kierowca';
+  if (lower.includes('handlowiec') || lower.includes('pracownik') || lower.includes('specjalista') || lower.includes('pozostałe') || lower.includes('pozostale')) return 'handlowiec';
+  return lower;
+}
+
+/**
  * Pobiera dane zalogowanego użytkownika na podstawie ciasteczka Supabase SSO (eltron_auth_token)
  * lub ciasteczka authToken / userEmail.
  * @param {Request} request
@@ -178,21 +194,16 @@ export async function getSessionUser(request) {
         if (fallbackUser) userRow = fallbackUser;
       }
 
-      const rawRole = (userPerm?.is_active && userPerm.role) ? userPerm.role : (fallbackUser?.role || userRow?.role || 'pracownik');
-      const roleLower = (rawRole || '').toLowerCase();
+      // Rola w aplikacji Transport:
+      // Wyłącznie z user_app_permissions (jeśli rekord istnieje i is_active)
+      // Nigdy nie bierzemy profiles.role, ponieważ historycznie wszyscy pracownicy w profiles mieli role='admin'!
+      const rawRole = (userPerm?.is_active && userPerm.role)
+        ? userPerm.role
+        : (fallbackUser?.role && fallbackUser.role !== 'admin' ? fallbackUser.role : 'pracownik');
+
+      const normalizedRole = normalizeTransportRole(rawRole);
       const emailLower = ssoEmail.toLowerCase();
       const isSuperAdmin = emailLower === 'a.bortniczuk@grupaeltron.pl';
-      const isAdmin = isSuperAdmin || roleLower === 'admin' || userRow?.is_admin === true || fallbackUser?.is_admin === true;
-
-      // Sprawdź czy to rola magazynowa
-      const isWarehouse = 
-        roleLower.includes('magazyn') ||
-        emailLower.includes('magazyn') ||
-        (userRow?.position && userRow.position.toLowerCase().includes('magazyn')) ||
-        (fallbackUser?.position && fallbackUser.position.toLowerCase().includes('magazyn'));
-
-      const isCoordinator = roleLower.includes('koordynator') || (fallbackUser?.role && fallbackUser.role.toLowerCase().includes('koordynator'));
-      const isDriver = roleLower.includes('kierowca') || emailLower.includes('kierowca');
 
       // Parsuj własne uprawnienia jeśli istnieją (z user_app_permissions z Supabase)
       let customPerms = {};
@@ -203,6 +214,24 @@ export async function getSessionUser(request) {
         }
       } catch (e) {}
 
+      // Użytkownik jest administratorem TYLKO jeśli:
+      // 1. Jest SuperAdminem (a.bortniczuk@grupaeltron.pl)
+      // 2. Jego rola w systemie transportowym to 'admin' (lub zawiera 'administrator')
+      // 3. W uprawnieniach transportu ma włączone zarządzanie użytkownikami (customPerms.admin.users === true)
+      const isAdmin = isSuperAdmin ||
+        normalizedRole === 'admin' ||
+        customPerms?.admin?.users === true;
+
+      // Sprawdź czy to rola magazynowa
+      const isWarehouse = 
+        normalizedRole === 'magazyn' ||
+        normalizedRole === 'magazyn_bialystok' ||
+        normalizedRole === 'magazyn_zielonka' ||
+        emailLower.includes('magazyn');
+
+      const isCoordinator = normalizedRole === 'koordynator';
+      const isDriver = normalizedRole === 'kierowca' || emailLower.includes('kierowca');
+
       // Sprawdź obecność grup w customPerms
       const hasCustomCalendar = customPerms && customPerms.calendar !== undefined;
       const hasCustomTransport = customPerms && customPerms.transport !== undefined;
@@ -211,7 +240,7 @@ export async function getSessionUser(request) {
 
       const canEditCalendar = hasCustomCalendar && customPerms.calendar?.edit !== undefined
         ? Boolean(customPerms.calendar.edit)
-        : (isAdmin || isWarehouse || isCoordinator || ['kierownik', 'dyrektor'].includes(roleLower));
+        : (isAdmin || isWarehouse || isCoordinator);
 
       const canCompleteTransport = hasCustomTransport && customPerms.transport?.markAsCompleted !== undefined
         ? Boolean(customPerms.transport.markAsCompleted)
@@ -288,7 +317,8 @@ export async function getSessionUser(request) {
           email: ssoEmail,
           name: userRow?.name || fallbackUser?.name || ssoEmail.split('@')[0],
           position: userRow?.position || fallbackUser?.position || '',
-          role: rawRole,
+          role: normalizedRole,
+          rawRole: rawRole,
           permissions: permissions,
           mpk: userRow?.mpk || fallbackUser?.mpk || '',
           isAdmin: isAdmin

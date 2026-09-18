@@ -74,10 +74,15 @@ export default function Navigation() {
 
       setIsLoggedIn(data.isAuthenticated);
       if (data.isAuthenticated && data.user) {
-        const role = data.user.role;
-        let normalizedRole = role;
-        if (role === 'magazyn_bialystok') normalizedRole = 'magazyn';
-        if (role === 'magazyn_zielonka') normalizedRole = 'magazyn';
+        const rawRole = (data.user.role || '').toLowerCase().trim();
+        let normalizedRole = rawRole;
+        if (rawRole === 'admin' || rawRole.includes('administrator')) normalizedRole = 'admin';
+        else if (rawRole.includes('koordynator') || rawRole.includes('dyspozytor')) normalizedRole = 'koordynator';
+        else if (rawRole.includes('magazynier zielonka') || rawRole === 'magazyn_zielonka') normalizedRole = 'magazyn_zielonka';
+        else if (rawRole.includes('magazynier białystok') || rawRole.includes('magazynier bialystok') || rawRole === 'magazyn_bialystok') normalizedRole = 'magazyn_bialystok';
+        else if (rawRole.includes('magazyn')) normalizedRole = 'magazyn';
+        else if (rawRole.includes('kierowca')) normalizedRole = 'kierowca';
+        else if (rawRole.includes('handlowiec') || rawRole.includes('pracownik') || rawRole.includes('specjalista') || rawRole.includes('pozostałe') || rawRole.includes('pozostale')) normalizedRole = 'handlowiec';
 
         setUserRole(normalizedRole || null);
         setUserName(data.user.name || '');
@@ -88,22 +93,17 @@ export default function Navigation() {
           data.user.isAdmin === 't' ||
           data.user.isAdmin === 'TRUE' ||
           data.user.isAdmin === 'true' ||
-          data.user.role === 'admin';
+          normalizedRole === 'admin';
 
         setIsAdmin(adminStatus);
 
         const permissions = data.user.permissions || {};
-        const hasPackagingsAccess = permissions.admin?.packagings === true ||
-          permissions.admin?.packagings === 1 ||
-          permissions.admin?.packagings === 't' ||
-          adminStatus;
-        const hasConstructionsAccess = permissions.admin?.constructions === true ||
-          permissions.admin?.constructions === 1 ||
-          permissions.admin?.constructions === 't' ||
-          adminStatus;
+        const hasUsersAccess = permissions.admin?.users === true || adminStatus;
+        const hasPackagingsAccess = permissions.admin?.packagings === true || adminStatus;
+        const hasConstructionsAccess = permissions.admin?.constructions === true || adminStatus;
 
         setAdminAccess({
-          isFullAdmin: adminStatus,
+          isFullAdmin: hasUsersAccess,
           packagings: hasPackagingsAccess,
           constructions: hasConstructionsAccess
         });
@@ -203,7 +203,7 @@ export default function Navigation() {
           ? [{ name: 'Moje wnioski', path: '/moje-wnioski', icon: FileText }]
           : []
         ),
-        ...(userRole === 'magazyn' || userRole?.startsWith('magazyn_') || userRole === 'admin'
+        ...(userRole === 'magazyn' || userRole?.startsWith('magazyn_') || userRole === 'admin' || userRole === 'koordynator'
           ? [{ name: 'Wnioski transportowe', path: '/wnioski-transportowe', icon: FileText }]
           : []
         )
