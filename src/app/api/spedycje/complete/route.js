@@ -313,6 +313,8 @@ export async function POST(request) {
     }
     
     const user = session.user;
+    const userId = user.email || user.name || 'system';
+    const userName = user.name || user.email || 'system';
     const canComplete = user.isAdmin || user.permissions?.spedycja?.respond === true;
 
     if (!canComplete) {
