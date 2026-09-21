@@ -271,10 +271,23 @@ export async function getSessionUser(request) {
         spedycja: {
           view: hasCustomSpedycja && customPerms.spedycja?.view !== undefined ? Boolean(customPerms.spedycja.view) : true,
           add: hasCustomSpedycja && customPerms.spedycja?.add !== undefined ? Boolean(customPerms.spedycja.add) : (isAdmin || isCoordinator || (!isWarehouse && !isDriver)),
+          edit: hasCustomSpedycja && customPerms.spedycja?.edit !== undefined ? Boolean(customPerms.spedycja.edit) : (isAdmin || isCoordinator || (!isWarehouse && !isDriver)),
           respond: hasCustomSpedycja && customPerms.spedycja?.respond !== undefined ? Boolean(customPerms.spedycja.respond) : (isAdmin || isCoordinator),
           sendOrder: hasCustomSpedycja && customPerms.spedycja?.sendOrder !== undefined ? Boolean(customPerms.spedycja.sendOrder) : (isAdmin || isCoordinator),
           cmr: hasCustomSpedycja && customPerms.spedycja?.cmr !== undefined ? Boolean(customPerms.spedycja.cmr) : (isAdmin || isCoordinator),
-          unmerge: hasCustomSpedycja && customPerms.spedycja?.unmerge !== undefined ? Boolean(customPerms.spedycja.unmerge) : (isAdmin || isCoordinator)
+          unmerge: hasCustomSpedycja && customPerms.spedycja?.unmerge !== undefined ? Boolean(customPerms.spedycja.unmerge) : (isAdmin || isCoordinator),
+          delete: hasCustomSpedycja && customPerms.spedycja?.delete !== undefined ? Boolean(customPerms.spedycja.delete) : (isAdmin || isCoordinator)
+        },
+        archive_spedycji: {
+          view: customPerms?.archive_spedycji?.view !== undefined 
+            ? Boolean(customPerms.archive_spedycji.view) 
+            : (customPerms?.archive?.view !== undefined ? Boolean(customPerms.archive.view) : true),
+          export: customPerms?.archive_spedycji?.export !== undefined 
+            ? Boolean(customPerms.archive_spedycji.export) 
+            : (customPerms?.archive?.export !== undefined ? Boolean(customPerms.archive.export) : true),
+          delete: customPerms?.archive_spedycji?.delete !== undefined 
+            ? Boolean(customPerms.archive_spedycji.delete) 
+            : (customPerms?.archive?.delete !== undefined ? Boolean(customPerms.archive.delete) : isAdmin)
         },
         courier: {
           view: customPerms?.courier?.view !== undefined ? Boolean(customPerms.courier.view) : true,

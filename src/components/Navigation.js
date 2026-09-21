@@ -214,7 +214,7 @@ export default function Navigation() {
       ? [{ name: 'Spedycja', path: '/spedycja', icon: Send }]
       : []
     ),
-    ...(isAdmin || perms.archive?.view !== false
+    ...(isAdmin || (perms.archive_spedycji?.view !== undefined ? perms.archive_spedycji.view !== false : perms.archive?.view !== false)
       ? [{ name: 'Archiwum spedycji', path: '/archiwum-spedycji', icon: Archive }]
       : []
     ),

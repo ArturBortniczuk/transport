@@ -122,9 +122,12 @@ export default function ArchiwumSpedycjiPage() {
             const admin = Boolean(u.isAdmin || u.role === 'admin');
             const perms = u.permissions || {};
             setIsAdmin(admin);
-            setCanView(admin || perms.archive?.view !== false);
-            setCanExport(admin || perms.archive?.export === true);
-            setCanDelete(admin || perms.archive?.delete === true);
+            const canViewArchive = admin || (perms.archive_spedycji?.view !== undefined ? Boolean(perms.archive_spedycji.view) : perms.archive?.view !== false);
+            const canExportArchive = admin || (perms.archive_spedycji?.export !== undefined ? Boolean(perms.archive_spedycji.export) : perms.archive?.export === true);
+            const canDeleteArchive = admin || (perms.archive_spedycji?.delete !== undefined ? Boolean(perms.archive_spedycji.delete) : perms.archive?.delete === true);
+            setCanView(canViewArchive);
+            setCanExport(canExportArchive);
+            setCanDelete(canDeleteArchive);
           }
         }
       } catch (error) {
