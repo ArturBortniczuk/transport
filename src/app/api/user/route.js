@@ -25,7 +25,10 @@ export async function GET(request) {
       });
     }
 
-    return NextResponse.json(sessionResult);
+    return NextResponse.json({
+      success: true,
+      ...sessionResult
+    });
   } catch (error) {
     console.error('Błąd pobierania użytkownika:', error);
     return NextResponse.json({ 

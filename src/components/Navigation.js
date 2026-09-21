@@ -57,11 +57,8 @@ export default function Navigation() {
   // Funkcja pobierająca dane użytkownika
   const fetchUserInfo = async () => {
     try {
-      console.log('Pobieranie informacji o użytkowniku...');
       const response = await fetch('/api/user');
       const data = await response.json();
-
-      console.log('Odpowiedź z API:', data);
 
       if (data.isClient || (data.user && (data.user.role === 'client' || data.user.role === 'klient'))) {
         window.location.replace('https://www.opakowania.grupaeltron.pl/dashboard');

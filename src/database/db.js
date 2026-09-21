@@ -26,15 +26,20 @@ const createDbConnection = () => {
     };
   }
 
-  // Połączenie z bazą produkcyjną Supabase (przez Pooler IPv4 / Direct IPv6)
-  const SUPABASE_DEFAULT = "postgresql://postgres.vwnjmcxwqrfykeexocqi:narzedziaeltron@aws-1-eu-central-1.pooler.supabase.com:5432/postgres";
+  // Połączenie z bazą produkcyjną Supabase (przez Transaction Pooler port 6543)
+  const SUPABASE_DEFAULT = "postgresql://postgres.vwnjmcxwqrfykeexocqi:narzedziaeltron@aws-1-eu-central-1.pooler.supabase.com:6543/postgres";
   let connStr = process.env.DATABASE_URL || process.env.SUPABASE_DATABASE_URL || SUPABASE_DEFAULT;
 
   // Korekta klastra poolera: projekt vwnjmcxwqrfykeexocqi znajduje się na klastrze aws-1 w regionie eu-central-1.
-  // Jeśli w zmiennych środowiskowych Vercela wpisano aws-0, zamieniamy automatycznie na właściwy aws-1.
   if (connStr.includes('vwnjmcxwqrfykeexocqi') && connStr.includes('aws-0-eu-central-1')) {
     console.log('[DB] Automatyczna korekta hosta poolera z aws-0 na aws-1');
     connStr = connStr.replace('aws-0-eu-central-1', 'aws-1-eu-central-1');
+  }
+
+  // Automatycznie zamień port 5432 na 6543 dla poolera Supabase (Transaction mode zamiast Session mode),
+  // co definitywnie eliminuje błąd EMAXCONNSESSION (max clients reached in session mode - pool_size: 15)
+  if (connStr.includes('pooler.supabase.com') && connStr.includes(':5432')) {
+    connStr = connStr.replace(':5432', ':6543');
   }
 
   // Zabezpieczenie przed starym adresem bazy Neon w zmiennych Vercela
@@ -53,14 +58,15 @@ const createDbConnection = () => {
     connection: connectionConfig,
     pool: {
       min: 0,
-      max: 10
-    },
-    acquireConnectionTimeout: 30000
+      max: 4,
+      idleTimeoutMillis: 10000,
+      acquireTimeoutMillis: 30000
+    }
   });
 };
 
-// Inicjalizacja połączenia
-const db = createDbConnection();
+// Inicjalizacja połączenia (singleton dla Next.js)
+const db = global._transportKnexDb || (global._transportKnexDb = createDbConnection());
 
 // Inicjalizacja wszystkich tabel
 const initializeDatabase = async () => {

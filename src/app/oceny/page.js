@@ -95,11 +95,11 @@ export default function OcenyPage() {
       const res = await fetch('/api/user')
       if (res.ok) {
         const data = await res.json()
-        if (data.success && data.user) {
+        if ((data.isAuthenticated || data.success) && data.user) {
           setCurrentUser(data.user)
           const perms = data.user.permissions || {}
-          const hasView = data.user.isAdmin || perms.ratings?.view !== false
-          const hasRate = data.user.isAdmin || perms.ratings?.rate === true
+          const hasView = Boolean(data.user.isAdmin || perms.ratings?.view !== false)
+          const hasRate = Boolean(data.user.isAdmin || perms.ratings?.rate !== false)
           setCanView(hasView)
           setCanRate(hasRate)
         }
@@ -634,25 +634,42 @@ export default function OcenyPage() {
             <p className="text-sm mt-2">Spróbuj zmienić filtry lub zakres dat</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            {activeTab === 'wlasny' ? (
-              <TransportWlasnyTable
-                transports={filteredTransports}
-                onRate={handleOpenRatingModal}
-                getMagazynName={getMagazynName}
-                getDriverName={getDriverName}
-                refreshBadges={refreshBadges}
-                canRate={canRate}
-              />
-            ) : (
-              <TransportSpedycyjnyTable
-                transports={filteredTransports}
-                onRate={handleOpenRatingModal}
-                getMagazynName={getMagazynName}
-                refreshBadges={refreshBadges}
-                canRate={canRate}
-              />
-            )}
+          <div className="space-y-3">
+            {/* Wskazówka jak oceniać */}
+            <div className="p-3.5 bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200/80 rounded-xl text-xs text-amber-900 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-sm">
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-lg bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm">
+                  <Star className="w-4 h-4 fill-current" />
+                </div>
+                <div>
+                  <span className="font-bold text-amber-950">Jak wystawić ocenę:</span> Kliknij żółty przycisk <strong>„⭐ Wystaw ocenę”</strong> po prawej stronie tabeli lub <strong>kliknij bezpośrednio w dowolny wiersz</strong> transportu, aby otworzyć formularz oceny.
+                </div>
+              </div>
+              <span className="text-[11px] font-bold text-amber-800 bg-amber-200/60 px-2.5 py-1 rounded-lg shrink-0 self-start sm:self-auto border border-amber-300/60">
+                Kliknij wiersz aby ocenić ↵
+              </span>
+            </div>
+
+            <div className="overflow-x-auto">
+              {activeTab === 'wlasny' ? (
+                <TransportWlasnyTable
+                  transports={filteredTransports}
+                  onRate={handleOpenRatingModal}
+                  getMagazynName={getMagazynName}
+                  getDriverName={getDriverName}
+                  refreshBadges={refreshBadges}
+                  canRate={canRate}
+                />
+              ) : (
+                <TransportSpedycyjnyTable
+                  transports={filteredTransports}
+                  onRate={handleOpenRatingModal}
+                  getMagazynName={getMagazynName}
+                  refreshBadges={refreshBadges}
+                  canRate={canRate}
+                />
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -706,13 +723,18 @@ function TransportWlasnyTable({ transports, onRate, getMagazynName, getDriverNam
           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">MPK</th>
           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Kierowca</th>
           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ocena</th>
-          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Akcje</th>
+          <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase sticky right-0 bg-gray-50 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)] z-10">Akcje</th>
         </tr>
       </thead>
       <tbody className="bg-white divide-y divide-gray-200">
         {transports.map((transport) => (
-          <tr key={transport.id} className="hover:bg-gray-50">
-            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+          <tr 
+            key={transport.id} 
+            onClick={() => onRate(transport)}
+            className="hover:bg-amber-50/70 cursor-pointer transition-colors group"
+            title="Kliknij, aby wystawić lub zobaczyć ocenę tego transportu"
+          >
+            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 font-medium">
               {safeFormatDate(transport.delivery_date)}
             </td>
             <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
@@ -762,21 +784,30 @@ function TransportWlasnyTable({ transports, onRate, getMagazynName, getDriverNam
                 refreshTrigger={refreshBadges}
               />
             </td>
-            <td className="px-4 py-3 whitespace-nowrap text-sm">
+            <td className="px-4 py-3 whitespace-nowrap text-sm text-center sticky right-0 bg-white group-hover:bg-amber-50/70 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)] z-10">
               {transport.has_rating ? (
                 <button
-                  onClick={() => onRate(transport)}
-                  className="flex items-center text-green-600 hover:text-green-700 transition-colors"
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRate(transport);
+                  }}
+                  className="inline-flex items-center px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs rounded-lg border border-emerald-300 transition-all shadow-sm cursor-pointer"
                 >
-                  <Star className="w-4 h-4 mr-1 fill-current" />
-                  <span className="underline">Zobacz ocenę</span>
+                  <Star className="w-3.5 h-3.5 mr-1 fill-current text-emerald-500" />
+                  <span>Zobacz ocenę</span>
                 </button>
               ) : canRate ? (
                 <button
-                  onClick={() => onRate(transport)}
-                  className="px-3 py-1 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 transition-colors"
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRate(transport);
+                  }}
+                  className="inline-flex items-center px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-bold text-xs rounded-lg transition-all shadow-sm shadow-amber-500/25 cursor-pointer"
                 >
-                  Oceń
+                  <Star className="w-3.5 h-3.5 mr-1 fill-current" />
+                  <span>Wystaw ocenę</span>
                 </button>
               ) : (
                 <span className="text-xs text-gray-400 italic">Brak oceny</span>
@@ -819,7 +850,7 @@ function TransportSpedycyjnyTable({ transports, onRate, getMagazynName, refreshB
           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Towar</th>
           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Opis towaru</th>
           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ocena</th>
-          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Akcje</th>
+          <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase sticky right-0 bg-gray-50 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)] z-10">Akcje</th>
         </tr>
       </thead>
       <tbody className="bg-white divide-y divide-gray-200">
@@ -829,8 +860,13 @@ function TransportSpedycyjnyTable({ transports, onRate, getMagazynName, refreshB
             : '-'
 
           return (
-            <tr key={transport.id} className="hover:bg-gray-50">
-              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+            <tr 
+              key={transport.id} 
+              onClick={() => onRate(transport)}
+              className="hover:bg-amber-50/70 cursor-pointer transition-colors group"
+              title="Kliknij, aby wystawić lub zobaczyć ocenę tego transportu"
+            >
+              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 font-medium">
                 {safeFormatDate(transport.created_at)}
               </td>
               <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
@@ -893,21 +929,30 @@ function TransportSpedycyjnyTable({ transports, onRate, getMagazynName, refreshB
                   refreshTrigger={refreshBadges}
                 />
               </td>
-              <td className="px-4 py-3 whitespace-nowrap text-sm">
+              <td className="px-4 py-3 whitespace-nowrap text-sm text-center sticky right-0 bg-white group-hover:bg-amber-50/70 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)] z-10">
                 {transport.has_rating ? (
                   <button
-                    onClick={() => onRate(transport)}
-                    className="flex items-center text-green-600 hover:text-green-700 transition-colors"
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRate(transport);
+                    }}
+                    className="inline-flex items-center px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs rounded-lg border border-emerald-300 transition-all shadow-sm cursor-pointer"
                   >
-                    <Star className="w-4 h-4 mr-1 fill-current" />
-                    <span className="underline">Zobacz ocenę</span>
+                    <Star className="w-3.5 h-3.5 mr-1 fill-current text-emerald-500" />
+                    <span>Zobacz ocenę</span>
                   </button>
                 ) : canRate ? (
                   <button
-                    onClick={() => onRate(transport)}
-                    className="px-3 py-1 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 transition-colors"
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRate(transport);
+                    }}
+                    className="inline-flex items-center px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-bold text-xs rounded-lg transition-all shadow-sm shadow-amber-500/25 cursor-pointer"
                   >
-                    Oceń
+                    <Star className="w-3.5 h-3.5 mr-1 fill-current" />
+                    <span>Wystaw ocenę</span>
                   </button>
                 ) : (
                   <span className="text-xs text-gray-400 italic">Brak oceny</span>
