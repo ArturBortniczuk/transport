@@ -34,7 +34,7 @@ export default function TransportOrderForm({ onSubmit, onCancel, zamowienie }) {
         if (data.success && data.spedycje) {
           // Filtrujemy tylko transporty, które mają numer zamówienia i nie są tym samym transportem
           const filtered = data.spedycje.filter(t =>
-            t.id !== zamowienie.id && (t.orderNumber || t.order_number)
+            String(t.id) !== String(zamowienie?.id) && (t.orderNumber || t.order_number)
           )
           setAvailableTransports(filtered)
         }
@@ -77,7 +77,7 @@ export default function TransportOrderForm({ onSubmit, onCancel, zamowienie }) {
   const handleAddPlace = () => {
     if (!selectedTransportId) return
 
-    const selectedTransport = availableTransports.find(t => t.id === parseInt(selectedTransportId))
+    const selectedTransport = availableTransports.find(t => String(t.id) === String(selectedTransportId))
     if (!selectedTransport) return
 
     // Przygotuj dane miejsca w zależności od wybranego typu
@@ -113,7 +113,7 @@ export default function TransportOrderForm({ onSubmit, onCancel, zamowienie }) {
   const getTransportRoute = (transport) => {
     const start = transport.location === 'Producent' && transport.producerAddress
       ? transport.producerAddress.city
-      : transport.location.replace('Magazyn ', '')
+      : (transport.location ? transport.location.replace('Magazyn ', '') : 'Brak')
 
     const end = transport.delivery?.city || 'Brak danych'
 

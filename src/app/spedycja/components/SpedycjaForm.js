@@ -178,7 +178,7 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
           if (data.success && data.spedycje) {
             // Filtruj, żeby nie pokazywać bieżącego transportu
             const filteredTransports = data.spedycje.filter(t =>
-              t.id !== (initialData?.id || 0) && t.status === 'new'
+              String(t.id) !== String(initialData?.id || '') && t.status === 'new'
             );
             setAvailableTransports(filteredTransports);
           }
@@ -433,21 +433,26 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
     if (!transport) return;
 
     // Sprawdź czy transport nie jest już dodany
-    if (connectedTransports.some(t => t.id === transport.id)) {
+    if (connectedTransports.some(t => String(t.id) === String(transport.id))) {
       return;
     }
+
+    const startLocation = transport.location === 'Odbiory własne'
+      ? (transport.producerAddress?.city || 'Odbiory własne')
+      : (transport.location ? transport.location.replace('Magazyn ', '') : 'Brak');
+
+    const endLocation = transport.delivery?.city || 'Brak danych';
 
     setConnectedTransports(prev => [
       ...prev,
       {
         id: transport.id,
         orderNumber: transport.orderNumber,
-        route: `${transport.location === 'Odbiory własne' ?
-          (transport.producerAddress?.city || 'Odbiory własne') :
-          transport.location.replace('Magazyn ', '')} → ${transport.delivery?.city || 'Brak danych'}`,
+        route: `${startLocation} → ${endLocation}`,
         responsiblePerson: transport.responsiblePerson,
         mpk: transport.mpk,
-        order: connectedTransports.length + 1,
+        distanceKm: transport.distanceKm || 0,
+        order: prev.length + 1,
         type: 'loading' // domyślnie jako załadunek
       }
     ]);
@@ -455,14 +460,14 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
 
   // Funkcja do usuwania połączonego transportu
   const handleRemoveConnectedTransport = (id) => {
-    setConnectedTransports(prev => prev.filter(t => t.id !== id));
+    setConnectedTransports(prev => prev.filter(t => String(t.id) !== String(id)));
   };
 
   // Funkcja do zmiany kolejności transportu
   const handleChangeTransportOrder = (id, newOrder) => {
     setConnectedTransports(prev => {
       const updated = prev.map(t => {
-        if (t.id === id) {
+        if (String(t.id) === String(id)) {
           return { ...t, order: newOrder };
         }
         return t;
@@ -474,7 +479,7 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
   // Funkcja do zmiany typu transportu (załadunek/rozładunek)
   const handleChangeTransportType = (id, newType) => {
     setConnectedTransports(prev =>
-      prev.map(t => t.id === id ? { ...t, type: newType } : t)
+      prev.map(t => String(t.id) === String(id) ? { ...t, type: newType } : t)
     );
   };
 
@@ -865,21 +870,29 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
                   <select
                     className="w-full p-2 border rounded-md"
                     onChange={(e) => {
-                      const selectedTransport = availableTransports.find(t => t.id === parseInt(e.target.value));
+                      const val = e.target.value;
+                      if (!val) return;
+                      const selectedTransport = availableTransports.find(t => String(t.id) === String(val));
                       if (selectedTransport) {
                         handleAddConnectedTransport(selectedTransport);
                       }
+                      e.target.value = '';
                     }}
                     value=""
                   >
                     <option value="">Wybierz transport...</option>
-                    {availableTransports.map(transport => (
-                      <option key={transport.id} value={transport.id}>
-                        {transport.orderNumber || transport.id} - {transport.delivery?.city || 'Brak danych'}
-                        ({transport.responsiblePerson || 'Brak'})
-                      </option>
-                    ))}
+                    {availableTransports
+                      .filter(transport => !connectedTransports.some(ct => String(ct.id) === String(transport.id)))
+                      .map(transport => (
+                        <option key={transport.id} value={transport.id}>
+                          {transport.orderNumber || transport.id} - {transport.delivery?.city || 'Brak danych'}
+                          ({transport.responsiblePerson || 'Brak'})
+                        </option>
+                      ))}
                   </select>
+                  {availableTransports.filter(transport => !connectedTransports.some(ct => String(ct.id) === String(transport.id))).length === 0 && (
+                    <p className="text-xs text-gray-500 mt-1">Brak innych dostępnych zleceń do połączenia</p>
+                  )}
                 </div>
 
                 {/* Lista wybranych transportów */}
