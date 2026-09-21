@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import db from '@/database/db';
+import { getNextSpedycjaOrderNumber } from '@/lib/utils/orderNumber';
 
 export async function OPTIONS() {
   return new NextResponse(null, {
@@ -34,21 +35,7 @@ export async function POST(request) {
     const month = (currentDate.getMonth() + 1).toString().padStart(2, '0');
     const year = currentDate.getFullYear();
 
-    const lastOrderQuery = await db('spedycje')
-      .whereRaw('EXTRACT(MONTH FROM created_at) = ?', [month])
-      .whereRaw('EXTRACT(YEAR FROM created_at) = ?', [year])
-      .orderBy('id', 'desc')
-      .first();
-
-    let orderNumber = 1;
-    if (lastOrderQuery && lastOrderQuery.order_number) {
-      const lastOrderMatch = lastOrderQuery.order_number.match(/^(\d+)\/\d+\/\d+$/);
-      if (lastOrderMatch) {
-        orderNumber = parseInt(lastOrderMatch[1], 10) + 1;
-      }
-    }
-
-    const formattedOrderNumber = `${orderNumber.toString().padStart(4, '0')}/${month}/${year}`;
+    const { formattedOrderNumber } = await getNextSpedycjaOrderNumber(db, month, year);
 
     let goodsDescriptionJson = null;
     if (spedycjaData.goodsDescription) {

@@ -240,7 +240,7 @@ export default function SpedycjaList({
   // Sprawdza, czy zamówienie może być edytowane
   const canBeEdited = (zamowienie) => {
     // Tylko nowe zamówienia bez odpowiedzi mogą być edytowane
-    return zamowienie.status === 'new' &&
+    return (zamowienie.status === 'new' || zamowienie.status === 'responded') &&
       (!zamowienie.response || Object.keys(zamowienie.response).length === 0);
   }
 
@@ -374,7 +374,7 @@ export default function SpedycjaList({
   return (
     <div className="divide-y">
       {zamowienia
-        .filter(z => showArchive ? z.status === 'completed' : z.status === 'new')
+        .filter(z => showArchive ? z.status === 'completed' : (z.status === 'new' || z.status === 'responded'))
         .map((zamowienie) => {
           const statusInfo = getStatusLabel(zamowienie);
           const dateChanged = isDeliveryDateChanged(zamowienie);
@@ -500,7 +500,7 @@ export default function SpedycjaList({
                   )}
 
                   {/* Przyciski admina - odpowiadanie i oznaczanie jako zrealizowane */}
-                  {isAdmin && zamowienie.status === 'new' && (
+                  {isAdmin && (zamowienie.status === 'new' || zamowienie.status === 'responded') && (
                     <>
                       {/* Pokaż przycisk "Odpowiedz" tylko jeśli NIE MA odpowiedzi */}
                       {(!zamowienie.response || Object.keys(zamowienie.response).length === 0) && (

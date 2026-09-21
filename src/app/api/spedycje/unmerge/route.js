@@ -1,48 +1,10 @@
 import { NextResponse } from 'next/server';
 import db from '@/database/db';
 import { getSessionUser } from '@/lib/auth';
+import { getNextSpedycjaOrderNumbers } from '@/lib/utils/orderNumber';
 
-// POPRAWIONA FUNKCJA: Generowanie sekwencyjnych numerów zamówień dla rozdzielanych transportów
 const generateOrderNumbersForUnmerge = async (count) => {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth() + 1;
-  
-  try {
-    // Pobierz ostatni numer zamówienia z tego miesiąca i roku
-    const lastOrderQuery = await db('spedycje')
-      .whereRaw('EXTRACT(MONTH FROM created_at) = ?', [month])
-      .whereRaw('EXTRACT(YEAR FROM created_at) = ?', [year])
-      .orderBy('id', 'desc')
-      .first();
-    
-    let startOrderNumber = 1;
-    if (lastOrderQuery && lastOrderQuery.order_number) {
-      const lastOrderMatch = lastOrderQuery.order_number.match(/^(\d+)\/\d+\/\d+$/);
-      if (lastOrderMatch) {
-        startOrderNumber = parseInt(lastOrderMatch[1], 10) + 1;
-      }
-    }
-    
-    // Generuj tablicę numerów - każdy kolejny o 1 większy
-    const orderNumbers = [];
-    for (let i = 0; i < count; i++) {
-      const orderNumber = startOrderNumber + i;
-      const formattedNumber = `${orderNumber.toString().padStart(4, '0')}/${month}/${year}`;
-      orderNumbers.push(formattedNumber);
-    }
-    
-    return orderNumbers;
-  } catch (error) {
-    console.error('Błąd generowania numerów zamówień:', error);
-    // Fallback - użyj timestamp z incremental
-    const baseTimestamp = Date.now();
-    const orderNumbers = [];
-    for (let i = 0; i < count; i++) {
-      orderNumbers.push(`${baseTimestamp + i}/${month}/${year}`);
-    }
-    return orderNumbers;
-  }
+  return await getNextSpedycjaOrderNumbers(db, count);
 };
 
 export async function POST(request) {

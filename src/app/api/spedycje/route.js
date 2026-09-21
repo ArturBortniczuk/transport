@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server';
 import db from '@/database/db';
 import nodemailer from 'nodemailer';
 import { getSessionUser } from '@/lib/auth';
+import { getNextSpedycjaOrderNumber } from '@/lib/utils/orderNumber';
 
 // Funkcja wysyłania powiadomienia o odpowiedzi na spedycję
 const sendResponseNotification = async (spedycjaData, responseData) => {
@@ -302,11 +303,14 @@ export async function GET(request) {
 
     let query = db('spedycje');
 
-    if (status) {
+    if (status === 'new') {
+      // Aktywne zlecenia spedycji: nowe oraz te, na które już udzielono odpowiedzi (ale nie zakończone)
+      query = query.whereIn('status', ['new', 'responded']);
+    } else if (status) {
       query = query.where('status', status);
     }
 
-    query = query.orderBy('created_at', 'desc');
+    query = query.orderBy('created_at', 'desc').orderBy('id', 'desc');
 
     const spedycje = await query;
 
@@ -410,21 +414,7 @@ export async function POST(request) {
     const month = (currentDate.getMonth() + 1).toString().padStart(2, '0');
     const year = currentDate.getFullYear();
 
-    const lastOrderQuery = await db('spedycje')
-      .whereRaw('EXTRACT(MONTH FROM created_at) = ?', [month])
-      .whereRaw('EXTRACT(YEAR FROM created_at) = ?', [year])
-      .orderBy('id', 'desc')
-      .first();
-
-    let orderNumber = 1;
-    if (lastOrderQuery && lastOrderQuery.order_number) {
-      const lastOrderMatch = lastOrderQuery.order_number.match(/^(\d+)\/\d+\/\d+$/);
-      if (lastOrderMatch) {
-        orderNumber = parseInt(lastOrderMatch[1], 10) + 1;
-      }
-    }
-
-    const formattedOrderNumber = `${orderNumber.toString().padStart(4, '0')}/${month}/${year}`;
+    const { formattedOrderNumber } = await getNextSpedycjaOrderNumber(db, month, year);
 
     let goodsDescriptionJson = null;
     if (spedycjaData.goodsDescription) {
