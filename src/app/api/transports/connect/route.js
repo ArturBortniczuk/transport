@@ -65,8 +65,9 @@ export async function POST(request) {
       .update({ 
         connected_transport_id: sourceTransportId,
         cost: targetTransport.distance ? Math.round(targetTransport.distance * 3.5) : null,
-        // Opcjonalnie, możemy również zaktualizować kierowcę, aby był taki sam jak w źródłowym
-        driver_id: sourceTransport.driver_id
+        // Uaktualniamy również kierowcę i pojazd, aby były zgodne z transportem źródłowym
+        driver_id: sourceTransport.driver_id,
+        vehicle_id: sourceTransport.vehicle_id
       });
     
     return NextResponse.json({ 

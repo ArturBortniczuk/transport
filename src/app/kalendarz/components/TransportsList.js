@@ -95,16 +95,16 @@ export default function TransportsList({
     if (transport.connected_transport_id) return true;
     
     // Lub być źródłem dla innego transportu
-    return transportyNaDzien.some(t => t.connected_transport_id === transport.id);
+    return transportyNaDzien.some(t => t.connected_transport_id && String(t.connected_transport_id) === String(transport.id));
   };
   
   // Funkcja pomocnicza znajdująca połączony transport
   const findConnectedTransport = (transport) => {
     if (transport.connected_transport_id) {
-      return transportyNaDzien.find(t => t.id === transport.connected_transport_id);
+      return transportyNaDzien.find(t => String(t.id) === String(transport.connected_transport_id));
     }
     
-    return transportyNaDzien.find(t => t.connected_transport_id === transport.id);
+    return transportyNaDzien.find(t => t.connected_transport_id && String(t.connected_transport_id) === String(transport.id));
   };
 
   // Funkcja do rozłączania transportów
@@ -165,7 +165,7 @@ export default function TransportsList({
   
   // Sprawdź, czy transport może być połączony (nie jest już połączony i jest aktywny)
   const canBeConnected = (transport) => {
-    return !isConnectedTransport(transport) && transport.status === 'active' && canEdit;
+    return !isConnectedTransport(transport) && (transport.status === 'active' || transport.status === 'aktywny') && (canConnect || canEdit);
   };
 
   if (isLoading) {
@@ -203,8 +203,8 @@ export default function TransportsList({
             
             // Sprawdź, czy transport jest połączony
             const isConnected = isConnectedTransport(transport);
-            const isSource = transportyNaDzien.some(t => t.connected_transport_id === transport.id);
-            const isTarget = transport.connected_transport_id !== null;
+            const isSource = transportyNaDzien.some(t => t.connected_transport_id && String(t.connected_transport_id) === String(transport.id));
+            const isTarget = Boolean(transport.connected_transport_id);
             
             // Sprawdź czy transport jest zrealizowany
             const isCompleted = transport.status === 'completed' || transport.status === 'zakończony';

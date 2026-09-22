@@ -114,9 +114,23 @@ export async function POST(request) {
       console.log('Data dostawy po formatowaniu:', transportData.delivery_date);
     }
     
-    // Oblicz koszt na podstawie dystansu (domyślnie stawka 4.5 dla nowych) i zaokrąglij do liczby całkowitej
+    // Upewnij się, że ID i powiązania są poprawnie sformatowane
+    if ('connected_transport_id' in transportData) {
+      transportData.connected_transport_id = transportData.connected_transport_id 
+        ? parseInt(transportData.connected_transport_id, 10) 
+        : null;
+    }
+    if (transportData.driver_id) {
+      transportData.driver_id = parseInt(transportData.driver_id, 10);
+    }
+    if (transportData.vehicle_id) {
+      transportData.vehicle_id = parseInt(transportData.vehicle_id, 10);
+    }
+    
+    // Oblicz koszt na podstawie dystansu (stawka 3.5 dla łączonych, 4.5 dla standardowych) i zaokrąglij do liczby całkowitej
     if (transportData.distance) {
-      transportData.cost = Math.round(transportData.distance * 4.5);
+      const rate = transportData.connected_transport_id ? 3.5 : 4.5;
+      transportData.cost = Math.round(transportData.distance * rate);
     }
 
     // Sprawdź czy podano osobę odpowiedzialną i MPK
@@ -256,11 +270,28 @@ export async function PUT(request) {
       updateData.completed_at = db.fn.now(); 
     }
     
-    // Wylicz na nowo koszt, jeśli zmieniono dystans i zaokrąglij do liczby całkowitej
-    if ('distance' in updateData) {
-      const distanceToUse = updateData.distance;
-      const rate = existingTransport.connected_transport_id ? 3.5 : 4.5;
-      updateData.cost = Math.round(distanceToUse * rate);
+    if ('connected_transport_id' in updateData) {
+      updateData.connected_transport_id = updateData.connected_transport_id 
+        ? parseInt(updateData.connected_transport_id, 10) 
+        : null;
+    }
+    if (updateData.driver_id) {
+      updateData.driver_id = parseInt(updateData.driver_id, 10);
+    }
+    if (updateData.vehicle_id) {
+      updateData.vehicle_id = parseInt(updateData.vehicle_id, 10);
+    }
+    
+    // Wylicz na nowo koszt, jeśli zmieniono dystans lub połączenie
+    if ('distance' in updateData || 'connected_transport_id' in updateData) {
+      const distanceToUse = updateData.distance !== undefined ? updateData.distance : existingTransport.distance;
+      const isConnected = updateData.connected_transport_id !== undefined 
+        ? Boolean(updateData.connected_transport_id) 
+        : Boolean(existingTransport.connected_transport_id);
+      const rate = isConnected ? 3.5 : 4.5;
+      if (distanceToUse) {
+        updateData.cost = Math.round(distanceToUse * rate);
+      }
     }
     
     if (Object.keys(updateData).length === 0) {

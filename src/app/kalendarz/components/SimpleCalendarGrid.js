@@ -66,16 +66,16 @@ export default function SimpleCalendarGrid({
     if (transport.connected_transport_id) return true;
     
     // Lub być źródłem dla innego transportu
-    return allTransports.some(t => t.connected_transport_id === transport.id);
+    return allTransports.some(t => t.connected_transport_id && String(t.connected_transport_id) === String(transport.id));
   };
   
   // Funkcja pomocnicza znajdująca połączony transport
   const findConnectedTransport = (transport, allTransports) => {
     if (transport.connected_transport_id) {
-      return allTransports.find(t => t.id === transport.connected_transport_id);
+      return allTransports.find(t => String(t.id) === String(transport.connected_transport_id));
     }
     
-    return allTransports.find(t => t.connected_transport_id === transport.id);
+    return allTransports.find(t => t.connected_transport_id && String(t.connected_transport_id) === String(transport.id));
   };
   
   // Funkcje pomocnicze do wyświetlania informacji o kierowcy i pojeździe
@@ -145,8 +145,8 @@ export default function SimpleCalendarGrid({
                   {filtrowaneTransporty.map((transport, index) => {
                     // Sprawdź, czy transport jest połączony z innym
                     const isConnected = isConnectedTransport(transport, transportyNaDzien);
-                    const isSource = transportyNaDzien.some(t => t.connected_transport_id === transport.id);
-                    const isTarget = transport.connected_transport_id !== null;
+                    const isSource = transportyNaDzien.some(t => t.connected_transport_id && String(t.connected_transport_id) === String(transport.id));
+                    const isTarget = Boolean(transport.connected_transport_id);
                     
                     // Sprawdź czy transport jest zrealizowany
                     const isCompleted = transport.status === 'completed' || transport.status === 'zakończony';

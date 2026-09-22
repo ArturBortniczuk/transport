@@ -130,8 +130,8 @@ export default function KalendarzPage() {
       if (transport) {
         // Sprawdź, czy transport jest częścią połączonej trasy
         const isConnected = sourceTransports.some(t => 
-          t.connected_transport_id === transport.id || 
-          transport.connected_transport_id === t.id
+          (t.connected_transport_id && String(t.connected_transport_id) === String(transport.id)) || 
+          (transport.connected_transport_id && String(transport.connected_transport_id) === String(t.id))
         );
         
         if (isConnected) {
@@ -139,8 +139,8 @@ export default function KalendarzPage() {
           if (confirm("Ten transport jest częścią połączonej trasy. Czy chcesz przenieść wszystkie połączone transporty?")) {
             // Znajdź wszystkie powiązane transporty
             const connectedTransport = sourceTransports.find(t => 
-              t.connected_transport_id === transport.id || 
-              transport.connected_transport_id === t.id
+              (t.connected_transport_id && String(t.connected_transport_id) === String(transport.id)) || 
+              (transport.connected_transport_id && String(transport.connected_transport_id) === String(t.id))
             );
             
             if (connectedTransport) {
@@ -202,7 +202,7 @@ export default function KalendarzPage() {
   const handleConfirmConnect = async (sourceTransport, targetTransport) => {
     try {
       // Upewnij się, że kierowcy obu transportów są tacy sami
-      if (sourceTransport.kierowcaId !== targetTransport.kierowcaId) {
+      if (sourceTransport.kierowcaId && targetTransport.kierowcaId && parseInt(sourceTransport.kierowcaId) !== parseInt(targetTransport.kierowcaId)) {
         if (!confirm('Transporty mają różnych kierowców. Czy na pewno chcesz je połączyć?')) {
           return;
         }
@@ -291,7 +291,7 @@ export default function KalendarzPage() {
             },
             odleglosc: transport.distance,
             packagingId: transport.packaging_id,
-            connected_transport_id: transport.connected_transport_id
+            connected_transport_id: transport.connected_transport_id ? String(transport.connected_transport_id) : null
           })
           return acc
         }, {})
@@ -444,7 +444,7 @@ export default function KalendarzPage() {
           delivery_date: format(selectedDate, "yyyy-MM-dd'T'HH:mm:ss"),
           status: 'active',
           packaging_id: nowyTransport.packagingId,
-          connected_transport_id: nowyTransport.connectedTransportId
+          connected_transport_id: nowyTransport.connectedTransportId || nowyTransport.connected_transport_id || null
         })
       });
       
@@ -519,7 +519,9 @@ export default function KalendarzPage() {
           dokumenty: '',
           trasaCykliczna: false,
           magazyn: defaultMagazyn,
-          packagingId: null
+          packagingId: null,
+          connectedTransportId: null,
+          connected_transport_id: null
         })
         alert('Transport został dodany!')
       } else {
@@ -688,7 +690,7 @@ export default function KalendarzPage() {
           distance: odlegloscOdMagazynu, // Zawsze odległość od magazynu
           delivery_date: selectedDate ? format(selectedDate, "yyyy-MM-dd'T'HH:mm:ss") : edytowanyTransport.delivery_date,
           packaging_id: nowyTransport.packagingId,
-          connected_transport_id: nowyTransport.connected_transport_id
+          connected_transport_id: nowyTransport.connectedTransportId || nowyTransport.connected_transport_id || null
         })
       })
   
@@ -715,6 +717,8 @@ export default function KalendarzPage() {
           dokumenty: '',
           trasaCykliczna: false,
           packagingId: null,
+          connectedTransportId: null,
+          connected_transport_id: null,
           magazyn: defaultMagazyn
         })
         alert('Transport został zaktualizowany!')
@@ -1105,13 +1109,13 @@ export default function KalendarzPage() {
                </p>
                
                <div className="max-h-64 overflow-y-auto mb-4">
-                 {Object.entries(transporty).map(([dateKey, transportsOnDay]) => {
-                   const filteredTransports = transportsOnDay.filter(t => 
-                     t.id !== connectingTransport.id && 
-                     t.status === 'active' &&
-                     !t.connected_transport_id &&
-                     !transportsOnDay.some(ot => ot.connected_transport_id === t.id)
-                   );
+                  {Object.entries(transporty).map(([dateKey, transportsOnDay]) => {
+                    const filteredTransports = transportsOnDay.filter(t => 
+                      String(t.id) !== String(connectingTransport.id) && 
+                      (t.status === 'active' || t.status === 'aktywny') &&
+                      !t.connected_transport_id &&
+                      !transportsOnDay.some(ot => ot.connected_transport_id && String(ot.connected_transport_id) === String(t.id))
+                    );
                    
                    if (filteredTransports.length === 0) return null;
                    

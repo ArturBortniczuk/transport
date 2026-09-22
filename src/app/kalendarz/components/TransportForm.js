@@ -189,6 +189,14 @@ export default function TransportForm({
     setSelectedSourceTransport(null)
   }, [edytowanyTransport])
 
+  // Resetowanie stanu łączenia przy zresetowaniu nowego transportu
+  useEffect(() => {
+    if (!edytowanyTransport && !nowyTransport.connectedTransportId && !nowyTransport.connected_transport_id && !nowyTransport.miasto && !nowyTransport.kodPocztowy) {
+      setConnectToExistingTransport(false)
+      setSelectedSourceTransport(null)
+    }
+  }, [nowyTransport.connectedTransportId, nowyTransport.connected_transport_id, nowyTransport.miasto, nowyTransport.kodPocztowy, edytowanyTransport])
+
   // Filtrowanie użytkowników na podstawie wpisanego tekstu
   useEffect(() => {
     if (searchTerm.trim() === '') {
@@ -217,6 +225,8 @@ export default function TransportForm({
       setNowyTransport(prev => ({
         ...prev,
         kierowcaId: selectedSourceTransport.kierowcaId,
+        pojazdId: selectedSourceTransport.pojazdId || (POJAZDY.find(p => p.id === parseInt(selectedSourceTransport.kierowcaId))?.id) || prev.pojazdId,
+        magazyn: selectedSourceTransport.zrodlo || prev.magazyn,
         connectedTransportId: selectedSourceTransport.id
       }))
     } else {
@@ -350,7 +360,7 @@ export default function TransportForm({
     return availableTransports.filter(t => 
       (t.status === 'aktywny' || t.status === 'active') && 
       !t.connected_transport_id && // Nie pokazujemy transportów, które już są połączone jako drugi punkt
-      t.id !== (edytowanyTransport?.id || 0) // Nie pokazujemy aktualnie edytowanego transportu
+      String(t.id) !== String(edytowanyTransport?.id || 0) // Nie pokazujemy aktualnie edytowanego transportu
     );
   };
 
@@ -383,27 +393,38 @@ export default function TransportForm({
         </div>
 
         {/* Wybór magazynu */}
-        <div className="flex space-x-4 p-6 border-b-2 border-gray-200">
-          <button
-            type="button"
-            onClick={() => handleMagazynSelect('bialystok')}
-            className={`
-              ${nowyTransport.magazyn === 'bialystok' ? 'bg-red-600 text-white shadow-lg' : 'bg-red-100 text-red-800 hover:bg-red-200'}
-              ${defaultMagazyn === 'bialystok' ? 'flex-grow py-4 rounded-lg text-lg font-medium transition-colors' : 'p-2 rounded-md text-sm'}
-            `}
-          >
-            MAGAZYN BIAŁYSTOK
-          </button>
-          <button
-            type="button"
-            onClick={() => handleMagazynSelect('zielonka')}
-            className={`
-              ${nowyTransport.magazyn === 'zielonka' ? 'bg-blue-600 text-white shadow-lg' : 'bg-blue-100 text-blue-800 hover:bg-blue-200'}
-              ${defaultMagazyn === 'zielonka' ? 'flex-grow py-4 rounded-lg text-lg font-medium transition-colors' : 'p-2 rounded-md text-sm'}
-            `}
-          >
-            MAGAZYN ZIELONKA
-          </button>
+        <div className="flex flex-col p-6 border-b-2 border-gray-200">
+          <div className="flex space-x-4">
+            <button
+              type="button"
+              onClick={() => handleMagazynSelect('bialystok')}
+              disabled={Boolean(connectToExistingTransport && selectedSourceTransport)}
+              className={`
+                ${nowyTransport.magazyn === 'bialystok' ? 'bg-red-600 text-white shadow-lg' : 'bg-red-100 text-red-800 hover:bg-red-200'}
+                ${defaultMagazyn === 'bialystok' ? 'flex-grow py-4 rounded-lg text-lg font-medium transition-colors' : 'p-2 rounded-md text-sm'}
+                ${connectToExistingTransport && selectedSourceTransport ? 'opacity-60 cursor-not-allowed' : ''}
+              `}
+            >
+              MAGAZYN BIAŁYSTOK
+            </button>
+            <button
+              type="button"
+              onClick={() => handleMagazynSelect('zielonka')}
+              disabled={Boolean(connectToExistingTransport && selectedSourceTransport)}
+              className={`
+                ${nowyTransport.magazyn === 'zielonka' ? 'bg-blue-600 text-white shadow-lg' : 'bg-blue-100 text-blue-800 hover:bg-blue-200'}
+                ${defaultMagazyn === 'zielonka' ? 'flex-grow py-4 rounded-lg text-lg font-medium transition-colors' : 'p-2 rounded-md text-sm'}
+                ${connectToExistingTransport && selectedSourceTransport ? 'opacity-60 cursor-not-allowed' : ''}
+              `}
+            >
+              MAGAZYN ZIELONKA
+            </button>
+          </div>
+          {connectToExistingTransport && selectedSourceTransport && (
+            <p className="mt-2 text-xs text-blue-600">
+              Magazyn jest ustawiony automatycznie na podstawie wybranego transportu początkowego.
+            </p>
+          )}
         </div>
 
         {/* Formularz */}
@@ -434,7 +455,13 @@ export default function TransportForm({
                       type="checkbox"
                       id="connectTransport"
                       checked={connectToExistingTransport}
-                      onChange={(e) => setConnectToExistingTransport(e.target.checked)}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setConnectToExistingTransport(checked);
+                        if (!checked) {
+                          setSelectedSourceTransport(null);
+                        }
+                      }}
                       className="h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
                     />
                     <label htmlFor="connectTransport" className="ml-2 text-sm text-gray-700">
@@ -448,28 +475,38 @@ export default function TransportForm({
                         Wybierz transport początkowy
                       </label>
                       <select
-                        value={selectedSourceTransport?.id || ""}
+                        value={selectedSourceTransport?.id ? String(selectedSourceTransport.id) : ""}
                         onChange={(e) => {
                           const transportId = e.target.value;
-                          const transport = getAvailableTransportsForConnection().find(t => t.id === parseInt(transportId));
-                          setSelectedSourceTransport(transport);
+                          if (!transportId) {
+                            setSelectedSourceTransport(null);
+                            return;
+                          }
+                          const transport = getAvailableTransportsForConnection().find(t => String(t.id) === String(transportId));
+                          setSelectedSourceTransport(transport || null);
                         }}
                         className={inputBaseClass}
                         disabled={!connectToExistingTransport}
                         required={connectToExistingTransport}
                       >
                         <option value="">Wybierz transport</option>
-                        {getAvailableTransportsForConnection().map(transport => (
-                          <option key={transport.id} value={transport.id}>
-                            {transport.miasto} - {transport.kodPocztowy} 
-                            ({KIEROWCY.find(k => k.id === parseInt(transport.kierowcaId))?.imie})
-                          </option>
-                        ))}
+                        {getAvailableTransportsForConnection().map(transport => {
+                          const kierowca = KIEROWCY.find(k => k.id === parseInt(transport.kierowcaId));
+                          const extraInfo = [
+                            transport.ulica,
+                            transport.nazwaKlienta
+                          ].filter(Boolean).join(', ');
+                          return (
+                            <option key={transport.id} value={transport.id}>
+                              {transport.miasto} ({transport.kodPocztowy}){extraInfo ? ` - ${extraInfo}` : ''} ({kierowca?.imie || 'Brak kierowcy'})
+                            </option>
+                          );
+                        })}
                       </select>
                       
                       {selectedSourceTransport && (
                         <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                          <p className="font-medium">Transport źródłowy:</p>
+                          <p className="font-medium text-blue-900">Transport źródłowy:</p>
                           <div className="flex items-center mt-2">
                             <div className="text-gray-700">
                               <span className="font-semibold">{selectedSourceTransport.miasto}</span> 
@@ -484,6 +521,11 @@ export default function TransportForm({
                           <p className="mt-2 text-sm text-gray-600">
                             Kierowca: {KIEROWCY.find(k => k.id === parseInt(selectedSourceTransport.kierowcaId))?.imie || "Nieznany"}
                           </p>
+                          {selectedSourceTransport.zrodlo && (
+                            <p className="text-sm text-gray-600">
+                              Magazyn startowy: <span className="font-medium capitalize">{selectedSourceTransport.zrodlo}</span>
+                            </p>
+                          )}
                         </div>
                       )}
                     </div>
