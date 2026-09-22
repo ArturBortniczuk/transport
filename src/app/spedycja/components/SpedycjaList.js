@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { format } from 'date-fns'
 import { pl } from 'date-fns/locale'
 import { generateCMR } from '@/lib/utils/generateCMR'
@@ -207,6 +207,10 @@ export default function SpedycjaList({
     if (!group) return null;
 
     const { mainTransport, connectedTransports } = group;
+    if (!connectedTransports || connectedTransports.length === 0) {
+      return null;
+    }
+
     const enrichedConnected = connectedTransports.map(ct => {
       if (ct.startAddress && ct.endAddress) return ct;
       const full = (zamowienia || []).find(t => String(t.id) === String(ct.id));
@@ -241,18 +245,21 @@ export default function SpedycjaList({
     };
   };
 
+  const pendingRoutesRef = useRef(new Set());
+
   // Efekt do asynchronicznego dociągania dystansów dla tras łączonych bez zapisanego totalDistance
   useEffect(() => {
     if (!zamowienia || zamowienia.length === 0) return;
 
     zamowienia.forEach(z => {
-      const group = getConnectedGroupInfo(z);
-      if (group && group.connectedTransports && group.connectedTransports.length > 0) {
-        const points = buildRoutePoints(group.mainTransport, group.connectedTransports);
-        const routeKey = points.join(' → ');
+      const conn = calculateConnectedRoute(z);
+      if (conn && conn.routePoints && conn.routePoints.length >= 2) {
+        const routeKey = conn.route;
+        const group = getConnectedGroupInfo(z);
 
-        if (!group.totalDistance && !routeDistances[routeKey] && points.length >= 2) {
-          calculateRouteDistance(points)
+        if (!group?.totalDistance && !routeDistances[routeKey] && !pendingRoutesRef.current.has(routeKey)) {
+          pendingRoutesRef.current.add(routeKey);
+          calculateRouteDistance(conn.routePoints)
             .then(res => {
               if (res && res.success && res.totalDistanceKm > 0) {
                 setRouteDistances(prev => ({
@@ -263,6 +270,9 @@ export default function SpedycjaList({
             })
             .catch(err => {
               console.warn('[SpedycjaList] Błąd kalkulacji dystansu trasy:', err);
+            })
+            .finally(() => {
+              pendingRoutesRef.current.delete(routeKey);
             });
         }
       }

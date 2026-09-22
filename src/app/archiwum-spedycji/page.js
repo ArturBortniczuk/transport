@@ -1,5 +1,5 @@
 'use client'
-import React, { useState, useEffect, Fragment } from 'react'
+import React, { useState, useEffect, useRef, Fragment } from 'react'
 import { format, startOfWeek, endOfWeek, eachWeekOfInterval, startOfMonth, endOfMonth } from 'date-fns'
 import { pl } from 'date-fns/locale'
 import * as XLSX from 'xlsx'
@@ -976,6 +976,11 @@ export default function ArchiwumSpedycjiPage() {
     const group = getConnectedGroupInfo(transport);
     if (!group) return null;
 
+    const { mainTransport, connectedTransports } = group;
+    if (!connectedTransports || connectedTransports.length === 0) {
+      return null;
+    }
+
     const enrichedConnected = connectedTransports.map(ct => {
       if (ct.startAddress && ct.endAddress) return ct;
       const full = (filteredArchiwum || archiwum || []).find(t => String(t.id) === String(ct.id));
@@ -1010,18 +1015,26 @@ export default function ArchiwumSpedycjiPage() {
     };
   };
 
-  // Efekt do asynchronicznego pobierania odległości dla tras łączonych w archiwum
+  const pendingRoutesRef = useRef(new Set());
+
+  const indexOfLastItem = currentPage * itemsPerPage
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage
+  const currentItems = filteredArchiwum.slice(indexOfFirstItem, indexOfLastItem)
+  const totalPages = Math.ceil(filteredArchiwum.length / itemsPerPage)
+
+  // Efekt do asynchronicznego pobierania odległości dla tras łączonych w archiwum (dla aktualnie wyświetlanej strony)
   useEffect(() => {
-    if (!filteredArchiwum || filteredArchiwum.length === 0) return;
+    if (!currentItems || currentItems.length === 0) return;
 
-    filteredArchiwum.forEach(z => {
-      const group = getConnectedGroupInfo(z);
-      if (group && group.connectedTransports && group.connectedTransports.length > 0) {
-        const points = buildRoutePoints(group.mainTransport, group.connectedTransports);
-        const routeKey = points.join(' → ');
+    currentItems.forEach(z => {
+      const conn = calculateConnectedRoute(z);
+      if (conn && conn.routePoints && conn.routePoints.length >= 2) {
+        const routeKey = conn.route;
+        const group = getConnectedGroupInfo(z);
 
-        if (!group.totalDistance && !routeDistances[routeKey] && points.length >= 2) {
-          calculateRouteDistance(points)
+        if (!group?.totalDistance && !routeDistances[routeKey] && !pendingRoutesRef.current.has(routeKey)) {
+          pendingRoutesRef.current.add(routeKey);
+          calculateRouteDistance(conn.routePoints)
             .then(res => {
               if (res && res.success && res.totalDistanceKm > 0) {
                 setRouteDistances(prev => ({
@@ -1032,11 +1045,14 @@ export default function ArchiwumSpedycjiPage() {
             })
             .catch(err => {
               console.warn('[ArchiwumSpedycji] Błąd kalkulacji dystansu trasy:', err);
+            })
+            .finally(() => {
+              pendingRoutesRef.current.delete(routeKey);
             });
         }
       }
     });
-  }, [filteredArchiwum, routeDistances]);
+  }, [currentItems, routeDistances]);
 
   // Renderuje info o powiązanych transportach
   const renderConnectedTransports = (transport) => {
@@ -1230,11 +1246,6 @@ export default function ArchiwumSpedycjiPage() {
       </div>
     );
   };
-
-  const indexOfLastItem = currentPage * itemsPerPage
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage
-  const currentItems = filteredArchiwum.slice(indexOfFirstItem, indexOfLastItem)
-  const totalPages = Math.ceil(filteredArchiwum.length / itemsPerPage)
 
   const paginate = (pageNumber) => setCurrentPage(pageNumber)
 
