@@ -52,13 +52,18 @@ export default function TransportOrderForm({ onSubmit, onCancel, zamowienie }) {
     if (zamowienie?.response?.connectedTransports && zamowienie.response.connectedTransports.length > 0) {
       const initialPlaces = [];
       zamowienie.response.connectedTransports.forEach(ct => {
-        const ctType = ct.type || 'both';
+        // W starszych zleceniach ct.type mogło być zapisane na sztywno jako 'loading',
+        // ale jeśli transport ma trasę powrotną (np. kółko Wilcze -> Zielonka), to musi mieć oba punkty
+        const isRoundTrip = ct.type === 'both' || !ct.type || (ct.type === 'loading' && ct.endCity && ct.endCity !== zamowienie?.delivery?.city);
+        const shouldAddLoading = ct.type === 'both' || ct.type === 'loading' || !ct.type;
+        const shouldAddUnloading = ct.type === 'both' || ct.type === 'unloading' || isRoundTrip;
+
         const startStr = ct.startCity || getTransportStartCity(ct);
         const endStr = ct.endCity || ct.delivery?.city || 'Brak danych';
         const routeStr = ct.route || `${startStr} → ${endStr}`;
         const company = ct.sourceClientName || ct.source_client_name || '';
 
-        if (ctType === 'both' || ctType === 'loading') {
+        if (shouldAddLoading) {
           initialPlaces.push({
             type: 'załadunek',
             transportId: ct.id,
@@ -74,7 +79,7 @@ export default function TransportOrderForm({ onSubmit, onCancel, zamowienie }) {
           });
         }
 
-        if (ctType === 'both' || ctType === 'unloading') {
+        if (shouldAddUnloading) {
           initialPlaces.push({
             type: 'rozładunek',
             transportId: ct.id,
@@ -180,9 +185,18 @@ export default function TransportOrderForm({ onSubmit, onCancel, zamowienie }) {
       });
     }
 
-    setAdditionalPlaces(prev => [...prev, ...newPlaces])
-    setShowAddPlaceForm(false)
-    setSelectedTransportId('')
+    // Bezpieczne dodawanie bez duplikatów dla tego samego transportId i typu:
+    setAdditionalPlaces(prev => {
+      const filtered = prev.filter(p => {
+        if (String(p.transportId) !== String(selectedTransport.id)) return true;
+        if (placeType === 'oba') return false; // zastąp dotychczasowe punkty tego transportu
+        return p.type !== placeType; // usuń istniejący punkt tego samego typu
+      });
+      return [...filtered, ...newPlaces];
+    });
+
+    setShowAddPlaceForm(false);
+    setSelectedTransportId('');
   }
 
   const removeAdditionalPlace = (index) => {
@@ -294,44 +308,73 @@ export default function TransportOrderForm({ onSubmit, onCancel, zamowienie }) {
         </div>
       </div>
 
-      {/* Sekcja dodatkowych miejsc */}
-      <div className="mt-6">
-        <div className="flex justify-between items-center mb-2">
-          <h3 className="text-lg font-medium">Dodatkowe miejsca załadunku/rozładunku</h3>
+      {/* Plan całej trasy zlecenia */}
+      <div className="mt-6 border-t pt-4">
+        <div className="flex justify-between items-center mb-3">
+          <div>
+            <h3 className="text-base font-semibold text-gray-900">Plan trasy i przystanki ({2 + additionalPlaces.length} punkty)</h3>
+            <p className="text-xs text-gray-500">Wszystkie punkty zlecenia w kolejności realizacji trasy</p>
+          </div>
           <button
             type="button"
             onClick={() => setShowAddPlaceForm(true)}
-            className="px-3 py-1 text-sm bg-blue-500 text-white rounded-md hover:bg-blue-600"
+            className="px-3 py-1.5 text-xs font-semibold bg-blue-600 text-white rounded-md hover:bg-blue-700 shadow-xs"
           >
-            Dodaj miejsce
+            + Dodaj miejsce
           </button>
         </div>
 
-        {additionalPlaces.length > 0 ? (
-          <div className="space-y-3">
-            {additionalPlaces.map((place, index) => (
-              <div key={index} className="flex justify-between p-3 bg-gray-50 rounded-md">
-                <div>
-                  <div className="font-medium">
-                    {place.type === 'załadunek' ? 'Miejsce załadunku' : 'Miejsce rozładunku'} {index + 1}
-                  </div>
-                  <div className="text-sm text-gray-600">
-                    {place.route} ({place.orderNumber})
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => removeAdditionalPlace(index)}
-                  className="text-red-500 hover:text-red-700"
-                >
-                  Usuń
-                </button>
-              </div>
-            ))}
+        <div className="space-y-2">
+          {/* Punkt 1: Załadunek główny */}
+          <div className="flex items-center justify-between p-2.5 bg-blue-50/70 border border-blue-200 rounded-md">
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-0.5 text-xs font-bold bg-blue-600 text-white rounded">1. Załadunek</span>
+              <span className="text-sm font-semibold text-gray-900">{getTransportStartCity(zamowienie)}</span>
+              <span className="text-xs text-gray-500">(Główne: {zamowienie.orderNumber || zamowienie.order_number || zamowienie.id})</span>
+            </div>
+            <span className="text-xs font-medium text-blue-700">Start trasy</span>
           </div>
-        ) : (
-          <p className="text-gray-500 text-sm italic">Brak dodatkowych miejsc</p>
-        )}
+
+          {/* Punkt 2: Rozładunek główny */}
+          <div className="flex items-center justify-between p-2.5 bg-green-50/70 border border-green-200 rounded-md">
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-0.5 text-xs font-bold bg-green-600 text-white rounded">2. Rozładunek</span>
+              <span className="text-sm font-semibold text-gray-900">{zamowienie.delivery?.city || 'Brak danych'}</span>
+              <span className="text-xs text-gray-500">({formatAddress(zamowienie.delivery)})</span>
+              <span className="text-xs text-gray-500">(Główne: {zamowienie.orderNumber || zamowienie.order_number || zamowienie.id})</span>
+            </div>
+            <span className="text-xs font-medium text-green-700">Cel główny</span>
+          </div>
+
+          {/* Dodatkowe punkty (np. kółko / doładunki) */}
+          {additionalPlaces.map((place, index) => (
+            <div key={index} className="flex items-center justify-between p-2.5 bg-white border border-gray-200 rounded-md shadow-2xs hover:border-gray-300">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className={`px-2 py-0.5 text-xs font-bold rounded ${
+                  place.type === 'załadunek' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
+                }`}>
+                  {index + 3}. {place.type === 'załadunek' ? 'Załadunek' : 'Rozładunek'}
+                </span>
+                <span className="text-sm font-semibold text-gray-900">
+                  {place.sourceClientName ? `${place.sourceClientName} - ` : ''}
+                  {place.type === 'załadunek'
+                    ? (place.producerAddress?.city || place.location || 'Załadunek')
+                    : (place.delivery?.city || 'Rozładunek')}
+                </span>
+                <span className="text-xs text-gray-500">
+                  (Zlecenie: {place.orderNumber || place.transportId})
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => removeAdditionalPlace(index)}
+                className="text-red-500 hover:text-red-700 text-xs font-medium px-2 py-1 hover:bg-red-50 rounded"
+              >
+                Usuń
+              </button>
+            </div>
+          ))}
+        </div>
 
         {/* Formularz dodawania miejsca */}
         {showAddPlaceForm && (

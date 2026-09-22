@@ -77,11 +77,20 @@ export async function POST(request) {
       console.error('Błąd parsowania danych JSON:', error);
     }
 
-    // Jeśli są dodatkowe miejsca, pobierz dane dla nich
+    // Jeśli są dodatkowe miejsca, pobierz dane dla nich (z deduplikacją)
     const additionalPlacesData = [];
 
     if (additionalPlaces && additionalPlaces.length > 0) {
-      for (const place of additionalPlaces) {
+      // Deduplikacja: nie pozwól na ten sam transportId i ten sam type punktu
+      const seenPlaceKeys = new Set();
+      const uniquePlaces = additionalPlaces.filter(place => {
+        const key = `${place.transportId || place.orderNumber || place.route}-${place.type}`;
+        if (seenPlaceKeys.has(key)) return false;
+        seenPlaceKeys.add(key);
+        return true;
+      });
+
+      for (const place of uniquePlaces) {
         // Pobierz dane spedycji dla dodatkowego miejsca
         if (place.transportId) {
           try {
@@ -253,30 +262,19 @@ function generateTransportOrderHTML({ spedycja, producerAddress, delivery, respo
       return '';
     }
 
-    // Pogrupuj miejsca według typu
-    const loadingPlaces = additionalPlaces.filter(place => place.type === 'załadunek');
-    const unloadingPlaces = additionalPlaces.filter(place => place.type === 'rozładunek');
-
     let html = '';
 
-    // Generuj sekcje dla dodatkowych miejsc załadunku
-    if (loadingPlaces.length > 0) {
-      loadingPlaces.forEach((place, index) => {
-        html += `
-        <div class="section">
-          <h2>Miejsce załadunku ${index + 2} (Zlecenie ${place.orderNumber || ''})</h2>
-          <table class="info-table">
-            <tr>
-              <th>Nr zlecenia:</th>
-              <td>${place.orderNumber || ''} ${place.route ? `(${place.route})` : ''}</td>
-            </tr>
-        `;
+    additionalPlaces.forEach((place, index) => {
+      const stopNumber = index + 3;
+      const isZaladunek = place.type === 'załadunek';
+      const title = `Przystanek ${stopNumber}: ${isZaladunek ? 'Załadunek' : 'Rozładunek'} (Zlecenie ${place.orderNumber || ''})`;
 
-        let address = 'Brak danych';
-        const company = (place.sourceClientName || place.source_client_name)
-          ? `<strong>${place.sourceClientName || place.source_client_name}</strong><br>`
-          : '';
+      let address = 'Brak danych';
+      const company = (place.sourceClientName || place.source_client_name)
+        ? `<strong>${place.sourceClientName || place.source_client_name}</strong><br>`
+        : '';
 
+      if (isZaladunek) {
         if (place.location === 'Odbiory własne' && place.producerAddress) {
           const addr = formatAddress(place.producerAddress);
           address = `${company}${addr !== 'Brak danych' ? addr : (place.producerAddress.city || '')}`;
@@ -293,37 +291,7 @@ function generateTransportOrderHTML({ spedycja, producerAddress, delivery, respo
             address = `${company}${place.address}`;
           }
         }
-
-        html += `
-            <tr>
-              <th>Miejsce załadunku:</th>
-              <td>${address}</td>
-            </tr>
-            <tr>
-              <th>Kontakt do załadunku:</th>
-              <td>${place.loadingContact || place.contact || 'Nie podano'}</td>
-            </tr>
-          </table>
-        </div>
-        `;
-      });
-    }
-
-    // Generuj sekcje dla dodatkowych miejsc rozładunku
-    if (unloadingPlaces.length > 0) {
-      unloadingPlaces.forEach((place, index) => {
-        html += `
-        <div class="section">
-          <h2>Miejsce rozładunku ${index + 2} (Zlecenie ${place.orderNumber || ''})</h2>
-          <table class="info-table">
-            <tr>
-              <th>Nr zlecenia:</th>
-              <td>${place.orderNumber || ''} ${place.route ? `(${place.route})` : ''}</td>
-            </tr>
-        `;
-
-        let address = 'Brak danych';
-
+      } else {
         if (place.delivery) {
           address = formatAddress(place.delivery);
         } else if (typeof place.address === 'object') {
@@ -331,21 +299,28 @@ function generateTransportOrderHTML({ spedycja, producerAddress, delivery, respo
         } else if (typeof place.address === 'string') {
           address = place.address;
         }
+      }
 
-        html += `
-            <tr>
-              <th>Miejsce rozładunku:</th>
-              <td>${address}</td>
-            </tr>
-            <tr>
-              <th>Kontakt do rozładunku:</th>
-              <td>${place.unloadingContact || place.contact || 'Nie podano'}</td>
-            </tr>
-          </table>
-        </div>
-        `;
-      });
-    }
+      html += `
+      <div class="section">
+        <h2>${title}</h2>
+        <table class="info-table">
+          <tr>
+            <th>Nr zlecenia:</th>
+            <td>${place.orderNumber || ''} ${place.route ? `(${place.route})` : ''}</td>
+          </tr>
+          <tr>
+            <th>${isZaladunek ? 'Miejsce załadunku:' : 'Miejsce rozładunku:'}</th>
+            <td>${address}</td>
+          </tr>
+          <tr>
+            <th>${isZaladunek ? 'Kontakt do załadunku:' : 'Kontakt do rozładunku:'}</th>
+            <td>${(isZaladunek ? (place.loadingContact || place.contact) : (place.unloadingContact || place.contact)) || 'Nie podano'}</td>
+          </tr>
+        </table>
+      </div>
+      `;
+    });
 
     return html;
   };
@@ -476,8 +451,19 @@ function generateTransportOrderHTML({ spedycja, producerAddress, delivery, respo
         </table>
       </div>
       
+      ${additionalPlaces.length > 0 ? `
+      <div class="section" style="background-color: #f2f7fc; border-left: 4px solid #1a71b5;">
+        <h2 style="color: #1a71b5; margin-bottom: 10px;">PLAN TRASY (Liczba punktów: ${2 + additionalPlaces.length})</h2>
+        <ol style="margin: 0; padding-left: 20px; line-height: 1.8;">
+          <li><strong>[ZAŁADUNEK]</strong> ${getLoadingLocation().replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()} <em>(Zlecenie główne: ${spedycja.order_number || spedycja.id})</em></li>
+          <li><strong>[ROZŁADUNEK]</strong> ${formatAddress(delivery)} <em>(Zlecenie główne: ${spedycja.order_number || spedycja.id})</em></li>
+          ${additionalPlaces.map((p) => `<li><strong>[${p.type === 'załadunek' ? 'ZAŁADUNEK' : 'ROZŁADUNEK'}]</strong> ${p.sourceClientName ? p.sourceClientName + ' - ' : ''}${p.type === 'załadunek' ? (p.producerAddress?.city || p.location || '') : (p.delivery?.city || '')} <em>(Zlecenie: ${p.orderNumber || ''})</em></li>`).join('')}
+        </ol>
+      </div>
+      ` : ''}
+
       <div class="section">
-        <h2>${additionalPlaces.some(p => p.type === 'załadunek') ? `Miejsce załadunku 1 (Zlecenie główne: ${spedycja.order_number || spedycja.id})` : 'Dane załadunku'}</h2>
+        <h2>${additionalPlaces.length > 0 ? `Przystanek 1: Załadunek (Zlecenie główne: ${spedycja.order_number || spedycja.id})` : 'Dane załadunku'}</h2>
         <table class="info-table">
           <tr>
             <th>Miejsce załadunku:</th>
@@ -495,7 +481,7 @@ function generateTransportOrderHTML({ spedycja, producerAddress, delivery, respo
       </div>
       
       <div class="section">
-        <h2>${additionalPlaces.some(p => p.type === 'rozładunek') ? `Miejsce rozładunku 1 (Zlecenie główne: ${spedycja.order_number || spedycja.id})` : 'Dane rozładunku'}</h2>
+        <h2>${additionalPlaces.length > 0 ? `Przystanek 2: Rozładunek (Zlecenie główne: ${spedycja.order_number || spedycja.id})` : 'Dane rozładunku'}</h2>
         <table class="info-table">
           <tr>
             <th>Miejsce rozładunku:</th>
