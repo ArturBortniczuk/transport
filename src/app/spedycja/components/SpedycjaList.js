@@ -1,8 +1,9 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { format } from 'date-fns'
 import { pl } from 'date-fns/locale'
 import { generateCMR } from '@/lib/utils/generateCMR'
 import { Truck, Package, MapPin, Phone, FileText, Calendar, DollarSign, User, Clipboard, ArrowRight, ChevronDown, ChevronUp, AlertCircle, Edit, Pencil, Building, ShoppingBag, Weight, Bot, Link as LinkIcon } from 'lucide-react'
+import { buildRoutePoints, calculateRouteDistance } from '@/app/services/calculateRoute'
 
 export default function SpedycjaList({
   zamowienia,
@@ -17,6 +18,7 @@ export default function SpedycjaList({
   currentUserEmail
 }) {
   const [expandedId, setExpandedId] = useState(null)
+  const [routeDistances, setRouteDistances] = useState({})
 
   const buttonClasses = {
     primary: "px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors flex items-center gap-2",
@@ -138,6 +140,10 @@ export default function SpedycjaList({
       const costPerTransport = mainTransport?.response?.costPerTransport
         || resp.costPerTransport
         || resp.deliveryPrice;
+      const totalDistance = mainTransport?.response?.totalDistance
+        || resp.mainTransportTotalDistance
+        || resp.totalDistance
+        || null;
 
       return {
         isSecondary: true,
@@ -155,6 +161,7 @@ export default function SpedycjaList({
         connectedTransports,
         totalPrice,
         costPerTransport,
+        totalDistance,
         totalCount: connectedTransports.length + 1
       };
     }
@@ -168,6 +175,7 @@ export default function SpedycjaList({
 
       const mainStart = getLoadingCity(transport);
       const mainEnd = getDeliveryCity(transport);
+      const totalDistance = resp.totalDistance || null;
 
       return {
         isSecondary: false,
@@ -185,6 +193,7 @@ export default function SpedycjaList({
         connectedTransports,
         totalPrice,
         costPerTransport,
+        totalDistance,
         totalCount: connectedTransports.length + 1
       };
     }
@@ -198,61 +207,67 @@ export default function SpedycjaList({
     if (!group) return null;
 
     const { mainTransport, connectedTransports } = group;
-    if (!connectedTransports || connectedTransports.length === 0) {
-      return null;
-    }
-
-    const routePoints = [];
-
-    // Dodaj punkt startowy zlecenia głównego
-    if (mainTransport.startCity && !routePoints.includes(mainTransport.startCity)) {
-      routePoints.push(mainTransport.startCity);
-    }
-
-    // Posortuj połączone transporty według kolejności
-    const sortedTransports = [...connectedTransports].sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0));
-
-    // Dodaj punkty z połączonych transportów
-    sortedTransports.forEach(ct => {
-      if (ct.route) {
-        const [start, end] = ct.route.split(' → ');
-        if (ct.type === 'loading') {
-          if (start && !routePoints.includes(start)) {
-            routePoints.push(start);
-          }
-          if (end && !routePoints.includes(end) && end !== mainTransport.endCity) {
-            routePoints.push(end);
-          }
-        } else {
-          // unloading
-          if (start && !routePoints.includes(start) && start !== mainTransport.startCity) {
-            routePoints.push(start);
-          }
-          if (end && !routePoints.includes(end)) {
-            routePoints.push(end);
-          }
-        }
-      }
+    const enrichedConnected = connectedTransports.map(ct => {
+      if (ct.startAddress && ct.endAddress) return ct;
+      const full = (zamowienia || []).find(t => String(t.id) === String(ct.id));
+      if (!full) return ct;
+      return {
+        ...ct,
+        startAddress: full.location === 'Odbiory własne' ? full.producerAddress : (ct.startAddress || { city: full.location?.replace(/^magazyn\s+/i, '') }),
+        endAddress: full.delivery || ct.endAddress
+      };
     });
 
-    // Dodaj punkt docelowy zlecenia głównego na końcu
-    if (mainTransport.endCity && !routePoints.includes(mainTransport.endCity)) {
-      routePoints.push(mainTransport.endCity);
-    }
+    const routePoints = buildRoutePoints(mainTransport, enrichedConnected);
+    const routeKey = routePoints.length > 0 ? routePoints.join(' → ') : (mainTransport.route || '');
 
-    // Oblicz całkowitą odległość
-    let totalDistance = Number(mainTransport.distanceKm) || 0;
-    sortedTransports.forEach(ct => {
-      totalDistance += (Number(ct.distanceKm) || 0);
-    });
+    // 1. Sprawdź, czy zapisany jest rzeczywisty dystans trasy łączonej punkt-do-punktu
+    let totalDistance = group.totalDistance 
+      || mainTransport.response?.totalDistance 
+      || transport.response?.totalDistance 
+      || routeDistances[routeKey] 
+      || null;
+
+    // 2. Jeśli nie ma jeszcze zapisanego dystansu w pamięci, bezpieczny fallback na bazie zlecenia głównego
+    if (!totalDistance) {
+      totalDistance = Number(mainTransport.distanceKm) || 0;
+    }
 
     return {
-      route: routePoints.length > 0 ? routePoints.join(' → ') : (mainTransport.route || ''),
-      totalDistance: totalDistance,
+      route: routeKey,
+      totalDistance: Number(totalDistance),
       connectedCount: connectedTransports.length,
       routePoints
     };
   };
+
+  // Efekt do asynchronicznego dociągania dystansów dla tras łączonych bez zapisanego totalDistance
+  useEffect(() => {
+    if (!zamowienia || zamowienia.length === 0) return;
+
+    zamowienia.forEach(z => {
+      const group = getConnectedGroupInfo(z);
+      if (group && group.connectedTransports && group.connectedTransports.length > 0) {
+        const points = buildRoutePoints(group.mainTransport, group.connectedTransports);
+        const routeKey = points.join(' → ');
+
+        if (!group.totalDistance && !routeDistances[routeKey] && points.length >= 2) {
+          calculateRouteDistance(points)
+            .then(res => {
+              if (res && res.success && res.totalDistanceKm > 0) {
+                setRouteDistances(prev => ({
+                  ...prev,
+                  [routeKey]: res.totalDistanceKm
+                }));
+              }
+            })
+            .catch(err => {
+              console.warn('[SpedycjaList] Błąd kalkulacji dystansu trasy:', err);
+            });
+        }
+      }
+    });
+  }, [zamowienia, routeDistances]);
 
   // FUNKCJA POMOCNICZA: Pobiera nazwę firmy załadowczej
   const getLoadingCompanyName = (transport) => {

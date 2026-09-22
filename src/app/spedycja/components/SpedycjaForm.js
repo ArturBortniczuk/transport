@@ -1,7 +1,8 @@
 // src/app/spedycja/components/SpedycjaForm.js
 'use client'
 import { useState, useEffect, useRef } from 'react'
-import { Calendar, Search, X, Info, Truck, PlusCircle } from 'lucide-react'
+import { Calendar, Search, X, Info, Truck, PlusCircle, Route } from 'lucide-react'
+import { buildRoutePoints, calculateRouteDistance } from '@/app/services/calculateRoute'
 
 export default function SpedycjaForm({ onSubmit, onCancel, initialData, isResponse, isEditing }) {
   const [selectedLocation, setSelectedLocation] = useState(initialData?.location || '')
@@ -52,6 +53,8 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
   const [connectedTransports, setConnectedTransports] = useState([])
   const [availableTransports, setAvailableTransports] = useState([])
   const [showTransportsSection, setShowTransportsSection] = useState(false)
+  const [connectedRouteInfo, setConnectedRouteInfo] = useState(null)
+  const [isCalculatingConnectedRoute, setIsCalculatingConnectedRoute] = useState(false)
 
   // Stałe dla magazynów
   const MAGAZYNY = {
@@ -93,6 +96,49 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
     const calculatedPrice = calculatePricePerTransport(totalPrice, transportsCount);
     setPricePerTransport(calculatedPrice);
   }, [totalPrice, connectedTransports]);
+
+  // Effect do automatycznego wyliczania trasy łączonej punkt-do-punktu i jej kilometrów
+  useEffect(() => {
+    if (!isResponse) return;
+
+    if (!connectedTransports || connectedTransports.length === 0) {
+      setConnectedRouteInfo(null);
+      setDistance(initialData?.distanceKm || 0);
+      return;
+    }
+
+    const points = buildRoutePoints(initialData, connectedTransports);
+    if (points.length >= 2) {
+      let isCurrent = true;
+      setIsCalculatingConnectedRoute(true);
+
+      calculateRouteDistance(points)
+        .then(res => {
+          if (!isCurrent) return;
+          if (res && res.success && res.totalDistanceKm > 0) {
+            setConnectedRouteInfo({
+              route: points.join(' → '),
+              totalDistance: res.totalDistanceKm,
+              legs: res.legs || [],
+              routePoints: points
+            });
+            setDistance(res.totalDistanceKm);
+          }
+        })
+        .catch(err => {
+          console.error('Błąd wyliczania odległości trasy łączonej:', err);
+        })
+        .finally(() => {
+          if (isCurrent) {
+            setIsCalculatingConnectedRoute(false);
+          }
+        });
+
+      return () => {
+        isCurrent = false;
+      };
+    }
+  }, [connectedTransports, initialData, isResponse]);
 
   // Pobierz listę użytkowników, budów i dane bieżącego użytkownika
   useEffect(() => {
@@ -232,6 +278,14 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
       if (initialData.response?.connectedTransports && initialData.response.connectedTransports.length > 0) {
         setConnectedTransports(initialData.response.connectedTransports);
         setShowTransportsSection(true);
+        if (initialData.response.totalDistance) {
+          setDistance(initialData.response.totalDistance);
+          setConnectedRouteInfo({
+            route: initialData.response.connectedRoute || '',
+            totalDistance: initialData.response.totalDistance,
+            routePoints: initialData.response.routePoints || []
+          });
+        }
       }
 
       if (isResponse) {
@@ -449,6 +503,8 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
         id: transport.id,
         orderNumber: transport.orderNumber,
         route: `${startLocation} → ${endLocation}`,
+        startCity: startLocation,
+        endCity: endLocation,
         responsiblePerson: transport.responsiblePerson,
         mpk: transport.mpk,
         distanceKm: transport.distanceKm || 0,
@@ -525,18 +581,19 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
 
     if (isResponse) {
       console.log('Odpowiedź na zamówienie, dane początkowe:', initialData);
-      // Wykorzystaj odległość z oryginalnego zamówienia
-      const distanceKm = initialData.distanceKm || 0;
-      console.log('Odległość używana do obliczeń:', distanceKm);
+      
+      // Wykorzystaj przeliczony dystans trasy łączonej punkt po punkcie lub dystans zlecenia
+      const effectiveDistance = (connectedTransports.length > 0 && connectedRouteInfo?.totalDistance)
+        ? connectedRouteInfo.totalDistance
+        : (distance || initialData.distanceKm || 0);
 
-      // ZMIANA: Używamy całkowitej ceny zamiast ceny na transport
       const totalDeliveryPrice = Number(totalPrice);
-      const pricePerKm = distanceKm > 0 ? (totalDeliveryPrice / distanceKm).toFixed(2) : 0;
+      const pricePerKm = effectiveDistance > 0 ? (totalDeliveryPrice / effectiveDistance).toFixed(2) : 0;
 
       console.log('Obliczenia:', {
         totalDeliveryPrice,
         pricePerTransport,
-        distanceKm,
+        effectiveDistance,
         pricePerKm
       });
 
@@ -549,7 +606,7 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
         transportType: transportType, // Przekazywanie zapisanego rodzaju transportu
         deliveryPrice: connectedTransports.length > 0 ? pricePerTransport : totalDeliveryPrice, // Przypisana cena transportu
         totalDeliveryPrice: totalDeliveryPrice, // Całkowita cena trasy
-        distanceKm: Number(distanceKm),
+        distanceKm: Number(effectiveDistance),
         pricePerKm: Number(pricePerKm),
         adminNotes: formData.get('adminNotes')
       };
@@ -564,9 +621,14 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
       // Dodaj połączone transporty, jeśli są
       if (connectedTransports.length > 0) {
         responseData.connectedTransports = connectedTransports;
-
-        // Oblicz podział kosztów
         responseData.costPerTransport = pricePerTransport;
+        responseData.totalDistance = Number(effectiveDistance);
+        if (connectedRouteInfo?.route) {
+          responseData.connectedRoute = connectedRouteInfo.route;
+        }
+        if (connectedRouteInfo?.routePoints) {
+          responseData.routePoints = connectedRouteInfo.routePoints;
+        }
       }
 
       onSubmit(initialData.id, responseData);
@@ -838,12 +900,20 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
               )}
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Odległość</label>
+              <label className="block text-sm font-medium mb-1">
+                Odległość {connectedTransports.length > 0 ? '(trasa połączona)' : ''}
+              </label>
               <input
                 name="distanceKm"
-                type="number"
-                className="w-full p-2 border rounded-md bg-gray-100"
-                value={initialData.distanceKm || 0}
+                type="text"
+                className={`w-full p-2 border rounded-md ${connectedTransports.length > 0 ? 'bg-indigo-50 font-semibold text-indigo-900 border-indigo-300' : 'bg-gray-100'}`}
+                value={
+                  isCalculatingConnectedRoute 
+                    ? 'Obliczanie...' 
+                    : (connectedTransports.length > 0 && connectedRouteInfo?.totalDistance 
+                        ? `${connectedRouteInfo.totalDistance} km` 
+                        : `${distance || initialData?.distanceKm || 0} km`)
+                }
                 readOnly
               />
             </div>
@@ -950,6 +1020,36 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
                         </div>
                       </div>
                     ))}
+
+                    {/* Podsumowanie trasy łączonej punkt po punkcie */}
+                    {connectedTransports.length > 0 && (
+                      <div className="mt-3 p-3 bg-indigo-50 border border-indigo-200 rounded-md">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <span className="text-xs font-semibold uppercase text-indigo-700 flex items-center gap-1">
+                              <Route size={14} />
+                              Trasa połączona (punkt po punkcie):
+                            </span>
+                            <p className="text-sm font-bold text-indigo-950 mt-0.5 break-words">
+                              {connectedRouteInfo ? connectedRouteInfo.route : 'Ustalanie przebiegu trasy...'}
+                            </p>
+                          </div>
+                          <div className="text-right flex-shrink-0">
+                            <span className="text-xs font-semibold uppercase text-indigo-700">Dystans trasy:</span>
+                            <p className="text-base font-bold text-indigo-950">
+                              {isCalculatingConnectedRoute ? 'Obliczanie...' : `${connectedRouteInfo?.totalDistance || distance} km`}
+                            </p>
+                          </div>
+                        </div>
+                        {connectedRouteInfo?.legs && connectedRouteInfo.legs.length > 1 && (
+                          <div className="mt-2 pt-2 border-t border-indigo-200/60 text-xs text-indigo-700 flex flex-wrap gap-x-3 gap-y-1">
+                            {connectedRouteInfo.legs.map((leg, idx) => (
+                              <span key={idx}>Odcinek {idx + 1}: <strong>{leg} km</strong></span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     {connectedTransports.length > 0 && (
                       <div className="mt-3 p-3 bg-yellow-50 border border-yellow-100 rounded-md">
