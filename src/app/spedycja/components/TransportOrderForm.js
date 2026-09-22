@@ -18,10 +18,77 @@ export default function TransportOrderForm({ onSubmit, onCancel, zamowienie }) {
   const [availableTransports, setAvailableTransports] = useState([])
   const [showAddPlaceForm, setShowAddPlaceForm] = useState(false)
   const [selectedTransportId, setSelectedTransportId] = useState('')
-  const [placeType, setPlaceType] = useState('załadunek') // 'załadunek' lub 'rozładunek'
-
+  const [placeType, setPlaceType] = useState('oba') // 'oba' (Załadunek i Rozładunek), 'załadunek' lub 'rozładunek'
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState(null)
+
+  const formatAddress = (address) => {
+    if (!address) return 'Brak danych';
+    if (typeof address === 'string') return address;
+    return `${address.postalCode || ''} ${address.city || ''}, ${address.street || ''}`.trim() || 'Brak danych';
+  };
+
+  const getTransportStartCity = (transport) => {
+    if (!transport) return 'Brak';
+    if (transport.location === 'Odbiory własne' || transport.location === 'Producent') {
+      const company = transport.sourceClientName || transport.source_client_name;
+      const city = transport.producerAddress?.city;
+      if (company && city) return `${company} (${city})`;
+      if (company) return company;
+      if (city) return city;
+      return 'Odbiory własne';
+    }
+    return transport.location ? transport.location.replace('Magazyn ', '') : 'Brak';
+  };
+
+  const getTransportRoute = (transport) => {
+    const start = getTransportStartCity(transport);
+    const end = transport.delivery?.city || transport.endCity || 'Brak danych';
+    return `${start} → ${end}`;
+  };
+
+  // Automatycznie wczytaj połączone transporty, jeśli zlecenie już je posiada
+  useEffect(() => {
+    if (zamowienie?.response?.connectedTransports && zamowienie.response.connectedTransports.length > 0) {
+      const initialPlaces = [];
+      zamowienie.response.connectedTransports.forEach(ct => {
+        const ctType = ct.type || 'both';
+        const startStr = ct.startCity || getTransportStartCity(ct);
+        const endStr = ct.endCity || ct.delivery?.city || 'Brak danych';
+        const routeStr = ct.route || `${startStr} → ${endStr}`;
+        const company = ct.sourceClientName || ct.source_client_name || '';
+
+        if (ctType === 'both' || ctType === 'loading') {
+          initialPlaces.push({
+            type: 'załadunek',
+            transportId: ct.id,
+            orderNumber: ct.orderNumber || ct.order_number || `${ct.id}`,
+            route: routeStr,
+            location: ct.location || 'Odbiory własne',
+            sourceClientName: company,
+            producerAddress: ct.producerAddress || ct.startAddress,
+            address: (ct.location === 'Odbiory własne' || !ct.location?.includes('Magazyn'))
+              ? (company ? `${company}, ${formatAddress(ct.producerAddress || ct.startAddress)}` : formatAddress(ct.producerAddress || ct.startAddress))
+              : ct.location,
+            contact: ct.loadingContact || ct.loading_contact
+          });
+        }
+
+        if (ctType === 'both' || ctType === 'unloading') {
+          initialPlaces.push({
+            type: 'rozładunek',
+            transportId: ct.id,
+            orderNumber: ct.orderNumber || ct.order_number || `${ct.id}`,
+            route: routeStr,
+            delivery: ct.delivery || ct.endAddress,
+            address: ct.delivery || ct.endAddress,
+            contact: ct.unloadingContact || ct.unloading_contact
+          });
+        }
+      });
+      setAdditionalPlaces(initialPlaces);
+    }
+  }, [zamowienie]);
 
   // Pobierz dostępne transporty przy pierwszym renderowaniu
   useEffect(() => {
@@ -80,44 +147,42 @@ export default function TransportOrderForm({ onSubmit, onCancel, zamowienie }) {
     const selectedTransport = availableTransports.find(t => String(t.id) === String(selectedTransportId))
     if (!selectedTransport) return
 
-    // Przygotuj dane miejsca w zależności od wybranego typu
-    let placeData = {
-      type: placeType,
-      transportId: selectedTransport.id,
-      orderNumber: selectedTransport.orderNumber || selectedTransport.order_number || '',
-      route: getTransportRoute(selectedTransport)
-    }
+    const isOdbiorWlasny = selectedTransport.location === 'Odbiory własne' || selectedTransport.location === 'Producent';
+    const company = selectedTransport.sourceClientName || selectedTransport.source_client_name || '';
 
-    if (placeType === 'załadunek') {
-      placeData = {
-        ...placeData,
+    const newPlaces = [];
+
+    if (placeType === 'oba' || placeType === 'załadunek') {
+      newPlaces.push({
+        type: 'załadunek',
+        transportId: selectedTransport.id,
+        orderNumber: selectedTransport.orderNumber || selectedTransport.order_number || '',
+        route: getTransportRoute(selectedTransport),
         location: selectedTransport.location,
-        address: selectedTransport.location === 'Producent'
-          ? selectedTransport.producerAddress
+        sourceClientName: company,
+        producerAddress: selectedTransport.producerAddress,
+        address: isOdbiorWlasny
+          ? (company ? `${company}, ${formatAddress(selectedTransport.producerAddress)}` : formatAddress(selectedTransport.producerAddress))
           : selectedTransport.location,
-        contact: selectedTransport.loadingContact
-      }
-    } else { // rozładunek
-      placeData = {
-        ...placeData,
-        address: selectedTransport.delivery,
-        contact: selectedTransport.unloadingContact
-      }
+        contact: selectedTransport.loadingContact || selectedTransport.loading_contact
+      });
     }
 
-    setAdditionalPlaces(prev => [...prev, placeData])
+    if (placeType === 'oba' || placeType === 'rozładunek') {
+      newPlaces.push({
+        type: 'rozładunek',
+        transportId: selectedTransport.id,
+        orderNumber: selectedTransport.orderNumber || selectedTransport.order_number || '',
+        route: getTransportRoute(selectedTransport),
+        delivery: selectedTransport.delivery,
+        address: selectedTransport.delivery,
+        contact: selectedTransport.unloadingContact || selectedTransport.unloading_contact
+      });
+    }
+
+    setAdditionalPlaces(prev => [...prev, ...newPlaces])
     setShowAddPlaceForm(false)
     setSelectedTransportId('')
-  }
-
-  const getTransportRoute = (transport) => {
-    const start = transport.location === 'Producent' && transport.producerAddress
-      ? transport.producerAddress.city
-      : (transport.location ? transport.location.replace('Magazyn ', '') : 'Brak')
-
-    const end = transport.delivery?.city || 'Brak danych'
-
-    return `${start} → ${end}`
   }
 
   const removeAdditionalPlace = (index) => {
@@ -291,20 +356,27 @@ export default function TransportOrderForm({ onSubmit, onCancel, zamowienie }) {
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Typ miejsca</label>
-                <div className="flex gap-2 pt-1">
+                <div className="flex gap-1.5 pt-1">
                   <button
                     type="button"
-                    className={`flex-1 py-2 px-3 rounded-md border ${placeType === 'załadunek' ? 'bg-blue-500 text-white' : 'bg-white'}`}
-                    onClick={() => setPlaceType('załadunek')}
+                    className={`flex-1 py-1.5 px-2 text-xs font-medium rounded-md border ${placeType === 'oba' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+                    onClick={() => setPlaceType('oba')}
                   >
-                    Załadunek
+                    Załadunek i Rozładunek
                   </button>
                   <button
                     type="button"
-                    className={`flex-1 py-2 px-3 rounded-md border ${placeType === 'rozładunek' ? 'bg-blue-500 text-white' : 'bg-white'}`}
+                    className={`flex-1 py-1.5 px-2 text-xs font-medium rounded-md border ${placeType === 'załadunek' ? 'bg-blue-600 text-white shadow-xs' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+                    onClick={() => setPlaceType('załadunek')}
+                  >
+                    Tylko Załadunek
+                  </button>
+                  <button
+                    type="button"
+                    className={`flex-1 py-1.5 px-2 text-xs font-medium rounded-md border ${placeType === 'rozładunek' ? 'bg-green-600 text-white shadow-xs' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
                     onClick={() => setPlaceType('rozładunek')}
                   >
-                    Rozładunek
+                    Tylko Rozładunek
                   </button>
                 </div>
               </div>

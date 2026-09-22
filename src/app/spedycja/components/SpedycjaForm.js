@@ -482,48 +482,63 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
     }));
   };
 
+  const getTransportStartDisplay = (t) => {
+    if (!t) return '';
+    if (t.location === 'Odbiory własne') {
+      const company = t.sourceClientName || t.source_client_name || '';
+      const city = t.producerAddress?.city || '';
+      if (company && city) return `${company} (${city})`;
+      if (company) return company;
+      if (city) return city;
+      return 'Odbiory własne';
+    }
+    return t.location ? t.location.replace('Magazyn ', '') : 'Brak';
+  };
+
   // Funkcja do dodawania połączonego transportu
-  const handleAddConnectedTransport = (transport) => {
+  const handleAddConnectedTransport = (transport, type = 'both') => {
     if (!transport) return;
 
-    // Sprawdź czy transport nie jest już dodany
-    if (connectedTransports.some(t => String(t.id) === String(transport.id))) {
-      return;
-    }
+    // Unikalny klucz wpisu
+    const uniqueKey = `${transport.id}-${type}-${Date.now()}`;
 
-    const startLocation = transport.location === 'Odbiory własne'
-      ? (transport.producerAddress?.city || 'Odbiory własne')
-      : (transport.location ? transport.location.replace('Magazyn ', '') : 'Brak');
-
+    const startLocation = getTransportStartDisplay(transport);
     const endLocation = transport.delivery?.city || 'Brak danych';
 
     setConnectedTransports(prev => [
       ...prev,
       {
+        uniqueKey,
         id: transport.id,
-        orderNumber: transport.orderNumber,
+        orderNumber: transport.orderNumber || transport.order_number,
         route: `${startLocation} → ${endLocation}`,
         startCity: startLocation,
         endCity: endLocation,
+        location: transport.location,
+        sourceClientName: transport.sourceClientName || transport.source_client_name || '',
+        producerAddress: transport.producerAddress,
+        delivery: transport.delivery,
+        loadingContact: transport.loadingContact || transport.loading_contact,
+        unloadingContact: transport.unloadingContact || transport.unloading_contact,
         responsiblePerson: transport.responsiblePerson,
         mpk: transport.mpk,
         distanceKm: transport.distanceKm || 0,
         order: prev.length + 1,
-        type: 'loading' // domyślnie jako załadunek
+        type: type // 'both' (Załadunek i Rozładunek), 'loading', 'unloading'
       }
     ]);
   };
 
   // Funkcja do usuwania połączonego transportu
-  const handleRemoveConnectedTransport = (id) => {
-    setConnectedTransports(prev => prev.filter(t => String(t.id) !== String(id)));
+  const handleRemoveConnectedTransport = (keyOrId) => {
+    setConnectedTransports(prev => prev.filter(t => (t.uniqueKey ? t.uniqueKey !== keyOrId : String(t.id) !== String(keyOrId))));
   };
 
   // Funkcja do zmiany kolejności transportu
-  const handleChangeTransportOrder = (id, newOrder) => {
+  const handleChangeTransportOrder = (keyOrId, newOrder) => {
     setConnectedTransports(prev => {
       const updated = prev.map(t => {
-        if (String(t.id) === String(id)) {
+        if ((t.uniqueKey && t.uniqueKey === keyOrId) || (!t.uniqueKey && String(t.id) === String(keyOrId))) {
           return { ...t, order: newOrder };
         }
         return t;
@@ -532,10 +547,10 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
     });
   };
 
-  // Funkcja do zmiany typu transportu (załadunek/rozładunek)
-  const handleChangeTransportType = (id, newType) => {
+  // Funkcja do zmiany typu transportu (both / loading / unloading)
+  const handleChangeTransportType = (keyOrId, newType) => {
     setConnectedTransports(prev =>
-      prev.map(t => String(t.id) === String(id) ? { ...t, type: newType } : t)
+      prev.map(t => ((t.uniqueKey && t.uniqueKey === keyOrId) || (!t.uniqueKey && String(t.id) === String(keyOrId))) ? { ...t, type: newType } : t)
     );
   };
 
@@ -942,9 +957,10 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
                     onChange={(e) => {
                       const val = e.target.value;
                       if (!val) return;
-                      const selectedTransport = availableTransports.find(t => String(t.id) === String(val));
+                      const [tId, prefType] = val.split(':');
+                      const selectedTransport = availableTransports.find(t => String(t.id) === String(tId));
                       if (selectedTransport) {
-                        handleAddConnectedTransport(selectedTransport);
+                        handleAddConnectedTransport(selectedTransport, prefType || 'both');
                       }
                       e.target.value = '';
                     }}
@@ -952,74 +968,140 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
                   >
                     <option value="">Wybierz transport...</option>
                     {availableTransports
-                      .filter(transport => !connectedTransports.some(ct => String(ct.id) === String(transport.id)))
-                      .map(transport => (
-                        <option key={transport.id} value={transport.id}>
-                          {transport.orderNumber || transport.id} - {transport.delivery?.city || 'Brak danych'}
-                          ({transport.responsiblePerson || 'Brak'})
-                        </option>
-                      ))}
+                      .flatMap(transport => {
+                        const existingEntries = connectedTransports.filter(ct => String(ct.id) === String(transport.id));
+                        const hasBoth = existingEntries.some(ct => ct.type === 'both');
+                        const hasLoading = existingEntries.some(ct => ct.type === 'loading');
+                        const hasUnloading = existingEntries.some(ct => ct.type === 'unloading');
+
+                        if (hasBoth || (hasLoading && hasUnloading)) {
+                          return [];
+                        }
+
+                        const startStr = getTransportStartDisplay(transport);
+                        const endStr = transport.delivery?.city || 'Brak danych';
+                        const orderNum = transport.orderNumber || transport.order_number || transport.id;
+
+                        if (existingEntries.length === 0) {
+                          return [
+                            <option key={`${transport.id}:both`} value={`${transport.id}:both`}>
+                              {orderNum} - {startStr} → {endStr} (Całe zlecenie / Kółko)
+                            </option>,
+                            <option key={`${transport.id}:loading`} value={`${transport.id}:loading`}>
+                              {orderNum} - Tylko Załadunek ({startStr})
+                            </option>,
+                            <option key={`${transport.id}:unloading`} value={`${transport.id}:unloading`}>
+                              {orderNum} - Tylko Rozładunek ({endStr})
+                            </option>
+                          ];
+                        }
+
+                        if (hasLoading && !hasUnloading) {
+                          return [
+                            <option key={`${transport.id}:unloading`} value={`${transport.id}:unloading`}>
+                              {orderNum} - Dodaj Rozładunek ({endStr})
+                            </option>
+                          ];
+                        }
+
+                        if (hasUnloading && !hasLoading) {
+                          return [
+                            <option key={`${transport.id}:loading`} value={`${transport.id}:loading`}>
+                              {orderNum} - Dodaj Załadunek ({startStr})
+                            </option>
+                          ];
+                        }
+
+                        return [];
+                      })}
                   </select>
-                  {availableTransports.filter(transport => !connectedTransports.some(ct => String(ct.id) === String(transport.id))).length === 0 && (
-                    <p className="text-xs text-gray-500 mt-1">Brak innych dostępnych zleceń do połączenia</p>
-                  )}
                 </div>
 
                 {/* Lista wybranych transportów */}
                 {connectedTransports.length > 0 ? (
-                  <div className="space-y-3">
-                    {connectedTransports.map((transport, index) => (
-                      <div key={transport.id} className="flex flex-col border rounded-md p-3 bg-white">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <div className="font-bold">{transport.orderNumber || transport.id}</div>
-                            <div className="text-sm text-gray-600">{transport.route}</div>
-                            <div className="text-sm">MPK: {transport.mpk}</div>
-                            <div className="text-sm">Osoba: {transport.responsiblePerson}</div>
+                  <div>
+                    <div className="space-y-3">
+                    {connectedTransports.map((transport, index) => {
+                      const itemKey = transport.uniqueKey || `${transport.id}-${index}`;
+                      return (
+                        <div key={itemKey} className="flex flex-col border rounded-md p-3 bg-white shadow-xs">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-gray-900">{transport.orderNumber || transport.id}</span>
+                                <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
+                                  transport.type === 'both' ? 'bg-indigo-100 text-indigo-800' :
+                                  transport.type === 'loading' ? 'bg-blue-100 text-blue-800' :
+                                  'bg-green-100 text-green-800'
+                                }`}>
+                                  {transport.type === 'both' ? 'Załadunek i Rozładunek' :
+                                   transport.type === 'loading' ? 'Załadunek' : 'Rozładunek'}
+                                </span>
+                              </div>
+                              <div className="text-sm text-gray-600 mt-1">{transport.route}</div>
+                              <div className="text-xs text-gray-500 mt-1 flex flex-wrap gap-x-3">
+                                {transport.mpk && <span>MPK: <strong>{transport.mpk}</strong></span>}
+                                {transport.responsiblePerson && <span>Osoba: <strong>{transport.responsiblePerson}</strong></span>}
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveConnectedTransport(itemKey)}
+                              className="text-red-500 hover:text-red-700 text-sm font-medium px-2 py-1"
+                            >
+                              Usuń
+                            </button>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveConnectedTransport(transport.id)}
-                            className="text-red-500 hover:text-red-700"
-                          >
-                            Usuń
-                          </button>
-                        </div>
 
-                        <div className="flex items-center mt-3 space-x-4">
-                          <div>
-                            <label className="block text-sm mb-1">Kolejność</label>
-                            <input
-                              type="number"
-                              min="1"
-                              value={transport.order || index + 1}
-                              onChange={(e) => handleChangeTransportOrder(transport.id, parseInt(e.target.value))}
-                              className="w-16 p-2 border rounded-md"
-                            />
-                          </div>
+                          <div className="flex flex-col sm:flex-row items-start sm:items-center mt-3 pt-3 border-t border-gray-100 gap-3">
+                            <div className="flex items-center gap-2">
+                              <label className="text-xs font-medium text-gray-600">Kolejność w trasie:</label>
+                              <input
+                                type="number"
+                                min="1"
+                                value={transport.order || index + 1}
+                                onChange={(e) => handleChangeTransportOrder(itemKey, parseInt(e.target.value) || 1)}
+                                className="w-16 p-1.5 text-sm border rounded-md"
+                              />
+                            </div>
 
-                          <div className="flex-1">
-                            <label className="block text-sm mb-1">Typ</label>
-                            <div className="flex space-x-2">
-                              <button
-                                type="button"
-                                className={`flex-1 py-1 px-3 text-sm rounded-md ${transport.type === 'loading' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
-                                onClick={() => handleChangeTransportType(transport.id, 'loading')}
-                              >
-                                Załadunek
-                              </button>
-                              <button
-                                type="button"
-                                className={`flex-1 py-1 px-3 text-sm rounded-md ${transport.type === 'unloading' ? 'bg-green-500 text-white' : 'bg-gray-200'}`}
-                                onClick={() => handleChangeTransportType(transport.id, 'unloading')}
-                              >
-                                Rozładunek
-                              </button>
+                            <div className="flex-1 w-full">
+                              <label className="block text-xs font-medium text-gray-600 mb-1">Typ punktu:</label>
+                              <div className="flex space-x-1 sm:space-x-2">
+                                <button
+                                  type="button"
+                                  className={`flex-1 py-1.5 px-2 text-xs font-medium rounded-md transition-colors ${
+                                    transport.type === 'both' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                  }`}
+                                  onClick={() => handleChangeTransportType(itemKey, 'both')}
+                                >
+                                  Załadunek i Rozładunek
+                                </button>
+                                <button
+                                  type="button"
+                                  className={`flex-1 py-1.5 px-2 text-xs font-medium rounded-md transition-colors ${
+                                    transport.type === 'loading' ? 'bg-blue-600 text-white shadow-xs' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                  }`}
+                                  onClick={() => handleChangeTransportType(itemKey, 'loading')}
+                                >
+                                  Tylko Załadunek
+                                </button>
+                                <button
+                                  type="button"
+                                  className={`flex-1 py-1.5 px-2 text-xs font-medium rounded-md transition-colors ${
+                                    transport.type === 'unloading' ? 'bg-green-600 text-white shadow-xs' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                  }`}
+                                  onClick={() => handleChangeTransportType(itemKey, 'unloading')}
+                                >
+                                  Tylko Rozładunek
+                                </button>
+                              </div>
                             </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
+                  </div>
 
                     {/* Podsumowanie trasy łączonej punkt po punkcie */}
                     {connectedTransports.length > 0 && (

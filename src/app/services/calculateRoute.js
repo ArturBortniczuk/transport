@@ -166,14 +166,15 @@ export function buildRoutePoints(mainTransport, connectedTransports = []) {
     ? createPoint(mainDelivData.city, mainDelivData)
     : createPoint(mainTransport.delivery?.city || mainTransport.endCity || '', mainTransport.delivery);
 
-  const routePoints = [];
+  const rawStops = [];
 
   if (mainStart && mainStart.city) {
-    routePoints.push(mainStart);
+    rawStops.push(mainStart);
   }
 
   if (connectedTransports && connectedTransports.length > 0) {
     const sorted = [...connectedTransports].sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0));
+    let mainEndAdded = false;
 
     sorted.forEach(ct => {
       const ctLocData = parseJsonSafe(ct.location_data) || parseJsonSafe(ct.producerAddress) || parseJsonSafe(ct.startAddress);
@@ -191,34 +192,47 @@ export function buildRoutePoints(mainTransport, connectedTransports = []) {
       const startPt = createPoint(ctStartCity, ctLocData || ct.startAddress || ct.producerAddress);
       const endPt = createPoint(ctEndCity, ctDelivData || ct.endAddress || ct.delivery);
 
-      const hasPoint = (pt) => pt && routePoints.some(p => p.city.toLowerCase() === pt.city.toLowerCase());
+      const type = ct.type || 'both';
 
-      if (ct.type === 'loading') {
-        if (startPt && !hasPoint(startPt)) {
-          routePoints.push(startPt);
+      if (type === 'both') {
+        // Dla pełnego zlecenia (np. kółko powrotne): najpierw musi nastąpić rozładunek głównego zlecenia
+        if (!mainEndAdded && mainEnd && mainEnd.city) {
+          rawStops.push(mainEnd);
+          mainEndAdded = true;
         }
-        if (endPt && (!mainEnd || endPt.city.toLowerCase() !== mainEnd.city.toLowerCase()) && !hasPoint(endPt)) {
-          routePoints.push(endPt);
+        if (startPt) rawStops.push(startPt);
+        if (endPt) rawStops.push(endPt);
+      } else if (type === 'loading') {
+        // Jeśli załadunek kolejnego zlecenia odbywa się w mieście docelowym zlecenia głównego,
+        // to najpierw rozładowujemy zlecenie główne
+        if (!mainEndAdded && mainEnd && mainEnd.city && startPt && startPt.city.toLowerCase() === mainEnd.city.toLowerCase()) {
+          rawStops.push(mainEnd);
+          mainEndAdded = true;
         }
-      } else {
-        // unloading
-        if (startPt && (!mainStart || startPt.city.toLowerCase() !== mainStart.city.toLowerCase()) && !hasPoint(startPt)) {
-          routePoints.push(startPt);
+        if (startPt) rawStops.push(startPt);
+      } else if (type === 'unloading') {
+        // Jeśli rozładunek tego zlecenia jest w mieście startowym (powrót do bazy),
+        // to zlecenie główne musiało być już rozładowane
+        if (!mainEndAdded && mainEnd && mainEnd.city && endPt && mainStart && endPt.city.toLowerCase() === mainStart.city.toLowerCase()) {
+          rawStops.push(mainEnd);
+          mainEndAdded = true;
         }
-        if (endPt && !hasPoint(endPt)) {
-          routePoints.push(endPt);
-        }
+        if (endPt) rawStops.push(endPt);
       }
     });
+
+    if (!mainEndAdded && mainEnd && mainEnd.city) {
+      rawStops.push(mainEnd);
+      mainEndAdded = true;
+    }
+  } else if (mainEnd && mainEnd.city) {
+    rawStops.push(mainEnd);
   }
 
-  if (mainEnd && mainEnd.city && !routePoints.some(p => p.city.toLowerCase() === mainEnd.city.toLowerCase())) {
-    routePoints.push(mainEnd);
-  }
-
-  // Usuń ewentualne sąsiadujące duplikaty
+  // Usuń bezpośrednio sąsiadujące identyczne punkty (np. Rozładunek w Wilcze, potem Załadunek w Wilcze)
+  // ale ZACHOWAJ powroty do bazy (np. Zielonka -> Wilcze -> Zielonka)
   const cleaned = [];
-  routePoints.forEach(p => {
+  rawStops.forEach(p => {
     if (p && p.city && (cleaned.length === 0 || cleaned[cleaned.length - 1].city.toLowerCase() !== p.city.toLowerCase())) {
       cleaned.push(p);
     }

@@ -460,9 +460,11 @@ export default function SpedycjaList({
                   </div>
                   <div className="text-xs text-indigo-800 mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
                     <span className={`px-1.5 py-0.5 rounded text-[11px] font-medium ${
+                      ct.type === 'both' ? 'bg-indigo-100 text-indigo-800' :
                       ct.type === 'loading' ? 'bg-amber-100 text-amber-800' : 'bg-green-100 text-green-800'
                     }`}>
-                      {ct.type === 'loading' ? 'Załadunek' : 'Rozładunek'}
+                      {ct.type === 'both' ? 'Załadunek i Rozładunek' :
+                       ct.type === 'loading' ? 'Załadunek' : 'Rozładunek'}
                     </span>
                     {ct.mpk && <span>MPK: <strong>{ct.mpk}</strong></span>}
                     {ct.responsiblePerson && <span>Osoba: <strong>{ct.responsiblePerson}</strong></span>}

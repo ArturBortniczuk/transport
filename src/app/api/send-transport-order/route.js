@@ -111,6 +111,7 @@ export async function POST(request) {
                 transportId: place.transportId,
                 orderNumber: additionalSpedycja.order_number || `${additionalSpedycja.id}`,
                 location: additionalSpedycja.location,
+                sourceClientName: additionalSpedycja.source_client_name || place.sourceClientName || '',
                 producerAddress: additionalProducerAddress,
                 delivery: additionalDelivery,
                 loadingContact: additionalSpedycja.loading_contact,
@@ -225,14 +226,19 @@ function generateTransportOrderHTML({ spedycja, producerAddress, delivery, respo
   };
 
   const getLoadingLocation = () => {
+    const company = spedycja.source_client_name ? `<strong>${spedycja.source_client_name}</strong><br>` : '';
     if (spedycja.location === 'Odbiory własne' && producerAddress) {
-      return formatAddress(producerAddress);
+      const addr = formatAddress(producerAddress);
+      if (addr && addr !== 'Brak danych') {
+        return `${company}${addr}`;
+      }
+      return `${company}${producerAddress.city || 'Punkt odbioru'}`;
     } else if (spedycja.location === 'Magazyn Białystok') {
       return 'Grupa Eltron Sp z o.o, ul. Wysockiego 69B, 15-169 Białystok';
     } else if (spedycja.location === 'Magazyn Zielonka') {
       return 'Grupa Eltron Sp z o.o, ul. Krótka 2, 05-220 Zielonka';
     }
-    return spedycja.location || 'Brak danych';
+    return company ? company.replace('<br>', '') : (spedycja.location || 'Brak danych');
   };
 
   // Formatowanie ceny z dopiskiem "Netto"
@@ -258,26 +264,34 @@ function generateTransportOrderHTML({ spedycja, producerAddress, delivery, respo
       loadingPlaces.forEach((place, index) => {
         html += `
         <div class="section">
-          <h2>Dodatkowe miejsce załadunku ${index + 1}</h2>
+          <h2>Miejsce załadunku ${index + 2} (Zlecenie ${place.orderNumber || ''})</h2>
           <table class="info-table">
             <tr>
               <th>Nr zlecenia:</th>
-              <td>${place.orderNumber || ''} (${place.route || ''})</td>
+              <td>${place.orderNumber || ''} ${place.route ? `(${place.route})` : ''}</td>
             </tr>
         `;
 
         let address = 'Brak danych';
+        const company = (place.sourceClientName || place.source_client_name)
+          ? `<strong>${place.sourceClientName || place.source_client_name}</strong><br>`
+          : '';
 
         if (place.location === 'Odbiory własne' && place.producerAddress) {
-          address = formatAddress(place.producerAddress);
+          const addr = formatAddress(place.producerAddress);
+          address = `${company}${addr !== 'Brak danych' ? addr : (place.producerAddress.city || '')}`;
         } else if (place.location === 'Magazyn Białystok') {
-          address = 'Magazyn Białystok';
+          address = 'Grupa Eltron Sp z o.o, ul. Wysockiego 69B, 15-169 Białystok';
         } else if (place.location === 'Magazyn Zielonka') {
-          address = 'Magazyn Zielonka';
+          address = 'Grupa Eltron Sp z o.o, ul. Krótka 2, 05-220 Zielonka';
         } else if (typeof place.address === 'object') {
-          address = formatAddress(place.address);
+          address = `${company}${formatAddress(place.address)}`;
         } else if (typeof place.address === 'string') {
-          address = place.address;
+          if (place.address === 'Odbiory własne' || place.address.includes('Odbiory własne')) {
+            address = `${company}${place.producerAddress ? formatAddress(place.producerAddress) : (place.producerAddress?.city || 'Punkt odbioru')}`;
+          } else {
+            address = `${company}${place.address}`;
+          }
         }
 
         html += `
@@ -300,11 +314,11 @@ function generateTransportOrderHTML({ spedycja, producerAddress, delivery, respo
       unloadingPlaces.forEach((place, index) => {
         html += `
         <div class="section">
-          <h2>Drugie miejsce rozładunku${index > 0 ? ' ' + (index + 1) : ''}</h2>
+          <h2>Miejsce rozładunku ${index + 2} (Zlecenie ${place.orderNumber || ''})</h2>
           <table class="info-table">
             <tr>
               <th>Nr zlecenia:</th>
-              <td>${place.orderNumber || ''} (${place.route || ''})</td>
+              <td>${place.orderNumber || ''} ${place.route ? `(${place.route})` : ''}</td>
             </tr>
         `;
 
@@ -463,7 +477,7 @@ function generateTransportOrderHTML({ spedycja, producerAddress, delivery, respo
       </div>
       
       <div class="section">
-        <h2>${additionalPlaces.some(p => p.type === 'załadunek') ? 'Pierwsze miejsce załadunku' : 'Dane załadunku'}</h2>
+        <h2>${additionalPlaces.some(p => p.type === 'załadunek') ? `Miejsce załadunku 1 (Zlecenie główne: ${spedycja.order_number || spedycja.id})` : 'Dane załadunku'}</h2>
         <table class="info-table">
           <tr>
             <th>Miejsce załadunku:</th>
@@ -481,7 +495,7 @@ function generateTransportOrderHTML({ spedycja, producerAddress, delivery, respo
       </div>
       
       <div class="section">
-        <h2>${additionalPlaces.some(p => p.type === 'rozładunek') ? 'Pierwsze miejsce rozładunku' : 'Dane rozładunku'}</h2>
+        <h2>${additionalPlaces.some(p => p.type === 'rozładunek') ? `Miejsce rozładunku 1 (Zlecenie główne: ${spedycja.order_number || spedycja.id})` : 'Dane rozładunku'}</h2>
         <table class="info-table">
           <tr>
             <th>Miejsce rozładunku:</th>

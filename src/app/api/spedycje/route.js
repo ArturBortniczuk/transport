@@ -520,11 +520,20 @@ const createResponsesForConnectedTransports = async (connectedTransports, mainRe
   console.log('Tworzenie odpowiedzi dla połączonych transportów:', connectedTransports);
 
   let mainStartCity = '';
-  if (mainTransport?.location === 'Odbiory własne' && mainTransport.location_data) {
-    try {
-      const loc = typeof mainTransport.location_data === 'string' ? JSON.parse(mainTransport.location_data) : mainTransport.location_data;
-      mainStartCity = loc?.city || 'Odbiory własne';
-    } catch (e) { }
+  if (mainTransport?.location === 'Odbiory własne') {
+    let city = '';
+    if (mainTransport.location_data) {
+      try {
+        const loc = typeof mainTransport.location_data === 'string' ? JSON.parse(mainTransport.location_data) : mainTransport.location_data;
+        city = loc?.city || '';
+      } catch (e) { }
+    }
+    const company = mainTransport.source_client_name || '';
+    if (company && city) {
+      mainStartCity = `${company} (${city})`;
+    } else {
+      mainStartCity = company || city || 'Odbiory własne';
+    }
   } else if (mainTransport?.location) {
     mainStartCity = mainTransport.location.replace('Magazyn ', '');
   }

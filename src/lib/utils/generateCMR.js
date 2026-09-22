@@ -157,7 +157,12 @@ function addPageContent(doc, transport, safeAddText) {
   // Funkcja do pobierania dodatkowych miejsc według typu
   const getAdditionalPlaces = (type) => {
     const connectedTransports = getConnectedTransports();
-    const filtered = connectedTransports.filter(place => place.type === type);
+    const filtered = connectedTransports.filter(place =>
+      place.type === type ||
+      place.type === 'both' ||
+      (type === 'załadunek' && (place.type === 'loading' || !place.type)) ||
+      (type === 'rozładunek' && (place.type === 'unloading' || !place.type))
+    );
     console.log(`Filtered places for type '${type}':`, filtered);
     return filtered;
   };
@@ -186,16 +191,19 @@ function addPageContent(doc, transport, safeAddText) {
     
     if (isLoading) {
       // Dla załadunku
+      const company = connectedTransport.sourceClientName || connectedTransport.source_client_name || '';
+      const prefix = company ? `${company}, ` : '';
       if (connectedTransport.location === 'Odbiory własne') {
-        return connectedTransport.producerAddress || connectedTransport.address;
+        const addr = connectedTransport.producerAddress || connectedTransport.startAddress || connectedTransport.address;
+        return `${prefix}${formatCompactAddress(addr)}`;
       } else if (connectedTransport.location?.includes('Magazyn')) {
         return connectedTransport.location;
       } else {
-        return connectedTransport.address;
+        return `${prefix}${formatCompactAddress(connectedTransport.address || connectedTransport.startAddress)}`;
       }
     } else {
       // Dla rozładunku
-      return connectedTransport.delivery || connectedTransport.address;
+      return connectedTransport.delivery || connectedTransport.endAddress || connectedTransport.address;
     }
   };
 
@@ -207,12 +215,13 @@ function addPageContent(doc, transport, safeAddText) {
   
   // Główny nadawca
   if (transport.location === 'Odbiory własne' && transport.producerAddress) {
+    const company = transport.sourceClientName || transport.source_client_name || '';
     sender = [
-      transport.producerAddress.city,
-      transport.producerAddress.postalCode,
+      company,
       transport.producerAddress.street,
+      `${transport.producerAddress.postalCode || ''} ${transport.producerAddress.city || ''}`.trim(),
       `Tel: ${transport.loadingContact}`
-    ].join('\n');
+    ].filter(Boolean).join('\n');
   } else if (magazynData[transport.location]) {
     sender = `${magazynData[transport.location].adres}\nTel: ${transport.loadingContact}`;
   } else {
