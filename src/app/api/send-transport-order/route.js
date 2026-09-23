@@ -284,7 +284,11 @@ export async function POST(request) {
     return NextResponse.json({
       success: false,
       error: error.message
-    // Funkcja generująca elegancki, ustrukturyzowany HTML zamówienia dla przewoźnika
+    }, { status: 500 });
+  }
+}
+
+// Funkcja generująca elegancki, ustrukturyzowany HTML zamówienia dla przewoźnika
 function generateTransportOrderHTML({ spedycja, producerAddress, delivery, responseData, user, additionalData }) {
   const {
     towar,
