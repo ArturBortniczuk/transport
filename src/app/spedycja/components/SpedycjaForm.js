@@ -98,6 +98,28 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
     return t.location ? t.location.replace('Magazyn ', '') : 'Brak';
   };
 
+  const resolveWarehouseAddress = (loc) => {
+    if (!loc) return null;
+    const s = String(loc).toLowerCase();
+    if (s.includes('białystok') || s.includes('bialystok')) {
+      return {
+        street: 'ul. Wysockiego 69B',
+        postalCode: '15-169',
+        city: 'Białystok',
+        full: 'ul. Wysockiego 69B, 15-169 Białystok'
+      };
+    }
+    if (s.includes('zielonka')) {
+      return {
+        street: 'ul. Krótka 2',
+        postalCode: '05-220',
+        city: 'Zielonka',
+        full: 'ul. Krótka 2, 05-220 Zielonka'
+      };
+    }
+    return null;
+  };
+
   // Tworzy listę obiektów przystanków (załadunki i rozładunki) dla transportu głównego i połączonych
   const createStopsFromTransports = (mainData, connList) => {
     if (!mainData) return [];
@@ -111,12 +133,15 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
     const mainLoc = parseJson(mainData.location_data) || parseJson(mainData.producerAddress);
     const mainDeliv = parseJson(mainData.delivery_data) || parseJson(mainData.delivery);
 
+    const mainWh = resolveWarehouseAddress(mainData.location);
     const mainStartCity = (mainLoc && mainLoc.city)
-      ? mainLoc.city
-      : (mainData.location === 'Odbiory własne' ? (mainData.producerAddress?.city || '') : (mainData.location?.replace(/^magazyn\s+/i, '') || ''));
+      || (mainWh ? mainWh.city : '')
+      || (mainData.location === 'Odbiory własne' ? (mainData.producerAddress?.city || '') : (mainData.location?.replace(/^magazyn\s+/i, '') || ''));
     const mainStartClient = mainData.sourceClientName || mainData.source_client_name
       || (mainData.location?.includes('Magazyn') ? mainData.location : 'Grupa Eltron Sp. z o.o.');
-    const mainStartAddr = mainLoc || mainData.producerAddress;
+    const mainStartAddr = mainWh
+      ? { street: mainWh.street, postalCode: mainWh.postalCode, city: mainWh.city }
+      : (mainLoc || mainData.producerAddress);
 
     const mainEndCity = (mainDeliv && mainDeliv.city) || mainData.delivery?.city || '';
     const mainEndClient = mainData.clientName || mainData.client_name || '';
@@ -155,9 +180,12 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
       const ctLoc = parseJson(ct.location_data) || parseJson(ct.producerAddress) || parseJson(ct.startAddress);
       const ctDeliv = parseJson(ct.delivery_data) || parseJson(ct.delivery) || parseJson(ct.endAddress);
 
-      const ctStartCity = ctLoc?.city || ct.startCity || (ct.location === 'Odbiory własne' ? ct.producerAddress?.city : ct.location?.replace(/^magazyn\s+/i, '')) || '';
+      const ctWh = resolveWarehouseAddress(ct.location) || resolveWarehouseAddress(ct.startCity) || resolveWarehouseAddress(ct.startAddress);
+      const ctStartCity = ctLoc?.city || (ctWh ? ctWh.city : '') || ct.startCity || (ct.location === 'Odbiory własne' ? ct.producerAddress?.city : ct.location?.replace(/^magazyn\s+/i, '')) || '';
       const ctStartClient = ct.sourceClientName || ct.source_client_name || (ct.location?.includes('Magazyn') ? ct.location : 'Grupa Eltron Sp. z o.o.');
-      const ctStartAddr = ctLoc || ct.producerAddress || ct.startAddress;
+      const ctStartAddr = ctWh
+        ? { street: ctWh.street, postalCode: ctWh.postalCode, city: ctWh.city }
+        : (ctLoc || ct.producerAddress || ct.startAddress);
 
       const ctEndCity = ctDeliv?.city || ct.endCity || ct.delivery?.city || '';
       const ctEndClient = ct.clientName || ct.client_name || ct.delivery?.clientName || '';
@@ -1256,10 +1284,17 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
                           {routeStops.map((stop, idx) => {
                             const isFirst = idx === 0;
                             const isLast = idx === routeStops.length - 1;
-                            const isLoad = stop.pointType === 'loading';
-                            const street = stop.address?.street;
-                            const postCode = stop.address?.postalCode;
-                            const addressStr = [street, postCode, stop.city].filter(Boolean).join(', ');
+                            const wh = resolveWarehouseAddress(stop.address) || resolveWarehouseAddress(stop.clientName) || resolveWarehouseAddress(stop.city);
+                            let addressStr = '';
+                            if (wh) {
+                              addressStr = wh.full;
+                            } else if (typeof stop.address === 'string' && stop.address.trim()) {
+                              addressStr = stop.address;
+                            } else {
+                              const street = stop.address?.street;
+                              const postCode = stop.address?.postalCode;
+                              addressStr = [street, [postCode, stop.city || stop.address?.city].filter(Boolean).join(' ')].filter(Boolean).join(', ') || stop.city || 'Brak danych adresowych';
+                            }
 
                             return (
                               <div

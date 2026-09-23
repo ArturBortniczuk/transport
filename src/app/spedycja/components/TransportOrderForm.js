@@ -47,6 +47,28 @@ export default function TransportOrderForm({ onSubmit, onCancel, zamowienie }) {
     return `${start} → ${end}`;
   };
 
+  const resolveWarehouseAddress = (loc) => {
+    if (!loc) return null;
+    const s = String(loc).toLowerCase();
+    if (s.includes('białystok') || s.includes('bialystok')) {
+      return {
+        street: 'ul. Wysockiego 69B',
+        postalCode: '15-169',
+        city: 'Białystok',
+        full: 'ul. Wysockiego 69B, 15-169 Białystok'
+      };
+    }
+    if (s.includes('zielonka')) {
+      return {
+        street: 'ul. Krótka 2',
+        postalCode: '05-220',
+        city: 'Zielonka',
+        full: 'ul. Krótka 2, 05-220 Zielonka'
+      };
+    }
+    return null;
+  };
+
   // Automatycznie wczytaj harmonogram przystanków
   useEffect(() => {
     if (!zamowienie) return;
@@ -56,9 +78,17 @@ export default function TransportOrderForm({ onSubmit, onCancel, zamowienie }) {
       const loadedStops = zamowienie.response.routeStops.map((rs, idx) => {
         const isLoad = rs.pointType === 'loading' || rs.type === 'załadunek';
         const client = rs.clientName || (isLoad ? (rs.sourceClientName || '') : (rs.clientName || ''));
-        const addrStr = rs.address?.street
-          ? `${rs.address.street}, ${rs.address.postalCode || ''} ${rs.city || ''}`.trim()
-          : (typeof rs.address === 'string' ? rs.address : formatAddress(rs.address || { city: rs.city }));
+        const wh = resolveWarehouseAddress(client) || resolveWarehouseAddress(rs.address) || resolveWarehouseAddress(rs.city);
+        let addrStr = '';
+        if (wh && (!rs.address?.street || typeof rs.address === 'string')) {
+          addrStr = wh.full;
+        } else if (rs.address?.street) {
+          addrStr = `${rs.address.street}, ${rs.address.postalCode || ''} ${rs.city || rs.address.city || ''}`.trim();
+        } else if (typeof rs.address === 'string' && rs.address.trim() && !rs.address.includes('Magazyn')) {
+          addrStr = rs.address;
+        } else {
+          addrStr = wh ? wh.full : formatAddress(rs.address || { city: rs.city });
+        }
 
         return {
           id: rs.id || `stop-${idx}-${Date.now()}`,
@@ -66,7 +96,7 @@ export default function TransportOrderForm({ onSubmit, onCancel, zamowienie }) {
           orderNumber: rs.orderNumber || zamowienie.orderNumber || zamowienie.order_number || zamowienie.id,
           type: isLoad ? 'załadunek' : 'rozładunek',
           clientName: client,
-          city: rs.city || '',
+          city: rs.city || (wh ? wh.city : ''),
           address: addrStr,
           producerAddress: isLoad ? rs.address : null,
           delivery: !isLoad ? rs.address : null,
@@ -82,14 +112,15 @@ export default function TransportOrderForm({ onSubmit, onCancel, zamowienie }) {
     const initialStops = [];
 
     // Główny załadunek
+    const mainWh = resolveWarehouseAddress(zamowienie.location);
     initialStops.push({
       id: `main-load-${zamowienie.id}`,
       transportId: zamowienie.id,
       orderNumber: zamowienie.orderNumber || zamowienie.order_number || zamowienie.id,
       type: 'załadunek',
       clientName: zamowienie.source_client_name || zamowienie.sourceClientName || (zamowienie.location?.includes('Magazyn') ? zamowienie.location : 'Grupa Eltron Sp. z o.o.'),
-      city: zamowienie.producerAddress?.city || (zamowienie.location === 'Odbiory własne' ? '' : zamowienie.location?.replace(/^magazyn\s+/i, '')) || '',
-      address: zamowienie.location === 'Odbiory własne' ? formatAddress(zamowienie.producerAddress) : zamowienie.location,
+      city: mainWh ? mainWh.city : (zamowienie.producerAddress?.city || (zamowienie.location === 'Odbiory własne' ? '' : zamowienie.location?.replace(/^magazyn\s+/i, '')) || ''),
+      address: mainWh ? mainWh.full : (zamowienie.location === 'Odbiory własne' ? formatAddress(zamowienie.producerAddress) : zamowienie.location),
       producerAddress: zamowienie.producerAddress,
       contact: zamowienie.loading_contact || zamowienie.loadingContact || '',
       isMain: true
@@ -100,14 +131,15 @@ export default function TransportOrderForm({ onSubmit, onCancel, zamowienie }) {
       zamowienie.response.connectedTransports.forEach((ct, idx) => {
         const type = ct.type || 'both';
         if (type === 'both' || type === 'loading') {
+          const ctWh = resolveWarehouseAddress(ct.location) || resolveWarehouseAddress(ct.startCity) || resolveWarehouseAddress(ct.sourceClientName);
           initialStops.push({
             id: `ct-load-${ct.id || idx}`,
             transportId: ct.id,
             orderNumber: ct.orderNumber || ct.order_number || `${ct.id}`,
             type: 'załadunek',
             clientName: ct.sourceClientName || ct.source_client_name || (ct.location?.includes('Magazyn') ? ct.location : 'Grupa Eltron Sp. z o.o.'),
-            city: ct.startCity || ct.producerAddress?.city || '',
-            address: formatAddress(ct.producerAddress || ct.startAddress) || ct.location || 'Brak danych',
+            city: ctWh ? ctWh.city : (ct.startCity || ct.producerAddress?.city || ''),
+            address: ctWh ? ctWh.full : (formatAddress(ct.producerAddress || ct.startAddress) || ct.location || 'Brak danych'),
             producerAddress: ct.producerAddress || ct.startAddress,
             contact: ct.loadingContact || ct.loading_contact || '',
             isMain: false

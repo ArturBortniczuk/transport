@@ -249,6 +249,18 @@ function generateTransportOrderHTML({ spedycja, producerAddress, delivery, respo
     return `${price} PLN Netto`;
   };
 
+  const resolveWarehouseAddress = (str) => {
+    if (!str) return null;
+    const s = String(str).toLowerCase();
+    if (s.includes('białystok') || s.includes('bialystok')) {
+      return 'ul. Wysockiego 69B, 15-169 Białystok';
+    }
+    if (s.includes('zielonka')) {
+      return 'ul. Krótka 2, 05-220 Zielonka';
+    }
+    return null;
+  };
+
   // Zbuduj ujednolicony harmonogram przystanków w ustalonej kolejności
   let stopsList = [];
 
@@ -256,7 +268,16 @@ function generateTransportOrderHTML({ spedycja, producerAddress, delivery, respo
     stopsList = stops.map(s => {
       const isLoad = s.type === 'załadunek' || s.pointType === 'loading';
       const client = s.clientName || (isLoad ? (spedycja.source_client_name || (spedycja.location?.includes('Magazyn') ? spedycja.location : 'Grupa Eltron Sp. z o.o.')) : (spedycja.client_name || 'Nie podano'));
-      const addr = s.address || (isLoad ? formatAddress(producerAddress) : formatAddress(delivery));
+      
+      let addr = s.address;
+      const wh = resolveWarehouseAddress(client) || resolveWarehouseAddress(addr) || resolveWarehouseAddress(s.city) || (isLoad && s.isMain ? resolveWarehouseAddress(spedycja.location) : null);
+      if (wh && (!addr || addr.includes('Magazyn') || addr === 'Białystok' || addr === 'Zielonka' || !addr.includes('ul.'))) {
+        addr = wh;
+      }
+      if (!addr) {
+        addr = isLoad ? (resolveWarehouseAddress(spedycja.location) || formatAddress(producerAddress)) : formatAddress(delivery);
+      }
+
       const contact = s.contact || (isLoad ? spedycja.loading_contact : spedycja.unloading_contact) || 'Nie podano';
       const date = isLoad ? (dataZaladunku ? formatDate(dataZaladunku) : 'Zgodnie z ustaleniami') : (dataRozladunku ? formatDate(dataRozladunku) : 'Zgodnie z ustaleniami');
 
@@ -276,7 +297,7 @@ function generateTransportOrderHTML({ spedycja, producerAddress, delivery, respo
     const mainLoadClient = spedycja.source_client_name || (spedycja.location?.includes('Magazyn') ? spedycja.location : 'Grupa Eltron Sp. z o.o.');
     const mainLoadAddr = spedycja.location === 'Odbiory własne'
       ? formatAddress(producerAddress)
-      : (spedycja.location === 'Magazyn Białystok' ? 'ul. Wysockiego 69B, 15-169 Białystok' : (spedycja.location === 'Magazyn Zielonka' ? 'ul. Krótka 2, 05-220 Zielonka' : (spedycja.location || 'Brak danych')));
+      : (resolveWarehouseAddress(spedycja.location) || (spedycja.location === 'Magazyn Białystok' ? 'ul. Wysockiego 69B, 15-169 Białystok' : (spedycja.location === 'Magazyn Zielonka' ? 'ul. Krótka 2, 05-220 Zielonka' : (spedycja.location || 'Brak danych'))));
 
     stopsList.push({
       type: 'załadunek',
@@ -308,7 +329,8 @@ function generateTransportOrderHTML({ spedycja, producerAddress, delivery, respo
           : (p.clientName || p.client_name || 'Nie podano');
         let addr = 'Brak danych';
         if (isLoad) {
-          addr = p.location === 'Odbiory własne' ? formatAddress(p.producerAddress) : (p.location || formatAddress(p.address));
+          const wh = resolveWarehouseAddress(p.location) || resolveWarehouseAddress(p.sourceClientName);
+          addr = wh || (p.location === 'Odbiory własne' ? formatAddress(p.producerAddress) : (p.location || formatAddress(p.address)));
         } else {
           addr = formatAddress(p.delivery || p.address);
         }
@@ -341,350 +363,278 @@ function generateTransportOrderHTML({ spedycja, producerAddress, delivery, respo
       <title>Zlecenie Transportowe nr ${orderNum}</title>
       <style>
         body {
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-          line-height: 1.5;
-          color: #1e293b;
+          margin: 0;
+          padding: 0;
           background-color: #f1f5f9;
-          margin: 0;
-          padding: 24px 12px;
+          font-family: Arial, Helvetica, sans-serif;
+          -webkit-text-size-adjust: 100%;
+          -ms-text-size-adjust: 100%;
         }
-        .container {
-          max-width: 720px;
-          margin: 0 auto;
-          background-color: #ffffff;
-          border-radius: 8px;
-          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
-          border: 1px solid #e2e8f0;
-          overflow: hidden;
-        }
-        .header {
-          background-color: #1e40af;
-          color: #ffffff;
-          padding: 24px;
-        }
-        .header-top {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-          padding-bottom: 12px;
-          margin-bottom: 12px;
-        }
-        .company-name {
-          font-size: 14px;
-          font-weight: 700;
-          letter-spacing: 0.5px;
-          text-transform: uppercase;
-          color: #93c5fd;
-        }
-        .order-date {
-          font-size: 12px;
-          color: #bfdbfe;
-        }
-        .order-title {
-          font-size: 22px;
-          font-weight: 800;
-          margin: 0;
-          letter-spacing: -0.5px;
-        }
-        .order-sub {
-          font-size: 13px;
-          color: #dbeafe;
-          margin-top: 4px;
-        }
-        .content {
-          padding: 24px;
-        }
-        .section-title {
-          font-size: 13px;
-          font-weight: 700;
-          text-transform: uppercase;
-          letter-spacing: 0.75px;
-          color: #475569;
-          margin: 0 0 12px 0;
-          display: flex;
-          align-items: center;
-          gap: 6px;
-        }
-        .params-grid {
-          width: 100%;
+        table {
           border-collapse: collapse;
-          margin-bottom: 24px;
-          border: 1px solid #e2e8f0;
-          border-radius: 6px;
-          overflow: hidden;
+          mso-table-lspace: 0pt;
+          mso-table-rspace: 0pt;
         }
-        .params-grid th {
-          background-color: #f8fafc;
-          text-align: left;
-          padding: 9px 12px;
-          font-size: 12px;
-          font-weight: 600;
-          color: #64748b;
-          border-bottom: 1px solid #e2e8f0;
-          width: 35%;
-        }
-        .params-grid td {
-          padding: 9px 12px;
-          font-size: 13px;
-          color: #0f172a;
-          border-bottom: 1px solid #e2e8f0;
-        }
-        .params-grid tr:last-child th,
-        .params-grid tr:last-child td {
-          border-bottom: none;
-        }
-        .stops-container {
-          margin-bottom: 24px;
-        }
-        .stop-card {
-          border: 1px solid #e2e8f0;
-          border-radius: 6px;
-          margin-bottom: 12px;
-          overflow: hidden;
-          background-color: #ffffff;
-        }
-        .stop-header {
-          padding: 8px 14px;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          font-size: 12px;
-          font-weight: 700;
-        }
-        .stop-header-load {
-          background-color: #fef3c7;
-          color: #92400e;
-          border-bottom: 1px solid #fde68a;
-        }
-        .stop-header-unload {
-          background-color: #d1fae5;
-          color: #065f46;
-          border-bottom: 1px solid #a7f3d0;
-        }
-        .stop-badge {
-          display: inline-block;
-          padding: 2px 8px;
-          border-radius: 4px;
-          font-size: 11px;
-          font-weight: 800;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-        }
-        .badge-load {
-          background-color: #d97706;
-          color: #ffffff;
-        }
-        .badge-unload {
-          background-color: #059669;
-          color: #ffffff;
-        }
-        .stop-table {
-          width: 100%;
-          border-collapse: collapse;
-        }
-        .stop-table th {
-          text-align: left;
-          padding: 8px 14px;
-          font-size: 12px;
-          font-weight: 600;
-          color: #64748b;
-          width: 32%;
-          border-bottom: 1px solid #f1f5f9;
-        }
-        .stop-table td {
-          padding: 8px 14px;
-          font-size: 13px;
-          color: #1e293b;
-          border-bottom: 1px solid #f1f5f9;
-        }
-        .stop-table tr:last-child th,
-        .stop-table tr:last-child td {
-          border-bottom: none;
-        }
-        .client-highlight {
-          font-size: 14px;
-          font-weight: 700;
-          color: #0f172a;
-        }
-        .billing-box {
-          background-color: #eff6ff;
-          border: 1px solid #bfdbfe;
-          border-left: 4px solid #2563eb;
-          padding: 14px 16px;
-          border-radius: 6px;
-          margin-bottom: 24px;
-        }
-        .billing-title {
-          font-size: 13px;
-          font-weight: 700;
-          color: #1e40af;
-          margin-bottom: 6px;
-        }
-        .billing-text {
-          font-size: 12px;
-          color: #1e3a8a;
-          margin: 0;
-          line-height: 1.6;
-        }
-        .driver-box {
-          background-color: #f8fafc;
-          border: 1px solid #e2e8f0;
-          border-radius: 6px;
-          padding: 12px 16px;
-          margin-bottom: 24px;
-        }
-        .notes-box {
-          background-color: #fffbeb;
-          border: 1px solid #fde68a;
-          border-radius: 6px;
-          padding: 12px 16px;
-          margin-bottom: 24px;
-          font-size: 12px;
-          color: #92400e;
-        }
-        .footer {
-          text-align: center;
-          font-size: 11px;
-          color: #94a3b8;
-          border-top: 1px solid #e2e8f0;
-          padding: 16px;
-          background-color: #f8fafc;
+        @media only screen and (max-width: 700px) {
+          .email-container {
+            width: 100% !important;
+            max-width: 100% !important;
+          }
+          .responsive-col {
+            width: 100% !important;
+            display: block !important;
+          }
         }
       </style>
     </head>
-    <body>
-      <div class="container">
-        <div class="header">
-          <div class="header-top">
-            <span class="company-name">Grupa Eltron Sp. z o.o.</span>
-            <span class="order-date">Wystawiono: ${formatDate(new Date().toISOString())}</span>
-          </div>
-          <h1 class="order-title">ZLECENIE TRANSPORTOWE</h1>
-          <div class="order-sub">Nr ewidencyjny: <strong>${orderNum}</strong> | Status: Potwierdzone</div>
-        </div>
-
-        <div class="content">
-          <!-- Parametry zlecenia -->
-          <div class="section-title">Parametry i warunki zlecenia</div>
-          <table class="params-grid">
+    <body style="margin: 0; padding: 0; background-color: #f1f5f9; font-family: Arial, Helvetica, sans-serif; color: #1e293b;">
+      <!-- Główny wrapper zewnętrzny centrujący całość -->
+      <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f1f5f9; width: 100%; margin: 0; padding: 24px 10px; table-layout: fixed;">
+        <tr>
+          <td align="center" valign="top">
+            <!--[if (gte mso 9)|(IE)]>
+            <table align="center" border="0" cellspacing="0" cellpadding="0" width="680">
             <tr>
-              <th>Numer zlecenia:</th>
-              <td><strong style="color: #1e40af;">${orderNum}</strong></td>
-            </tr>
-            <tr>
-              <th>Numer MPK:</th>
-              <td><strong>${spedycja.mpk || 'Nie podano'}</strong></td>
-            </tr>
-            <tr>
-              <th>Stawka transportu:</th>
-              <td><strong style="font-size: 14px; color: #047857;">${deliveryPriceFormatted}</strong></td>
-            </tr>
-            <tr>
-              <th>Termin płatności:</th>
-              <td>${terminPlatnosci || '14 dni'}</td>
-            </tr>
-            <tr>
-              <th>Rodzaj towaru:</th>
-              <td>${towar || 'Materiały i towary handlowe'}</td>
-            </tr>
-            <tr>
-              <th>Waga całkowita:</th>
-              <td>${waga ? `${waga} kg` : 'Nie podano'}</td>
-            </tr>
-            <tr>
-              <th>Wymagany pojazd:</th>
-              <td>${responseData.transportType || 'Standard'}</td>
-            </tr>
-            <tr>
-              <th>Wymagane dokumenty:</th>
-              <td>${spedycja.documents || 'List przewozowy CMR / Dokument WZ'}</td>
-            </tr>
-          </table>
-
-          <!-- Harmonogram trasy punkt po punkcie -->
-          <div class="section-title">Harmonogram trasy (${stopsList.length} ${stopsList.length === 1 ? 'przystanek' : stopsList.length < 5 ? 'przystanki' : 'przystanków'})</div>
-          <div class="stops-container">
-            ${stopsList.map((stop, idx) => {
-              const isLoad = stop.type === 'załadunek';
-              return `
-                <div class="stop-card">
-                  <div class="stop-header ${isLoad ? 'stop-header-load' : 'stop-header-unload'}">
-                    <span>
-                      <span class="stop-badge ${isLoad ? 'badge-load' : 'badge-unload'}">
-                        Przystanek ${idx + 1}
-                      </span>
-                      &nbsp; ${isLoad ? 'PUNKT ZAŁADUNKU' : 'PUNKT ROZŁADUNKU'}
-                    </span>
-                    <span style="font-size: 11px; font-weight: normal; opacity: 0.85;">
-                      Zlecenie: ${stop.orderNumber || orderNum}
-                    </span>
-                  </div>
-                  <table class="stop-table">
+            <td align="center" valign="top" width="680">
+            <![endif]-->
+            
+            <!-- Centrowana karta zlecenia o stałej szerokości max 680px -->
+            <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="680" class="email-container" align="center" style="width: 680px; max-width: 680px; background-color: #ffffff; border-radius: 8px; border: 1px solid #cbd5e1; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08); overflow: hidden; margin: 0 auto; text-align: left;">
+              
+              <!-- NAGŁÓWEK -->
+              <tr>
+                <td style="background-color: #1e3a8a; padding: 22px 28px; color: #ffffff;">
+                  <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0">
                     <tr>
-                      <th>Klient / Firma:</th>
-                      <td class="client-highlight">${stop.clientName || 'Nie podano'}</td>
+                      <td style="font-size: 13px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; color: #93c5fd;">
+                        Grupa Eltron Sp. z o.o.
+                      </td>
+                      <td align="right" style="font-size: 12px; color: #bfdbfe;">
+                        Wystawiono: ${formatDate(new Date().toISOString())}
+                      </td>
                     </tr>
                     <tr>
-                      <th>Adres:</th>
-                      <td>${stop.address || 'Brak danych adresowych'}</td>
-                    </tr>
-                    <tr>
-                      <th>${isLoad ? 'Planowany załadunek:' : 'Planowany rozładunek:'}</th>
-                      <td><strong>${stop.date}</strong></td>
-                    </tr>
-                    <tr>
-                      <th>Kontakt na miejscu:</th>
-                      <td>${stop.contact || 'Nie podano'}</td>
+                      <td colspan="2" style="padding-top: 10px;">
+                        <h1 style="margin: 0; font-size: 22px; font-weight: bold; color: #ffffff; letter-spacing: -0.3px;">ZLECENIE TRANSPORTOWE</h1>
+                        <div style="font-size: 13px; color: #dbeafe; margin-top: 4px;">
+                          Nr ewidencyjny: <strong style="color: #ffffff; font-size: 14px;">${orderNum}</strong> &nbsp;|&nbsp; Status: <strong>Potwierdzone</strong>
+                        </div>
+                      </td>
                     </tr>
                   </table>
-                </div>
-              `;
-            }).join('')}
-          </div>
+                </td>
+              </tr>
 
-          <!-- Dane przewoźnika i pojazdu -->
-          <div class="section-title">Dane kierowcy i pojazdu</div>
-          <div class="driver-box">
-            <table class="stop-table">
+              <!-- WAŻNY KOMUNIKAT DLA PRZEWOŹNIKA (FAKTURA + MPK + NR ZLECENIA) -->
               <tr>
-                <th>Kierowca:</th>
-                <td><strong>${(responseData.driverName || '') + ' ' + (responseData.driverSurname || '') || 'Nie podano'}</strong></td>
+                <td style="padding: 20px 24px 8px 24px;">
+                  <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-left: 6px solid #2563eb; border-radius: 6px;">
+                    <tr>
+                      <td style="padding: 14px 16px;">
+                        <div style="font-size: 13px; font-weight: bold; color: #1e40af; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">
+                          📌 Ważna informacja dla przewoźnika dotycząca faktury
+                        </div>
+                        <div style="font-size: 13px; color: #1e3a8a; line-height: 1.5; margin-bottom: 10px;">
+                          Proszę o dopisanie na fakturze zamieszczonego poniżej numeru MPK: <strong>${spedycja.mpk || '-'}</strong> oraz numeru zlecenia: <strong>${orderNum}</strong>.
+                        </div>
+                        <!-- Czerwone ostrzeżenie -->
+                        <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #fef2f2; border: 1px solid #f87171; border-radius: 4px;">
+                          <tr>
+                            <td style="padding: 10px 14px; color: #991b1b; font-size: 13px; font-weight: bold; line-height: 1.4;">
+                              ⚠️ UWAGA! Na fakturze musi być podany numer zlecenia: ${orderNum}.<br>
+                              Faktury bez numeru zlecenia nie będą opłacane.
+                            </td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
               </tr>
+
+              <!-- GŁÓWNA ZAWARTOŚĆ -->
               <tr>
-                <th>Telefon do kierowcy:</th>
-                <td>${responseData.driverPhone ? `<a href="tel:${responseData.driverPhone}" style="color: #1e40af; text-decoration: none; font-weight: bold;">${responseData.driverPhone}</a>` : 'Nie podano'}</td>
+                <td style="padding: 12px 24px 24px 24px;">
+                  
+                  <!-- PARAMETRY ZLECENIA -->
+                  <div style="font-size: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.75px; color: #475569; margin-bottom: 8px;">
+                    Parametry i warunki zlecenia
+                  </div>
+                  <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="border: 1px solid #e2e8f0; border-radius: 6px; margin-bottom: 22px; overflow: hidden;">
+                    <tr style="border-bottom: 1px solid #e2e8f0;">
+                      <td width="180" style="width: 180px; background-color: #f8fafc; padding: 8px 12px; font-size: 12px; font-weight: 600; color: #64748b; border-bottom: 1px solid #e2e8f0;">Numer zlecenia:</td>
+                      <td style="padding: 8px 12px; font-size: 13px; color: #1e40af; font-weight: bold; border-bottom: 1px solid #e2e8f0;">${orderNum}</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #e2e8f0;">
+                      <td style="background-color: #f8fafc; padding: 8px 12px; font-size: 12px; font-weight: 600; color: #64748b; border-bottom: 1px solid #e2e8f0;">Numer MPK:</td>
+                      <td style="padding: 8px 12px; font-size: 13px; color: #0f172a; font-weight: bold; border-bottom: 1px solid #e2e8f0;">${spedycja.mpk || 'Nie podano'}</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #e2e8f0;">
+                      <td style="background-color: #f8fafc; padding: 8px 12px; font-size: 12px; font-weight: 600; color: #64748b; border-bottom: 1px solid #e2e8f0;">Stawka transportu:</td>
+                      <td style="padding: 8px 12px; font-size: 14px; color: #047857; font-weight: bold; border-bottom: 1px solid #e2e8f0;">${deliveryPriceFormatted}</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #e2e8f0;">
+                      <td style="background-color: #f8fafc; padding: 8px 12px; font-size: 12px; font-weight: 600; color: #64748b; border-bottom: 1px solid #e2e8f0;">Termin płatności:</td>
+                      <td style="padding: 8px 12px; font-size: 13px; color: #0f172a; border-bottom: 1px solid #e2e8f0;">${terminPlatnosci || '14 dni'}</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #e2e8f0;">
+                      <td style="background-color: #f8fafc; padding: 8px 12px; font-size: 12px; font-weight: 600; color: #64748b; border-bottom: 1px solid #e2e8f0;">Rodzaj towaru:</td>
+                      <td style="padding: 8px 12px; font-size: 13px; color: #0f172a; border-bottom: 1px solid #e2e8f0;">${towar || 'Materiały i towary handlowe'}</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #e2e8f0;">
+                      <td style="background-color: #f8fafc; padding: 8px 12px; font-size: 12px; font-weight: 600; color: #64748b; border-bottom: 1px solid #e2e8f0;">Waga całkowita:</td>
+                      <td style="padding: 8px 12px; font-size: 13px; color: #0f172a; border-bottom: 1px solid #e2e8f0;">${waga ? `${waga} kg` : 'Nie podano'}</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #e2e8f0;">
+                      <td style="background-color: #f8fafc; padding: 8px 12px; font-size: 12px; font-weight: 600; color: #64748b; border-bottom: 1px solid #e2e8f0;">Wymagany pojazd:</td>
+                      <td style="padding: 8px 12px; font-size: 13px; color: #0f172a; border-bottom: 1px solid #e2e8f0;">${responseData.transportType || 'Standard'}</td>
+                    </tr>
+                    <tr>
+                      <td style="background-color: #f8fafc; padding: 8px 12px; font-size: 12px; font-weight: 600; color: #64748b;">Wymagane dokumenty:</td>
+                      <td style="padding: 8px 12px; font-size: 13px; color: #0f172a;">${spedycja.documents || 'List przewozowy CMR / Dokument WZ'}</td>
+                    </tr>
+                  </table>
+
+                  <!-- HARMONOGRAM TRASY -->
+                  <div style="font-size: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.75px; color: #475569; margin-bottom: 8px;">
+                    Harmonogram trasy (${stopsList.length} ${stopsList.length === 1 ? 'przystanek' : stopsList.length < 5 ? 'przystanki' : 'przystanków'})
+                  </div>
+                  <div style="margin-bottom: 22px;">
+                    ${stopsList.map((stop, idx) => {
+                      const isLoad = stop.type === 'załadunek';
+                      const headerBg = isLoad ? '#fef3c7' : '#d1fae5';
+                      const headerBorder = isLoad ? '#fde68a' : '#a7f3d0';
+                      const headerTextColor = isLoad ? '#92400e' : '#065f46';
+                      const badgeBg = isLoad ? '#d97706' : '#059669';
+
+                      return `
+                        <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="border: 1px solid #e2e8f0; border-radius: 6px; margin-bottom: 12px; overflow: hidden; background-color: #ffffff;">
+                          <!-- Nagłówek przystanku -->
+                          <tr>
+                            <td style="background-color: ${headerBg}; border-bottom: 1px solid ${headerBorder}; padding: 8px 14px;">
+                              <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0">
+                                <tr>
+                                  <td style="font-size: 12px; font-weight: bold; color: ${headerTextColor};">
+                                    <span style="display: inline-block; background-color: ${badgeBg}; color: #ffffff; padding: 2px 7px; border-radius: 3px; font-size: 11px; font-weight: bold; text-transform: uppercase; margin-right: 6px;">
+                                      Przystanek ${idx + 1}
+                                    </span>
+                                    ${isLoad ? 'PUNKT ZAŁADUNKU' : 'PUNKT ROZŁADUNKU'}
+                                  </td>
+                                  <td align="right" style="font-size: 11px; color: ${headerTextColor}; opacity: 0.9;">
+                                    Zlecenie: <strong>${stop.orderNumber || orderNum}</strong>
+                                  </td>
+                                </tr>
+                              </table>
+                            </td>
+                          </tr>
+                          <!-- Szczegóły przystanku -->
+                          <tr>
+                            <td style="padding: 4px 14px 8px 14px;">
+                              <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0">
+                                <tr>
+                                  <td width="160" style="width: 160px; padding: 6px 0; font-size: 12px; font-weight: 600; color: #64748b; border-bottom: 1px solid #f1f5f9;">Klient / Firma:</td>
+                                  <td style="padding: 6px 0; font-size: 14px; font-weight: bold; color: #0f172a; border-bottom: 1px solid #f1f5f9;">${stop.clientName || 'Nie podano'}</td>
+                                </tr>
+                                <tr>
+                                  <td style="padding: 6px 0; font-size: 12px; font-weight: 600; color: #64748b; border-bottom: 1px solid #f1f5f9;">Adres:</td>
+                                  <td style="padding: 6px 0; font-size: 13px; color: #1e293b; border-bottom: 1px solid #f1f5f9;">${stop.address || 'Brak danych adresowych'}</td>
+                                </tr>
+                                <tr>
+                                  <td style="padding: 6px 0; font-size: 12px; font-weight: 600; color: #64748b; border-bottom: 1px solid #f1f5f9;">${isLoad ? 'Planowany załadunek:' : 'Planowany rozładunek:'}</td>
+                                  <td style="padding: 6px 0; font-size: 13px; color: #0f172a; font-weight: bold; border-bottom: 1px solid #f1f5f9;">${stop.date}</td>
+                                </tr>
+                                <tr>
+                                  <td style="padding: 6px 0; font-size: 12px; font-weight: 600; color: #64748b;">Kontakt na miejscu:</td>
+                                  <td style="padding: 6px 0; font-size: 13px; color: #1e293b;">${stop.contact || 'Nie podano'}</td>
+                                </tr>
+                              </table>
+                            </td>
+                          </tr>
+                        </table>
+                      `;
+                    }).join('')}
+                  </div>
+
+                  <!-- DANE KIEROWCY I POJAZDU -->
+                  <div style="font-size: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.75px; color: #475569; margin-bottom: 8px;">
+                    Dane kierowcy i pojazdu
+                  </div>
+                  <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; margin-bottom: 22px; padding: 6px 14px;">
+                    <tr>
+                      <td style="padding: 6px 0;">
+                        <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0">
+                          <tr>
+                            <td width="160" style="width: 160px; padding: 4px 0; font-size: 12px; font-weight: 600; color: #64748b;">Kierowca:</td>
+                            <td style="padding: 4px 0; font-size: 13px; color: #0f172a; font-weight: bold;">
+                              ${(responseData.driverName || '') + ' ' + (responseData.driverSurname || '') || 'Nie podano'}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td style="padding: 4px 0; font-size: 12px; font-weight: 600; color: #64748b;">Telefon do kierowcy:</td>
+                            <td style="padding: 4px 0; font-size: 13px; color: #1e40af; font-weight: bold;">
+                              ${responseData.driverPhone ? `<a href="tel:${responseData.driverPhone}" style="color: #1e40af; text-decoration: none;">${responseData.driverPhone}</a>` : 'Nie podano'}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td style="padding: 4px 0; font-size: 12px; font-weight: 600; color: #64748b;">Numer rejestracyjny:</td>
+                            <td style="padding: 4px 0; font-size: 13px; color: #0f172a; font-weight: bold;">
+                              ${responseData.vehicleNumber || 'Nie podano'}
+                            </td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                  </table>
+
+                  <!-- ADRES DO WYSYŁKI FAKTUR I DOKUMENTÓW -->
+                  <div style="font-size: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.75px; color: #475569; margin-bottom: 8px;">
+                    Adres do wysyłki faktur i dokumentów
+                  </div>
+                  <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; margin-bottom: 16px; padding: 12px 16px;">
+                    <tr>
+                      <td style="font-size: 13px; color: #1e293b; line-height: 1.6;">
+                        <strong>Grupa Eltron Sp. z o.o.</strong><br>
+                        ul. Główna 7, 18-100 Łapy<br>
+                        tel. 85 715 27 05 &nbsp;|&nbsp; NIP: <strong>9662112843</strong><br>
+                        E-mail do faktur: <a href="mailto:ksiegowosc@grupaeltron.pl" style="color: #2563eb; font-weight: bold; text-decoration: none;">ksiegowosc@grupaeltron.pl</a>
+                      </td>
+                    </tr>
+                  </table>
+
+                  ${(spedycja.notes || responseData.adminNotes) ? `
+                  <!-- UWAGI -->
+                  <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; margin-bottom: 16px; padding: 12px 16px;">
+                    <tr>
+                      <td style="font-size: 12px; color: #92400e; line-height: 1.5;">
+                        <strong style="font-size: 13px;">Uwagi i instrukcje specjalne:</strong><br>
+                        ${spedycja.notes ? `• ${spedycja.notes}<br>` : ''}
+                        ${responseData.adminNotes ? `• ${responseData.adminNotes}` : ''}
+                      </td>
+                    </tr>
+                  </table>
+                  ` : ''}
+
+                </td>
               </tr>
+
+              <!-- STOPKA -->
               <tr>
-                <th>Numer rejestracyjny:</th>
-                <td><strong>${responseData.vehicleNumber || 'Nie podano'}</strong></td>
+                <td align="center" style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; padding: 16px; font-size: 11px; color: #94a3b8; text-align: center;">
+                  Zlecenie wygenerowane automatycznie przez System Logistyki i Spedycji Grupy Eltron.<br>
+                  Wszelkie pytania prosimy kierować na adres: <a href="mailto:logistyka@grupaeltron.pl" style="color: #64748b;">logistyka@grupaeltron.pl</a>
+                </td>
               </tr>
+
             </table>
-          </div>
-
-          <!-- Instrukcje do faktury -->
-          <div class="billing-box">
-            <div class="billing-title">Wytyczne do wystawienia faktury VAT:</div>
-            <p class="billing-text">
-              1. Na fakturze <strong>wymagane jest podanie numeru zlecenia: ${orderNum}</strong> oraz <strong>MPK: ${spedycja.mpk || '-'}</strong>.<br>
-              2. Prawidłowo wystawioną e-fakturę wraz z potwierdzonymi dokumentami WZ/CMR prosimy przesłać na adres: <strong>ksiegowosc@grupaeltron.pl</strong>.<br>
-              3. Dane nabywcy: <strong>Grupa Eltron Sp. z o.o.</strong>, ul. Główna 7, 18-100 Łapy, NIP: <strong>9662112843</strong>.
-            </p>
-          </div>
-
-          ${(spedycja.notes || responseData.adminNotes) ? `
-          <div class="notes-box">
-            <strong>Uwagi i instrukcje specjalne:</strong><br>
-            ${spedycja.notes ? `• ${spedycja.notes}<br>` : ''}
-            ${responseData.adminNotes ? `• ${responseData.adminNotes}` : ''}
-          </div>
-          ` : ''}
-        </div>
-
-        <div class="footer">
-          Zlecenie wygenerowane automatycznie przez System Logistyki i Spedycji Grupy Eltron. Wszelkie pytania prosimy kierować na logistyka@grupaeltron.pl.
-        </div>
-      </div>
+            
+            <!--[if (gte mso 9)|(IE)]>
+            </td>
+            </tr>
+            </table>
+            <![endif]-->
+          </td>
+        </tr>
+      </table>
     </body>
     </html>
   `;
