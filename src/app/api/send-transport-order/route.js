@@ -33,7 +33,7 @@ export async function POST(request) {
       }, { status: 403 });
     }
 
-    // Pobierz dane z żądania, dodaj obsługę additionalPlaces
+    // Pobierz dane z żądania, dodaj obsługę stops i additionalPlaces
     const {
       spedycjaId,
       towar,
@@ -42,7 +42,8 @@ export async function POST(request) {
       dataZaladunku,
       dataRozladunku,
       emailOdbiorcy,
-      additionalPlaces = [] // Nowe pole
+      stops = [],
+      additionalPlaces = []
     } = await request.json();
 
     // Pobierz dane spedycji
@@ -151,6 +152,7 @@ export async function POST(request) {
         waga,
         dataZaladunku,
         dataRozladunku,
+        stops,
         additionalPlaces: additionalPlacesData
       }
     });
@@ -191,6 +193,7 @@ export async function POST(request) {
           waga,
           dataZaladunku,
           dataRozladunku,
+          stops,
           additionalPlaces: additionalPlacesData.map(place => ({
             type: place.type,
             transportId: place.transportId,
@@ -213,13 +216,14 @@ export async function POST(request) {
   }
 }
 
-// Funkcja generująca HTML zamówienia
+// Funkcja generująca elegancki, ustrukturyzowany HTML zamówienia dla przewoźnika
 function generateTransportOrderHTML({ spedycja, producerAddress, delivery, responseData, user, additionalData }) {
-  const { towar, terminPlatnosci, waga, dataZaladunku, dataRozladunku, additionalPlaces = [] } = additionalData;
+  const { towar, terminPlatnosci, waga, dataZaladunku, dataRozladunku, stops = [], additionalPlaces = [] } = additionalData;
 
   const formatDate = (dateString) => {
     if (!dateString) return '';
     const date = new Date(dateString);
+    if (isNaN(date.getTime())) return dateString;
     return date.toLocaleDateString('pl-PL', {
       year: 'numeric',
       month: '2-digit',
@@ -231,327 +235,455 @@ function generateTransportOrderHTML({ spedycja, producerAddress, delivery, respo
 
   const formatAddress = (address) => {
     if (!address) return 'Brak danych';
-    return `${address.city || ''}, ${address.postalCode || ''}, ${address.street || ''}`;
+    if (typeof address === 'string') return address;
+    const parts = [
+      address.street,
+      address.postalCode,
+      address.city
+    ].filter(Boolean);
+    return parts.join(', ') || 'Brak danych';
   };
 
-  const getLoadingLocation = () => {
-    const company = spedycja.source_client_name ? `<strong>${spedycja.source_client_name}</strong><br>` : '';
-    if (spedycja.location === 'Odbiory własne' && producerAddress) {
-      const addr = formatAddress(producerAddress);
-      if (addr && addr !== 'Brak danych') {
-        return `${company}${addr}`;
-      }
-      return `${company}${producerAddress.city || 'Punkt odbioru'}`;
-    } else if (spedycja.location === 'Magazyn Białystok') {
-      return 'Grupa Eltron Sp z o.o, ul. Wysockiego 69B, 15-169 Białystok';
-    } else if (spedycja.location === 'Magazyn Zielonka') {
-      return 'Grupa Eltron Sp z o.o, ul. Krótka 2, 05-220 Zielonka';
-    }
-    return company ? company.replace('<br>', '') : (spedycja.location || 'Brak danych');
-  };
-
-  // Formatowanie ceny z dopiskiem "Netto"
   const formatPrice = (price) => {
-    if (!price) return 'Nie podano';
+    if (!price) return 'Do uzgodnienia';
     return `${price} PLN Netto`;
   };
 
-  // Generowanie sekcji dla dodatkowych miejsc
-  const generateAdditionalPlacesHTML = () => {
-    if (!additionalPlaces || additionalPlaces.length === 0) {
-      return '';
-    }
+  // Zbuduj ujednolicony harmonogram przystanków w ustalonej kolejności
+  let stopsList = [];
 
-    let html = '';
+  if (stops && stops.length > 0) {
+    stopsList = stops.map(s => {
+      const isLoad = s.type === 'załadunek' || s.pointType === 'loading';
+      const client = s.clientName || (isLoad ? (spedycja.source_client_name || (spedycja.location?.includes('Magazyn') ? spedycja.location : 'Grupa Eltron Sp. z o.o.')) : (spedycja.client_name || 'Nie podano'));
+      const addr = s.address || (isLoad ? formatAddress(producerAddress) : formatAddress(delivery));
+      const contact = s.contact || (isLoad ? spedycja.loading_contact : spedycja.unloading_contact) || 'Nie podano';
+      const date = isLoad ? (dataZaladunku ? formatDate(dataZaladunku) : 'Zgodnie z ustaleniami') : (dataRozladunku ? formatDate(dataRozladunku) : 'Zgodnie z ustaleniami');
 
-    additionalPlaces.forEach((place, index) => {
-      const stopNumber = index + 3;
-      const isZaladunek = place.type === 'załadunek';
-      const title = `Przystanek ${stopNumber}: ${isZaladunek ? 'Załadunek' : 'Rozładunek'} (Zlecenie ${place.orderNumber || ''})`;
+      return {
+        type: isLoad ? 'załadunek' : 'rozładunek',
+        orderNumber: s.orderNumber || spedycja.order_number || spedycja.id,
+        clientName: client,
+        city: s.city || '',
+        address: addr,
+        contact: contact,
+        date: date,
+        isMain: s.isMain
+      };
+    });
+  } else {
+    // Układ domyślny
+    const mainLoadClient = spedycja.source_client_name || (spedycja.location?.includes('Magazyn') ? spedycja.location : 'Grupa Eltron Sp. z o.o.');
+    const mainLoadAddr = spedycja.location === 'Odbiory własne'
+      ? formatAddress(producerAddress)
+      : (spedycja.location === 'Magazyn Białystok' ? 'ul. Wysockiego 69B, 15-169 Białystok' : (spedycja.location === 'Magazyn Zielonka' ? 'ul. Krótka 2, 05-220 Zielonka' : (spedycja.location || 'Brak danych')));
 
-      let address = 'Brak danych';
-      const company = (place.sourceClientName || place.source_client_name)
-        ? `<strong>${place.sourceClientName || place.source_client_name}</strong><br>`
-        : '';
-
-      if (isZaladunek) {
-        if (place.location === 'Odbiory własne' && place.producerAddress) {
-          const addr = formatAddress(place.producerAddress);
-          address = `${company}${addr !== 'Brak danych' ? addr : (place.producerAddress.city || '')}`;
-        } else if (place.location === 'Magazyn Białystok') {
-          address = 'Grupa Eltron Sp z o.o, ul. Wysockiego 69B, 15-169 Białystok';
-        } else if (place.location === 'Magazyn Zielonka') {
-          address = 'Grupa Eltron Sp z o.o, ul. Krótka 2, 05-220 Zielonka';
-        } else if (typeof place.address === 'object') {
-          address = `${company}${formatAddress(place.address)}`;
-        } else if (typeof place.address === 'string') {
-          if (place.address === 'Odbiory własne' || place.address.includes('Odbiory własne')) {
-            address = `${company}${place.producerAddress ? formatAddress(place.producerAddress) : (place.producerAddress?.city || 'Punkt odbioru')}`;
-          } else {
-            address = `${company}${place.address}`;
-          }
-        }
-      } else {
-        if (place.delivery) {
-          address = formatAddress(place.delivery);
-        } else if (typeof place.address === 'object') {
-          address = formatAddress(place.address);
-        } else if (typeof place.address === 'string') {
-          address = place.address;
-        }
-      }
-
-      html += `
-      <div class="section">
-        <h2>${title}</h2>
-        <table class="info-table">
-          <tr>
-            <th>Nr zlecenia:</th>
-            <td>${place.orderNumber || ''} ${place.route ? `(${place.route})` : ''}</td>
-          </tr>
-          <tr>
-            <th>${isZaladunek ? 'Miejsce załadunku:' : 'Miejsce rozładunku:'}</th>
-            <td>${address}</td>
-          </tr>
-          <tr>
-            <th>${isZaladunek ? 'Kontakt do załadunku:' : 'Kontakt do rozładunku:'}</th>
-            <td>${(isZaladunek ? (place.loadingContact || place.contact) : (place.unloadingContact || place.contact)) || 'Nie podano'}</td>
-          </tr>
-        </table>
-      </div>
-      `;
+    stopsList.push({
+      type: 'załadunek',
+      orderNumber: spedycja.order_number || spedycja.id,
+      clientName: mainLoadClient,
+      city: producerAddress?.city || '',
+      address: mainLoadAddr,
+      contact: spedycja.loading_contact || 'Nie podano',
+      date: dataZaladunku ? formatDate(dataZaladunku) : 'Zgodnie z ustaleniami',
+      isMain: true
     });
 
-    return html;
-  };
+    stopsList.push({
+      type: 'rozładunek',
+      orderNumber: spedycja.order_number || spedycja.id,
+      clientName: spedycja.client_name || 'Nie podano',
+      city: delivery?.city || '',
+      address: formatAddress(delivery),
+      contact: spedycja.unloading_contact || 'Nie podano',
+      date: dataRozladunku ? formatDate(dataRozladunku) : 'Zgodnie z ustaleniami',
+      isMain: true
+    });
 
-  // Tworzenie HTML-a
+    if (additionalPlaces && additionalPlaces.length > 0) {
+      additionalPlaces.forEach(p => {
+        const isLoad = p.type === 'załadunek';
+        const client = isLoad
+          ? (p.sourceClientName || p.source_client_name || 'Grupa Eltron Sp. z o.o.')
+          : (p.clientName || p.client_name || 'Nie podano');
+        let addr = 'Brak danych';
+        if (isLoad) {
+          addr = p.location === 'Odbiory własne' ? formatAddress(p.producerAddress) : (p.location || formatAddress(p.address));
+        } else {
+          addr = formatAddress(p.delivery || p.address);
+        }
+
+        stopsList.push({
+          type: p.type,
+          orderNumber: p.orderNumber || '',
+          clientName: client,
+          city: (isLoad ? p.producerAddress?.city : p.delivery?.city) || '',
+          address: addr,
+          contact: (isLoad ? (p.loadingContact || p.contact) : (p.unloadingContact || p.contact)) || 'Nie podano',
+          date: isLoad ? (dataZaladunku ? formatDate(dataZaladunku) : 'Zgodnie z ustaleniami') : (dataRozladunku ? formatDate(dataRozladunku) : 'Zgodnie z ustaleniami'),
+          isMain: false
+        });
+      });
+    }
+  }
+
+  const orderNum = spedycja.order_number || spedycja.id;
+  const deliveryPriceFormatted = (responseData.totalDeliveryPrice || responseData.deliveryPrice)
+    ? formatPrice(responseData.totalDeliveryPrice || responseData.deliveryPrice)
+    : 'Do uzgodnienia';
+
   return `
     <!DOCTYPE html>
     <html lang="pl">
     <head>
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Zlecenie Spedycyjne</title>
+      <title>Zlecenie Transportowe nr ${orderNum}</title>
       <style>
         body {
-          font-family: Arial, sans-serif;
-          line-height: 1.6;
-          color: #333;
-          max-width: 800px;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+          line-height: 1.5;
+          color: #1e293b;
+          background-color: #f1f5f9;
+          margin: 0;
+          padding: 24px 12px;
+        }
+        .container {
+          max-width: 720px;
           margin: 0 auto;
-          padding: 20px;
+          background-color: #ffffff;
+          border-radius: 8px;
+          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+          border: 1px solid #e2e8f0;
+          overflow: hidden;
         }
         .header {
-          text-align: center;
-          margin-bottom: 30px;
-          border-bottom: 2px solid #1a71b5;
-          padding-bottom: 20px;
+          background-color: #1e40af;
+          color: #ffffff;
+          padding: 24px;
         }
-        .header h1 {
-          color: #1a71b5;
-          margin-bottom: 5px;
+        .header-top {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+          padding-bottom: 12px;
+          margin-bottom: 12px;
         }
-        .header p {
-          color: #666;
-          margin-top: 0;
+        .company-name {
+          font-size: 14px;
+          font-weight: 700;
+          letter-spacing: 0.5px;
+          text-transform: uppercase;
+          color: #93c5fd;
         }
-        .section {
-          margin-bottom: 20px;
-          padding: 15px;
-          background-color: #f9f9f9;
-          border-radius: 5px;
+        .order-date {
+          font-size: 12px;
+          color: #bfdbfe;
         }
-        .section h2 {
-          margin-top: 0;
-          border-bottom: 1px solid #ddd;
-          padding-bottom: 5px;
-          color: #1a71b5;
+        .order-title {
+          font-size: 22px;
+          font-weight: 800;
+          margin: 0;
+          letter-spacing: -0.5px;
         }
-        .info-table {
+        .order-sub {
+          font-size: 13px;
+          color: #dbeafe;
+          margin-top: 4px;
+        }
+        .content {
+          padding: 24px;
+        }
+        .section-title {
+          font-size: 13px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.75px;
+          color: #475569;
+          margin: 0 0 12px 0;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+        .params-grid {
+          width: 100%;
+          border-collapse: collapse;
+          margin-bottom: 24px;
+          border: 1px solid #e2e8f0;
+          border-radius: 6px;
+          overflow: hidden;
+        }
+        .params-grid th {
+          background-color: #f8fafc;
+          text-align: left;
+          padding: 9px 12px;
+          font-size: 12px;
+          font-weight: 600;
+          color: #64748b;
+          border-bottom: 1px solid #e2e8f0;
+          width: 35%;
+        }
+        .params-grid td {
+          padding: 9px 12px;
+          font-size: 13px;
+          color: #0f172a;
+          border-bottom: 1px solid #e2e8f0;
+        }
+        .params-grid tr:last-child th,
+        .params-grid tr:last-child td {
+          border-bottom: none;
+        }
+        .stops-container {
+          margin-bottom: 24px;
+        }
+        .stop-card {
+          border: 1px solid #e2e8f0;
+          border-radius: 6px;
+          margin-bottom: 12px;
+          overflow: hidden;
+          background-color: #ffffff;
+        }
+        .stop-header {
+          padding: 8px 14px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          font-size: 12px;
+          font-weight: 700;
+        }
+        .stop-header-load {
+          background-color: #fef3c7;
+          color: #92400e;
+          border-bottom: 1px solid #fde68a;
+        }
+        .stop-header-unload {
+          background-color: #d1fae5;
+          color: #065f46;
+          border-bottom: 1px solid #a7f3d0;
+        }
+        .stop-badge {
+          display: inline-block;
+          padding: 2px 8px;
+          border-radius: 4px;
+          font-size: 11px;
+          font-weight: 800;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+        .badge-load {
+          background-color: #d97706;
+          color: #ffffff;
+        }
+        .badge-unload {
+          background-color: #059669;
+          color: #ffffff;
+        }
+        .stop-table {
           width: 100%;
           border-collapse: collapse;
         }
-        .info-table th {
+        .stop-table th {
           text-align: left;
-          background-color: #eee;
-          padding: 8px;
-          width: 40%;
+          padding: 8px 14px;
+          font-size: 12px;
+          font-weight: 600;
+          color: #64748b;
+          width: 32%;
+          border-bottom: 1px solid #f1f5f9;
         }
-        .info-table td {
-          padding: 8px;
-          border-bottom: 1px solid #eee;
+        .stop-table td {
+          padding: 8px 14px;
+          font-size: 13px;
+          color: #1e293b;
+          border-bottom: 1px solid #f1f5f9;
+        }
+        .stop-table tr:last-child th,
+        .stop-table tr:last-child td {
+          border-bottom: none;
+        }
+        .client-highlight {
+          font-size: 14px;
+          font-weight: 700;
+          color: #0f172a;
+        }
+        .billing-box {
+          background-color: #eff6ff;
+          border: 1px solid #bfdbfe;
+          border-left: 4px solid #2563eb;
+          padding: 14px 16px;
+          border-radius: 6px;
+          margin-bottom: 24px;
+        }
+        .billing-title {
+          font-size: 13px;
+          font-weight: 700;
+          color: #1e40af;
+          margin-bottom: 6px;
+        }
+        .billing-text {
+          font-size: 12px;
+          color: #1e3a8a;
+          margin: 0;
+          line-height: 1.6;
+        }
+        .driver-box {
+          background-color: #f8fafc;
+          border: 1px solid #e2e8f0;
+          border-radius: 6px;
+          padding: 12px 16px;
+          margin-bottom: 24px;
+        }
+        .notes-box {
+          background-color: #fffbeb;
+          border: 1px solid #fde68a;
+          border-radius: 6px;
+          padding: 12px 16px;
+          margin-bottom: 24px;
+          font-size: 12px;
+          color: #92400e;
         }
         .footer {
-          margin-top: 30px;
           text-align: center;
-          font-size: 12px;
-          color: #777;
-          border-top: 1px solid #ddd;
-          padding-top: 20px;
-        }
-        .important-note {
-          background-color: #f2f9ff;
-          border-left: 4px solid #1a71b5;
-          padding: 10px 15px;
-          margin-bottom: 20px;
-          font-weight: bold;
-        }
-        .important-info {
-          background-color: #f9f9f9;
-          padding: 12px;
-          border-radius: 5px;
-          border-left: 4px solid #1a71b5;
-        }
-        .important-warning {
-          background-color: #fff2f2;
-          border-left: 4px solid #e74c3c;
-          margin: 20px 0;
-          padding: 15px;
-          border-radius: 5px;
-          font-weight: bold;
-          color: #c0392b;
+          font-size: 11px;
+          color: #94a3b8;
+          border-top: 1px solid #e2e8f0;
+          padding: 16px;
+          background-color: #f8fafc;
         }
       </style>
     </head>
     <body>
-      <div class="header">
-        <h1>ZLECENIE SPEDYCYJNE</h1>
-        <p>Nr zlecenia: ${spedycja.order_number || spedycja.id} | Data utworzenia: ${formatDate(new Date().toISOString())}</p>
-      </div>
-      
-      <div class="important-note">
-        Proszę o dopisanie na fakturze zamieszczonego poniżej numeru MPK oraz numeru zlecenia: ${spedycja.order_number || spedycja.id}.
-      </div>
-      
-      <div class="important-warning">
-        <strong>UWAGA!</strong> Na fakturze musi być podany numer zlecenia: ${spedycja.order_number || spedycja.id}. 
-        Faktury bez numeru zlecenia nie będą opłacane.
-      </div>
-      
-      <div class="section">
-        <h2>Dane podstawowe</h2>
-        <table class="info-table">
-          <tr>
-            <th>Numer MPK:</th>
-            <td>${spedycja.mpk || 'Nie podano'}</td>
-          </tr>
-          <tr>
-            <th>Dokumenty:</th>
-            <td>${spedycja.documents || 'Nie podano'}</td>
-          </tr>
-          <tr>
-            <th>Rodzaj towaru:</th>
-            <td>${towar || 'Nie podano'}</td>
-          </tr>
-          <tr>
-            <th>Waga towaru:</th>
-            <td>${waga || 'Nie podano'}</td>
-          </tr>
-        </table>
-      </div>
-      
-      ${additionalPlaces.length > 0 ? `
-      <div class="section" style="background-color: #f2f7fc; border-left: 4px solid #1a71b5;">
-        <h2 style="color: #1a71b5; margin-bottom: 10px;">PLAN TRASY (Liczba punktów: ${2 + additionalPlaces.length})</h2>
-        <ol style="margin: 0; padding-left: 20px; line-height: 1.8;">
-          <li><strong>[ZAŁADUNEK]</strong> ${getLoadingLocation().replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()} <em>(Zlecenie główne: ${spedycja.order_number || spedycja.id})</em></li>
-          <li><strong>[ROZŁADUNEK]</strong> ${formatAddress(delivery)} <em>(Zlecenie główne: ${spedycja.order_number || spedycja.id})</em></li>
-          ${additionalPlaces.map((p) => `<li><strong>[${p.type === 'załadunek' ? 'ZAŁADUNEK' : 'ROZŁADUNEK'}]</strong> ${p.sourceClientName ? p.sourceClientName + ' - ' : ''}${p.type === 'załadunek' ? (p.producerAddress?.city || p.location || '') : (p.delivery?.city || '')} <em>(Zlecenie: ${p.orderNumber || ''})</em></li>`).join('')}
-        </ol>
-      </div>
-      ` : ''}
+      <div class="container">
+        <div class="header">
+          <div class="header-top">
+            <span class="company-name">Grupa Eltron Sp. z o.o.</span>
+            <span class="order-date">Wystawiono: ${formatDate(new Date().toISOString())}</span>
+          </div>
+          <h1 class="order-title">ZLECENIE TRANSPORTOWE</h1>
+          <div class="order-sub">Nr ewidencyjny: <strong>${orderNum}</strong> | Status: Potwierdzone</div>
+        </div>
 
-      <div class="section">
-        <h2>${additionalPlaces.length > 0 ? `Przystanek 1: Załadunek (Zlecenie główne: ${spedycja.order_number || spedycja.id})` : 'Dane załadunku'}</h2>
-        <table class="info-table">
-          <tr>
-            <th>Miejsce załadunku:</th>
-            <td>${getLoadingLocation()}</td>
-          </tr>
-          <tr>
-            <th>Data załadunku:</th>
-            <td>${formatDate(dataZaladunku) || 'Nie podano'}</td>
-          </tr>
-          <tr>
-            <th>Kontakt do załadunku:</th>
-            <td>${spedycja.loading_contact || 'Nie podano'}</td>
-          </tr>
-        </table>
-      </div>
-      
-      <div class="section">
-        <h2>${additionalPlaces.length > 0 ? `Przystanek 2: Rozładunek (Zlecenie główne: ${spedycja.order_number || spedycja.id})` : 'Dane rozładunku'}</h2>
-        <table class="info-table">
-          <tr>
-            <th>Miejsce rozładunku:</th>
-            <td>${formatAddress(delivery)}</td>
-          </tr>
-          <tr>
-            <th>Data rozładunku:</th>
-            <td>${formatDate(dataRozladunku) || 'Nie podano'}</td>
-          </tr>
-          <tr>
-            <th>Kontakt do rozładunku:</th>
-            <td>${spedycja.unloading_contact || 'Nie podano'}</td>
-          </tr>
-        </table>
-      </div>
-      
-      ${generateAdditionalPlacesHTML()}
-      
-      <div class="section">
-        <h2>Dane przewoźnika</h2>
-        <table class="info-table">
-          <tr>
-            <th>Przewoźnik:</th>
-            <td>${responseData.driverName || ''} ${responseData.driverSurname || ''}</td>
-          </tr>
-          <tr>
-            <th>Numer rejestracyjny:</th>
-            <td>${responseData.vehicleNumber || 'Nie podano'}</td>
-          </tr>
-          <tr>
-            <th>Telefon do kierowcy:</th>
-            <td>${responseData.driverPhone || 'Nie podano'}</td>
-          </tr>
-        </table>
-      </div>
-      
-      <div class="section">
-        <h2>Płatność</h2>
-        <table class="info-table">
-          <tr>
-            <th>Cena transportu:</th>
-            <td>${(responseData.totalDeliveryPrice || responseData.deliveryPrice) ? formatPrice(responseData.totalDeliveryPrice || responseData.deliveryPrice) : 'Nie podano'}</td>
-          </tr>
-          <tr>
-            <th>Termin płatności:</th>
-            <td>${terminPlatnosci || 'Nie podano'}</td>
-          </tr>
-        </table>
-      </div>
-      
-      <div class="section">
-        <h2>Uwagi</h2>
-        <p>${spedycja.notes || 'Brak uwag'}</p>
-        ${responseData.adminNotes ? `<p><strong>Uwagi przewoźnika:</strong> ${responseData.adminNotes}</p>` : ''}
-      </div>
-      
-      <div class="section">
-        <h2>Adres do wysyłki faktur i dokumentów</h2>
-        <p class="important-info">
-          Grupa Eltron Sp. z o.o.<br>
-          ul. Główna 7<br>
-          18-100 Łapy<br>
-          tel. 85 715 27 05<br>
-          NIP: 9662112843<br>
-          ksiegowosc@grupaeltron.pl
-        </p>
-      </div>
-      
-      <div class="footer">
-        <p>Zlecenie wygenerowane automatycznie.</p>
+        <div class="content">
+          <!-- Parametry zlecenia -->
+          <div class="section-title">Parametry i warunki zlecenia</div>
+          <table class="params-grid">
+            <tr>
+              <th>Numer zlecenia:</th>
+              <td><strong style="color: #1e40af;">${orderNum}</strong></td>
+            </tr>
+            <tr>
+              <th>Numer MPK:</th>
+              <td><strong>${spedycja.mpk || 'Nie podano'}</strong></td>
+            </tr>
+            <tr>
+              <th>Stawka transportu:</th>
+              <td><strong style="font-size: 14px; color: #047857;">${deliveryPriceFormatted}</strong></td>
+            </tr>
+            <tr>
+              <th>Termin płatności:</th>
+              <td>${terminPlatnosci || '14 dni'}</td>
+            </tr>
+            <tr>
+              <th>Rodzaj towaru:</th>
+              <td>${towar || 'Materiały i towary handlowe'}</td>
+            </tr>
+            <tr>
+              <th>Waga całkowita:</th>
+              <td>${waga ? `${waga} kg` : 'Nie podano'}</td>
+            </tr>
+            <tr>
+              <th>Wymagany pojazd:</th>
+              <td>${responseData.transportType || 'Standard'}</td>
+            </tr>
+            <tr>
+              <th>Wymagane dokumenty:</th>
+              <td>${spedycja.documents || 'List przewozowy CMR / Dokument WZ'}</td>
+            </tr>
+          </table>
+
+          <!-- Harmonogram trasy punkt po punkcie -->
+          <div class="section-title">Harmonogram trasy (${stopsList.length} ${stopsList.length === 1 ? 'przystanek' : stopsList.length < 5 ? 'przystanki' : 'przystanków'})</div>
+          <div class="stops-container">
+            ${stopsList.map((stop, idx) => {
+              const isLoad = stop.type === 'załadunek';
+              return `
+                <div class="stop-card">
+                  <div class="stop-header ${isLoad ? 'stop-header-load' : 'stop-header-unload'}">
+                    <span>
+                      <span class="stop-badge ${isLoad ? 'badge-load' : 'badge-unload'}">
+                        Przystanek ${idx + 1}
+                      </span>
+                      &nbsp; ${isLoad ? 'PUNKT ZAŁADUNKU' : 'PUNKT ROZŁADUNKU'}
+                    </span>
+                    <span style="font-size: 11px; font-weight: normal; opacity: 0.85;">
+                      Zlecenie: ${stop.orderNumber || orderNum}
+                    </span>
+                  </div>
+                  <table class="stop-table">
+                    <tr>
+                      <th>Klient / Firma:</th>
+                      <td class="client-highlight">${stop.clientName || 'Nie podano'}</td>
+                    </tr>
+                    <tr>
+                      <th>Adres:</th>
+                      <td>${stop.address || 'Brak danych adresowych'}</td>
+                    </tr>
+                    <tr>
+                      <th>${isLoad ? 'Planowany załadunek:' : 'Planowany rozładunek:'}</th>
+                      <td><strong>${stop.date}</strong></td>
+                    </tr>
+                    <tr>
+                      <th>Kontakt na miejscu:</th>
+                      <td>${stop.contact || 'Nie podano'}</td>
+                    </tr>
+                  </table>
+                </div>
+              `;
+            }).join('')}
+          </div>
+
+          <!-- Dane przewoźnika i pojazdu -->
+          <div class="section-title">Dane kierowcy i pojazdu</div>
+          <div class="driver-box">
+            <table class="stop-table">
+              <tr>
+                <th>Kierowca:</th>
+                <td><strong>${(responseData.driverName || '') + ' ' + (responseData.driverSurname || '') || 'Nie podano'}</strong></td>
+              </tr>
+              <tr>
+                <th>Telefon do kierowcy:</th>
+                <td>${responseData.driverPhone ? `<a href="tel:${responseData.driverPhone}" style="color: #1e40af; text-decoration: none; font-weight: bold;">${responseData.driverPhone}</a>` : 'Nie podano'}</td>
+              </tr>
+              <tr>
+                <th>Numer rejestracyjny:</th>
+                <td><strong>${responseData.vehicleNumber || 'Nie podano'}</strong></td>
+              </tr>
+            </table>
+          </div>
+
+          <!-- Instrukcje do faktury -->
+          <div class="billing-box">
+            <div class="billing-title">Wytyczne do wystawienia faktury VAT:</div>
+            <p class="billing-text">
+              1. Na fakturze <strong>wymagane jest podanie numeru zlecenia: ${orderNum}</strong> oraz <strong>MPK: ${spedycja.mpk || '-'}</strong>.<br>
+              2. Prawidłowo wystawioną e-fakturę wraz z potwierdzonymi dokumentami WZ/CMR prosimy przesłać na adres: <strong>ksiegowosc@grupaeltron.pl</strong>.<br>
+              3. Dane nabywcy: <strong>Grupa Eltron Sp. z o.o.</strong>, ul. Główna 7, 18-100 Łapy, NIP: <strong>9662112843</strong>.
+            </p>
+          </div>
+
+          ${(spedycja.notes || responseData.adminNotes) ? `
+          <div class="notes-box">
+            <strong>Uwagi i instrukcje specjalne:</strong><br>
+            ${spedycja.notes ? `• ${spedycja.notes}<br>` : ''}
+            ${responseData.adminNotes ? `• ${responseData.adminNotes}` : ''}
+          </div>
+          ` : ''}
+        </div>
+
+        <div class="footer">
+          Zlecenie wygenerowane automatycznie przez System Logistyki i Spedycji Grupy Eltron. Wszelkie pytania prosimy kierować na logistyka@grupaeltron.pl.
+        </div>
       </div>
     </body>
     </html>

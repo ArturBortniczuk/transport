@@ -55,6 +55,7 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
   const [showTransportsSection, setShowTransportsSection] = useState(false)
   const [connectedRouteInfo, setConnectedRouteInfo] = useState(null)
   const [isCalculatingConnectedRoute, setIsCalculatingConnectedRoute] = useState(false)
+  const [routeStops, setRouteStops] = useState([])
 
   // Stałe dla magazynów
   const MAGAZYNY = {
@@ -84,6 +85,171 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
     }
   };
 
+  const getTransportStartDisplay = (t) => {
+    if (!t) return '';
+    if (t.location === 'Odbiory własne') {
+      const company = t.sourceClientName || t.source_client_name || '';
+      const city = t.producerAddress?.city || '';
+      if (company && city) return `${company} (${city})`;
+      if (company) return company;
+      if (city) return city;
+      return 'Odbiory własne';
+    }
+    return t.location ? t.location.replace('Magazyn ', '') : 'Brak';
+  };
+
+  // Tworzy listę obiektów przystanków (załadunki i rozładunki) dla transportu głównego i połączonych
+  const createStopsFromTransports = (mainData, connList) => {
+    if (!mainData) return [];
+
+    const parseJson = (val) => {
+      if (!val) return null;
+      if (typeof val === 'object') return val;
+      try { return JSON.parse(val); } catch (e) { return null; }
+    };
+
+    const mainLoc = parseJson(mainData.location_data) || parseJson(mainData.producerAddress);
+    const mainDeliv = parseJson(mainData.delivery_data) || parseJson(mainData.delivery);
+
+    const mainStartCity = (mainLoc && mainLoc.city)
+      ? mainLoc.city
+      : (mainData.location === 'Odbiory własne' ? (mainData.producerAddress?.city || '') : (mainData.location?.replace(/^magazyn\s+/i, '') || ''));
+    const mainStartClient = mainData.sourceClientName || mainData.source_client_name
+      || (mainData.location?.includes('Magazyn') ? mainData.location : 'Grupa Eltron Sp. z o.o.');
+    const mainStartAddr = mainLoc || mainData.producerAddress;
+
+    const mainEndCity = (mainDeliv && mainDeliv.city) || mainData.delivery?.city || '';
+    const mainEndClient = mainData.clientName || mainData.client_name || '';
+    const mainEndAddr = mainDeliv || mainData.delivery;
+
+    const stops = [];
+
+    // Główny załadunek
+    stops.push({
+      id: `main-load-${mainData.id}`,
+      transportId: mainData.id,
+      orderNumber: mainData.orderNumber || mainData.order_number || mainData.id,
+      isMain: true,
+      pointType: 'loading',
+      clientName: mainStartClient,
+      city: mainStartCity,
+      address: mainStartAddr,
+      contact: mainData.loadingContact || mainData.loading_contact || ''
+    });
+
+    // Główny rozładunek
+    stops.push({
+      id: `main-unload-${mainData.id}`,
+      transportId: mainData.id,
+      orderNumber: mainData.orderNumber || mainData.order_number || mainData.id,
+      isMain: true,
+      pointType: 'unloading',
+      clientName: mainEndClient,
+      city: mainEndCity,
+      address: mainEndAddr,
+      contact: mainData.unloadingContact || mainData.unloading_contact || ''
+    });
+
+    // Przystanki ze zleceń dołączonych
+    (connList || []).forEach(ct => {
+      const ctLoc = parseJson(ct.location_data) || parseJson(ct.producerAddress) || parseJson(ct.startAddress);
+      const ctDeliv = parseJson(ct.delivery_data) || parseJson(ct.delivery) || parseJson(ct.endAddress);
+
+      const ctStartCity = ctLoc?.city || ct.startCity || (ct.location === 'Odbiory własne' ? ct.producerAddress?.city : ct.location?.replace(/^magazyn\s+/i, '')) || '';
+      const ctStartClient = ct.sourceClientName || ct.source_client_name || (ct.location?.includes('Magazyn') ? ct.location : 'Grupa Eltron Sp. z o.o.');
+      const ctStartAddr = ctLoc || ct.producerAddress || ct.startAddress;
+
+      const ctEndCity = ctDeliv?.city || ct.endCity || ct.delivery?.city || '';
+      const ctEndClient = ct.clientName || ct.client_name || ct.delivery?.clientName || '';
+      const ctEndAddr = ctDeliv || ct.delivery || ct.endAddress;
+
+      const type = ct.type || 'both';
+
+      if (type === 'both' || type === 'loading') {
+        stops.push({
+          id: `${ct.uniqueKey || ct.id}-load`,
+          transportId: ct.id,
+          orderNumber: ct.orderNumber || ct.order_number || ct.id,
+          isMain: false,
+          pointType: 'loading',
+          clientName: ctStartClient,
+          city: ctStartCity,
+          address: ctStartAddr,
+          contact: ct.loadingContact || ct.loading_contact || ''
+        });
+      }
+
+      if (type === 'both' || type === 'unloading') {
+        stops.push({
+          id: `${ct.uniqueKey || ct.id}-unload`,
+          transportId: ct.id,
+          orderNumber: ct.orderNumber || ct.order_number || ct.id,
+          isMain: false,
+          pointType: 'unloading',
+          clientName: ctEndClient,
+          city: ctEndCity,
+          address: ctEndAddr,
+          contact: ct.unloadingContact || ct.unloading_contact || ''
+        });
+      }
+    });
+
+    return stops;
+  };
+
+  const updateRouteStops = (newConnList) => {
+    const requiredStops = createStopsFromTransports(initialData, newConnList);
+
+    setRouteStops(prev => {
+      if (!prev || prev.length === 0) {
+        // Domyślnie załadunki najpierw, potem rozładunki
+        const loads = requiredStops.filter(s => s.pointType === 'loading');
+        const unloads = requiredStops.filter(s => s.pointType === 'unloading');
+        return [...loads, ...unloads];
+      }
+
+      const requiredMap = new Map(requiredStops.map(s => [s.id, s]));
+
+      // Zachowaj istniejące przystanki w ich dotychczasowej kolejności
+      const preserved = prev
+        .filter(s => requiredMap.has(s.id))
+        .map(s => ({ ...requiredMap.get(s.id), ...s }));
+
+      const preservedIds = new Set(preserved.map(s => s.id));
+      const newlyAdded = requiredStops.filter(s => !preservedIds.has(s.id));
+
+      let result = [...preserved];
+      newlyAdded.forEach(newStop => {
+        if (newStop.pointType === 'loading') {
+          // Jeśli dodano załadunek, umieść go przed pierwszym rozładunkiem na trasie!
+          // Dzięki temu trasa domyślnie przyjmuje układ: Załadunek 1 -> Załadunek 2 -> Rozładunek 1
+          const firstUnloadIdx = result.findIndex(s => s.pointType === 'unloading');
+          if (firstUnloadIdx !== -1) {
+            result.splice(firstUnloadIdx, 0, newStop);
+          } else {
+            result.push(newStop);
+          }
+        } else {
+          result.push(newStop);
+        }
+      });
+
+      return result;
+    });
+  };
+
+  const handleMoveStop = (index, direction) => {
+    setRouteStops(prev => {
+      const targetIndex = index + direction;
+      if (targetIndex < 0 || targetIndex >= prev.length) return prev;
+      const updated = [...prev];
+      const item = updated[index];
+      updated[index] = updated[targetIndex];
+      updated[targetIndex] = item;
+      return updated;
+    });
+  };
+
   // Funkcja do automatycznego obliczania ceny na transport
   const calculatePricePerTransport = (total, transportsCount) => {
     if (transportsCount === 0) return total;
@@ -97,7 +263,7 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
     setPricePerTransport(calculatedPrice);
   }, [totalPrice, connectedTransports]);
 
-  // Effect do automatycznego wyliczania trasy łączonej punkt-do-punktu i jej kilometrów
+  // Effect do automatycznego wyliczania trasy łączonej punkt-do-punktu i jej kilometrów na bazie kolejności routeStops
   useEffect(() => {
     if (!isResponse) return;
 
@@ -107,20 +273,32 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
       return;
     }
 
-    const points = buildRoutePoints(initialData, connectedTransports);
-    if (points.length >= 2) {
+    if (!routeStops || routeStops.length < 2) return;
+
+    const routeCities = routeStops.map(s => s.city).filter(Boolean);
+    if (routeCities.length >= 2) {
       let isCurrent = true;
       setIsCalculatingConnectedRoute(true);
 
-      calculateRouteDistance(points)
+      const pointsForCalc = routeStops.map(s => ({
+        city: s.city,
+        postalCode: s.address?.postalCode || '',
+        street: s.address?.street || '',
+        clientName: s.clientName || '',
+        pointType: s.pointType || '',
+        toString() { return this.city; }
+      }));
+
+      calculateRouteDistance(pointsForCalc)
         .then(res => {
           if (!isCurrent) return;
           if (res && res.success && res.totalDistanceKm > 0) {
             setConnectedRouteInfo({
-              route: points.join(' → '),
+              route: routeCities.join(' → '),
               totalDistance: res.totalDistanceKm,
               legs: res.legs || [],
-              routePoints: points
+              routePoints: routeCities,
+              routeStops: routeStops
             });
             setDistance(res.totalDistanceKm);
           }
@@ -138,7 +316,7 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
         isCurrent = false;
       };
     }
-  }, [connectedTransports, initialData, isResponse]);
+  }, [routeStops, connectedTransports, initialData, isResponse]);
 
   // Pobierz listę użytkowników, budów i dane bieżącego użytkownika
   useEffect(() => {
@@ -278,12 +456,19 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
       if (initialData.response?.connectedTransports && initialData.response.connectedTransports.length > 0) {
         setConnectedTransports(initialData.response.connectedTransports);
         setShowTransportsSection(true);
+        if (initialData.response.routeStops && initialData.response.routeStops.length > 0) {
+          setRouteStops(initialData.response.routeStops);
+        } else {
+          const initialStops = createStopsFromTransports(initialData, initialData.response.connectedTransports);
+          setRouteStops(initialStops);
+        }
         if (initialData.response.totalDistance) {
           setDistance(initialData.response.totalDistance);
           setConnectedRouteInfo({
             route: initialData.response.connectedRoute || '',
             totalDistance: initialData.response.totalDistance,
-            routePoints: initialData.response.routePoints || []
+            routePoints: initialData.response.routePoints || [],
+            routeStops: initialData.response.routeStops || []
           });
         }
       }
@@ -482,19 +667,6 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
     }));
   };
 
-  const getTransportStartDisplay = (t) => {
-    if (!t) return '';
-    if (t.location === 'Odbiory własne') {
-      const company = t.sourceClientName || t.source_client_name || '';
-      const city = t.producerAddress?.city || '';
-      if (company && city) return `${company} (${city})`;
-      if (company) return company;
-      if (city) return city;
-      return 'Odbiory własne';
-    }
-    return t.location ? t.location.replace('Magazyn ', '') : 'Brak';
-  };
-
   // Funkcja do dodawania połączonego transportu
   const handleAddConnectedTransport = (transport, type = 'both') => {
     if (!transport) return;
@@ -505,53 +677,46 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
     const startLocation = getTransportStartDisplay(transport);
     const endLocation = transport.delivery?.city || 'Brak danych';
 
-    setConnectedTransports(prev => [
-      ...prev,
-      {
-        uniqueKey,
-        id: transport.id,
-        orderNumber: transport.orderNumber || transport.order_number,
-        route: `${startLocation} → ${endLocation}`,
-        startCity: startLocation,
-        endCity: endLocation,
-        location: transport.location,
-        sourceClientName: transport.sourceClientName || transport.source_client_name || '',
-        producerAddress: transport.producerAddress,
-        delivery: transport.delivery,
-        loadingContact: transport.loadingContact || transport.loading_contact,
-        unloadingContact: transport.unloadingContact || transport.unloading_contact,
-        responsiblePerson: transport.responsiblePerson,
-        mpk: transport.mpk,
-        distanceKm: transport.distanceKm || 0,
-        order: prev.length + 1,
-        type: type // 'both' (Załadunek i Rozładunek), 'loading', 'unloading'
-      }
-    ]);
+    const newConn = {
+      uniqueKey,
+      id: transport.id,
+      orderNumber: transport.orderNumber || transport.order_number,
+      route: `${startLocation} → ${endLocation}`,
+      startCity: startLocation,
+      endCity: endLocation,
+      location: transport.location,
+      sourceClientName: transport.sourceClientName || transport.source_client_name || '',
+      clientName: transport.clientName || transport.client_name || '',
+      producerAddress: transport.producerAddress,
+      delivery: transport.delivery,
+      loadingContact: transport.loadingContact || transport.loading_contact,
+      unloadingContact: transport.unloadingContact || transport.unloading_contact,
+      responsiblePerson: transport.responsiblePerson,
+      mpk: transport.mpk,
+      distanceKm: transport.distanceKm || 0,
+      order: connectedTransports.length + 1,
+      type: type // 'both' (Załadunek i Rozładunek), 'loading', 'unloading'
+    };
+
+    const nextList = [...connectedTransports, newConn];
+    setConnectedTransports(nextList);
+    updateRouteStops(nextList);
   };
 
   // Funkcja do usuwania połączonego transportu
   const handleRemoveConnectedTransport = (keyOrId) => {
-    setConnectedTransports(prev => prev.filter(t => (t.uniqueKey ? t.uniqueKey !== keyOrId : String(t.id) !== String(keyOrId))));
-  };
-
-  // Funkcja do zmiany kolejności transportu
-  const handleChangeTransportOrder = (keyOrId, newOrder) => {
-    setConnectedTransports(prev => {
-      const updated = prev.map(t => {
-        if ((t.uniqueKey && t.uniqueKey === keyOrId) || (!t.uniqueKey && String(t.id) === String(keyOrId))) {
-          return { ...t, order: newOrder };
-        }
-        return t;
-      });
-      return updated.sort((a, b) => a.order - b.order);
-    });
+    const nextList = connectedTransports.filter(t => (t.uniqueKey ? t.uniqueKey !== keyOrId : String(t.id) !== String(keyOrId)));
+    setConnectedTransports(nextList);
+    updateRouteStops(nextList);
   };
 
   // Funkcja do zmiany typu transportu (both / loading / unloading)
   const handleChangeTransportType = (keyOrId, newType) => {
-    setConnectedTransports(prev =>
-      prev.map(t => ((t.uniqueKey && t.uniqueKey === keyOrId) || (!t.uniqueKey && String(t.id) === String(keyOrId))) ? { ...t, type: newType } : t)
+    const nextList = connectedTransports.map(t =>
+      ((t.uniqueKey && t.uniqueKey === keyOrId) || (!t.uniqueKey && String(t.id) === String(keyOrId))) ? { ...t, type: newType } : t
     );
+    setConnectedTransports(nextList);
+    updateRouteStops(nextList);
   };
 
   // Filter users and constructions based on search term
@@ -643,6 +808,9 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
         }
         if (connectedRouteInfo?.routePoints) {
           responseData.routePoints = connectedRouteInfo.routePoints;
+        }
+        if (routeStops && routeStops.length > 0) {
+          responseData.routeStops = routeStops;
         }
       }
 
@@ -949,70 +1117,37 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
 
             {showTransportsSection && (
               <div className="mt-3 border border-gray-200 rounded-md p-4 bg-gray-50">
-                {/* Wybór transportów do połączenia */}
+                {/* Wybór transportów do połączenia - każdy transport dokładnie jeden raz */}
                 <div className="mb-4">
-                  <label className="block text-sm font-medium mb-2">Wybierz transporty do połączenia</label>
+                  <label className="block text-sm font-medium mb-1">Wybierz transport do połączenia</label>
+                  <p className="text-xs text-gray-500 mb-2">Każde zlecenie pojawia się na liście jeden raz. Po dodaniu określisz przyciskami, czy pobierasz załadunek, rozładunek czy oba punkty.</p>
                   <select
-                    className="w-full p-2 border rounded-md"
+                    className="w-full p-2 border rounded-md bg-white shadow-2xs text-sm"
                     onChange={(e) => {
-                      const val = e.target.value;
-                      if (!val) return;
-                      const [tId, prefType] = val.split(':');
+                      const tId = e.target.value;
+                      if (!tId) return;
                       const selectedTransport = availableTransports.find(t => String(t.id) === String(tId));
                       if (selectedTransport) {
-                        handleAddConnectedTransport(selectedTransport, prefType || 'both');
+                        handleAddConnectedTransport(selectedTransport, 'both');
                       }
                       e.target.value = '';
                     }}
                     value=""
                   >
-                    <option value="">Wybierz transport...</option>
+                    <option value="">-- Wybierz transport z listy --</option>
                     {availableTransports
-                      .flatMap(transport => {
-                        const existingEntries = connectedTransports.filter(ct => String(ct.id) === String(transport.id));
-                        const hasBoth = existingEntries.some(ct => ct.type === 'both');
-                        const hasLoading = existingEntries.some(ct => ct.type === 'loading');
-                        const hasUnloading = existingEntries.some(ct => ct.type === 'unloading');
-
-                        if (hasBoth || (hasLoading && hasUnloading)) {
-                          return [];
-                        }
-
+                      .filter(transport => !connectedTransports.some(ct => String(ct.id) === String(transport.id)))
+                      .map(transport => {
                         const startStr = getTransportStartDisplay(transport);
                         const endStr = transport.delivery?.city || 'Brak danych';
                         const orderNum = transport.orderNumber || transport.order_number || transport.id;
+                        const client = transport.clientName || transport.client_name || '';
 
-                        if (existingEntries.length === 0) {
-                          return [
-                            <option key={`${transport.id}:both`} value={`${transport.id}:both`}>
-                              {orderNum} - {startStr} → {endStr} (Całe zlecenie / Kółko)
-                            </option>,
-                            <option key={`${transport.id}:loading`} value={`${transport.id}:loading`}>
-                              {orderNum} - Tylko Załadunek ({startStr})
-                            </option>,
-                            <option key={`${transport.id}:unloading`} value={`${transport.id}:unloading`}>
-                              {orderNum} - Tylko Rozładunek ({endStr})
-                            </option>
-                          ];
-                        }
-
-                        if (hasLoading && !hasUnloading) {
-                          return [
-                            <option key={`${transport.id}:unloading`} value={`${transport.id}:unloading`}>
-                              {orderNum} - Dodaj Rozładunek ({endStr})
-                            </option>
-                          ];
-                        }
-
-                        if (hasUnloading && !hasLoading) {
-                          return [
-                            <option key={`${transport.id}:loading`} value={`${transport.id}:loading`}>
-                              {orderNum} - Dodaj Załadunek ({startStr})
-                            </option>
-                          ];
-                        }
-
-                        return [];
+                        return (
+                          <option key={transport.id} value={transport.id}>
+                            {orderNum} - {startStr} → {endStr} {client ? `(${client})` : ''}
+                          </option>
+                        );
                       })}
                   </select>
                 </div>
@@ -1021,57 +1156,50 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
                 {connectedTransports.length > 0 ? (
                   <div>
                     <div className="space-y-3">
-                    {connectedTransports.map((transport, index) => {
-                      const itemKey = transport.uniqueKey || `${transport.id}-${index}`;
-                      return (
-                        <div key={itemKey} className="flex flex-col border rounded-md p-3 bg-white shadow-xs">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <span className="font-bold text-gray-900">{transport.orderNumber || transport.id}</span>
-                                <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
-                                  transport.type === 'both' ? 'bg-indigo-100 text-indigo-800' :
-                                  transport.type === 'loading' ? 'bg-blue-100 text-blue-800' :
-                                  'bg-green-100 text-green-800'
-                                }`}>
-                                  {transport.type === 'both' ? 'Załadunek i Rozładunek' :
-                                   transport.type === 'loading' ? 'Załadunek' : 'Rozładunek'}
-                                </span>
+                      {connectedTransports.map((transport, index) => {
+                        const itemKey = transport.uniqueKey || `${transport.id}-${index}`;
+                        return (
+                          <div key={itemKey} className="flex flex-col border border-gray-200 rounded-md p-3 bg-white shadow-2xs">
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold text-gray-900">{transport.orderNumber || transport.id}</span>
+                                  <span className={`text-xs px-2.5 py-0.5 rounded-full font-semibold ${
+                                    transport.type === 'both' ? 'bg-indigo-100 text-indigo-800' :
+                                    transport.type === 'loading' ? 'bg-amber-100 text-amber-800' :
+                                    'bg-emerald-100 text-emerald-800'
+                                  }`}>
+                                    {transport.type === 'both' ? 'Załadunek i Rozładunek' :
+                                     transport.type === 'loading' ? 'Tylko Załadunek' : 'Tylko Rozładunek'}
+                                  </span>
+                                </div>
+                                <div className="text-sm font-medium text-gray-700 mt-1">{transport.route}</div>
+                                <div className="text-xs text-gray-500 mt-1 flex flex-wrap gap-x-3">
+                                  {transport.sourceClientName && <span>Nadawca: <strong>{transport.sourceClientName}</strong></span>}
+                                  {transport.clientName && <span>Odbiorca: <strong>{transport.clientName}</strong></span>}
+                                  {transport.mpk && <span>MPK: <strong>{transport.mpk}</strong></span>}
+                                </div>
                               </div>
-                              <div className="text-sm text-gray-600 mt-1">{transport.route}</div>
-                              <div className="text-xs text-gray-500 mt-1 flex flex-wrap gap-x-3">
-                                {transport.mpk && <span>MPK: <strong>{transport.mpk}</strong></span>}
-                                {transport.responsiblePerson && <span>Osoba: <strong>{transport.responsiblePerson}</strong></span>}
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveConnectedTransport(itemKey)}
-                              className="text-red-500 hover:text-red-700 text-sm font-medium px-2 py-1"
-                            >
-                              Usuń
-                            </button>
-                          </div>
-
-                          <div className="flex flex-col sm:flex-row items-start sm:items-center mt-3 pt-3 border-t border-gray-100 gap-3">
-                            <div className="flex items-center gap-2">
-                              <label className="text-xs font-medium text-gray-600">Kolejność w trasie:</label>
-                              <input
-                                type="number"
-                                min="1"
-                                value={transport.order || index + 1}
-                                onChange={(e) => handleChangeTransportOrder(itemKey, parseInt(e.target.value) || 1)}
-                                className="w-16 p-1.5 text-sm border rounded-md"
-                              />
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveConnectedTransport(itemKey)}
+                                className="text-red-600 hover:text-red-800 text-xs font-semibold px-2 py-1 hover:bg-red-50 rounded"
+                              >
+                                Usuń
+                              </button>
                             </div>
 
-                            <div className="flex-1 w-full">
-                              <label className="block text-xs font-medium text-gray-600 mb-1">Typ punktu:</label>
-                              <div className="flex space-x-1 sm:space-x-2">
+                            <div className="mt-3 pt-2.5 border-t border-gray-100">
+                              <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+                                Typ punktu (co realizujemy z tego zlecenia):
+                              </label>
+                              <div className="grid grid-cols-3 gap-1.5">
                                 <button
                                   type="button"
-                                  className={`flex-1 py-1.5 px-2 text-xs font-medium rounded-md transition-colors ${
-                                    transport.type === 'both' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                  className={`py-1.5 px-2 text-xs font-semibold rounded-md border transition-all ${
+                                    transport.type === 'both'
+                                      ? 'bg-indigo-600 border-indigo-700 text-white shadow-xs'
+                                      : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
                                   }`}
                                   onClick={() => handleChangeTransportType(itemKey, 'both')}
                                 >
@@ -1079,8 +1207,10 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
                                 </button>
                                 <button
                                   type="button"
-                                  className={`flex-1 py-1.5 px-2 text-xs font-medium rounded-md transition-colors ${
-                                    transport.type === 'loading' ? 'bg-blue-600 text-white shadow-xs' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                  className={`py-1.5 px-2 text-xs font-semibold rounded-md border transition-all ${
+                                    transport.type === 'loading'
+                                      ? 'bg-amber-600 border-amber-700 text-white shadow-xs'
+                                      : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
                                   }`}
                                   onClick={() => handleChangeTransportType(itemKey, 'loading')}
                                 >
@@ -1088,8 +1218,10 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
                                 </button>
                                 <button
                                   type="button"
-                                  className={`flex-1 py-1.5 px-2 text-xs font-medium rounded-md transition-colors ${
-                                    transport.type === 'unloading' ? 'bg-green-600 text-white shadow-xs' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                  className={`py-1.5 px-2 text-xs font-semibold rounded-md border transition-all ${
+                                    transport.type === 'unloading'
+                                      ? 'bg-emerald-600 border-emerald-700 text-white shadow-xs'
+                                      : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
                                   }`}
                                   onClick={() => handleChangeTransportType(itemKey, 'unloading')}
                                 >
@@ -1098,10 +1230,97 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
                               </div>
                             </div>
                           </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Interaktywna lista kolejności wszystkich punktów na trasie */}
+                    {routeStops.length > 0 && (
+                      <div className="mt-4 pt-3 border-t border-gray-200">
+                        <div className="flex items-center justify-between mb-2">
+                          <div>
+                            <h4 className="text-sm font-bold text-gray-900 flex items-center gap-1.5">
+                              <Route size={16} className="text-indigo-600" />
+                              Kolejność punktów na trasie (harmonogram przystanków)
+                            </h4>
+                            <p className="text-xs text-gray-500">
+                              Użyj przycisków ▲ i ▼, aby ustalić dokładny przebieg trasy (np. Załadunek 1 → Załadunek 2 → Rozładunek 1)
+                            </p>
+                          </div>
+                          <span className="text-xs font-semibold px-2 py-0.5 bg-indigo-100 text-indigo-800 rounded-full">
+                            {routeStops.length} punkty trasy
+                          </span>
                         </div>
-                      );
-                    })}
-                  </div>
+
+                        <div className="space-y-2 mt-2">
+                          {routeStops.map((stop, idx) => {
+                            const isFirst = idx === 0;
+                            const isLast = idx === routeStops.length - 1;
+                            const isLoad = stop.pointType === 'loading';
+                            const street = stop.address?.street;
+                            const postCode = stop.address?.postalCode;
+                            const addressStr = [street, postCode, stop.city].filter(Boolean).join(', ');
+
+                            return (
+                              <div
+                                key={stop.id || `${stop.transportId}-${stop.pointType}-${idx}`}
+                                className={`flex items-center justify-between p-3 rounded-md border transition-all ${
+                                  isLoad
+                                    ? 'bg-amber-50/80 border-amber-200 hover:border-amber-300'
+                                    : 'bg-emerald-50/80 border-emerald-200 hover:border-emerald-300'
+                                }`}
+                              >
+                                <div className="flex items-center gap-3 min-w-0 flex-1">
+                                  <span className="flex-shrink-0 w-6 h-6 rounded-full bg-gray-900 text-white font-bold text-xs flex items-center justify-center">
+                                    {idx + 1}
+                                  </span>
+                                  <span className={`flex-shrink-0 px-2.5 py-1 text-xs font-bold rounded-md uppercase tracking-wider ${
+                                    isLoad ? 'bg-amber-500 text-white' : 'bg-emerald-600 text-white'
+                                  }`}>
+                                    {isLoad ? 'Załadunek' : 'Rozładunek'}
+                                  </span>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="text-sm font-bold text-gray-900">
+                                        {stop.clientName ? `${stop.clientName} - ` : ''}{stop.city || 'Brak miasta'}
+                                      </span>
+                                      <span className="text-xs font-medium text-gray-600 bg-white/90 px-2 py-0.5 rounded border border-gray-200">
+                                        {stop.isMain ? `Główne: ${stop.orderNumber}` : `Zlecenie: ${stop.orderNumber}`}
+                                      </span>
+                                    </div>
+                                    <div className="text-xs text-gray-600 mt-0.5 truncate">
+                                      {addressStr || 'Brak danych adresowych'}
+                                      {stop.contact ? ` • tel: ${stop.contact}` : ''}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-1 ml-3 flex-shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleMoveStop(idx, -1)}
+                                    disabled={isFirst}
+                                    className="px-2.5 py-1 rounded bg-white border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed text-xs font-bold flex items-center gap-1 shadow-2xs"
+                                    title="Przesuń w górę trasy"
+                                  >
+                                    ▲ <span className="hidden sm:inline">Góra</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleMoveStop(idx, 1)}
+                                    disabled={isLast}
+                                    className="px-2.5 py-1 rounded bg-white border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed text-xs font-bold flex items-center gap-1 shadow-2xs"
+                                    title="Przesuń w dół trasy"
+                                  >
+                                    ▼ <span className="hidden sm:inline">Dół</span>
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Podsumowanie trasy łączonej punkt po punkcie */}
                     {connectedTransports.length > 0 && (

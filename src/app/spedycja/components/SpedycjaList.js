@@ -156,7 +156,8 @@ export default function SpedycjaList({
           startCity: mainStart,
           endCity: mainEnd,
           mpk: mainMpk,
-          distanceKm: mainDistance
+          distanceKm: mainDistance,
+          response: mainTransport?.response || resp
         },
         connectedTransports,
         totalPrice,
@@ -188,7 +189,8 @@ export default function SpedycjaList({
           startCity: mainStart,
           endCity: mainEnd,
           mpk: getCurrentMPK(transport),
-          distanceKm: transport.distanceKm || transport.distance_km || 0
+          distanceKm: transport.distanceKm || transport.distance_km || 0,
+          response: resp
         },
         connectedTransports,
         totalPrice,
@@ -211,18 +213,29 @@ export default function SpedycjaList({
       return null;
     }
 
-    const enrichedConnected = connectedTransports.map(ct => {
-      if (ct.startAddress && ct.endAddress) return ct;
-      const full = (zamowienia || []).find(t => String(t.id) === String(ct.id));
-      if (!full) return ct;
-      return {
-        ...ct,
-        startAddress: full.location === 'Odbiory własne' ? full.producerAddress : (ct.startAddress || { city: full.location?.replace(/^magazyn\s+/i, '') }),
-        endAddress: full.delivery || ct.endAddress
-      };
-    });
+    // Sprawdź czy zapisano niestandardowy harmonogram przystanków
+    const savedStops = mainTransport?.response?.routeStops || transport?.response?.routeStops;
+    const savedPoints = mainTransport?.response?.routePoints || transport?.response?.routePoints;
 
-    const routePoints = buildRoutePoints(mainTransport, enrichedConnected);
+    let routePoints = [];
+    if (savedStops && Array.isArray(savedStops) && savedStops.length > 0) {
+      routePoints = savedStops.map(s => s.address || s.city || '').filter(Boolean);
+    } else if (savedPoints && Array.isArray(savedPoints) && savedPoints.length > 0) {
+      routePoints = savedPoints;
+    } else {
+      const enrichedConnected = connectedTransports.map(ct => {
+        if (ct.startAddress && ct.endAddress) return ct;
+        const full = (zamowienia || []).find(t => String(t.id) === String(ct.id));
+        if (!full) return ct;
+        return {
+          ...ct,
+          startAddress: full.location === 'Odbiory własne' ? full.producerAddress : (ct.startAddress || { city: full.location?.replace(/^magazyn\s+/i, '') }),
+          endAddress: full.delivery || ct.endAddress
+        };
+      });
+
+      routePoints = buildRoutePoints(mainTransport, enrichedConnected);
+    }
     const routeKey = routePoints.length > 0 ? routePoints.join(' → ') : (mainTransport.route || '');
 
     // 1. Sprawdź, czy zapisany jest rzeczywisty dystans trasy łączonej punkt-do-punktu

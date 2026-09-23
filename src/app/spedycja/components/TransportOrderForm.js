@@ -12,20 +12,20 @@ export default function TransportOrderForm({ onSubmit, onCancel, zamowienie }) {
     emailOdbiorcy: ''
   })
 
-  // Stan dla dodatkowych miejsc
-  const [additionalPlaces, setAdditionalPlaces] = useState([])
+  // Stan dla wszystkich przystanków w ustalonej kolejności trasy
+  const [stops, setStops] = useState([])
   const [isLoadingTransports, setIsLoadingTransports] = useState(false)
   const [availableTransports, setAvailableTransports] = useState([])
   const [showAddPlaceForm, setShowAddPlaceForm] = useState(false)
   const [selectedTransportId, setSelectedTransportId] = useState('')
-  const [placeType, setPlaceType] = useState('oba') // 'oba' (Załadunek i Rozładunek), 'załadunek' lub 'rozładunek'
+  const [placeType, setPlaceType] = useState('oba') // 'oba', 'załadunek', 'rozładunek'
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState(null)
 
   const formatAddress = (address) => {
     if (!address) return 'Brak danych';
     if (typeof address === 'string') return address;
-    return `${address.postalCode || ''} ${address.city || ''}, ${address.street || ''}`.trim() || 'Brak danych';
+    return `${address.street ? `${address.street}, ` : ''}${address.postalCode || ''} ${address.city || ''}`.trim() || 'Brak danych';
   };
 
   const getTransportStartCity = (transport) => {
@@ -47,161 +47,227 @@ export default function TransportOrderForm({ onSubmit, onCancel, zamowienie }) {
     return `${start} → ${end}`;
   };
 
-  // Automatycznie wczytaj połączone transporty, jeśli zlecenie już je posiada
+  // Automatycznie wczytaj harmonogram przystanków
   useEffect(() => {
-    if (zamowienie?.response?.connectedTransports && zamowienie.response.connectedTransports.length > 0) {
-      const initialPlaces = [];
-      zamowienie.response.connectedTransports.forEach(ct => {
-        // W starszych zleceniach ct.type mogło być zapisane na sztywno jako 'loading',
-        // ale jeśli transport ma trasę powrotną (np. kółko Wilcze -> Zielonka), to musi mieć oba punkty
-        const isRoundTrip = ct.type === 'both' || !ct.type || (ct.type === 'loading' && ct.endCity && ct.endCity !== zamowienie?.delivery?.city);
-        const shouldAddLoading = ct.type === 'both' || ct.type === 'loading' || !ct.type;
-        const shouldAddUnloading = ct.type === 'both' || ct.type === 'unloading' || isRoundTrip;
+    if (!zamowienie) return;
 
-        const startStr = ct.startCity || getTransportStartCity(ct);
-        const endStr = ct.endCity || ct.delivery?.city || 'Brak danych';
-        const routeStr = ct.route || `${startStr} → ${endStr}`;
-        const company = ct.sourceClientName || ct.source_client_name || '';
+    // 1. Jeśli zlecenie posiada już ustaloną kolejność routeStops z formularza odpowiedzi
+    if (zamowienie.response?.routeStops && zamowienie.response.routeStops.length > 0) {
+      const loadedStops = zamowienie.response.routeStops.map((rs, idx) => {
+        const isLoad = rs.pointType === 'loading' || rs.type === 'załadunek';
+        const client = rs.clientName || (isLoad ? (rs.sourceClientName || '') : (rs.clientName || ''));
+        const addrStr = rs.address?.street
+          ? `${rs.address.street}, ${rs.address.postalCode || ''} ${rs.city || ''}`.trim()
+          : (typeof rs.address === 'string' ? rs.address : formatAddress(rs.address || { city: rs.city }));
 
-        if (shouldAddLoading) {
-          initialPlaces.push({
+        return {
+          id: rs.id || `stop-${idx}-${Date.now()}`,
+          transportId: rs.transportId || zamowienie.id,
+          orderNumber: rs.orderNumber || zamowienie.orderNumber || zamowienie.order_number || zamowienie.id,
+          type: isLoad ? 'załadunek' : 'rozładunek',
+          clientName: client,
+          city: rs.city || '',
+          address: addrStr,
+          producerAddress: isLoad ? rs.address : null,
+          delivery: !isLoad ? rs.address : null,
+          contact: rs.contact || (isLoad ? (zamowienie.loadingContact || zamowienie.loading_contact) : (zamowienie.unloadingContact || zamowienie.unloading_contact)) || '',
+          isMain: rs.isMain !== undefined ? rs.isMain : String(rs.transportId) === String(zamowienie.id)
+        };
+      });
+      setStops(loadedStops);
+      return;
+    }
+
+    // 2. Jeśli brak routeStops, stwórz domyślną listę z punktów zlecenia głównego i powiązanych
+    const initialStops = [];
+
+    // Główny załadunek
+    initialStops.push({
+      id: `main-load-${zamowienie.id}`,
+      transportId: zamowienie.id,
+      orderNumber: zamowienie.orderNumber || zamowienie.order_number || zamowienie.id,
+      type: 'załadunek',
+      clientName: zamowienie.source_client_name || zamowienie.sourceClientName || (zamowienie.location?.includes('Magazyn') ? zamowienie.location : 'Grupa Eltron Sp. z o.o.'),
+      city: zamowienie.producerAddress?.city || (zamowienie.location === 'Odbiory własne' ? '' : zamowienie.location?.replace(/^magazyn\s+/i, '')) || '',
+      address: zamowienie.location === 'Odbiory własne' ? formatAddress(zamowienie.producerAddress) : zamowienie.location,
+      producerAddress: zamowienie.producerAddress,
+      contact: zamowienie.loading_contact || zamowienie.loadingContact || '',
+      isMain: true
+    });
+
+    // Jeśli są połączone transporty
+    if (zamowienie.response?.connectedTransports && zamowienie.response.connectedTransports.length > 0) {
+      zamowienie.response.connectedTransports.forEach((ct, idx) => {
+        const type = ct.type || 'both';
+        if (type === 'both' || type === 'loading') {
+          initialStops.push({
+            id: `ct-load-${ct.id || idx}`,
+            transportId: ct.id,
+            orderNumber: ct.orderNumber || ct.order_number || `${ct.id}`,
             type: 'załadunek',
-            transportId: ct.id,
-            orderNumber: ct.orderNumber || ct.order_number || `${ct.id}`,
-            route: routeStr,
-            location: ct.location || 'Odbiory własne',
-            sourceClientName: company,
+            clientName: ct.sourceClientName || ct.source_client_name || (ct.location?.includes('Magazyn') ? ct.location : 'Grupa Eltron Sp. z o.o.'),
+            city: ct.startCity || ct.producerAddress?.city || '',
+            address: formatAddress(ct.producerAddress || ct.startAddress) || ct.location || 'Brak danych',
             producerAddress: ct.producerAddress || ct.startAddress,
-            address: (ct.location === 'Odbiory własne' || !ct.location?.includes('Magazyn'))
-              ? (company ? `${company}, ${formatAddress(ct.producerAddress || ct.startAddress)}` : formatAddress(ct.producerAddress || ct.startAddress))
-              : ct.location,
-            contact: ct.loadingContact || ct.loading_contact
-          });
-        }
-
-        if (shouldAddUnloading) {
-          initialPlaces.push({
-            type: 'rozładunek',
-            transportId: ct.id,
-            orderNumber: ct.orderNumber || ct.order_number || `${ct.id}`,
-            route: routeStr,
-            delivery: ct.delivery || ct.endAddress,
-            address: ct.delivery || ct.endAddress,
-            contact: ct.unloadingContact || ct.unloading_contact
+            contact: ct.loadingContact || ct.loading_contact || '',
+            isMain: false
           });
         }
       });
-      setAdditionalPlaces(initialPlaces);
     }
+
+    // Główny rozładunek
+    initialStops.push({
+      id: `main-unload-${zamowienie.id}`,
+      transportId: zamowienie.id,
+      orderNumber: zamowienie.orderNumber || zamowienie.order_number || zamowienie.id,
+      type: 'rozładunek',
+      clientName: zamowienie.client_name || zamowienie.clientName || '',
+      city: zamowienie.delivery?.city || '',
+      address: formatAddress(zamowienie.delivery),
+      delivery: zamowienie.delivery,
+      contact: zamowienie.unloading_contact || zamowienie.unloadingContact || '',
+      isMain: true
+    });
+
+    // Rozładunki ze zleceń dołączonych
+    if (zamowienie.response?.connectedTransports && zamowienie.response.connectedTransports.length > 0) {
+      zamowienie.response.connectedTransports.forEach((ct, idx) => {
+        const type = ct.type || 'both';
+        if (type === 'both' || type === 'unloading') {
+          initialStops.push({
+            id: `ct-unload-${ct.id || idx}`,
+            transportId: ct.id,
+            orderNumber: ct.orderNumber || ct.order_number || `${ct.id}`,
+            type: 'rozładunek',
+            clientName: ct.clientName || ct.client_name || '',
+            city: ct.endCity || ct.delivery?.city || '',
+            address: formatAddress(ct.delivery || ct.endAddress),
+            delivery: ct.delivery || ct.endAddress,
+            contact: ct.unloadingContact || ct.unloading_contact || '',
+            isMain: false
+          });
+        }
+      });
+    }
+
+    setStops(initialStops);
   }, [zamowienie]);
 
   // Pobierz dostępne transporty przy pierwszym renderowaniu
   useEffect(() => {
     const fetchTransports = async () => {
       try {
-        setIsLoadingTransports(true)
-        const response = await fetch('/api/spedycje?status=new')
-        const data = await response.json()
+        setIsLoadingTransports(true);
+        const response = await fetch('/api/spedycje?status=new');
+        const data = await response.json();
 
         if (data.success && data.spedycje) {
-          // Filtrujemy tylko transporty, które mają numer zamówienia i nie są tym samym transportem
           const filtered = data.spedycje.filter(t =>
             String(t.id) !== String(zamowienie?.id) && (t.orderNumber || t.order_number)
-          )
-          setAvailableTransports(filtered)
+          );
+          setAvailableTransports(filtered);
         }
       } catch (error) {
-        console.error('Błąd pobierania transportów:', error)
+        console.error('Błąd pobierania transportów:', error);
       } finally {
-        setIsLoadingTransports(false)
+        setIsLoadingTransports(false);
       }
-    }
+    };
 
-    fetchTransports()
-  }, [zamowienie.id])
+    fetchTransports();
+  }, [zamowienie?.id]);
 
   const handleChange = (e) => {
-    const { name, value } = e.target
+    const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
       [name]: value
-    }))
-  }
+    }));
+  };
+
+  const handleMoveStop = (index, direction) => {
+    setStops(prev => {
+      const targetIndex = index + direction;
+      if (targetIndex < 0 || targetIndex >= prev.length) return prev;
+      const updated = [...prev];
+      const item = updated[index];
+      updated[index] = updated[targetIndex];
+      updated[targetIndex] = item;
+      return updated;
+    });
+  };
+
+  const handleRemoveStop = (index) => {
+    setStops(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleAddPlace = () => {
+    if (!selectedTransportId) return;
+
+    const selectedTransport = availableTransports.find(t => String(t.id) === String(selectedTransportId));
+    if (!selectedTransport) return;
+
+    const companyLoad = selectedTransport.sourceClientName || selectedTransport.source_client_name || (selectedTransport.location?.includes('Magazyn') ? selectedTransport.location : 'Grupa Eltron Sp. z o.o.');
+    const companyUnload = selectedTransport.clientName || selectedTransport.client_name || '';
+
+    const newStops = [];
+
+    if (placeType === 'oba' || placeType === 'załadunek') {
+      newStops.push({
+        id: `added-load-${selectedTransport.id}-${Date.now()}`,
+        type: 'załadunek',
+        transportId: selectedTransport.id,
+        orderNumber: selectedTransport.orderNumber || selectedTransport.order_number || '',
+        clientName: companyLoad,
+        city: selectedTransport.producerAddress?.city || (selectedTransport.location === 'Odbiory własne' ? '' : selectedTransport.location?.replace(/^magazyn\s+/i, '')) || '',
+        address: selectedTransport.location === 'Odbiory własne'
+          ? formatAddress(selectedTransport.producerAddress)
+          : selectedTransport.location,
+        producerAddress: selectedTransport.producerAddress,
+        contact: selectedTransport.loadingContact || selectedTransport.loading_contact || '',
+        isMain: false
+      });
+    }
+
+    if (placeType === 'oba' || placeType === 'rozładunek') {
+      newStops.push({
+        id: `added-unload-${selectedTransport.id}-${Date.now()}`,
+        type: 'rozładunek',
+        transportId: selectedTransport.id,
+        orderNumber: selectedTransport.orderNumber || selectedTransport.order_number || '',
+        clientName: companyUnload,
+        city: selectedTransport.delivery?.city || '',
+        address: formatAddress(selectedTransport.delivery),
+        delivery: selectedTransport.delivery,
+        contact: selectedTransport.unloadingContact || selectedTransport.unloading_contact || '',
+        isMain: false
+      });
+    }
+
+    setStops(prev => [...prev, ...newStops]);
+    setShowAddPlaceForm(false);
+    setSelectedTransportId('');
+  };
 
   const handleSubmit = async (e) => {
-    e.preventDefault()
-    setIsSubmitting(true)
-    setError(null)
+    e.preventDefault();
+    setIsSubmitting(true);
+    setError(null);
 
     try {
       await onSubmit({
         spedycjaId: zamowienie.id,
         ...formData,
-        additionalPlaces // Przekazujemy dodatkowe miejsca
-      })
+        stops, // Przekazujemy wszystkie przystanki w ustalonej kolejności
+        additionalPlaces: stops.filter(s => !s.isMain) // Kompatybilność wsteczna
+      });
     } catch (err) {
-      setError(err.message || 'Wystąpił błąd podczas wysyłania zlecenia')
+      setError(err.message || 'Wystąpił błąd podczas wysyłania zlecenia');
     } finally {
-      setIsSubmitting(false)
+      setIsSubmitting(false);
     }
-  }
-
-  const handleAddPlace = () => {
-    if (!selectedTransportId) return
-
-    const selectedTransport = availableTransports.find(t => String(t.id) === String(selectedTransportId))
-    if (!selectedTransport) return
-
-    const isOdbiorWlasny = selectedTransport.location === 'Odbiory własne' || selectedTransport.location === 'Producent';
-    const company = selectedTransport.sourceClientName || selectedTransport.source_client_name || '';
-
-    const newPlaces = [];
-
-    if (placeType === 'oba' || placeType === 'załadunek') {
-      newPlaces.push({
-        type: 'załadunek',
-        transportId: selectedTransport.id,
-        orderNumber: selectedTransport.orderNumber || selectedTransport.order_number || '',
-        route: getTransportRoute(selectedTransport),
-        location: selectedTransport.location,
-        sourceClientName: company,
-        producerAddress: selectedTransport.producerAddress,
-        address: isOdbiorWlasny
-          ? (company ? `${company}, ${formatAddress(selectedTransport.producerAddress)}` : formatAddress(selectedTransport.producerAddress))
-          : selectedTransport.location,
-        contact: selectedTransport.loadingContact || selectedTransport.loading_contact
-      });
-    }
-
-    if (placeType === 'oba' || placeType === 'rozładunek') {
-      newPlaces.push({
-        type: 'rozładunek',
-        transportId: selectedTransport.id,
-        orderNumber: selectedTransport.orderNumber || selectedTransport.order_number || '',
-        route: getTransportRoute(selectedTransport),
-        delivery: selectedTransport.delivery,
-        address: selectedTransport.delivery,
-        contact: selectedTransport.unloadingContact || selectedTransport.unloading_contact
-      });
-    }
-
-    // Bezpieczne dodawanie bez duplikatów dla tego samego transportId i typu:
-    setAdditionalPlaces(prev => {
-      const filtered = prev.filter(p => {
-        if (String(p.transportId) !== String(selectedTransport.id)) return true;
-        if (placeType === 'oba') return false; // zastąp dotychczasowe punkty tego transportu
-        return p.type !== placeType; // usuń istniejący punkt tego samego typu
-      });
-      return [...filtered, ...newPlaces];
-    });
-
-    setShowAddPlaceForm(false);
-    setSelectedTransportId('');
-  }
-
-  const removeAdditionalPlace = (index) => {
-    setAdditionalPlaces(prev => prev.filter((_, i) => i !== index))
-  }
+  };
 
   return (
     <form onSubmit={handleSubmit} className="p-6 space-y-6">
@@ -312,8 +378,8 @@ export default function TransportOrderForm({ onSubmit, onCancel, zamowienie }) {
       <div className="mt-6 border-t pt-4">
         <div className="flex justify-between items-center mb-3">
           <div>
-            <h3 className="text-base font-semibold text-gray-900">Plan trasy i przystanki ({2 + additionalPlaces.length} punkty)</h3>
-            <p className="text-xs text-gray-500">Wszystkie punkty zlecenia w kolejności realizacji trasy</p>
+            <h3 className="text-base font-semibold text-gray-900">Plan trasy i harmonogram przystanków ({stops.length} punkty)</h3>
+            <p className="text-xs text-gray-500">Wszystkie przystanki w dokładnej kolejności realizacji trasy przez przewoźnika</p>
           </div>
           <button
             type="button"
@@ -325,55 +391,75 @@ export default function TransportOrderForm({ onSubmit, onCancel, zamowienie }) {
         </div>
 
         <div className="space-y-2">
-          {/* Punkt 1: Załadunek główny */}
-          <div className="flex items-center justify-between p-2.5 bg-blue-50/70 border border-blue-200 rounded-md">
-            <div className="flex items-center gap-2">
-              <span className="px-2 py-0.5 text-xs font-bold bg-blue-600 text-white rounded">1. Załadunek</span>
-              <span className="text-sm font-semibold text-gray-900">{getTransportStartCity(zamowienie)}</span>
-              <span className="text-xs text-gray-500">(Główne: {zamowienie.orderNumber || zamowienie.order_number || zamowienie.id})</span>
-            </div>
-            <span className="text-xs font-medium text-blue-700">Start trasy</span>
-          </div>
+          {stops.map((stop, index) => {
+            const isLoad = stop.type === 'załadunek';
+            const isFirst = index === 0;
+            const isLast = index === stops.length - 1;
 
-          {/* Punkt 2: Rozładunek główny */}
-          <div className="flex items-center justify-between p-2.5 bg-green-50/70 border border-green-200 rounded-md">
-            <div className="flex items-center gap-2">
-              <span className="px-2 py-0.5 text-xs font-bold bg-green-600 text-white rounded">2. Rozładunek</span>
-              <span className="text-sm font-semibold text-gray-900">{zamowienie.delivery?.city || 'Brak danych'}</span>
-              <span className="text-xs text-gray-500">({formatAddress(zamowienie.delivery)})</span>
-              <span className="text-xs text-gray-500">(Główne: {zamowienie.orderNumber || zamowienie.order_number || zamowienie.id})</span>
-            </div>
-            <span className="text-xs font-medium text-green-700">Cel główny</span>
-          </div>
-
-          {/* Dodatkowe punkty (np. kółko / doładunki) */}
-          {additionalPlaces.map((place, index) => (
-            <div key={index} className="flex items-center justify-between p-2.5 bg-white border border-gray-200 rounded-md shadow-2xs hover:border-gray-300">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className={`px-2 py-0.5 text-xs font-bold rounded ${
-                  place.type === 'załadunek' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
-                }`}>
-                  {index + 3}. {place.type === 'załadunek' ? 'Załadunek' : 'Rozładunek'}
-                </span>
-                <span className="text-sm font-semibold text-gray-900">
-                  {place.sourceClientName ? `${place.sourceClientName} - ` : ''}
-                  {place.type === 'załadunek'
-                    ? (place.producerAddress?.city || place.location || 'Załadunek')
-                    : (place.delivery?.city || 'Rozładunek')}
-                </span>
-                <span className="text-xs text-gray-500">
-                  (Zlecenie: {place.orderNumber || place.transportId})
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => removeAdditionalPlace(index)}
-                className="text-red-500 hover:text-red-700 text-xs font-medium px-2 py-1 hover:bg-red-50 rounded"
+            return (
+              <div
+                key={stop.id || index}
+                className={`flex items-center justify-between p-3 rounded-md border transition-all ${
+                  isLoad ? 'bg-amber-50/70 border-amber-200' : 'bg-emerald-50/70 border-emerald-200'
+                }`}
               >
-                Usuń
-              </button>
-            </div>
-          ))}
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <span className="flex-shrink-0 w-6 h-6 rounded-full bg-gray-900 text-white font-bold text-xs flex items-center justify-center">
+                    {index + 1}
+                  </span>
+                  <span className={`flex-shrink-0 px-2.5 py-1 text-xs font-bold rounded uppercase tracking-wider ${
+                    isLoad ? 'bg-amber-500 text-white' : 'bg-emerald-600 text-white'
+                  }`}>
+                    {isLoad ? 'Załadunek' : 'Rozładunek'}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-bold text-gray-500 uppercase">Klient / Firma:</span>
+                      <span className="text-sm font-bold text-gray-900">
+                        {stop.clientName || 'Nie podano'}
+                      </span>
+                      <span className="text-xs font-medium text-gray-500 bg-white/80 px-2 py-0.5 rounded border border-gray-200">
+                        {stop.isMain ? `Główne: ${stop.orderNumber}` : `Zlecenie: ${stop.orderNumber}`}
+                      </span>
+                    </div>
+                    <div className="text-xs text-gray-600 mt-1">
+                      <span className="font-semibold text-gray-700">Adres:</span> {stop.address || stop.city || 'Brak danych'}
+                      {stop.contact ? ` • tel: ${stop.contact}` : ''}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 ml-3 flex-shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => handleMoveStop(index, -1)}
+                    disabled={isFirst}
+                    className="px-2 py-1 rounded bg-white border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed text-xs font-bold shadow-2xs"
+                    title="Przesuń w górę"
+                  >
+                    ▲
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleMoveStop(index, 1)}
+                    disabled={isLast}
+                    className="px-2 py-1 rounded bg-white border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed text-xs font-bold shadow-2xs"
+                    title="Przesuń w dół"
+                  >
+                    ▼
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveStop(index)}
+                    className="text-red-500 hover:text-red-700 text-xs font-semibold px-2 py-1 hover:bg-red-50 rounded ml-1"
+                    title="Usuń przystanek"
+                  >
+                    Usuń
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
 
         {/* Formularz dodawania miejsca */}

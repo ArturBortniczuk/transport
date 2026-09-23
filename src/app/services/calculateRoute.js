@@ -129,7 +129,37 @@ export function normalizeCityName(city) {
 export function buildRoutePoints(mainTransport, connectedTransports = []) {
   if (!mainTransport) return [];
 
-  const createPoint = (city, addr = null) => {
+  // 1. Jeśli przekazano bezpośrednio zdefiniowaną kolejność routeStops w odpowiedzi zlecenia głównego
+  const savedStops = mainTransport.response?.routeStops || mainTransport.routeStops;
+  if (Array.isArray(savedStops) && savedStops.length >= 2) {
+    return savedStops
+      .filter(s => s && (s.city || typeof s === 'string'))
+      .map(s => {
+        if (typeof s === 'string') {
+          return { city: s, toString() { return this.city; } };
+        }
+        return {
+          city: s.city,
+          postalCode: s.postalCode || s.address?.postalCode || '',
+          street: s.street || s.address?.street || '',
+          clientName: s.clientName || '',
+          pointType: s.pointType || s.type || '',
+          toString() { return this.city; }
+        };
+      });
+  }
+
+  const savedPoints = mainTransport.response?.routePoints || mainTransport.routePoints;
+  if (Array.isArray(savedPoints) && savedPoints.length >= 2) {
+    return savedPoints.map(p => {
+      if (typeof p === 'string') {
+        return { city: p, toString() { return this.city; } };
+      }
+      return p;
+    });
+  }
+
+  const createPoint = (city, addr = null, extra = {}) => {
     const rawCity = typeof city === 'string' ? city : (city?.city || '');
     const cityName = rawCity.replace(/^magazyn\s+/i, '').trim();
     if (!cityName) return null;
@@ -141,6 +171,7 @@ export function buildRoutePoints(mainTransport, connectedTransports = []) {
       city: cityName,
       postalCode,
       street,
+      ...extra,
       toString() {
         return this.city;
       }
@@ -157,14 +188,26 @@ export function buildRoutePoints(mainTransport, connectedTransports = []) {
   const mainDelivData = parseJsonSafe(mainTransport.delivery_data) || parseJsonSafe(mainTransport.delivery);
 
   const mainStart = (mainLocData && mainLocData.city)
-    ? createPoint(mainLocData.city, mainLocData)
+    ? createPoint(mainLocData.city, mainLocData, {
+        pointType: 'loading',
+        clientName: mainTransport.source_client_name || mainTransport.sourceClientName || (mainTransport.location?.includes('Magazyn') ? mainTransport.location : '')
+      })
     : (mainTransport.location && mainTransport.location !== 'Odbiory własne'
-        ? createPoint(mainTransport.location.replace(/^magazyn\s+/i, '').trim())
-        : createPoint(mainTransport.startCity || ''));
+        ? createPoint(mainTransport.location.replace(/^magazyn\s+/i, '').trim(), null, {
+            pointType: 'loading',
+            clientName: mainTransport.location
+          })
+        : createPoint(mainTransport.startCity || '', null, { pointType: 'loading' }));
 
   const mainEnd = (mainDelivData && mainDelivData.city)
-    ? createPoint(mainDelivData.city, mainDelivData)
-    : createPoint(mainTransport.delivery?.city || mainTransport.endCity || '', mainTransport.delivery);
+    ? createPoint(mainDelivData.city, mainDelivData, {
+        pointType: 'unloading',
+        clientName: mainTransport.client_name || mainTransport.clientName || ''
+      })
+    : createPoint(mainTransport.delivery?.city || mainTransport.endCity || '', mainTransport.delivery, {
+        pointType: 'unloading',
+        clientName: mainTransport.client_name || mainTransport.clientName || ''
+      });
 
   const rawStops = [];
 
@@ -189,13 +232,19 @@ export function buildRoutePoints(mainTransport, connectedTransports = []) {
         if (!ctEndCity) ctEndCity = parts[1]?.trim();
       }
 
-      const startPt = createPoint(ctStartCity, ctLocData || ct.startAddress || ct.producerAddress);
-      const endPt = createPoint(ctEndCity, ctDelivData || ct.endAddress || ct.delivery);
+      const startPt = createPoint(ctStartCity, ctLocData || ct.startAddress || ct.producerAddress, {
+        pointType: 'loading',
+        clientName: ct.sourceClientName || ct.source_client_name || ''
+      });
+      const endPt = createPoint(ctEndCity, ctDelivData || ct.endAddress || ct.delivery, {
+        pointType: 'unloading',
+        clientName: ct.clientName || ct.client_name || ''
+      });
 
       const type = ct.type || 'both';
 
       if (type === 'both') {
-        // Dla pełnego zlecenia (np. kółko powrotne): najpierw musi nastąpić rozładunek głównego zlecenia
+        // Dla pełnego zlecenia (kółko): najpierw rozładunek głównego zlecenia, potem kolejne załadunek i rozładunek
         if (!mainEndAdded && mainEnd && mainEnd.city) {
           rawStops.push(mainEnd);
           mainEndAdded = true;
@@ -203,16 +252,10 @@ export function buildRoutePoints(mainTransport, connectedTransports = []) {
         if (startPt) rawStops.push(startPt);
         if (endPt) rawStops.push(endPt);
       } else if (type === 'loading') {
-        // Jeśli załadunek kolejnego zlecenia odbywa się w mieście docelowym zlecenia głównego,
-        // to najpierw rozładowujemy zlecenie główne
-        if (!mainEndAdded && mainEnd && mainEnd.city && startPt && startPt.city.toLowerCase() === mainEnd.city.toLowerCase()) {
-          rawStops.push(mainEnd);
-          mainEndAdded = true;
-        }
+        // Tylko załadunek (doładunek po drodze): załadunek następuje przed docelowym rozładunkiem zlecenia głównego!
         if (startPt) rawStops.push(startPt);
       } else if (type === 'unloading') {
-        // Jeśli rozładunek tego zlecenia jest w mieście startowym (powrót do bazy),
-        // to zlecenie główne musiało być już rozładowane
+        // Tylko rozładunek: jeśli powrót do bazy, to po głównym rozładunku
         if (!mainEndAdded && mainEnd && mainEnd.city && endPt && mainStart && endPt.city.toLowerCase() === mainStart.city.toLowerCase()) {
           rawStops.push(mainEnd);
           mainEndAdded = true;
