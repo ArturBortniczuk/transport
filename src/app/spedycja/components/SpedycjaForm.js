@@ -492,8 +492,13 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
         }
         if (initialData.response.totalDistance) {
           setDistance(initialData.response.totalDistance);
+          const savedRoute = initialData.response.connectedRoute;
+          const fallbackRoute = (initialData.response.routeStops || initialData.response.routePoints || [])
+            .map(s => (typeof s === 'string' ? s : s?.city))
+            .filter(Boolean)
+            .join(' → ');
           setConnectedRouteInfo({
-            route: initialData.response.connectedRoute || '',
+            route: (savedRoute && !savedRoute.includes('[object')) ? savedRoute : fallbackRoute,
             totalDistance: initialData.response.totalDistance,
             routePoints: initialData.response.routePoints || [],
             routeStops: initialData.response.routeStops || []
@@ -831,11 +836,16 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
         responseData.connectedTransports = connectedTransports;
         responseData.costPerTransport = pricePerTransport;
         responseData.totalDistance = Number(effectiveDistance);
-        if (connectedRouteInfo?.route) {
+        if (connectedRouteInfo?.route && !connectedRouteInfo.route.includes('[object')) {
           responseData.connectedRoute = connectedRouteInfo.route;
+        } else if (routeStops && routeStops.length > 0) {
+          const cleanCities = routeStops.map(s => s.city).filter(Boolean);
+          if (cleanCities.length > 0) {
+            responseData.connectedRoute = cleanCities.join(' → ');
+          }
         }
-        if (connectedRouteInfo?.routePoints) {
-          responseData.routePoints = connectedRouteInfo.routePoints;
+        if (connectedRouteInfo?.routePoints && Array.isArray(connectedRouteInfo.routePoints)) {
+          responseData.routePoints = connectedRouteInfo.routePoints.map(p => (typeof p === 'string' ? p : p?.city)).filter(Boolean);
         }
         if (routeStops && routeStops.length > 0) {
           responseData.routeStops = routeStops;
