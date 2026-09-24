@@ -2,7 +2,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { Calendar, Search, X, Info, Truck, PlusCircle, Route } from 'lucide-react'
-import { buildRoutePoints, calculateRouteDistance } from '@/app/services/calculateRoute'
+import { buildRoutePoints, calculateRouteDistance as calculateMultiPointRouteDistance } from '@/app/services/calculateRoute'
 
 export default function SpedycjaForm({ onSubmit, onCancel, initialData, isResponse, isEditing }) {
   const [selectedLocation, setSelectedLocation] = useState(initialData?.location || '')
@@ -317,7 +317,7 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
         toString() { return this.city; }
       }));
 
-      calculateRouteDistance(pointsForCalc)
+      calculateMultiPointRouteDistance(pointsForCalc)
         .then(res => {
           if (!isCurrent) return;
           if (res && res.success && res.totalDistanceKm > 0) {
@@ -1284,6 +1284,7 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
                           {routeStops.map((stop, idx) => {
                             const isFirst = idx === 0;
                             const isLast = idx === routeStops.length - 1;
+                            const isLoad = stop.pointType === 'loading' || stop.type === 'załadunek';
                             const wh = resolveWarehouseAddress(stop.address) || resolveWarehouseAddress(stop.clientName) || resolveWarehouseAddress(stop.city);
                             let addressStr = '';
                             if (wh) {

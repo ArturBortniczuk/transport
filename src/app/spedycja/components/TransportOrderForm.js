@@ -424,7 +424,7 @@ export default function TransportOrderForm({ onSubmit, onCancel, zamowienie }) {
 
         <div className="space-y-2">
           {stops.map((stop, index) => {
-            const isLoad = stop.type === 'załadunek';
+            const isLoad = stop.type === 'załadunek' || stop.pointType === 'loading';
             const isFirst = index === 0;
             const isLast = index === stops.length - 1;
 
