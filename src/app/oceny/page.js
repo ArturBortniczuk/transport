@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear } from 'date-fns'
 import { pl } from 'date-fns/locale'
-import { Star, Filter, ChevronDown, Calendar, AlertCircle } from 'lucide-react'
+import { Star, Filter, ChevronDown, Calendar, AlertCircle, Clock } from 'lucide-react'
 import CompleteRatingModal from '@/components/CompleteRatingModal'
 import SpeditionRatingModal from '@/components/SpeditionRatingModal'
 import TransportDetailedRatingBadge from '@/components/TransportRatingBadge'
@@ -78,6 +78,8 @@ export default function OcenyPage() {
   const [selectedCity, setSelectedCity] = useState('')
   const [transportTypeFilter, setTransportTypeFilter] = useState('all')
   const [ratingFilter, setRatingFilter] = useState('all')
+  const [dateBasis, setDateBasis] = useState('delivery_date') // 'delivery_date' | 'rated_at'
+  const [sortBy, setSortBy] = useState('delivery_date') // 'delivery_date' | 'rated_at'
   const [showFilters, setShowFilters] = useState(false)
 
   // Modal
@@ -138,7 +140,7 @@ export default function OcenyPage() {
     if (startDate && endDate) {
       fetchTransports()
     }
-  }, [activeTab, startDate, endDate])
+  }, [activeTab, startDate, endDate, dateBasis, sortBy])
 
   const fetchUsers = async () => {
     try {
@@ -178,7 +180,9 @@ export default function OcenyPage() {
       const params = new URLSearchParams({
         type: activeTab,
         startDate,
-        endDate
+        endDate,
+        dateBasis,
+        sortBy
       })
 
       const response = await fetch(`/api/oceny-transportow?${params}`, {
@@ -315,7 +319,10 @@ export default function OcenyPage() {
 
     // Filtr ocen
     if (ratingFilter !== 'all') {
-      if (ratingFilter === 'rated' && !transport.has_rating) {
+      if ((ratingFilter === 'rated' || ratingFilter === 'recent_ratings') && !transport.has_rating) {
+        return false
+      }
+      if (ratingFilter === 'unrated' && transport.has_rating) {
         return false
       }
       if (ratingFilter === 'negative') {
@@ -326,6 +333,22 @@ export default function OcenyPage() {
 
     return true
   })
+
+  // Sortowanie transportów (np. od ostatnio ocenionych wg daty wystawienia oceny)
+  const sortedTransports = useMemo(() => {
+    return [...filteredTransports].sort((a, b) => {
+      if (sortBy === 'rated_at' || ratingFilter === 'recent_ratings') {
+        if (a.rated_at && b.rated_at) {
+          return new Date(b.rated_at) - new Date(a.rated_at)
+        }
+        if (a.rated_at) return -1
+        if (b.rated_at) return 1
+        return new Date(b.delivery_date || 0) - new Date(a.delivery_date || 0)
+      }
+      // Domyślnie data dostawy malejąco
+      return new Date(b.delivery_date || 0) - new Date(a.delivery_date || 0)
+    })
+  }, [filteredTransports, sortBy, ratingFilter])
 
   const handleOpenRatingModal = (transport) => {
     if (!transport.has_rating && !canRate) {
@@ -389,14 +412,39 @@ export default function OcenyPage() {
             <Star className="w-6 h-6 mr-2 text-yellow-500" />
             Oceny Transportów
           </h1>
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-          >
-            <Filter className="w-4 h-4 mr-2" />
-            {showFilters ? 'Ukryj filtry' : 'Pokaż filtry'}
-            <ChevronDown className={`w-4 h-4 ml-2 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
-          </button>
+          <div className="flex items-center space-x-3">
+            <button
+              type="button"
+              onClick={() => {
+                if (sortBy === 'rated_at' && ratingFilter === 'recent_ratings') {
+                  setSortBy('delivery_date')
+                  setRatingFilter('all')
+                  setDateBasis('delivery_date')
+                } else {
+                  setSortBy('rated_at')
+                  setRatingFilter('recent_ratings')
+                  setDateBasis('rated_at')
+                }
+              }}
+              className={`flex items-center px-4 py-2 rounded-md font-medium text-sm transition-all border shadow-sm ${
+                sortBy === 'rated_at' || ratingFilter === 'recent_ratings'
+                  ? 'bg-amber-500 hover:bg-amber-600 text-white border-amber-600 ring-2 ring-amber-300'
+                  : 'bg-white hover:bg-gray-50 text-gray-700 border-gray-300'
+              }`}
+              title="Filtruj i sortuj od ostatnio ocenionych (wg daty wystawienia oceny)"
+            >
+              <Clock className="w-4 h-4 mr-2" />
+              Od ostatnio ocenionych
+            </button>
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+            >
+              <Filter className="w-4 h-4 mr-2" />
+              {showFilters ? 'Ukryj filtry' : 'Pokaż filtry'}
+              <ChevronDown className={`w-4 h-4 ml-2 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
+            </button>
+          </div>
         </div>
 
         <div className="flex space-x-2 mb-6 border-b border-gray-200">
@@ -572,12 +620,45 @@ export default function OcenyPage() {
               <label className="block text-sm font-medium text-gray-700 mb-1">Status oceny</label>
               <select
                 value={ratingFilter}
-                onChange={(e) => setRatingFilter(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value
+                  setRatingFilter(val)
+                  if (val === 'recent_ratings') {
+                    setSortBy('rated_at')
+                    setDateBasis('rated_at')
+                  }
+                }}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
               >
                 <option value="all">Wszystkie</option>
+                <option value="recent_ratings">⭐ Od ostatnio ocenionych</option>
                 <option value="rated">Tylko ocenione</option>
+                <option value="unrated">Tylko nieocenione</option>
                 <option value="negative">Tylko negatywne</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Kolejność (sortowanie)</label>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="delivery_date">Data dostawy (od najnowszych)</option>
+                <option value="rated_at">Data oceny (od ostatnio ocenionych)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Zakres dat dotyczy</label>
+              <select
+                value={dateBasis}
+                onChange={(e) => setDateBasis(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="delivery_date">Daty dostawy (domyślnie)</option>
+                <option value="rated_at">Daty wystawienia oceny</option>
               </select>
             </div>
 
@@ -592,6 +673,8 @@ export default function OcenyPage() {
                   setSelectedCity('')
                   setTransportTypeFilter('all')
                   setRatingFilter('all')
+                  setSortBy('delivery_date')
+                  setDateBasis('delivery_date')
                 }}
                 className="w-full px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors"
               >
@@ -653,20 +736,22 @@ export default function OcenyPage() {
             <div className="overflow-x-auto">
               {activeTab === 'wlasny' ? (
                 <TransportWlasnyTable
-                  transports={filteredTransports}
+                  transports={sortedTransports}
                   onRate={handleOpenRatingModal}
                   getMagazynName={getMagazynName}
                   getDriverName={getDriverName}
                   refreshBadges={refreshBadges}
                   canRate={canRate}
+                  sortBy={sortBy}
                 />
               ) : (
                 <TransportSpedycyjnyTable
-                  transports={filteredTransports}
+                  transports={sortedTransports}
                   onRate={handleOpenRatingModal}
                   getMagazynName={getMagazynName}
                   refreshBadges={refreshBadges}
                   canRate={canRate}
+                  sortBy={sortBy}
                 />
               )}
             </div>
@@ -694,7 +779,7 @@ export default function OcenyPage() {
   )
 }
 
-function TransportWlasnyTable({ transports, onRate, getMagazynName, getDriverName, refreshBadges, canRate }) {
+function TransportWlasnyTable({ transports, onRate, getMagazynName, getDriverName, refreshBadges, canRate, sortBy }) {
   const safeFormatDate = (dateString) => {
     if (!dateString) return '-'
     try {
@@ -722,7 +807,9 @@ function TransportWlasnyTable({ transports, onRate, getMagazynName, getDriverNam
           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Osoba odp.</th>
           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">MPK</th>
           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Kierowca</th>
-          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ocena</th>
+          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+            Ocena {sortBy === 'rated_at' ? '↓ (wg daty)' : ''}
+          </th>
           <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase sticky right-0 bg-gray-50 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)] z-10">Akcje</th>
         </tr>
       </thead>
@@ -783,6 +870,19 @@ function TransportWlasnyTable({ transports, onRate, getMagazynName, getDriverNam
                 type="transport"
                 refreshTrigger={refreshBadges}
               />
+              {transport.has_rating && transport.rated_at && (
+                <div className="mt-1 text-[11px] text-gray-500 leading-tight">
+                  <div className="font-semibold text-gray-700 flex items-center">
+                    <Clock className="w-3 h-3 mr-1 text-amber-500 inline shrink-0" />
+                    {format(new Date(transport.rated_at), 'dd.MM.yyyy HH:mm', { locale: pl })}
+                  </div>
+                  {transport.rater_name && (
+                    <div className="text-gray-400 truncate max-w-[130px]" title={transport.rater_name}>
+                      {transport.rater_name}
+                    </div>
+                  )}
+                </div>
+              )}
             </td>
             <td className="px-4 py-3 whitespace-nowrap text-sm text-center sticky right-0 bg-white group-hover:bg-amber-50/70 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)] z-10">
               {transport.has_rating ? (
@@ -820,7 +920,7 @@ function TransportWlasnyTable({ transports, onRate, getMagazynName, getDriverNam
   )
 }
 
-function TransportSpedycyjnyTable({ transports, onRate, getMagazynName, refreshBadges, canRate }) {
+function TransportSpedycyjnyTable({ transports, onRate, getMagazynName, refreshBadges, canRate, sortBy }) {
   const safeFormatDate = (dateString) => {
     if (!dateString) return '-'
     try {
@@ -849,7 +949,9 @@ function TransportSpedycyjnyTable({ transports, onRate, getMagazynName, refreshB
           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">PLN/km</th>
           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Towar</th>
           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Opis towaru</th>
-          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ocena</th>
+          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+            Ocena {sortBy === 'rated_at' ? '↓ (wg daty)' : ''}
+          </th>
           <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase sticky right-0 bg-gray-50 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)] z-10">Akcje</th>
         </tr>
       </thead>
@@ -928,6 +1030,19 @@ function TransportSpedycyjnyTable({ transports, onRate, getMagazynName, refreshB
                   type="spedition"
                   refreshTrigger={refreshBadges}
                 />
+                {transport.has_rating && transport.rated_at && (
+                  <div className="mt-1 text-[11px] text-gray-500 leading-tight">
+                    <div className="font-semibold text-gray-700 flex items-center">
+                      <Clock className="w-3 h-3 mr-1 text-amber-500 inline shrink-0" />
+                      {format(new Date(transport.rated_at), 'dd.MM.yyyy HH:mm', { locale: pl })}
+                    </div>
+                    {transport.rater_name && (
+                      <div className="text-gray-400 truncate max-w-[130px]" title={transport.rater_name}>
+                        {transport.rater_name}
+                      </div>
+                    )}
+                  </div>
+                )}
               </td>
               <td className="px-4 py-3 whitespace-nowrap text-sm text-center sticky right-0 bg-white group-hover:bg-amber-50/70 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)] z-10">
                 {transport.has_rating ? (
