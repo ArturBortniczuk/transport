@@ -113,6 +113,71 @@ export default function ArchiwumSpedycjiPage() {
     return 'Inne';
   }
 
+  const formatDate = (dateString) => {
+    if (!dateString) return 'Brak daty';
+    try {
+      const d = dateString instanceof Date ? dateString : new Date(dateString);
+      if (isNaN(d.getTime())) return 'Nieprawidłowa data';
+      return format(d, 'dd.MM.yyyy', { locale: pl });
+    } catch (error) {
+      console.error("Błąd formatowania daty:", error, dateString);
+      return 'Nieprawidłowa data';
+    }
+  }
+
+  const formatDateTime = (dateString) => {
+    if (!dateString) return 'Brak daty';
+    try {
+      const d = dateString instanceof Date ? dateString : new Date(dateString);
+      if (isNaN(d.getTime())) return 'Nieprawidłowa data';
+      return format(d, 'dd.MM.yyyy HH:mm', { locale: pl });
+    } catch (error) {
+      console.error("Błąd formatowania daty:", error, dateString);
+      return 'Nieprawidłowa data';
+    }
+  }
+
+  const parseTransportDate = (dateVal) => {
+    if (!dateVal) return null;
+    if (dateVal instanceof Date) {
+      if (isNaN(dateVal.getTime())) return null;
+      return dateVal;
+    }
+    if (typeof dateVal === 'string') {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateVal.trim())) {
+        const [y, m, d] = dateVal.trim().split('-').map(Number);
+        return new Date(y, m - 1, d, 12, 0, 0);
+      }
+    }
+    const d = new Date(dateVal);
+    return isNaN(d.getTime()) ? null : d;
+  };
+
+  const isDeliveryDateChanged = (transport) => {
+    return Boolean(
+      transport?.response?.newDeliveryDate &&
+      (transport.response.dateChanged === true ||
+       (transport.deliveryDate && !String(transport.deliveryDate).startsWith(String(transport.response.newDeliveryDate))))
+    );
+  };
+
+  const getActualDeliveryDate = (transport) => {
+    if (isDeliveryDateChanged(transport)) {
+      return transport.response.newDeliveryDate;
+    }
+    return transport?.deliveryDate || null;
+  };
+
+  const getTransportDeliveryDate = (transport) => {
+    const actualDelivery = getActualDeliveryDate(transport);
+    if (actualDelivery) {
+      const parsed = parseTransportDate(actualDelivery);
+      if (parsed) return parsed;
+    }
+    const fallback = transport?.completedAt || transport?.completed_at || transport?.createdAt || transport?.created_at;
+    return parseTransportDate(fallback);
+  };
+
   useEffect(() => {
     const checkAdmin = async () => {
       try {
@@ -191,6 +256,13 @@ export default function ArchiwumSpedycjiPage() {
           // Znajdź transporty, które mają informację o połączeniu i przekaż ją do pozostałych
           const processedSpedycje = processConnectedTransports(data.spedycje);
 
+          // Posortuj po dacie dostawy malejąco
+          processedSpedycje.sort((a, b) => {
+            const dateA = getTransportDeliveryDate(a) || new Date(a.completedAt || a.createdAt);
+            const dateB = getTransportDeliveryDate(b) || new Date(b.completedAt || b.createdAt);
+            return (dateB?.getTime() || 0) - (dateA?.getTime() || 0);
+          });
+
           setArchiwum(processedSpedycje)
 
           // Zbierz unikalne wartości rynków (na podstawie MPK)
@@ -200,7 +272,7 @@ export default function ArchiwumSpedycjiPage() {
           )].sort()
           setMarketOptions(uniqueMarkets)
 
-          applyFilters(data.spedycje, selectedYear, selectedMonth, selectedWeek, '', '', '')
+          applyFilters(processedSpedycje, selectedYear, selectedMonth, selectedWeek, '', '', '')
         } else {
           throw new Error(data.error || 'Błąd pobierania danych')
         }
@@ -217,7 +289,11 @@ export default function ArchiwumSpedycjiPage() {
         if (savedData) {
           const transporty = JSON.parse(savedData)
             .filter(transport => transport.status === 'completed')
-            .sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt))
+            .sort((a, b) => {
+              const dateA = getTransportDeliveryDate(a) || new Date(a.completedAt || a.createdAt);
+              const dateB = getTransportDeliveryDate(b) || new Date(b.completedAt || b.createdAt);
+              return (dateB?.getTime() || 0) - (dateA?.getTime() || 0);
+            })
 
           setArchiwum(transporty)
 
@@ -467,7 +543,9 @@ export default function ArchiwumSpedycjiPage() {
     }
 
     const filtered = transports.filter(transport => {
-      const date = new Date(transport.completedAt || transport.createdAt)
+      const date = getTransportDeliveryDate(transport) || new Date(transport.completedAt || transport.createdAt)
+      if (!date) return false
+
       const transportYear = date.getFullYear()
 
       if (transportYear !== parseInt(year)) {
@@ -589,12 +667,15 @@ export default function ArchiwumSpedycjiPage() {
       const pricePerKm = calculatePricePerKm(price || calculatedCost, distanceKm)
       const responsibleInfo = getResponsibleInfo(transport)
       const goodsData = getGoodsDataFromTransportOrder(transport)
+      const actualDeliveryDate = getActualDeliveryDate(transport) || transport.deliveryDate
+      const deliveryDateObj = getTransportDeliveryDate(transport) || new Date(transport.completedAt || transport.createdAt)
 
       return {
         'Data zlecenia': formatDate(transport.createdAt),
-        'Data realizacji': transport.completedAt ? formatDate(transport.completedAt) : 'Brak',
+        'Data dostawy': formatDate(actualDeliveryDate),
+        'Data zakończenia': transport.completedAt ? formatDate(transport.completedAt) : 'Brak',
         'Numer zamówienia': transport.orderNumber || '',
-        'Tydzień': `${format(new Date(transport.completedAt || transport.createdAt), 'yyyy')}-T${format(new Date(transport.completedAt || transport.createdAt), 'I', { locale: pl })}`,
+        'Tydzień': `${format(deliveryDateObj, 'yyyy')}-T${format(deliveryDateObj, 'I', { locale: pl })}`,
         'Rynek': getMarketFromMPK(getCurrentMPK(transport)),
         'Trasa': `${getLoadingCity(transport)} → ${getDeliveryCity(transport)}`,
         'Załadunek - miasto': getLoadingCity(transport),
@@ -669,7 +750,8 @@ export default function ArchiwumSpedycjiPage() {
 
       // PODSUMOWANIE PO TYGODNIACH
       const summaryByWeek = filteredArchiwum.reduce((acc, transport) => {
-        const weekKey = `${format(new Date(transport.completedAt || transport.createdAt), 'yyyy')}-T${format(new Date(transport.completedAt || transport.createdAt), 'I', { locale: pl })}`;
+        const deliveryDateObj = getTransportDeliveryDate(transport) || new Date(transport.completedAt || transport.createdAt);
+        const weekKey = `${format(deliveryDateObj, 'yyyy')}-T${format(deliveryDateObj, 'I', { locale: pl })}`;
         const distance = transport.response?.distanceKm || transport.distanceKm || 0;
         const price = transport.response?.deliveryPrice || 0;
         const cost = calculateSpedycjaCost(price, distance);
@@ -680,7 +762,7 @@ export default function ArchiwumSpedycjiPage() {
             totalDistance: 0,
             count: 0,
             totalRealPrice: 0,
-            weekStart: format(new Date(transport.completedAt || transport.createdAt), 'dd.MM.yyyy', { locale: pl })
+            weekStart: format(deliveryDateObj, 'dd.MM.yyyy', { locale: pl })
           };
         }
 
@@ -824,39 +906,6 @@ export default function ArchiwumSpedycjiPage() {
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
-  }
-
-  const formatDate = (dateString) => {
-    if (!dateString) return 'Brak daty';
-    try {
-      return format(new Date(dateString), 'dd.MM.yyyy', { locale: pl });
-    } catch (error) {
-      console.error("Błąd formatowania daty:", error, dateString);
-      return 'Nieprawidłowa data';
-    }
-  }
-
-  const formatDateTime = (dateString) => {
-    if (!dateString) return 'Brak daty';
-    try {
-      return format(new Date(dateString), 'dd.MM.yyyy HH:mm', { locale: pl });
-    } catch (error) {
-      console.error("Błąd formatowania daty:", error, dateString);
-      return 'Nieprawidłowa data';
-    }
-  }
-
-  const isDeliveryDateChanged = (transport) => {
-    return transport.response &&
-      transport.response.dateChanged === true &&
-      transport.response.newDeliveryDate;
-  }
-
-  const getActualDeliveryDate = (transport) => {
-    if (isDeliveryDateChanged(transport)) {
-      return transport.response.newDeliveryDate;
-    }
-    return transport.deliveryDate;
   }
 
   // FUNKCJA: Sprawdza czy odpowiedź została wygenerowana automatycznie
