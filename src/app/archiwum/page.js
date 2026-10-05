@@ -663,7 +663,8 @@ export default function ArchiwumPage() {
       const driver = KIEROWCY.find(k => k.id === parseInt(transport.driver_id))
       const rating = transportRatings[transport.id]
       const handlowiec = users.find(u => u.email === transport.requester_email || (transport.requester_name && u.name.trim().toLowerCase() === transport.requester_name.trim().toLowerCase()));
-      const distanceKm = transport.distance || 0;
+      const rawDistance = transport.distance ? parseFloat(String(transport.distance).replace(',', '.')) : 0;
+      const distanceKm = isNaN(rawDistance) ? 0 : rawDistance;
       const resolvedMpk = getResolvedMPK(transport);
       // Zawsze upewniamy się, że to liczba całkowita
       const calculatedCost = Math.round(
@@ -702,7 +703,8 @@ export default function ArchiwumPage() {
       // Przygotowanie danych do podsumowania
       const summaryByMpk = filteredArchiwum.reduce((acc, transport) => {
         const mpk = getResolvedMPK(transport) || 'Brak MPK';
-        const distance = transport.distance || 0;
+        const rawDistance = transport.distance ? parseFloat(String(transport.distance).replace(',', '.')) : 0;
+        const distance = isNaN(rawDistance) ? 0 : rawDistance;
         // Zawsze upewniamy się, że to liczba całkowita
         const cost = Math.round(
           transport.cost !== undefined && transport.cost !== null 
@@ -792,7 +794,10 @@ export default function ArchiwumPage() {
   }
 
   // Statystyki
-  const totalDistance = filteredArchiwum.reduce((sum, t) => sum + (t.distance || 0), 0)
+  const totalDistance = filteredArchiwum.reduce((sum, t) => {
+    const dist = t.distance ? parseFloat(String(t.distance).replace(',', '.')) : 0
+    return sum + (isNaN(dist) ? 0 : dist)
+  }, 0)
 
   // Komponent wyświetlający ocenę transportu
   const RatingDisplay = ({ transportId }) => {
@@ -1644,7 +1649,7 @@ export default function ArchiwumPage() {
             <Route className="h-8 w-8 text-green-600" />
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-600">Łączna odległość</p>
-              <p className="text-2xl font-bold text-gray-900">{totalDistance.toLocaleString()} km</p>
+              <p className="text-2xl font-bold text-gray-900">{totalDistance.toLocaleString('pl-PL', { maximumFractionDigits: 1 })} km</p>
             </div>
           </div>
         </div>

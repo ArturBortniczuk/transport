@@ -718,7 +718,8 @@ export default function ArchiwumSpedycjiPage() {
       // PODSUMOWANIE PO MPK
       const summaryByMpk = filteredArchiwum.reduce((acc, transport) => {
         const mpk = getCurrentMPK(transport) || 'Brak MPK';
-        const distance = transport.response?.distanceKm || transport.distanceKm || 0;
+        const rawDistance = transport.response?.distanceKm || transport.distanceKm || 0;
+        const distance = typeof rawDistance === 'number' ? rawDistance : (parseFloat(String(rawDistance).replace(',', '.')) || 0);
         const price = transport.response?.deliveryPrice || 0;
         const cost = calculateSpedycjaCost(price, distance);
 
@@ -752,7 +753,8 @@ export default function ArchiwumSpedycjiPage() {
       const summaryByWeek = filteredArchiwum.reduce((acc, transport) => {
         const deliveryDateObj = getTransportDeliveryDate(transport) || new Date(transport.completedAt || transport.createdAt);
         const weekKey = `${format(deliveryDateObj, 'yyyy')}-T${format(deliveryDateObj, 'I', { locale: pl })}`;
-        const distance = transport.response?.distanceKm || transport.distanceKm || 0;
+        const rawDistance = transport.response?.distanceKm || transport.distanceKm || 0;
+        const distance = typeof rawDistance === 'number' ? rawDistance : (parseFloat(String(rawDistance).replace(',', '.')) || 0);
         const price = transport.response?.deliveryPrice || 0;
         const cost = calculateSpedycjaCost(price, distance);
 
@@ -789,7 +791,8 @@ export default function ArchiwumSpedycjiPage() {
       // PODSUMOWANIE PO PRZEWOŹNIKACH
       const summaryByCarrier = filteredArchiwum.reduce((acc, transport) => {
         const carrierName = ((transport.response?.driverName || '') + ' ' + (transport.response?.driverSurname || '')).trim() || 'Nieznany przewoźnik';
-        const distance = transport.response?.distanceKm || transport.distanceKm || 0;
+        const rawDistance = transport.response?.distanceKm || transport.distanceKm || 0;
+        const distance = typeof rawDistance === 'number' ? rawDistance : (parseFloat(String(rawDistance).replace(',', '.')) || 0);
         const price = transport.response?.deliveryPrice || 0;
         const cost = calculateSpedycjaCost(price, distance);
 
