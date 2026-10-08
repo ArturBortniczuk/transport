@@ -117,18 +117,20 @@ const LoginPage = () => {
         {/* Nagłówek z oficjalnym logo */}
         <div className="text-center space-y-2">
           <div className="flex justify-center mb-4">
-            <img
-              src="/logo.png"
-              alt="Grupa Eltron"
-              className="h-12 w-auto object-contain"
-              onError={(e) => {
-                e.currentTarget.onerror = null;
-                e.currentTarget.src = '/logo40.png';
-              }}
-            />
+            <div className="bg-gradient-to-r from-blue-950 via-blue-900 to-blue-950 px-6 py-3 rounded-2xl shadow-sm border border-blue-900 flex items-center justify-center">
+              <img
+                src="/logo.png"
+                alt="Logo TRANSPORT"
+                className="h-9 w-auto object-contain"
+                onError={(e) => {
+                  e.currentTarget.onerror = null;
+                  e.currentTarget.src = '/logo40.png';
+                }}
+              />
+            </div>
           </div>
-          <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight">
-            System Transportowy
+          <h2 className="text-2xl font-black text-slate-900 tracking-wide uppercase">
+            TRANSPORT
           </h2>
           <p className="text-xs text-slate-500 font-medium">
             Zaloguj się, aby uzyskać dostęp do zleceń i kalendarza

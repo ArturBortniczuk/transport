@@ -44,7 +44,7 @@ const APPS = [
   }
 ];
 
-export const AppSwitcher = () => {
+export const AppSwitcher = ({ dark = false }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
 
@@ -66,8 +66,8 @@ export const AppSwitcher = () => {
         title="Przełącz aplikację"
         className={`p-2 rounded-xl border transition-all flex items-center justify-center cursor-pointer ${
           isOpen
-            ? 'bg-blue-50 border-blue-300 text-blue-600 shadow-sm'
-            : 'text-gray-600 border-gray-200 hover:bg-gray-100'
+            ? (dark ? 'bg-blue-800 border-blue-600 text-white shadow-sm' : 'bg-blue-50 border-blue-300 text-blue-600 shadow-sm')
+            : (dark ? 'text-blue-200 border-blue-800/80 hover:bg-blue-800/60 hover:text-white' : 'text-gray-600 border-gray-200 hover:bg-gray-100')
         }`}
       >
         <LayoutGrid className="w-5 h-5" />

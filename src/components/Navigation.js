@@ -455,31 +455,26 @@ export default function Navigation({ children }) {
   if (!isLoggedIn || isPublicPath) {
     return (
       <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900 font-sans">
-        <header className="fixed top-0 left-0 right-0 h-16 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/90 shadow-xs px-4 sm:px-6 flex items-center justify-between">
-          <Link href="/" className="flex items-center space-x-3 group">
+        <header className="fixed top-0 left-0 right-0 h-16 z-40 bg-gradient-to-r from-blue-950 via-blue-900 to-blue-950 text-white border-b border-blue-950 shadow-md px-4 sm:px-6 flex items-center justify-between">
+          <Link href="/" className="flex items-center space-x-3.5 group">
             <img
               src="/logo.png"
-              alt="Grupa Eltron"
-              className="h-8 sm:h-9 w-auto object-contain shrink-0"
+              alt="Logo TRANSPORT"
+              className="h-9 sm:h-10 w-auto object-contain shrink-0 drop-shadow-sm"
               onError={(e) => {
                 e.currentTarget.onerror = null;
                 e.currentTarget.src = '/logo40.png';
               }}
             />
-            <div className="hidden sm:block border-l border-slate-200 pl-3">
-              <h1 className="font-extrabold text-sm tracking-tight text-slate-900 leading-none">
-                Grupa Eltron
-              </h1>
-              <p className="text-[10px] text-blue-600 font-bold uppercase tracking-wider leading-none mt-1">
-                System Zarządzania Transportem
-              </p>
-            </div>
+            <span className="text-xl sm:text-2xl font-black tracking-wider text-white uppercase select-none">
+              TRANSPORT
+            </span>
           </Link>
           <div className="flex items-center space-x-3">
-            <AppSwitcher />
+            <AppSwitcher dark={true} />
             <Link
               href="/login"
-              className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 text-white rounded-xl text-xs font-bold transition-all shadow-sm shadow-blue-500/20"
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-950/40"
             >
               Logowanie
             </Link>
@@ -497,16 +492,16 @@ export default function Navigation({ children }) {
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900 font-sans">
       
       {/* GÓRNY PASEK NAGŁÓWKA (HEADER) */}
-      <header className="fixed top-0 left-0 right-0 h-16 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/90 shadow-xs px-4 sm:px-6 flex items-center justify-between transition-colors">
+      <header className="fixed top-0 left-0 right-0 h-16 z-40 bg-gradient-to-r from-blue-950 via-blue-900 to-blue-950 text-white border-b border-blue-950 shadow-md px-4 sm:px-6 flex items-center justify-between transition-colors">
         
-        {/* Lewa strona: Przycisk zwijania sidebara + Oficjalne Logo */}
+        {/* Lewa strona: Przycisk zwijania sidebara + Logo i Duży Tytuł TRANSPORT */}
         <div className="flex items-center space-x-3">
           
           {/* Przycisk mobile drawer */}
           <button
             type="button"
             onClick={() => setIsMobileOpen(!isMobileOpen)}
-            className="p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-slate-200 transition-all cursor-pointer lg:hidden"
+            className="p-2 rounded-xl text-blue-200 hover:text-white hover:bg-blue-800/60 border border-blue-800/80 transition-all cursor-pointer lg:hidden"
             title="Otwórz menu mobilne"
           >
             {isMobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -517,34 +512,29 @@ export default function Navigation({ children }) {
             type="button"
             onClick={toggleCollapse}
             title={isCollapsed ? "Rozwiń panel boczny" : "Zwiń panel boczny"}
-            className="p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-slate-200 transition-all cursor-pointer hidden lg:flex items-center justify-center shrink-0"
+            className="p-2 rounded-xl text-blue-200 hover:text-white hover:bg-blue-800/60 border border-blue-800/80 transition-all cursor-pointer hidden lg:flex items-center justify-center shrink-0"
           >
             {isCollapsed ? (
-              <PanelLeftOpen className="w-5 h-5 text-blue-600" />
+              <PanelLeftOpen className="w-5 h-5 text-blue-300" />
             ) : (
-              <PanelLeftClose className="w-5 h-5 text-slate-600" />
+              <PanelLeftClose className="w-5 h-5 text-blue-200" />
             )}
           </button>
 
-          {/* Brand Logo & Tytuł */}
-          <Link href="/kalendarz" className="flex items-center space-x-3 cursor-pointer group">
+          {/* Brand Logo & Duży napis TRANSPORT */}
+          <Link href="/kalendarz" className="flex items-center space-x-3.5 cursor-pointer group">
             <img
               src="/logo.png"
-              alt="Grupa Eltron"
-              className="h-8 sm:h-9 w-auto object-contain shrink-0"
+              alt="Logo TRANSPORT"
+              className="h-9 sm:h-10 w-auto object-contain shrink-0 drop-shadow-sm"
               onError={(e) => {
                 e.currentTarget.onerror = null;
                 e.currentTarget.src = '/logo40.png';
               }}
             />
-            <div className="hidden sm:block border-l border-slate-200 pl-3">
-              <h1 className="font-extrabold text-sm tracking-tight text-slate-900 leading-none">
-                Grupa Eltron
-              </h1>
-              <p className="text-[10px] text-blue-600 font-bold uppercase tracking-wider leading-none mt-1">
-                System Zarządzania Transportem
-              </p>
-            </div>
+            <span className="text-xl sm:text-2xl font-black tracking-wider text-white uppercase select-none">
+              TRANSPORT
+            </span>
           </Link>
         </div>
 
@@ -552,16 +542,16 @@ export default function Navigation({ children }) {
         <div className="flex items-center space-x-2.5 sm:space-x-3">
           
           {/* Przełącznik aplikacji Eltron */}
-          <AppSwitcher />
+          <AppSwitcher dark={true} />
 
           {/* Dane zalogowanego użytkownika */}
-          <div className="flex items-center space-x-3 border-l border-slate-200 pl-3">
-            <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-700 text-white font-extrabold flex items-center justify-center text-xs shadow-sm shrink-0">
+          <div className="flex items-center space-x-3 border-l border-blue-800/80 pl-3">
+            <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-600 text-white font-extrabold flex items-center justify-center text-xs shadow-sm shrink-0 border border-blue-400/30">
               {getAvatarInitials(userName)}
             </div>
 
             <div className="hidden sm:block text-left leading-tight">
-              <div className="text-xs font-extrabold text-slate-900 truncate max-w-[160px]">
+              <div className="text-xs font-extrabold text-white truncate max-w-[160px]">
                 {userName || 'Użytkownik'}
               </div>
               <div className="mt-0.5">
@@ -573,7 +563,7 @@ export default function Navigation({ children }) {
             <button
               type="button"
               onClick={() => setShowChangePassword(true)}
-              className="p-2 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-slate-100 border border-slate-200 transition-all cursor-pointer"
+              className="p-2 rounded-xl text-blue-200 hover:text-white hover:bg-blue-800/60 border border-blue-800/80 transition-all cursor-pointer"
               title="Zmień hasło"
             >
               <Lock className="w-4 h-4" />
@@ -583,7 +573,7 @@ export default function Navigation({ children }) {
             <button
               type="button"
               onClick={handleLogout}
-              className="p-2 rounded-xl text-slate-500 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 hover:border-rose-200 transition-all cursor-pointer"
+              className="p-2 rounded-xl text-blue-200 hover:text-rose-300 hover:bg-rose-950/40 border border-blue-800/80 hover:border-rose-800/60 transition-all cursor-pointer"
               title="Wyloguj z systemu"
             >
               <LogOut className="w-4 h-4" />
@@ -662,26 +652,25 @@ export default function Navigation({ children }) {
 
           {/* Panel szuflady */}
           <div className="relative w-72 max-w-[80vw] bg-white h-full shadow-2xl flex flex-col justify-between z-50">
-            <div className="p-4 border-b border-slate-200 flex items-center justify-between">
-              <div className="flex items-center space-x-2.5">
+            <div className="p-4 bg-gradient-to-r from-blue-950 via-blue-900 to-blue-950 border-b border-blue-900 text-white flex items-center justify-between">
+              <div className="flex items-center space-x-3">
                 <img
                   src="/logo.png"
-                  alt="Grupa Eltron"
-                  className="h-8 w-auto object-contain shrink-0"
+                  alt="Logo TRANSPORT"
+                  className="h-8 w-auto object-contain shrink-0 drop-shadow-sm"
                   onError={(e) => {
                     e.currentTarget.onerror = null;
                     e.currentTarget.src = '/logo40.png';
                   }}
                 />
-                <div className="border-l border-slate-200 pl-2.5">
-                  <h3 className="font-extrabold text-xs text-slate-900 leading-tight">Grupa Eltron</h3>
-                  <p className="text-[10px] text-blue-600 font-bold uppercase leading-tight">Transport</p>
-                </div>
+                <span className="text-lg font-black tracking-wider text-white uppercase">
+                  TRANSPORT
+                </span>
               </div>
               <button
                 type="button"
                 onClick={() => setIsMobileOpen(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                className="p-1.5 rounded-lg text-blue-200 hover:text-white hover:bg-blue-800/60"
               >
                 <X className="w-5 h-5" />
               </button>
