@@ -1394,14 +1394,14 @@ export default function ArchiwumSpedycjiPage() {
 
   if (!canView) {
     return (
-      <div className="max-w-7xl mx-auto p-12 text-center text-red-600 bg-white rounded-xl shadow-lg">
+      <div className="w-full p-12 text-center text-red-600 bg-white rounded-xl shadow-lg">
         Brak uprawnień do przeglądania archiwum spedycji
       </div>
     )
   }
 
   return (
-    <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+    <div className="w-full">
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">
           Archiwum Spedycji

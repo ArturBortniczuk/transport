@@ -144,14 +144,14 @@ export default function KurierPage() {
 
   if (!canView) {
     return (
-      <div className="max-w-6xl mx-auto p-12 text-center text-red-600 bg-white rounded-xl shadow-lg">
+      <div className="w-full p-12 text-center text-red-600 bg-white rounded-xl shadow-lg">
         Brak uprawnień do przeglądania przesyłek kurierskich
       </div>
     )
   }
 
   return (
-    <div className="max-w-6xl mx-auto">
+    <div className="w-full">
       <div className="mb-8 flex justify-between items-center">
         <h1 className="text-3xl font-bold text-gray-900">
           Zamówienia kuriera

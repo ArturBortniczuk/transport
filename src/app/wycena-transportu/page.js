@@ -202,7 +202,7 @@ export default function WycenaTransportu() {
     }
 
     return (
-        <div className="container mx-auto px-4 py-8 max-w-6xl">
+        <div className="w-full">
             <div className="flex flex-col md:flex-row md:items-center justify-between mb-8">
                 <h1 className="text-3xl font-bold text-gray-800 flex items-center mb-4 md:mb-0">
                     <Calculator className="mr-3 h-8 w-8 text-blue-600" />

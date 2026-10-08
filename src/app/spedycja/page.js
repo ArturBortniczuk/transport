@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import SpedycjaForm from './components/SpedycjaForm'
 import SpedycjaList from './components/SpedycjaList'
 import Link from 'next/link'
-import { Clipboard, Archive, Edit, CheckCircle, AlertCircle } from 'lucide-react'
+import { Clipboard, Archive, Edit, CheckCircle, AlertCircle, Send, Plus } from 'lucide-react'
 import TransportOrderForm from './components/TransportOrderForm'
 
 
@@ -29,8 +29,8 @@ export default function SpedycjaPage() {
   const [operationMessage, setOperationMessage] = useState(null);
 
   const buttonClasses = {
-    primary: "px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors flex items-center gap-2",
-    outline: "px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-100 transition-colors flex items-center gap-2"
+    primary: "px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs sm:text-sm rounded-xl transition-all shadow-sm flex items-center gap-2 cursor-pointer",
+    outline: "px-4 py-2.5 border border-slate-300 hover:border-slate-400 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs sm:text-sm rounded-xl transition-all shadow-xs flex items-center gap-2 cursor-pointer"
   };
 
   // NOWA FUNKCJA: Wyświetlanie komunikatu operacji
@@ -324,8 +324,8 @@ export default function SpedycjaPage() {
 
   if (error) {
     return (
-      <div className="max-w-6xl mx-auto">
-        <div className="bg-red-50 text-red-700 p-4 rounded-lg">
+      <div className="w-full">
+        <div className="bg-red-50 text-red-700 p-4 rounded-xl border border-red-200">
           {error}
         </div>
       </div>
@@ -333,10 +333,10 @@ export default function SpedycjaPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto">
+    <div className="w-full">
       {/* NOWY KOMPONENT: Komunikaty o operacjach */}
       {operationMessage && (
-        <div className={`mb-4 p-4 rounded-lg flex items-center ${
+        <div className={`mb-4 p-4 rounded-xl flex items-center ${
           operationMessage.type === 'success' 
             ? 'bg-green-50 text-green-700 border border-green-200' 
             : 'bg-red-50 text-red-700 border border-red-200'
@@ -350,23 +350,31 @@ export default function SpedycjaPage() {
         </div>
       )}
 
-      <div className="mb-8 flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-gray-900">
-          Zamówienia spedycji
-        </h1>
-        <div className="flex gap-2">
+      <div className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="flex items-center space-x-3">
+          <div className="w-12 h-12 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-md shadow-blue-500/20 shrink-0">
+            <Send className="w-6 h-6" />
+          </div>
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+              Zamówienia spedycji
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-500 font-semibold">Zarządzanie zleceniami spedycyjnymi i transportem zewnętrznym</p>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
           <button 
             className={!showArchive ? buttonClasses.primary : buttonClasses.outline}
             onClick={() => setShowArchive(false)}
           >
-            <Clipboard size={18} />
+            <Clipboard size={16} />
             Aktywne
           </button>
           <Link 
             href="/archiwum-spedycji"
             className={buttonClasses.outline}
           >
-            <Archive size={18} />
+            <Archive size={16} />
             Archiwum
           </Link>
           
@@ -379,6 +387,7 @@ export default function SpedycjaPage() {
                 setShowForm(true);
               }}
             >
+              <Plus size={16} />
               Nowe zamówienie
             </button>
           )}
@@ -387,7 +396,7 @@ export default function SpedycjaPage() {
 
       {/* Lista zamówień */}
       {!showForm && (
-        <div className="bg-white rounded-lg shadow">
+        <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 overflow-hidden">
           {zamowienia.length > 0 ? (
             <SpedycjaList
               zamowienia={zamowienia}

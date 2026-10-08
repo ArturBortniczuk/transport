@@ -55,8 +55,8 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 p-6">
-        <div className="max-w-7xl mx-auto">
+      <div className="min-h-screen bg-transparent">
+        <div className="w-full">
           <div className="animate-pulse">
             <div className="h-8 bg-gray-200 rounded w-1/4 mb-8"></div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -96,8 +96,8 @@ export default function DashboardPage() {
   const isFiltered = dashboardData?.userFiltered;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-transparent">
+      <div className="w-full">
         {/* Header */}
         <div className="mb-8 flex justify-between items-end">
           <div>

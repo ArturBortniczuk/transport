@@ -7,8 +7,8 @@ import AuthCheck from '../components/AuthCheck'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata = {
-  title: 'System Zarządzania Transportem',
-  description: 'Kompleksowe rozwiązanie do zarządzania transportem i kierowcami',
+  title: 'System Zarządzania Transportem - Grupa Eltron',
+  description: 'Kompleksowe rozwiązanie do zarządzania transportem i spedycją w Grupie Eltron',
 }
 
 export default function RootLayout({ children }) {
@@ -17,17 +17,9 @@ export default function RootLayout({ children }) {
       <body className={inter.className}>
         <AuthCheck>
           <LogoutCleanup />
-          <div className="min-h-screen flex flex-col">
-            <Navigation />
-            <main className="flex-grow container mx-auto px-4 py-8">
-              {children}
-            </main>
-            <footer className="bg-gray-800 text-white py-6">
-              <div className="container mx-auto px-4 text-center">
-                <p>&copy; 2025 System Zarządzania Transportem. Wszelkie prawa zastrzeżone.</p>
-              </div>
-            </footer>
-          </div>
+          <Navigation>
+            {children}
+          </Navigation>
         </AuthCheck>
       </body>
     </html>

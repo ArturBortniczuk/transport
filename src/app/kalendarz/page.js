@@ -10,7 +10,6 @@ import SimpleCalendarGrid from './components/SimpleCalendarGrid'
 import TransportForm from './components/TransportForm'
 import FilterPanel from './components/FilterPanel'
 import TransportsList from './components/TransportsList'
-import PackagingsList from './components/PackagingsList'
 import { wyslijPowiadomienieOdbioruBebnow } from '@/utils/smsNotifications'
 import { MAGAZYNY } from './constants'
 import { KIEROWCY } from './constants'
@@ -909,7 +908,7 @@ export default function KalendarzPage() {
   
    return (
      <DragDropContext onDragEnd={handleMainDragEnd}>
-       <div className="max-w-6xl mx-auto">
+       <div className="w-full">
          <div className="mb-8 flex justify-between items-center">
            <h1 className="text-3xl font-bold text-gray-900">
              Kalendarz Transportów - {format(currentMonth, 'LLLL yyyy', { locale: pl })}
@@ -941,9 +940,7 @@ export default function KalendarzPage() {
            setFiltryAktywne={setFiltryAktywne}
          />
   
-          {/* Dodajemy komponent do wyświetlania opakowań do odbioru - bez onDragEnd */}
-          <PackagingsList canAssignPackagings={canAssignPackagings} />
-
+          
           <SimpleCalendarGrid 
             daysInMonth={daysInMonth}
             onDateSelect={handleDateClick}

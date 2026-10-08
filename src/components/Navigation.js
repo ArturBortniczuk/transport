@@ -1,12 +1,18 @@
-// src/components/Navigation.js - ZAKTUALIZOWANY Z LINKIEM "OCENY"
+// src/components/Navigation.js - ZAKTUALIZOWANY O BOCZNY ZWIJALNY PANEL (SIDEBAR) ZGODNY Z EKOSYSTEMEM ELTRON
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import ChangePassword from './ChangePassword'
 import AppSwitcher from './AppSwitcher'
 import {
+  ChevronLeft,
+  ChevronRight,
   ChevronDown,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Menu,
+  X,
   Truck,
   Calendar,
   Archive,
@@ -16,45 +22,67 @@ import {
   Package,
   Send,
   Users,
-  Settings,
   Lock,
   LogOut,
-  Menu,
-  X,
-  Star, // NOWA IKONA dla Ocen
-  Calculator, // IKONA dla Wyceny Transportu
-  Activity,
+  Star,
+  Calculator,
   BarChart3,
-  ListFilter // Ikona dla Koordynatora
+  ListFilter,
+  Shield,
+  UserCheck
 } from 'lucide-react'
 
-export default function Navigation() {
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+function cn(...classes) {
+  return classes.filter(Boolean).join(' ');
+}
+
+export default function Navigation({ children }) {
+  const pathname = usePathname()
+  const router = useRouter()
+
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
   const [userPermissions, setUserPermissions] = useState(null)
   const [userRole, setUserRole] = useState(null)
   const [userName, setUserName] = useState('')
+  const [userEmail, setUserEmail] = useState('')
   const [showChangePassword, setShowChangePassword] = useState(false)
 
-  // Stany dla dropdown menu
-  const [openDropdown, setOpenDropdown] = useState(null)
-  const dropdownRefs = useRef({})
+  // Stan zwinięcia bocznego menu (Sidebar)
+  const [isCollapsed, setIsCollapsed] = useState(false)
+  // Stan mobilnego drawer menu
+  const [isMobileOpen, setIsMobileOpen] = useState(false)
 
-  const pathname = usePathname()
-  const router = useRouter()
+  // Odczyt zapamiętanego stanu zwinięcia sidebara z localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('transport_sidebar_collapsed');
+      if (saved !== null) {
+        setIsCollapsed(saved === 'true');
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
 
-  // Funkcja pomocnicza do obsługi różnych formatów boolean
-  const isTrueValue = (value) => {
-    return value === true ||
-      value === 1 ||
-      value === 't' ||
-      value === 'TRUE' ||
-      value === 'true' ||
-      value === 'T';
+  // Zamknięcie menu mobilnego przy zmianie trasy
+  useEffect(() => {
+    setIsMobileOpen(false);
+  }, [pathname]);
+
+  const toggleCollapse = () => {
+    setIsCollapsed(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem('transport_sidebar_collapsed', String(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
   };
 
-  // Funkcja pobierająca dane użytkownika
+  // Pobieranie danych użytkownika
   const fetchUserInfo = async () => {
     try {
       const response = await fetch('/api/user');
@@ -79,6 +107,7 @@ export default function Navigation() {
 
         setUserRole(normalizedRole || null);
         setUserName(data.user.name || '');
+        setUserEmail(data.user.email || '');
 
         const adminStatus =
           data.user.isAdmin === true ||
@@ -101,12 +130,11 @@ export default function Navigation() {
 
     const intervalId = isLoggedIn
       ? setInterval(() => {
-        fetchUserInfo();
-      }, 60000)
+          fetchUserInfo();
+        }, 60000)
       : null;
 
     const handleAuthChange = () => {
-      console.log('Wykryto zmianę stanu uwierzytelnienia');
       fetchUserInfo();
     };
 
@@ -116,22 +144,7 @@ export default function Navigation() {
       if (intervalId) clearInterval(intervalId);
       window.removeEventListener('auth-state-changed', handleAuthChange);
     };
-  }, [pathname]);
-
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (openDropdown && dropdownRefs.current[openDropdown]) {
-        if (!dropdownRefs.current[openDropdown].contains(event.target)) {
-          setOpenDropdown(null);
-        }
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [openDropdown]);
+  }, [pathname, isLoggedIn]);
 
   const handleLogout = async () => {
     try {
@@ -142,6 +155,7 @@ export default function Navigation() {
       setIsLoggedIn(false);
       setUserRole(null);
       setUserName('');
+      setUserEmail('');
       setIsAdmin(false);
       setUserPermissions(null);
 
@@ -152,12 +166,10 @@ export default function Navigation() {
     }
   };
 
-  const toggleDropdown = (dropdownName) => {
-    setOpenDropdown(openDropdown === dropdownName ? null : dropdownName);
+  const isActive = (path) => {
+    if (path === '/') return pathname === '/';
+    return pathname === path || pathname.startsWith(path + '/');
   };
-
-  const isActive = (path) => pathname === path;
-  const isDropdownActive = (paths) => paths.some(path => pathname.startsWith(path));
 
   const perms = userPermissions || {};
 
@@ -192,7 +204,7 @@ export default function Navigation() {
       : []
     ),
     ...(isAdmin || perms.map?.view !== false
-      ? [{ name: 'Mapa', path: '/mapa', icon: Map }]
+      ? [{ name: 'Mapa tras', path: '/mapa', icon: Map }]
       : []
     ),
     ...(canViewOwnRequests
@@ -214,20 +226,11 @@ export default function Navigation() {
     ...(isAdmin || (perms.archive_spedycji?.view !== undefined ? perms.archive_spedycji.view !== false : perms.archive?.view !== false)
       ? [{ name: 'Archiwum spedycji', path: '/archiwum-spedycji', icon: Archive }]
       : []
-    ),
-    ...(isAdmin || perms.courier?.view !== false
-      ? [{ name: 'Kurier', path: '/kurier', icon: Package }]
-      : []
-    ),
-    ...(isAdmin || perms.map?.view !== false
-      ? [{ name: 'Mapa spedycji', path: '/mapa', icon: Map }]
-      : []
     )
   ];
 
   // Admin items:
   const hasAdminUsers = isAdmin || perms.admin?.users === true;
-  const hasAdminPackagings = isAdmin || perms.admin?.packagings === true;
   const hasAdminConstructions = isAdmin || perms.admin?.constructions === true;
   const hasAdminValuation = isAdmin || perms.admin?.valuation === true;
   const hasAdminCableAdvices = isAdmin || perms.admin?.cable_advices === true;
@@ -236,10 +239,6 @@ export default function Navigation() {
   const adminItems = [
     ...(hasAdminUsers
       ? [{ name: 'Zarządzanie użytkownikami', path: '/admin', icon: Users }]
-      : []
-    ),
-    ...(hasAdminPackagings
-      ? [{ name: 'Zarządzanie opakowaniami', path: '/admin/packagings', icon: Package }]
       : []
     ),
     ...(hasAdminConstructions
@@ -260,273 +259,493 @@ export default function Navigation() {
     )
   ];
 
-  // Struktura menu
-  const menuStructure = {};
+  const menuSections = [
+    { id: 'narzedzia', title: 'Narzędzia', icon: BarChart3, items: narzedziaItems },
+    { id: 'transport-wlasny', title: 'Transport własny', icon: Truck, items: transportWlasnyItems },
+    { id: 'transport-zewnetrzny', title: 'Transport zewnętrzny', icon: Send, items: transportZewnetrznyItems },
+    { id: 'panel-admin', title: 'Panel Administratora', icon: Shield, items: adminItems }
+  ].filter(section => section.items.length > 0);
 
-  if (narzedziaItems.length > 0) {
-    menuStructure['narzedzia'] = {
-      title: 'Narzędzia',
-      icon: Activity,
-      items: narzedziaItems
+  // Stan rozwinięcia poszczególnych zakładek (kategorii)
+  const [openSections, setOpenSections] = useState({});
+
+  // Gdy użytkownik przechodzi między stronami, automatycznie rozwijamy zakładkę zawierającą bieżącą podstronę
+  useEffect(() => {
+    const activeSection = menuSections.find(section =>
+      section.items.some(item => isActive(item.path))
+    );
+    if (activeSection) {
+      setOpenSections(prev => {
+        if (prev[activeSection.id]) return prev;
+        return { ...prev, [activeSection.id]: true };
+      });
+    }
+  }, [pathname]);
+
+  const toggleSection = (sectionId) => {
+    setOpenSections(prev => ({
+      ...prev,
+      [sectionId]: !prev[sectionId]
+    }));
+  };
+
+  const getRoleBadge = (role) => {
+    const rawRole = (role || '').toLowerCase();
+    const roleConfig = {
+      admin: { label: 'Administrator', icon: Shield, gradient: 'from-purple-600 to-indigo-700' },
+      koordynator: { label: 'Koordynator', icon: ListFilter, gradient: 'from-blue-600 to-cyan-700' },
+      magazyn_zielonka: { label: 'Magazyn Zielonka', icon: Package, gradient: 'from-sky-600 to-blue-700' },
+      magazyn_bialystok: { label: 'Magazyn Białystok', icon: Package, gradient: 'from-sky-600 to-blue-700' },
+      magazyn: { label: 'Magazyn', icon: Package, gradient: 'from-sky-600 to-blue-700' },
+      kierowca: { label: 'Kierowca', icon: Truck, gradient: 'from-amber-500 to-orange-600' },
+      handlowiec: { label: 'Handlowiec', icon: UserCheck, gradient: 'from-indigo-500 to-blue-600' }
     };
-  }
-
-  if (transportWlasnyItems.length > 0) {
-    menuStructure['transport-wlasny'] = {
-      title: 'Transport własny',
-      icon: Truck,
-      items: transportWlasnyItems
-    };
-  }
-
-  if (transportZewnetrznyItems.length > 0) {
-    menuStructure['transport-zewnetrzny'] = {
-      title: 'Transport zewnętrzny',
-      icon: Building2,
-      items: transportZewnetrznyItems
-    };
-  }
-
-  if (adminItems.length > 0) {
-    menuStructure['panel-admin'] = {
-      title: 'Panel Administratora',
-      icon: Settings,
-      items: adminItems
-    };
-  }
-
-  if (!isLoggedIn) {
+    const config = roleConfig[rawRole] || { label: role || 'Pracownik', icon: UserCheck, gradient: 'from-slate-600 to-slate-800' };
+    const Icon = config.icon;
     return (
-      <nav className="bg-gradient-to-r from-blue-900 to-blue-800 text-white shadow-lg">
-        <div className="container mx-auto px-4">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
-              <Link href="/" className="flex items-center space-x-3">
-                <img
-                  src="/logo.png"
-                  alt="Logo TRANSPORT"
-                  className="h-10 w-auto"
-                  onError={(e) => {
-                    e.target.style.display = 'none';
-                    e.target.nextElementSibling.style.display = 'block';
-                  }}
-                />
-                <svg
-                  className="h-8 w-8 hidden"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  style={{ display: 'none' }}
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-                <span className="font-bold text-xl">TRANSPORT</span>
-              </Link>
+      <div className={`inline-flex items-center space-x-1 px-2 py-0.5 rounded-md bg-gradient-to-r ${config.gradient} text-white text-[10px] font-bold shadow-xs whitespace-nowrap`}>
+        <Icon className="w-2.5 h-2.5 shrink-0" />
+        <span>{config.label}</span>
+      </div>
+    );
+  };
+
+  const getAvatarInitials = (name) => {
+    if (!name) return 'U';
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+    return name.slice(0, 2).toUpperCase();
+  };
+
+  const isPublicPath = pathname === '/login' || pathname === '/first-change-password';
+
+  // Renderowanie zakładek z możliwością zwijania i pokazywania zawartości dopiero po rozwinięciu
+  const renderNavSection = (section, collapsedMode) => {
+    const SectionIcon = section.icon;
+    const isSectionActive = section.items.some(item => isActive(item.path));
+    const isOpen = !!openSections[section.id];
+
+    // Tryb zminimalizowanego paska (szerokość 80px)
+    if (collapsedMode) {
+      return (
+        <div key={section.id} className="relative group flex justify-center py-1">
+          <button
+            type="button"
+            onClick={() => {
+              setIsCollapsed(false);
+              setOpenSections(prev => ({ ...prev, [section.id]: true }));
+            }}
+            title={`${section.title} (${section.items.length}) - Kliknij, aby rozwinąć`}
+            className={cn(
+              "w-11 h-11 rounded-xl flex items-center justify-center transition-all cursor-pointer relative",
+              isSectionActive
+                ? "bg-gradient-to-tr from-blue-600 to-indigo-700 text-white shadow-md shadow-blue-500/25"
+                : "text-slate-500 hover:text-blue-700 hover:bg-blue-50/80 border border-transparent hover:border-blue-100"
+            )}
+          >
+            <SectionIcon className="w-5 h-5" />
+            {isSectionActive && (
+              <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-white ring-2 ring-blue-600" />
+            )}
+          </button>
+        </div>
+      );
+    }
+
+    // Standardowy widok: Zwinięta/rozwinięta zakładka (akordeon)
+    return (
+      <div
+        key={section.id}
+        className={cn(
+          "rounded-xl border transition-all overflow-hidden",
+          isOpen
+            ? "border-blue-200/90 bg-white shadow-xs"
+            : "border-slate-200/70 bg-white/70 hover:border-blue-200 hover:bg-white"
+        )}
+      >
+        {/* Nagłówek zakładki (przycisk zwijania / rozwijania) */}
+        <button
+          type="button"
+          onClick={() => toggleSection(section.id)}
+          className={cn(
+            "w-full px-3 py-2.5 flex items-center justify-between text-left transition-colors cursor-pointer select-none",
+            isOpen
+              ? "bg-gradient-to-r from-blue-50/80 to-indigo-50/50"
+              : "hover:bg-slate-50/80"
+          )}
+        >
+          <div className="flex items-center space-x-2.5 min-w-0">
+            <div
+              className={cn(
+                "w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors",
+                isOpen || isSectionActive
+                  ? "bg-gradient-to-tr from-blue-600 to-indigo-700 text-white shadow-xs shadow-blue-500/20"
+                  : "bg-slate-100 text-slate-500"
+              )}
+            >
+              <SectionIcon className="w-3.5 h-3.5" />
             </div>
+            <span
+              className={cn(
+                "text-xs sm:text-[13px] tracking-tight truncate",
+                isOpen || isSectionActive
+                  ? "font-bold text-slate-900"
+                  : "font-semibold text-slate-700"
+              )}
+            >
+              {section.title}
+            </span>
+          </div>
+
+          <div className="flex items-center space-x-1.5 shrink-0 ml-2">
+            <span
+              className={cn(
+                "text-[10px] font-bold px-1.5 py-0.5 rounded-full transition-colors",
+                isSectionActive
+                  ? "bg-blue-600 text-white"
+                  : "bg-slate-100 text-slate-500"
+              )}
+            >
+              {section.items.length}
+            </span>
+            <ChevronDown
+              className={cn(
+                "w-4 h-4 text-slate-400 transition-transform duration-200",
+                isOpen && "rotate-180 text-blue-600"
+              )}
+            />
+          </div>
+        </button>
+
+        {/* Zawartość zakładki - POKAZYWANA TYLKO PO ROZWINIĘCIU! */}
+        {isOpen && (
+          <div className="p-1.5 bg-slate-50/40 border-t border-slate-100 space-y-0.5">
+            {section.items.map((item) => {
+              const ItemIcon = item.icon;
+              const itemActive = isActive(item.path);
+              return (
+                <Link
+                  key={item.path}
+                  href={item.path}
+                  onClick={() => setIsMobileOpen(false)}
+                  className={cn(
+                    "flex items-center px-2.5 py-2 rounded-lg text-xs font-semibold transition-all group",
+                    itemActive
+                      ? "bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-sm shadow-blue-500/20 font-bold"
+                      : "text-slate-600 hover:text-blue-700 hover:bg-blue-50/80"
+                  )}
+                >
+                  <ItemIcon
+                    className={cn(
+                      "w-4 h-4 mr-2.5 shrink-0 transition-colors",
+                      itemActive ? "text-white" : "text-slate-400 group-hover:text-blue-600"
+                    )}
+                  />
+                  <span className="truncate">{item.name}</span>
+                </Link>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Jeśli użytkownik jest na stronie logowania lub nie jest zalogowany
+  if (!isLoggedIn || isPublicPath) {
+    return (
+      <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900 font-sans">
+        <header className="fixed top-0 left-0 right-0 h-16 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/90 shadow-xs px-4 sm:px-6 flex items-center justify-between">
+          <Link href="/" className="flex items-center space-x-3 group">
+            <img
+              src="/logo.png"
+              alt="Grupa Eltron"
+              className="h-8 sm:h-9 w-auto object-contain shrink-0"
+              onError={(e) => {
+                e.currentTarget.onerror = null;
+                e.currentTarget.src = '/logo40.png';
+              }}
+            />
+            <div className="hidden sm:block border-l border-slate-200 pl-3">
+              <h1 className="font-extrabold text-sm tracking-tight text-slate-900 leading-none">
+                Grupa Eltron
+              </h1>
+              <p className="text-[10px] text-blue-600 font-bold uppercase tracking-wider leading-none mt-1">
+                System Zarządzania Transportem
+              </p>
+            </div>
+          </Link>
+          <div className="flex items-center space-x-3">
+            <AppSwitcher />
             <Link
               href="/login"
-              className="text-blue-100 hover:text-white px-3 py-2 text-sm font-medium transition-custom"
+              className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 text-white rounded-xl text-xs font-bold transition-all shadow-sm shadow-blue-500/20"
             >
               Logowanie
             </Link>
           </div>
-        </div>
-      </nav>
+        </header>
+
+        <main className="flex-1 w-full pt-16 flex flex-col">
+          {children}
+        </main>
+      </div>
     );
   }
 
   return (
-    <nav className="bg-gradient-to-r from-blue-900 to-blue-800 text-white shadow-lg">
-      <div className="container mx-auto px-4">
-        <div className="flex justify-between items-center h-16">
-          {/* Logo */}
-          <div className="flex items-center">
-            <Link href="/" className="flex items-center space-x-3">
-              <img
-                src="/logo.png"
-                alt="Logo TransportSystem"
-                className="h-10 w-auto"
-                onError={(e) => {
-                  e.target.style.display = 'none';
-                  e.target.nextElementSibling.style.display = 'block';
-                }}
-              />
-              <svg
-                className="h-8 w-8 hidden"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                style={{ display: 'none' }}
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-              <span className="font-bold text-xl">TransportSystem</span>
-            </Link>
-          </div>
+    <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900 font-sans">
+      
+      {/* GÓRNY PASEK NAGŁÓWKA (HEADER) */}
+      <header className="fixed top-0 left-0 right-0 h-16 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/90 shadow-xs px-4 sm:px-6 flex items-center justify-between transition-colors">
+        
+        {/* Lewa strona: Przycisk zwijania sidebara + Oficjalne Logo */}
+        <div className="flex items-center space-x-3">
+          
+          {/* Przycisk mobile drawer */}
+          <button
+            type="button"
+            onClick={() => setIsMobileOpen(!isMobileOpen)}
+            className="p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-slate-200 transition-all cursor-pointer lg:hidden"
+            title="Otwórz menu mobilne"
+          >
+            {isMobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
 
-          {/* Desktop Navigation */}
-          <div className="hidden lg:flex items-center space-x-4">
-            {/* Dropdown categories */}
-            {Object.entries(menuStructure).map(([key, category]) => (
-              <div key={key} className="relative" ref={el => dropdownRefs.current[key] = el}>
-                <button
-                  onClick={() => toggleDropdown(key)}
-                  className={`${isDropdownActive(category.items.map(item => item.path))
-                    ? 'text-white bg-blue-800'
-                    : 'text-blue-100 hover:text-white hover:bg-blue-800'
-                    } px-3 py-2 rounded-md text-sm font-medium transition-custom flex items-center space-x-1`}
-                >
-                  <category.icon className="w-4 h-4" />
-                  <span>{category.title}</span>
-                  <ChevronDown className={`w-4 h-4 transition-transform ${openDropdown === key ? 'rotate-180' : ''}`} />
-                </button>
+          {/* Przycisk zwijania bocznego panelu dla desktopu */}
+          <button
+            type="button"
+            onClick={toggleCollapse}
+            title={isCollapsed ? "Rozwiń panel boczny" : "Zwiń panel boczny"}
+            className="p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-slate-200 transition-all cursor-pointer hidden lg:flex items-center justify-center shrink-0"
+          >
+            {isCollapsed ? (
+              <PanelLeftOpen className="w-5 h-5 text-blue-600" />
+            ) : (
+              <PanelLeftClose className="w-5 h-5 text-slate-600" />
+            )}
+          </button>
 
-                {openDropdown === key && (
-                  <div className="absolute top-full left-0 mt-1 w-56 bg-white rounded-md shadow-lg ring-1 ring-black ring-opacity-5 z-50">
-                    <div className="py-1">
-                      {category.items.map((item) => (
-                        <Link
-                          key={item.path}
-                          href={item.path}
-                          onClick={() => setOpenDropdown(null)}
-                          className={`${isActive(item.path)
-                            ? 'bg-blue-50 text-blue-700'
-                            : 'text-gray-700 hover:bg-gray-100'
-                            } group flex items-center px-4 py-2 text-sm transition-colors`}
-                        >
-                          <item.icon className="w-4 h-4 mr-3 text-gray-400 group-hover:text-gray-500" />
-                          {item.name}
-                        </Link>
-                      ))}
-                    </div>
-                  </div>
-                )}
+          {/* Brand Logo & Tytuł */}
+          <Link href="/kalendarz" className="flex items-center space-x-3 cursor-pointer group">
+            <img
+              src="/logo.png"
+              alt="Grupa Eltron"
+              className="h-8 sm:h-9 w-auto object-contain shrink-0"
+              onError={(e) => {
+                e.currentTarget.onerror = null;
+                e.currentTarget.src = '/logo40.png';
+              }}
+            />
+            <div className="hidden sm:block border-l border-slate-200 pl-3">
+              <h1 className="font-extrabold text-sm tracking-tight text-slate-900 leading-none">
+                Grupa Eltron
+              </h1>
+              <p className="text-[10px] text-blue-600 font-bold uppercase tracking-wider leading-none mt-1">
+                System Zarządzania Transportem
+              </p>
+            </div>
+          </Link>
+        </div>
+
+        {/* Prawa strona: Przełącznik Ekosystemu Eltron + Info Użytkownika + Akcje */}
+        <div className="flex items-center space-x-2.5 sm:space-x-3">
+          
+          {/* Przełącznik aplikacji Eltron */}
+          <AppSwitcher />
+
+          {/* Dane zalogowanego użytkownika */}
+          <div className="flex items-center space-x-3 border-l border-slate-200 pl-3">
+            <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-700 text-white font-extrabold flex items-center justify-center text-xs shadow-sm shrink-0">
+              {getAvatarInitials(userName)}
+            </div>
+
+            <div className="hidden sm:block text-left leading-tight">
+              <div className="text-xs font-extrabold text-slate-900 truncate max-w-[160px]">
+                {userName || 'Użytkownik'}
               </div>
-            ))}
-
-            {/* App Switcher for Ecosystem */}
-            <div className="ml-2">
-              <AppSwitcher />
+              <div className="mt-0.5">
+                {getRoleBadge(userRole)}
+              </div>
             </div>
 
-            {/* User Menu */}
-            <div className="relative ml-2" ref={el => dropdownRefs.current['user-menu'] = el}>
-              <button
-                onClick={() => toggleDropdown('user-menu')}
-                className="text-blue-100 hover:text-white px-3 py-2 text-sm font-medium transition-custom flex items-center space-x-2"
-              >
-                <span>{userName}</span>
-                <ChevronDown className={`w-4 h-4 transition-transform ${openDropdown === 'user-menu' ? 'rotate-180' : ''}`} />
-              </button>
-
-              {openDropdown === 'user-menu' && (
-                <div className="absolute top-full right-0 mt-1 w-48 bg-white rounded-md shadow-lg ring-1 ring-black ring-opacity-5 z-50">
-                  <div className="py-1">
-                    <button
-                      onClick={() => {
-                        setShowChangePassword(true);
-                        setOpenDropdown(null);
-                      }}
-                      className="group flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
-                    >
-                      <Lock className="w-4 h-4 mr-3 text-gray-400 group-hover:text-gray-500" />
-                      Zmień hasło
-                    </button>
-                    <button
-                      onClick={() => {
-                        handleLogout();
-                        setOpenDropdown(null);
-                      }}
-                      className="group flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
-                    >
-                      <LogOut className="w-4 h-4 mr-3 text-red-400 group-hover:text-red-500" />
-                      Wyloguj się
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Mobile Menu Button */}
-          <div className="lg:hidden">
+            {/* Przycisk Zmiany Hasła */}
             <button
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="text-gray-200 hover:text-white focus:outline-none p-2"
+              type="button"
+              onClick={() => setShowChangePassword(true)}
+              className="p-2 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-slate-100 border border-slate-200 transition-all cursor-pointer"
+              title="Zmień hasło"
             >
-              {isMobileMenuOpen ? (
-                <X className="h-6 w-6" />
-              ) : (
-                <Menu className="h-6 w-6" />
-              )}
+              <Lock className="w-4 h-4" />
+            </button>
+
+            {/* Przycisk Wylogowania */}
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="p-2 rounded-xl text-slate-500 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 hover:border-rose-200 transition-all cursor-pointer"
+              title="Wyloguj z systemu"
+            >
+              <LogOut className="w-4 h-4" />
             </button>
           </div>
         </div>
+      </header>
 
-        {/* Mobile Menu */}
-        {isMobileMenuOpen && (
-          <div className="lg:hidden border-t border-blue-700">
-            <div className="px-2 pt-2 pb-3 space-y-1">
-              {Object.entries(menuStructure).map(([key, category]) => (
-                <div key={key}>
-                  <div className="text-blue-100 px-3 py-2 text-sm font-medium flex items-center">
-                    <category.icon className="w-4 h-4 mr-2" />
-                    {category.title}
-                  </div>
-                  <div className="ml-4 space-y-1">
-                    {category.items.map((item) => (
-                      <Link
-                        key={item.path}
-                        href={item.path}
-                        onClick={() => setIsMobileMenuOpen(false)}
-                        className={`${isActive(item.path)
-                          ? 'bg-blue-700 text-white'
-                          : 'text-blue-100 hover:bg-blue-700 hover:text-white'
-                          } group flex items-center px-3 py-2 rounded-md text-sm font-medium transition-custom`}
-                      >
-                        <item.icon className="w-4 h-4 mr-2" />
-                        {item.name}
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              ))}
-
-              {/* Mobile User Menu */}
-              <div className="border-t border-blue-700 pt-2 mt-2">
-                <div className="px-3 py-2 text-sm text-blue-100">
-                  {userName}
-                </div>
-                <button
-                  onClick={() => {
-                    setShowChangePassword(true);
-                    setIsMobileMenuOpen(false);
-                  }}
-                  className="w-full text-left flex items-center text-blue-100 hover:bg-blue-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition-custom"
-                >
-                  <Lock className="w-4 h-4 mr-2" />
-                  Zmień hasło
-                </button>
-                <button
-                  onClick={() => {
-                    handleLogout();
-                    setIsMobileMenuOpen(false);
-                  }}
-                  className="w-full text-left flex items-center text-red-300 hover:bg-red-600 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition-custom"
-                >
-                  <LogOut className="w-4 h-4 mr-2" />
-                  Wyloguj się
-                </button>
+      {/* LEWY BOCZNY PANEL NAWIGACJI (DESKTOP SIDEBAR) */}
+      <aside
+        className={cn(
+          "fixed top-16 left-0 bottom-0 z-30 bg-white/95 backdrop-blur-md border-r border-slate-200/90 shadow-xs hidden lg:flex flex-col justify-between transition-all duration-300 ease-in-out",
+          isCollapsed ? "w-20" : "w-72"
+        )}
+      >
+        {/* Karta użytkownika na samej górze panelu (gdy rozwinięty) */}
+        {!isCollapsed && (
+          <div className="p-3.5 border-b border-slate-100 bg-gradient-to-r from-blue-50/50 to-indigo-50/40">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-700 text-white font-extrabold flex items-center justify-center text-xs shadow-sm shrink-0">
+                {getAvatarInitials(userName)}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-bold text-slate-900 truncate">{userName}</div>
+                <div className="text-[11px] text-slate-500 truncate">{userEmail}</div>
               </div>
             </div>
           </div>
         )}
-      </div>
+
+        {/* Scrollowalna lista zakładek podzielona na zwijane kategorie */}
+        <nav className="flex-1 overflow-y-auto p-3 space-y-2.5">
+          {menuSections.map(section => renderNavSection(section, isCollapsed))}
+        </nav>
+
+        {/* Stopka bocznego paska: Przycisk Zwiń/Rozwiń + Wyloguj */}
+        <div className="p-3 border-t border-slate-200/80 bg-white/50 space-y-1.5">
+          <button
+            type="button"
+            onClick={toggleCollapse}
+            title={isCollapsed ? "Rozwiń panel boczny" : "Zwiń panel boczny"}
+            className={cn(
+              "w-full flex items-center rounded-xl border border-slate-200 text-slate-600 hover:text-blue-700 hover:bg-blue-50/60 hover:border-blue-200 transition-all cursor-pointer font-bold text-xs",
+              isCollapsed ? "justify-center p-2.5" : "p-2.5 space-x-2.5"
+            )}
+          >
+            <div className="shrink-0 text-blue-600">
+              {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+            </div>
+            {!isCollapsed && <span>Zwiń panel</span>}
+          </button>
+
+          <button
+            type="button"
+            onClick={handleLogout}
+            title="Wyloguj z systemu"
+            className={cn(
+              "w-full flex items-center rounded-xl text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition-all cursor-pointer font-bold text-xs",
+              isCollapsed ? "justify-center p-2.5" : "p-2.5 space-x-2.5"
+            )}
+          >
+            <LogOut className="w-4 h-4 shrink-0 text-rose-500" />
+            {!isCollapsed && <span>Wyloguj się</span>}
+          </button>
+        </div>
+      </aside>
+
+      {/* MOBILNY DRAWER (DLA EKRANÓW < LG) */}
+      {isMobileOpen && (
+        <div className="lg:hidden fixed inset-0 z-50 flex">
+          {/* Tło przyciemniające */}
+          <div
+            className="fixed inset-0 bg-black/50 backdrop-blur-xs transition-opacity"
+            onClick={() => setIsMobileOpen(false)}
+          />
+
+          {/* Panel szuflady */}
+          <div className="relative w-72 max-w-[80vw] bg-white h-full shadow-2xl flex flex-col justify-between z-50">
+            <div className="p-4 border-b border-slate-200 flex items-center justify-between">
+              <div className="flex items-center space-x-2.5">
+                <img
+                  src="/logo.png"
+                  alt="Grupa Eltron"
+                  className="h-8 w-auto object-contain shrink-0"
+                  onError={(e) => {
+                    e.currentTarget.onerror = null;
+                    e.currentTarget.src = '/logo40.png';
+                  }}
+                />
+                <div className="border-l border-slate-200 pl-2.5">
+                  <h3 className="font-extrabold text-xs text-slate-900 leading-tight">Grupa Eltron</h3>
+                  <p className="text-[10px] text-blue-600 font-bold uppercase leading-tight">Transport</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsMobileOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <nav className="flex-1 overflow-y-auto p-4 space-y-2.5">
+              {menuSections.map(section => renderNavSection(section, false))}
+            </nav>
+
+            <div className="p-4 border-t border-slate-200 space-y-2">
+              <div className="flex items-center space-x-2.5 mb-2">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-700 text-white font-bold flex items-center justify-center text-xs">
+                  {getAvatarInitials(userName)}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-bold text-slate-900 truncate">{userName}</div>
+                  <div className="mt-0.5">{getRoleBadge(userRole)}</div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMobileOpen(false);
+                  setShowChangePassword(true);
+                }}
+                className="w-full p-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-100 text-xs font-bold flex items-center space-x-2"
+              >
+                <Lock className="w-4 h-4 text-slate-500" />
+                <span>Zmień hasło</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="w-full p-2.5 rounded-xl text-rose-600 hover:bg-rose-50 text-xs font-bold flex items-center space-x-2"
+              >
+                <LogOut className="w-4 h-4 text-rose-500" />
+                <span>Wyloguj się</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* GŁÓWNA ZAWARTOŚĆ STRONY (MAIN WORKSPACE) */}
+      <main
+        className={cn(
+          "flex-1 min-w-0 transition-all duration-300 ease-in-out pt-16 flex flex-col min-h-screen",
+          isLoggedIn && !isPublicPath ? (isCollapsed ? "lg:pl-20" : "lg:pl-72") : "pl-0"
+        )}
+      >
+        <div className="flex-1 w-full min-w-0 p-4 sm:p-6 lg:p-8">
+          {children}
+        </div>
+
+        {/* Nowoczesna, czysta stopka */}
+        <footer className="py-4 px-6 border-t border-slate-200/70 bg-white/60 text-center text-xs text-slate-500 font-medium">
+          <p>&copy; 2025 Grupa Eltron &bull; System Zarządzania Transportem. Wszelkie prawa zastrzeżone.</p>
+        </footer>
+      </main>
 
       {/* Modal zmiany hasła */}
       {showChangePassword && (
         <ChangePassword onClose={() => setShowChangePassword(false)} />
       )}
-    </nav>
+    </div>
   );
 }

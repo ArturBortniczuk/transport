@@ -3,12 +3,30 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: white;
-  --text: #1a1a1a;
+@layer base {
+  html {
+    @apply bg-slate-50 text-slate-900;
+  }
+  body {
+    @apply bg-slate-50 text-slate-900 antialiased min-h-screen overflow-x-hidden;
+  }
 }
 
-body {
-  background-color: var(--background);
-  color: var(--text);
+/* Custom scrollbars for clean modern UI */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.4);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.6);
 }

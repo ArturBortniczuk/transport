@@ -282,14 +282,14 @@ export default function AwizacjeKabliPage() {
 
   if (!canView) {
     return (
-      <div className="max-w-7xl mx-auto p-12 text-center text-red-600 bg-white rounded-xl shadow-lg">
+      <div className="w-full p-12 text-center text-red-600 bg-white rounded-xl shadow-lg">
         Brak uprawnień do przeglądania awizacji kabli
       </div>
     );
   }
 
   return (
-    <div className="max-w-7xl mx-auto p-6">
+    <div className="w-full">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-900">Awizacje Kabli</h1>
         {canManage && (

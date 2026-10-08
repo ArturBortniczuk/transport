@@ -318,7 +318,7 @@ export default function MapaPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto">
+    <div className="w-full">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">Mapa Transportów</h1>
       </div>
