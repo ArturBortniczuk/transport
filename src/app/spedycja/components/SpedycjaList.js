@@ -1342,7 +1342,7 @@ export default function SpedycjaList({
       {/* MODAL: Pytanie czy transport jest w trakcie realizacji przy pobieraniu CMR */}
       {cmrModalState.isOpen && cmrModalState.zamowienie && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-xs animate-fade-in">
-          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full overflow-hidden border border-gray-100">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden border border-gray-100">
             {/* Nagłówek modalu */}
             <div className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white p-5 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
@@ -1357,7 +1357,7 @@ export default function SpedycjaList({
               <button
                 type="button"
                 onClick={() => setCmrModalState({ isOpen: false, zamowienie: null, isSubmitting: false })}
-                className="text-white/80 hover:text-white p-1 rounded-md hover:bg-white/10 transition-colors"
+                className="text-white/80 hover:text-white p-1.5 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
                 disabled={cmrModalState.isSubmitting}
               >
                 <X size={20} />
@@ -1366,43 +1366,35 @@ export default function SpedycjaList({
 
             {/* Treść modalu */}
             <div className="p-6">
-              <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-4">
-                <div className="flex items-start gap-3">
-                  <div className="p-2 bg-purple-100 rounded-full text-purple-700 mt-0.5">
-                    <Truck size={20} />
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-purple-950 text-base">
-                      Czy transport jest w trakcie realizacji?
-                    </h4>
-                    <p className="text-sm text-purple-800 mt-1">
-                      Kierowca z reguły odbiera CMR w momencie podstawienia pojazdu na załadunek.
-                      Jeśli samochód przyjechał po towar, możesz nadać zleceniu status: <strong className="text-purple-950 bg-purple-200/70 px-1.5 py-0.5 rounded">W trakcie transportu</strong>.
-                    </p>
-                  </div>
+              <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 mb-4 flex items-center gap-3.5">
+                <div className="p-2.5 bg-purple-100 rounded-xl text-purple-700 shrink-0">
+                  <Truck size={22} />
                 </div>
+                <h4 className="font-bold text-purple-950 text-base sm:text-lg">
+                  Czy transport jest w trakcie realizacji?
+                </h4>
               </div>
 
               {/* Informacje o zleceniu */}
-              <div className="bg-gray-50 rounded-lg p-3.5 text-xs text-gray-700 space-y-1.5 mb-5 border border-gray-200">
-                <div className="flex justify-between">
+              <div className="bg-gray-50 rounded-xl p-4 text-xs sm:text-sm text-gray-700 space-y-2 mb-5 border border-gray-200">
+                <div className="flex justify-between items-center">
                   <span className="text-gray-500">Trasa:</span>
                   <span className="font-semibold text-gray-900">{getLoadingCity(cmrModalState.zamowienie)} → {getDeliveryCity(cmrModalState.zamowienie)}</span>
                 </div>
                 {cmrModalState.zamowienie.response?.driverName && (
-                  <div className="flex justify-between">
+                  <div className="flex justify-between items-center">
                     <span className="text-gray-500">Kierowca:</span>
                     <span className="font-semibold text-gray-900">{cmrModalState.zamowienie.response.driverName} {cmrModalState.zamowienie.response.driverSurname}</span>
                   </div>
                 )}
                 {cmrModalState.zamowienie.response?.vehicleNumber && (
-                  <div className="flex justify-between">
+                  <div className="flex justify-between items-center">
                     <span className="text-gray-500">Pojazd:</span>
                     <span className="font-semibold text-gray-900">{cmrModalState.zamowienie.response.vehicleNumber}</span>
                   </div>
                 )}
                 {cmrModalState.zamowienie.response?.connectedTransports?.length > 0 && (
-                  <div className="pt-1.5 border-t border-gray-200 text-indigo-700 font-medium">
+                  <div className="pt-2 border-t border-gray-200 text-indigo-700 font-medium text-xs">
                     ℹ️ Zlecenie połączone z {cmrModalState.zamowienie.response.connectedTransports.length} innymi transportami (status zostanie zmieniony dla całej trasy).
                   </div>
                 )}
@@ -1414,7 +1406,7 @@ export default function SpedycjaList({
                   type="button"
                   onClick={() => handleConfirmCmr(true)}
                   disabled={cmrModalState.isSubmitting}
-                  className="w-full py-3 px-4 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold flex items-center justify-center gap-2 shadow-sm transition-colors disabled:opacity-50"
+                  className="w-full py-3 px-4 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-sm transition-colors disabled:opacity-50 cursor-pointer text-sm sm:text-base whitespace-nowrap"
                 >
                   <Truck size={18} />
                   {cmrModalState.isSubmitting ? 'Zapisywanie...' : 'Tak, transport w trakcie realizacji (Ustaw status "W trakcie transportu")'}
@@ -1424,7 +1416,7 @@ export default function SpedycjaList({
                   type="button"
                   onClick={() => handleConfirmCmr(false)}
                   disabled={cmrModalState.isSubmitting}
-                  className="w-full py-2.5 px-4 bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 rounded-lg font-medium flex items-center justify-center gap-2 transition-colors disabled:opacity-50 text-sm"
+                  className="w-full py-2.5 px-4 bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 rounded-xl font-medium flex items-center justify-center gap-2 transition-colors disabled:opacity-50 text-sm cursor-pointer"
                 >
                   <FileText size={16} />
                   Tylko pobierz CMR (bez zmiany statusu)
@@ -1434,7 +1426,7 @@ export default function SpedycjaList({
                   type="button"
                   onClick={() => setCmrModalState({ isOpen: false, zamowienie: null, isSubmitting: false })}
                   disabled={cmrModalState.isSubmitting}
-                  className="w-full py-2 px-4 text-gray-500 hover:text-gray-800 text-xs font-medium text-center transition-colors"
+                  className="w-full py-2 px-4 text-gray-500 hover:text-gray-800 text-xs font-semibold text-center transition-colors cursor-pointer"
                 >
                   Anuluj
                 </button>
