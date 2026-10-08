@@ -309,6 +309,11 @@ export default function SpedycjaPage() {
     }
   };
 
+  const handleStatusChange = (message, type = 'success') => {
+    fetchSpedycje();
+    showOperationMessage(message, type);
+  };
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -395,6 +400,7 @@ export default function SpedycjaPage() {
               canCMR={canCMR}
               onEdit={handleEdit}
               currentUserEmail={currentUserEmail}
+              onStatusChange={handleStatusChange}
             />
           ) : (
             <div className="p-12 text-center text-gray-500">

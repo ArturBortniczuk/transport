@@ -1,7 +1,7 @@
 // src/app/spedycja/components/SpedycjaForm.js
 'use client'
 import { useState, useEffect, useRef } from 'react'
-import { Calendar, Search, X, Info, Truck, PlusCircle, Route } from 'lucide-react'
+import { Calendar, Search, X, Info, Truck, PlusCircle, Route, Clock } from 'lucide-react'
 import { buildRoutePoints, calculateRouteDistance as calculateMultiPointRouteDistance } from '@/app/services/calculateRoute'
 
 export default function SpedycjaForm({ onSubmit, onCancel, initialData, isResponse, isEditing }) {
@@ -41,6 +41,11 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
   const [originalDeliveryDate, setOriginalDeliveryDate] = useState('')
   const [newDeliveryDate, setNewDeliveryDate] = useState('')
   const [changeDeliveryDate, setChangeDeliveryDate] = useState(false)
+
+  // Nowe stany dla dat i godzin załadunku / rozładunku
+  const [loadingDate, setLoadingDate] = useState('')
+  const [unloadingDate, setUnloadingDate] = useState('')
+  const [additionalDates, setAdditionalDates] = useState([])
 
   // Nowe stany dla opisu towaru
   const [showGoodsDescription, setShowGoodsDescription] = useState(false)
@@ -512,6 +517,27 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
           setOriginalDeliveryDate(initialData.deliveryDate);
           setNewDeliveryDate(initialData.deliveryDate);
         }
+
+        // Inicjalizacja daty i godziny załadunku
+        if (initialData.response?.loadingDate) {
+          const ld = String(initialData.response.loadingDate);
+          setLoadingDate(ld.includes('T') ? ld.slice(0, 16) : `${ld}T08:00`);
+        } else {
+          setLoadingDate('');
+        }
+
+        // Inicjalizacja daty i godziny rozładunku
+        if (initialData.response?.unloadingDate) {
+          const ud = String(initialData.response.unloadingDate);
+          setUnloadingDate(ud.includes('T') ? ud.slice(0, 16) : `${ud}T08:00`);
+        } else if (initialData.deliveryDate) {
+          const dStr = String(initialData.deliveryDate).split('T')[0];
+          setUnloadingDate(`${dStr}T08:00`);
+        }
+
+        if (initialData.response?.additionalDates && Array.isArray(initialData.response.additionalDates)) {
+          setAdditionalDates(initialData.response.additionalDates);
+        }
       } else if (isEditing) {
         // Dla trybu edycji
         if (initialData.responsibleEmail) {
@@ -752,6 +778,39 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
     updateRouteStops(nextList);
   };
 
+  // Obsługa dodatkowych terminów załadunku/rozładunku
+  const handleAddAdditionalDate = () => {
+    setAdditionalDates(prev => [
+      ...prev,
+      {
+        id: `date-${Date.now()}`,
+        type: 'załadunek',
+        label: '',
+        dateTime: ''
+      }
+    ]);
+  };
+
+  const handleRemoveAdditionalDate = (index) => {
+    setAdditionalDates(prev => prev.filter((_, idx) => idx !== index));
+  };
+
+  const handleAdditionalDateChange = (index, field, value) => {
+    setAdditionalDates(prev => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      return updated;
+    });
+  };
+
+  const handleStopDateTimeChange = (index, dateTime) => {
+    setRouteStops(prev => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], dateTime };
+      return updated;
+    });
+  };
+
   // Filter users and constructions based on search term
   const filteredItems = [...users, ...constructions].filter(item =>
     item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -821,6 +880,9 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
         totalDeliveryPrice: totalDeliveryPrice, // Całkowita cena trasy
         distanceKm: Number(effectiveDistance),
         pricePerKm: Number(pricePerKm),
+        loadingDate: loadingDate, // Planowana data i godzina załadunku
+        unloadingDate: unloadingDate, // Planowana data i godzina rozładunku
+        additionalDates: additionalDates, // Dodatkowe terminy dla różnych dni
         adminNotes: formData.get('adminNotes')
       };
 
@@ -1028,12 +1090,111 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
             )}
           </div>
 
+          {/* Sekcja terminów załadunku i rozładunku */}
+          <div className="bg-amber-50/70 p-4 rounded-lg border border-amber-200 mb-6">
+            <h3 className="text-sm font-bold text-amber-950 mb-3 flex items-center">
+              <Clock size={18} className="mr-2 text-amber-700" />
+              Harmonogram terminu transportu (dla magazynu i zlecenia)
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-800 mb-1">
+                  Data i godzina załadunku <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="datetime-local"
+                  name="loadingDate"
+                  value={loadingDate}
+                  onChange={(e) => setLoadingDate(e.target.value)}
+                  className="w-full p-2 border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-amber-500"
+                  required
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Widoczne dla magazynu w informacjach o transporcie
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-800 mb-1">
+                  Data i godzina rozładunku <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="datetime-local"
+                  name="unloadingDate"
+                  value={unloadingDate}
+                  onChange={(e) => setUnloadingDate(e.target.value)}
+                  className="w-full p-2 border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-amber-500"
+                  required
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Planowany czas dostawy towaru do odbiorcy
+                </p>
+              </div>
+            </div>
+
+            {/* Opcja dodania dodatkowych terminów załadunków/rozładunków */}
+            <div className="mt-4 pt-3 border-t border-amber-200/60">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-xs font-semibold text-amber-900">
+                  Dodatkowe godziny / daty (jeśli załadunki lub rozładunki odbywają się w różne dni):
+                </span>
+                <button
+                  type="button"
+                  onClick={handleAddAdditionalDate}
+                  className="text-xs font-semibold text-amber-800 hover:text-amber-950 bg-amber-100 hover:bg-amber-200 px-2.5 py-1 rounded flex items-center gap-1 transition-colors"
+                >
+                  <PlusCircle size={14} /> Dodaj kolejny termin
+                </button>
+              </div>
+
+              {additionalDates.length > 0 && (
+                <div className="space-y-2 mt-2">
+                  {additionalDates.map((item, idx) => (
+                    <div key={item.id || idx} className="flex items-center gap-2 bg-white p-2.5 rounded-md border border-amber-200">
+                      <select
+                        value={item.type}
+                        onChange={(e) => handleAdditionalDateChange(idx, 'type', e.target.value)}
+                        className="p-1.5 text-xs border rounded-md bg-gray-50 font-semibold"
+                      >
+                        <option value="załadunek">Załadunek</option>
+                        <option value="rozładunek">Rozładunek</option>
+                      </select>
+                      <input
+                        type="text"
+                        placeholder="Opis punktu / miejsca (np. Magazyn Zielonka, Klient B)"
+                        value={item.label || ''}
+                        onChange={(e) => handleAdditionalDateChange(idx, 'label', e.target.value)}
+                        className="flex-1 p-1.5 text-xs border rounded-md"
+                      />
+                      <input
+                        type="datetime-local"
+                        value={item.dateTime || ''}
+                        onChange={(e) => handleAdditionalDateChange(idx, 'dateTime', e.target.value)}
+                        className="p-1.5 text-xs border rounded-md"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveAdditionalDate(idx)}
+                        className="text-red-500 hover:text-red-700 p-1 text-xs"
+                        title="Usuń termin"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-1">Imię kierowcy</label>
               <input
                 name="driverName"
                 type="text"
+                defaultValue={initialData?.response?.driverName || ''}
                 className="w-full p-2 border rounded-md"
                 required
               />
@@ -1043,6 +1204,7 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
               <input
                 name="driverSurname"
                 type="text"
+                defaultValue={initialData?.response?.driverSurname || ''}
                 className="w-full p-2 border rounded-md"
                 required
               />
@@ -1055,6 +1217,7 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
               <input
                 name="driverPhone"
                 type="tel"
+                defaultValue={initialData?.response?.driverPhone || ''}
                 className="w-full p-2 border rounded-md"
                 required
               />
@@ -1064,6 +1227,7 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
               <input
                 name="vehicleNumber"
                 type="text"
+                defaultValue={initialData?.response?.vehicleNumber || ''}
                 className="w-full p-2 border rounded-md"
                 required
               />
@@ -1338,6 +1502,20 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
                                       {addressStr || 'Brak danych adresowych'}
                                       {stop.contact ? ` • tel: ${stop.contact}` : ''}
                                     </div>
+                                    <div className="mt-2 pt-1.5 border-t border-gray-200/60 flex items-center gap-2 flex-wrap">
+                                      <span className="text-xs font-semibold text-gray-700">Termin punktu (data i godzina):</span>
+                                      <input
+                                        type="datetime-local"
+                                        value={stop.dateTime || ''}
+                                        onChange={(e) => handleStopDateTimeChange(idx, e.target.value)}
+                                        className="text-xs p-1 border border-gray-300 rounded bg-white text-gray-800 focus:ring-1 focus:ring-indigo-500"
+                                      />
+                                      {!stop.dateTime && (
+                                        <span className="text-[11px] text-gray-400 italic">
+                                          (domyślnie: {isLoad ? 'z głównej daty załadunku' : 'z głównej daty rozładunku'})
+                                        </span>
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
 
@@ -1420,6 +1598,7 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
             <label className="block text-sm font-medium mb-1">Uwagi do transportu</label>
             <textarea
               name="adminNotes"
+              defaultValue={initialData?.response?.adminNotes || ''}
               className="w-full p-2 border rounded-md"
               rows={3}
             />

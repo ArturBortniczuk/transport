@@ -2,13 +2,29 @@
 'use client'
 import { useState, useEffect } from 'react'
 
+const formatInitialDateTime = (val, fallbackDate = null) => {
+  if (val) {
+    const s = String(val);
+    if (s.includes('T')) return s.slice(0, 16);
+    return `${s}T08:00`;
+  }
+  if (fallbackDate) {
+    const d = String(fallbackDate).split('T')[0];
+    return `${d}T08:00`;
+  }
+  return '';
+};
+
 export default function TransportOrderForm({ onSubmit, onCancel, zamowienie }) {
   const [formData, setFormData] = useState({
-    towar: '',
+    towar: zamowienie?.goodsDescription?.description || zamowienie?.order_data?.towar || '',
     terminPlatnosci: '14 dni',
-    waga: '',
-    dataZaladunku: '',
-    dataRozladunku: '',
+    waga: zamowienie?.goodsDescription?.weight || zamowienie?.order_data?.waga || '',
+    dataZaladunku: formatInitialDateTime(zamowienie?.response?.loadingDate || zamowienie?.response?.dataZaladunku),
+    dataRozladunku: formatInitialDateTime(
+      zamowienie?.response?.unloadingDate || zamowienie?.response?.dataRozladunku || zamowienie?.response?.newDeliveryDate,
+      zamowienie?.deliveryDate
+    ),
     emailOdbiorcy: ''
   })
 
@@ -101,6 +117,7 @@ export default function TransportOrderForm({ onSubmit, onCancel, zamowienie }) {
           producerAddress: isLoad ? rs.address : null,
           delivery: !isLoad ? rs.address : null,
           contact: rs.contact || (isLoad ? (zamowienie.loadingContact || zamowienie.loading_contact) : (zamowienie.unloadingContact || zamowienie.unloading_contact)) || '',
+          dateTime: rs.dateTime || (isLoad ? (zamowienie.response?.loadingDate || '') : (zamowienie.response?.unloadingDate || '')),
           isMain: rs.isMain !== undefined ? rs.isMain : String(rs.transportId) === String(zamowienie.id)
         };
       });
@@ -123,6 +140,7 @@ export default function TransportOrderForm({ onSubmit, onCancel, zamowienie }) {
       address: mainWh ? mainWh.full : (zamowienie.location === 'Odbiory własne' ? formatAddress(zamowienie.producerAddress) : zamowienie.location),
       producerAddress: zamowienie.producerAddress,
       contact: zamowienie.loading_contact || zamowienie.loadingContact || '',
+      dateTime: zamowienie.response?.loadingDate || '',
       isMain: true
     });
 
@@ -142,6 +160,7 @@ export default function TransportOrderForm({ onSubmit, onCancel, zamowienie }) {
             address: ctWh ? ctWh.full : (formatAddress(ct.producerAddress || ct.startAddress) || ct.location || 'Brak danych'),
             producerAddress: ct.producerAddress || ct.startAddress,
             contact: ct.loadingContact || ct.loading_contact || '',
+            dateTime: ct.loadingDate || zamowienie.response?.loadingDate || '',
             isMain: false
           });
         }
@@ -159,6 +178,7 @@ export default function TransportOrderForm({ onSubmit, onCancel, zamowienie }) {
       address: formatAddress(zamowienie.delivery),
       delivery: zamowienie.delivery,
       contact: zamowienie.unloading_contact || zamowienie.unloadingContact || '',
+      dateTime: zamowienie.response?.unloadingDate || (zamowienie.response?.newDeliveryDate ? `${zamowienie.response.newDeliveryDate}T08:00` : ''),
       isMain: true
     });
 
@@ -177,6 +197,7 @@ export default function TransportOrderForm({ onSubmit, onCancel, zamowienie }) {
             address: formatAddress(ct.delivery || ct.endAddress),
             delivery: ct.delivery || ct.endAddress,
             contact: ct.unloadingContact || ct.unloading_contact || '',
+            dateTime: ct.unloadingDate || zamowienie.response?.unloadingDate || '',
             isMain: false
           });
         }
@@ -216,6 +237,14 @@ export default function TransportOrderForm({ onSubmit, onCancel, zamowienie }) {
       ...prev,
       [name]: value
     }));
+  };
+
+  const handleStopDateTimeChange = (index, value) => {
+    setStops(prev => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], dateTime: value };
+      return updated;
+    });
   };
 
   const handleMoveStop = (index, direction) => {
@@ -457,6 +486,21 @@ export default function TransportOrderForm({ onSubmit, onCancel, zamowienie }) {
                     <div className="text-xs text-gray-600 mt-1">
                       <span className="font-semibold text-gray-700">Adres:</span> {stop.address || stop.city || 'Brak danych'}
                       {stop.contact ? ` • tel: ${stop.contact}` : ''}
+                    </div>
+
+                    <div className="mt-2 pt-2 border-t border-gray-200/70 flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-semibold text-gray-700">Data i godzina przystanku:</span>
+                      <input
+                        type="datetime-local"
+                        value={stop.dateTime || ''}
+                        onChange={(e) => handleStopDateTimeChange(index, e.target.value)}
+                        className="text-xs p-1.5 border rounded-md bg-white text-gray-800 focus:ring-1 focus:ring-blue-500"
+                      />
+                      {!stop.dateTime && (
+                        <span className="text-[11px] text-gray-400 italic">
+                          (Domyślnie: {isLoad ? (formData.dataZaladunku ? 'z głównej daty załadunku' : 'brak') : (formData.dataRozladunku ? 'z głównej daty rozładunku' : 'brak')})
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>

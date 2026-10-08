@@ -361,7 +361,8 @@ function generateTransportOrderHTML({ spedycja, producerAddress, delivery, respo
       }
 
       const contact = s.contact || (isLoad ? spedycja.loading_contact : spedycja.unloading_contact) || 'Nie podano';
-      const date = isLoad ? (dataZaladunku ? formatDate(dataZaladunku) : 'Zgodnie z ustaleniami') : (dataRozladunku ? formatDate(dataRozladunku) : 'Zgodnie z ustaleniami');
+      const stopDate = s.dateTime || s.date;
+      const date = stopDate ? formatDate(stopDate) : (isLoad ? (dataZaladunku ? formatDate(dataZaladunku) : 'Zgodnie z ustaleniami') : (dataRozladunku ? formatDate(dataRozladunku) : 'Zgodnie z ustaleniami'));
       const stopMpk = s.mpk || (s.transportId && connectedSpedycjeMap?.get(String(s.transportId))?.mpk) || (s.isMain ? spedycja.mpk : '');
 
       return {
@@ -431,7 +432,7 @@ function generateTransportOrderHTML({ spedycja, producerAddress, delivery, respo
           city: (isLoad ? p.producerAddress?.city : p.delivery?.city) || '',
           address: addr,
           contact: (isLoad ? (p.loadingContact || p.contact) : (p.unloadingContact || p.contact)) || 'Nie podano',
-          date: isLoad ? (dataZaladunku ? formatDate(dataZaladunku) : 'Zgodnie z ustaleniami') : (dataRozladunku ? formatDate(dataRozladunku) : 'Zgodnie z ustaleniami'),
+          date: (p.dateTime || p.date) ? formatDate(p.dateTime || p.date) : (isLoad ? (dataZaladunku ? formatDate(dataZaladunku) : 'Zgodnie z ustaleniami') : (dataRozladunku ? formatDate(dataRozladunku) : 'Zgodnie z ustaleniami')),
           isMain: false
         });
       });

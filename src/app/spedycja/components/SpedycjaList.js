@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { format } from 'date-fns'
 import { pl } from 'date-fns/locale'
 import { generateCMR } from '@/lib/utils/generateCMR'
-import { Truck, Package, MapPin, Phone, FileText, Calendar, DollarSign, User, Clipboard, ArrowRight, ChevronDown, ChevronUp, AlertCircle, Edit, Pencil, Building, ShoppingBag, Weight, Bot, Link as LinkIcon } from 'lucide-react'
+import { Truck, Package, MapPin, Phone, FileText, Calendar, DollarSign, User, Clipboard, ArrowRight, ChevronDown, ChevronUp, AlertCircle, Edit, Pencil, Building, ShoppingBag, Weight, Bot, Link as LinkIcon, Clock, Check, X, Route } from 'lucide-react'
 import { buildRoutePoints, calculateRouteDistance } from '@/app/services/calculateRoute'
 
 export default function SpedycjaList({
@@ -15,10 +15,69 @@ export default function SpedycjaList({
   canSendOrder,
   canCMR,
   onEdit,
-  currentUserEmail
+  currentUserEmail,
+  onStatusChange
 }) {
   const [expandedId, setExpandedId] = useState(null)
   const [routeDistances, setRouteDistances] = useState({})
+  const [cmrModalState, setCmrModalState] = useState({
+    isOpen: false,
+    zamowienie: null,
+    isSubmitting: false
+  })
+
+  const handleCmrClick = (zamowienie) => {
+    // Jeśli transport jest już w trakcie transportu lub zakończony, od razu pobieramy CMR
+    if (zamowienie.status === 'in_transit' || zamowienie.status === 'completed') {
+      generateCMR(zamowienie);
+      return;
+    }
+
+    // Otwórz modal z zapytaniem czy transport jest w trakcie realizacji
+    setCmrModalState({
+      isOpen: true,
+      zamowienie,
+      isSubmitting: false
+    });
+  };
+
+  const handleConfirmCmr = async (setInTransit) => {
+    const z = cmrModalState.zamowienie;
+    if (!z) return;
+
+    try {
+      setCmrModalState(prev => ({ ...prev, isSubmitting: true }));
+
+      if (setInTransit) {
+        const res = await fetch('/api/spedycje/status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: z.id,
+            status: 'in_transit',
+            updateConnected: true
+          })
+        });
+
+        const data = await res.json();
+        if (!data.success) {
+          throw new Error(data.error || 'Nie udało się zaktualizować statusu');
+        }
+
+        if (onStatusChange) {
+          onStatusChange(`Status zlecenia ${z.orderNumber || z.id} został zmieniony na "W trakcie transportu"`, 'success');
+        }
+      }
+
+      // Generuj dokument CMR
+      await generateCMR(z);
+    } catch (err) {
+      console.error('Błąd podczas obsługi CMR / zmiany statusu:', err);
+      alert('Wystąpił błąd: ' + err.message);
+    } finally {
+      setCmrModalState({ isOpen: false, zamowienie: null, isSubmitting: false });
+    }
+  };
 
   const buttonClasses = {
     primary: "px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors flex items-center gap-2",
@@ -38,6 +97,17 @@ export default function SpedycjaList({
     } catch (error) {
       console.error("Błąd formatowania daty:", error, dateString);
       return 'Nieprawidłowa data';
+    }
+  }
+
+  const formatDateTime = (dateString) => {
+    if (!dateString) return 'Brak terminu';
+    try {
+      const d = new Date(dateString);
+      if (isNaN(d.getTime())) return dateString;
+      return format(d, 'dd.MM.yyyy HH:mm', { locale: pl });
+    } catch (error) {
+      return dateString;
     }
   }
 
@@ -408,6 +478,12 @@ export default function SpedycjaList({
         className: 'bg-green-100 text-green-800 border border-green-300',
         icon: <Clipboard size={16} className="mr-1" />
       };
+    } else if (zamowienie.status === 'in_transit') {
+      return {
+        label: 'W trakcie transportu',
+        className: 'bg-purple-100 text-purple-800 border border-purple-300 font-semibold',
+        icon: <Truck size={16} className="mr-1 text-purple-700" />
+      };
     } else if (zamowienie.response && Object.keys(zamowienie.response).length > 0) {
       // Wszystkie odpowiedzi teraz mają ten sam status "Odpowiedziane"
       return {
@@ -659,7 +735,7 @@ export default function SpedycjaList({
   return (
     <div className="divide-y">
       {zamowienia
-        .filter(z => showArchive ? z.status === 'completed' : (z.status === 'new' || z.status === 'responded'))
+        .filter(z => showArchive ? z.status === 'completed' : (z.status === 'new' || z.status === 'responded' || z.status === 'in_transit'))
         .map((zamowienie) => {
           const statusInfo = getStatusLabel(zamowienie);
           const dateChanged = isDeliveryDateChanged(zamowienie);
@@ -723,6 +799,22 @@ export default function SpedycjaList({
                       MPK: {getCurrentMPK(zamowienie)}
                     </p>
 
+                    {/* Skrócona informacja o terminie załadunku/rozładunku */}
+                    {zamowienie.response?.loadingDate && (
+                      <div className="flex items-center mt-1 gap-2 flex-wrap">
+                        <span className="inline-flex items-center text-xs font-medium text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                          <Clock size={12} className="mr-1 text-amber-600" />
+                          Załadunek: {formatDateTime(zamowienie.response.loadingDate)}
+                        </span>
+                        {zamowienie.response?.unloadingDate && (
+                          <span className="inline-flex items-center text-xs font-medium text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                            <Clock size={12} className="mr-1 text-emerald-600" />
+                            Rozładunek: {formatDateTime(zamowienie.response.unloadingDate)}
+                          </span>
+                        )}
+                      </div>
+                    )}
+
                     {/* Wyświetl informację o budowach */}
                     {zamowienie.responsibleConstructions && zamowienie.responsibleConstructions.length > 0 && (
                       <div className="flex items-center mt-1">
@@ -779,7 +871,7 @@ export default function SpedycjaList({
                   )}
 
                   {/* Przyciski admina - odpowiadanie i oznaczanie jako zrealizowane */}
-                  {isAdmin && (zamowienie.status === 'new' || zamowienie.status === 'responded') && (
+                  {isAdmin && (zamowienie.status === 'new' || zamowienie.status === 'responded' || zamowienie.status === 'in_transit') && (
                     <>
                       {/* Pokaż przycisk "Odpowiedz" tylko jeśli NIE MA odpowiedzi */}
                       {(!zamowienie.response || Object.keys(zamowienie.response).length === 0) && (
@@ -905,6 +997,80 @@ export default function SpedycjaList({
                         <Truck size={18} className="mr-2" />
                         Informacje o transporcie
                       </h4>
+
+                      {/* Terminy załadunku i rozładunku dla magazynu */}
+                      {zamowienie.response?.loadingDate && (
+                        <div className="text-sm mb-2.5 p-2.5 bg-amber-50/90 rounded-md border border-amber-200 shadow-2xs">
+                          <div className="flex items-center text-amber-900">
+                            <Clock size={16} className="mr-2 text-amber-700 flex-shrink-0" />
+                            <div>
+                              <span className="text-xs uppercase font-semibold text-amber-700 block">Planowany termin załadunku</span>
+                              <span className="font-bold text-base text-amber-950">
+                                {formatDateTime(zamowienie.response.loadingDate)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {zamowienie.response?.unloadingDate && (
+                        <div className="text-sm mb-2.5 p-2.5 bg-emerald-50/90 rounded-md border border-emerald-200 shadow-2xs">
+                          <div className="flex items-center text-emerald-900">
+                            <Clock size={16} className="mr-2 text-emerald-700 flex-shrink-0" />
+                            <div>
+                              <span className="text-xs uppercase font-semibold text-emerald-700 block">Planowany termin rozładunku</span>
+                              <span className="font-bold text-base text-emerald-950">
+                                {formatDateTime(zamowienie.response.unloadingDate)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Harmonogram przystanków i dodatkowe terminy */}
+                      {zamowienie.response?.routeStops && zamowienie.response.routeStops.some(s => s.dateTime) && (
+                        <div className="mb-2.5 p-2.5 bg-indigo-50/70 border border-indigo-200 rounded-md text-xs">
+                          <div className="font-bold text-indigo-900 mb-1.5 flex items-center">
+                            <Route size={14} className="mr-1.5 text-indigo-700" />
+                            Harmonogram punktów trasy:
+                          </div>
+                          <div className="space-y-1">
+                            {zamowienie.response.routeStops.map((stop, sIdx) => {
+                              const isLoad = stop.pointType === 'loading' || stop.type === 'załadunek';
+                              return (
+                                <div key={sIdx} className="flex justify-between items-center text-gray-700 py-0.5 border-b border-indigo-100 last:border-b-0">
+                                  <span>
+                                    <strong className={isLoad ? 'text-amber-800' : 'text-emerald-800'}>
+                                      {isLoad ? 'Załadunek' : 'Rozładunek'}:
+                                    </strong>{' '}
+                                    {stop.city || stop.clientName}
+                                  </span>
+                                  <span className="font-semibold text-indigo-950">
+                                    {stop.dateTime ? formatDateTime(stop.dateTime) : (isLoad ? formatDateTime(zamowienie.response.loadingDate) : formatDateTime(zamowienie.response.unloadingDate))}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {zamowienie.response?.additionalDates && zamowienie.response.additionalDates.length > 0 && (
+                        <div className="mb-2.5 p-2 bg-amber-50/60 border border-amber-200 rounded-md text-xs">
+                          <div className="font-bold text-amber-900 mb-1 flex items-center">
+                            <Calendar size={13} className="mr-1 text-amber-700" />
+                            Dodatkowe terminy:
+                          </div>
+                          <div className="space-y-1">
+                            {zamowienie.response.additionalDates.map((ad, adIdx) => (
+                              <div key={adIdx} className="flex justify-between items-center text-gray-700">
+                                <span>{ad.type === 'załadunek' ? 'Załadunek' : 'Rozładunek'} {ad.label ? `(${ad.label})` : ''}:</span>
+                                <span className="font-semibold text-amber-950">{formatDateTime(ad.dateTime)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
                       {/* Data dostawy z wyróżnieniem, jeśli zmieniona */}
                       <div className="text-sm mb-2">
@@ -1101,6 +1267,20 @@ export default function SpedycjaList({
                             </h5>
                             <p className="text-sm mb-1.5"><span className="font-medium">Data odpowiedzi:</span> {formatDate(zamowienie.completedAt || zamowienie.createdAt)}</p>
 
+                            {zamowienie.response.loadingDate && (
+                              <p className="text-sm mb-1.5 flex items-center text-amber-900 font-medium">
+                                <Clock size={13} className="mr-1 text-amber-700" />
+                                <span>Załadunek:</span> <span className="ml-1 font-bold">{formatDateTime(zamowienie.response.loadingDate)}</span>
+                              </p>
+                            )}
+
+                            {zamowienie.response.unloadingDate && (
+                              <p className="text-sm mb-1.5 flex items-center text-emerald-900 font-medium">
+                                <Clock size={13} className="mr-1 text-emerald-700" />
+                                <span>Rozładunek:</span> <span className="ml-1 font-bold">{formatDateTime(zamowienie.response.unloadingDate)}</span>
+                              </p>
+                            )}
+
                             {/* Wyświetl informację o automatycznym generowaniu */}
                             {isAutoResponse && (
                               <div className="bg-purple-50 p-2 rounded-md border border-purple-100 mt-2 mb-1.5">
@@ -1134,7 +1314,7 @@ export default function SpedycjaList({
                           <button
                             type="button"
                             className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors flex items-center gap-2"
-                            onClick={() => generateCMR(zamowienie)}
+                            onClick={() => handleCmrClick(zamowienie)}
                           >
                             <FileText size={16} />
                             Generuj CMR
@@ -1158,6 +1338,111 @@ export default function SpedycjaList({
             </div>
           );
         })}
+
+      {/* MODAL: Pytanie czy transport jest w trakcie realizacji przy pobieraniu CMR */}
+      {cmrModalState.isOpen && cmrModalState.zamowienie && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full overflow-hidden border border-gray-100">
+            {/* Nagłówek modalu */}
+            <div className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white p-5 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-white/10 rounded-lg">
+                  <FileText size={22} className="text-white" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold">Generowanie dokumentu CMR</h3>
+                  <p className="text-xs text-blue-100">Zlecenie: {cmrModalState.zamowienie.orderNumber || cmrModalState.zamowienie.id}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCmrModalState({ isOpen: false, zamowienie: null, isSubmitting: false })}
+                className="text-white/80 hover:text-white p-1 rounded-md hover:bg-white/10 transition-colors"
+                disabled={cmrModalState.isSubmitting}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Treść modalu */}
+            <div className="p-6">
+              <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-4">
+                <div className="flex items-start gap-3">
+                  <div className="p-2 bg-purple-100 rounded-full text-purple-700 mt-0.5">
+                    <Truck size={20} />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-purple-950 text-base">
+                      Czy transport jest w trakcie realizacji?
+                    </h4>
+                    <p className="text-sm text-purple-800 mt-1">
+                      Kierowca z reguły odbiera CMR w momencie podstawienia pojazdu na załadunek.
+                      Jeśli samochód przyjechał po towar, możesz nadać zleceniu status: <strong className="text-purple-950 bg-purple-200/70 px-1.5 py-0.5 rounded">W trakcie transportu</strong>.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Informacje o zleceniu */}
+              <div className="bg-gray-50 rounded-lg p-3.5 text-xs text-gray-700 space-y-1.5 mb-5 border border-gray-200">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Trasa:</span>
+                  <span className="font-semibold text-gray-900">{getLoadingCity(cmrModalState.zamowienie)} → {getDeliveryCity(cmrModalState.zamowienie)}</span>
+                </div>
+                {cmrModalState.zamowienie.response?.driverName && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Kierowca:</span>
+                    <span className="font-semibold text-gray-900">{cmrModalState.zamowienie.response.driverName} {cmrModalState.zamowienie.response.driverSurname}</span>
+                  </div>
+                )}
+                {cmrModalState.zamowienie.response?.vehicleNumber && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Pojazd:</span>
+                    <span className="font-semibold text-gray-900">{cmrModalState.zamowienie.response.vehicleNumber}</span>
+                  </div>
+                )}
+                {cmrModalState.zamowienie.response?.connectedTransports?.length > 0 && (
+                  <div className="pt-1.5 border-t border-gray-200 text-indigo-700 font-medium">
+                    ℹ️ Zlecenie połączone z {cmrModalState.zamowienie.response.connectedTransports.length} innymi transportami (status zostanie zmieniony dla całej trasy).
+                  </div>
+                )}
+              </div>
+
+              {/* Przyciski akcji */}
+              <div className="space-y-2.5">
+                <button
+                  type="button"
+                  onClick={() => handleConfirmCmr(true)}
+                  disabled={cmrModalState.isSubmitting}
+                  className="w-full py-3 px-4 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold flex items-center justify-center gap-2 shadow-sm transition-colors disabled:opacity-50"
+                >
+                  <Truck size={18} />
+                  {cmrModalState.isSubmitting ? 'Zapisywanie...' : 'Tak, transport w trakcie realizacji (Ustaw status "W trakcie transportu")'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleConfirmCmr(false)}
+                  disabled={cmrModalState.isSubmitting}
+                  className="w-full py-2.5 px-4 bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 rounded-lg font-medium flex items-center justify-center gap-2 transition-colors disabled:opacity-50 text-sm"
+                >
+                  <FileText size={16} />
+                  Tylko pobierz CMR (bez zmiany statusu)
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setCmrModalState({ isOpen: false, zamowienie: null, isSubmitting: false })}
+                  disabled={cmrModalState.isSubmitting}
+                  className="w-full py-2 px-4 text-gray-500 hover:text-gray-800 text-xs font-medium text-center transition-colors"
+                >
+                  Anuluj
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

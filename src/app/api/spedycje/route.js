@@ -184,6 +184,12 @@ const sendResponseNotification = async (spedycjaData, responseData) => {
                 ${responseData.pricePerKm ? `
                   <div><strong>Cena za km:</strong> ${responseData.pricePerKm} PLN/km</div>
                 ` : ''}
+                ${responseData.loadingDate ? `
+                  <div><strong>Planowany załadunek:</strong> ${new Date(responseData.loadingDate).toLocaleString('pl-PL', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</div>
+                ` : ''}
+                ${responseData.unloadingDate ? `
+                  <div><strong>Planowany rozładunek:</strong> ${new Date(responseData.unloadingDate).toLocaleString('pl-PL', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</div>
+                ` : ''}
                 ${responseData.adminNotes ? `
                   <div style="margin-top: 10px;"><strong>Uwagi:</strong> ${responseData.adminNotes}</div>
                 ` : ''}
@@ -304,8 +310,8 @@ export async function GET(request) {
     let query = db('spedycje');
 
     if (status === 'new') {
-      // Aktywne zlecenia spedycji: nowe oraz te, na które już udzielono odpowiedzi (ale nie zakończone)
-      query = query.whereIn('status', ['new', 'responded']);
+      // Aktywne zlecenia spedycji: nowe, odpowiedziane oraz w trakcie transportu (ale nie zakończone)
+      query = query.whereIn('status', ['new', 'responded', 'in_transit']);
     } else if (status) {
       query = query.where('status', status);
     }
@@ -602,6 +608,33 @@ const createResponsesForConnectedTransports = async (connectedTransports, mainRe
         connectedFrom: `Transport ID: ${mainResponseData.sourceTransportId || 'Główny'}`
       };
 
+      // Wyszukaj dedykowane daty załadunku/rozładunku w routeStops dla tego transportu
+      let ctLoadingDate = mainResponseData.loadingDate || null;
+      let ctUnloadingDate = mainResponseData.unloadingDate || null;
+
+      if (mainResponseData.routeStops && Array.isArray(mainResponseData.routeStops)) {
+        const ctLoadStop = mainResponseData.routeStops.find(s =>
+          String(s.transportId) === String(connectedTransport.id) &&
+          (s.pointType === 'loading' || s.type === 'załadunek')
+        );
+        if (ctLoadStop?.dateTime) {
+          ctLoadingDate = ctLoadStop.dateTime;
+        }
+
+        const ctUnloadStop = mainResponseData.routeStops.find(s =>
+          String(s.transportId) === String(connectedTransport.id) &&
+          (s.pointType === 'unloading' || s.type === 'rozładunek')
+        );
+        if (ctUnloadStop?.dateTime) {
+          ctUnloadingDate = ctUnloadStop.dateTime;
+        }
+      }
+
+      connectedResponseData.loadingDate = ctLoadingDate;
+      connectedResponseData.unloadingDate = ctUnloadingDate;
+      connectedResponseData.additionalDates = mainResponseData.additionalDates || [];
+      connectedResponseData.routeStops = mainResponseData.routeStops || [];
+
       if (mainResponseData.dateChanged) {
         connectedResponseData.newDeliveryDate = mainResponseData.newDeliveryDate;
         connectedResponseData.originalDeliveryDate = currentTransport.delivery_date;
@@ -610,11 +643,16 @@ const createResponsesForConnectedTransports = async (connectedTransports, mainRe
 
       console.log(`Zapisuję odpowiedź dla transportu ${connectedTransport.id}:`, connectedResponseData);
 
+      const ctUpdateData = {
+        response_data: JSON.stringify(connectedResponseData)
+      };
+      if (currentTransport.status === 'new') {
+        ctUpdateData.status = 'responded';
+      }
+
       await db('spedycje')
         .where('id', connectedTransport.id)
-        .update({
-          response_data: JSON.stringify(connectedResponseData)
-        });
+        .update(ctUpdateData);
 
       console.log(`Pomyślnie utworzono odpowiedź dla transportu ${connectedTransport.id}`);
 
@@ -692,6 +730,10 @@ export async function PUT(request) {
     const updateData = {
       response_data: JSON.stringify(responseData)
     };
+
+    if (prevSpedycja.status === 'new') {
+      updateData.status = 'responded';
+    }
 
     if (data.totalDistance) {
       updateData.distance_km = data.totalDistance;
