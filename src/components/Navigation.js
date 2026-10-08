@@ -608,37 +608,6 @@ export default function Navigation({ children }) {
         <nav className="flex-1 overflow-y-auto p-3 space-y-2.5">
           {menuSections.map(section => renderNavSection(section, isCollapsed))}
         </nav>
-
-        {/* Stopka bocznego paska: Przycisk Zwiń/Rozwiń + Wyloguj */}
-        <div className="p-3 border-t border-slate-200/80 bg-white/50 space-y-1.5">
-          <button
-            type="button"
-            onClick={toggleCollapse}
-            title={isCollapsed ? "Rozwiń panel boczny" : "Zwiń panel boczny"}
-            className={cn(
-              "w-full flex items-center rounded-xl border border-slate-200 text-slate-600 hover:text-blue-700 hover:bg-blue-50/60 hover:border-blue-200 transition-all cursor-pointer font-bold text-xs",
-              isCollapsed ? "justify-center p-2.5" : "p-2.5 space-x-2.5"
-            )}
-          >
-            <div className="shrink-0 text-blue-600">
-              {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
-            </div>
-            {!isCollapsed && <span>Zwiń panel</span>}
-          </button>
-
-          <button
-            type="button"
-            onClick={handleLogout}
-            title="Wyloguj z systemu"
-            className={cn(
-              "w-full flex items-center rounded-xl text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition-all cursor-pointer font-bold text-xs",
-              isCollapsed ? "justify-center p-2.5" : "p-2.5 space-x-2.5"
-            )}
-          >
-            <LogOut className="w-4 h-4 shrink-0 text-rose-500" />
-            {!isCollapsed && <span>Wyloguj się</span>}
-          </button>
-        </div>
       </aside>
 
       {/* MOBILNY DRAWER (DLA EKRANÓW < LG) */}
