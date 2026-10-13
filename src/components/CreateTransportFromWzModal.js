@@ -17,7 +17,7 @@ export default function CreateTransportFromWzModal({
   const isZielonka = selectedDocs.some(d => d.symbol_magazynu?.includes('WAH') || d.nazwa_magazynu?.toLowerCase().includes('zielonka'));
 
   const [formData, setFormData] = useState({
-    source_warehouse: isZielonka ? 'Zielonka' : 'Białystok',
+    source_warehouse: isZielonka ? 'zielonka' : 'bialystok',
     destination_city: firstDoc.extracted_city || '',
     postal_code: firstDoc.extracted_postal_code || '',
     street: firstDoc.extracted_street || firstDoc.adres_dostawy || '',
@@ -43,7 +43,8 @@ export default function CreateTransportFromWzModal({
         client_name: prev.client_name || firstDoc.nazwa_kontrahenta || '',
         destination_city: prev.destination_city || firstDoc.extracted_city || '',
         street: prev.street || firstDoc.extracted_street || firstDoc.adres_dostawy || '',
-        postal_code: prev.postal_code || firstDoc.extracted_postal_code || '',
+        postal_code: prev.postal_code || firstDoc.kod_pocztowy_dostawy || firstDoc.extracted_postal_code || '',
+        market: firstDoc.rynek || prev.market || 'Podlaski',
         notes: firstDoc.uwagi ? `Instrukcje z WZ:\n${firstDoc.uwagi}` : ''
       }));
     }
@@ -130,6 +131,12 @@ export default function CreateTransportFromWzModal({
                 </span>
               ))}
             </div>
+            {(firstDoc.handlowiec || firstDoc.rynek) && (
+              <div className="mt-2 pt-2 border-t border-gray-200/80 flex flex-wrap items-center justify-between text-[11px] text-gray-500">
+                {firstDoc.handlowiec && <span>Handlowiec: <b className="text-gray-800">{firstDoc.handlowiec}</b></span>}
+                {firstDoc.rynek && <span>Rynek ERP: <b className="text-blue-700">{firstDoc.rynek}</b></span>}
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -143,8 +150,8 @@ export default function CreateTransportFromWzModal({
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                 required
               >
-                <option value="Białystok">Magazyn Białystok</option>
-                <option value="Zielonka">Magazyn Zielonka</option>
+                <option value="bialystok">Magazyn Białystok</option>
+                <option value="zielonka">Magazyn Zielonka</option>
               </select>
             </div>
 

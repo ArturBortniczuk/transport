@@ -405,6 +405,10 @@ const initializeDatabase = async () => {
         table.string('extracted_postal_code');
         table.string('extracted_street');
         table.string('extracted_phone');
+        table.string('kod_pocztowy_dostawy');
+        table.string('jednostka_lokalizacji');
+        table.string('rynek');
+        table.string('handlowiec');
         table.timestamp('created_at').defaultTo(db.fn.now());
         table.timestamp('updated_at').defaultTo(db.fn.now());
       });

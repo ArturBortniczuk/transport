@@ -97,8 +97,19 @@ export default function WzDetailsModal({ wzNumber, onClose, onAssignChange }) {
                   <p className="text-sm font-bold text-gray-900">{doc.nazwa_kontrahenta || 'Brak nazwy'}</p>
                   <p className="text-xs text-gray-500">Kod klienta: {doc.kod_kontrahenta || '-'}</p>
                   {doc.nazwa_miejsca_dostawy && (
-                    <p className="text-xs text-gray-600 pt-1">
+                    <p className="text-xs text-gray-600 pt-0.5">
                       <span className="text-gray-400">Miejsce: </span>{doc.nazwa_miejsca_dostawy}
+                    </p>
+                  )}
+                  {(doc.handlowiec || doc.rynek) && (
+                    <div className="pt-2 border-t border-gray-200/60 flex flex-wrap items-center justify-between gap-1 text-xs">
+                      {doc.handlowiec && <span>Handlowiec: <b className="text-gray-900">{doc.handlowiec}</b></span>}
+                      {doc.rynek && <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded font-semibold text-[10px]">Rynek: {doc.rynek}</span>}
+                    </div>
+                  )}
+                  {doc.jednostka_lokalizacji && (
+                    <p className="text-[11px] text-gray-400">
+                      Jednostka: {doc.jednostka_lokalizacji}
                     </p>
                   )}
                 </div>
@@ -109,11 +120,10 @@ export default function WzDetailsModal({ wzNumber, onClose, onAssignChange }) {
                     <MapPin className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
                     <div>
                       <p className="text-sm font-medium text-gray-900">{doc.adres_dostawy || 'Brak bezpośredniego adresu w ERP'}</p>
-                      {doc.extracted_city && (
-                        <p className="text-xs text-gray-500">
-                          {doc.extracted_postal_code ? `${doc.extracted_postal_code} ` : ''}{doc.extracted_city}
-                        </p>
-                      )}
+                      <p className="text-xs text-gray-600 mt-0.5">
+                        {doc.kod_pocztowy_dostawy ? <b className="text-gray-900">{doc.kod_pocztowy_dostawy} </b> : (doc.extracted_postal_code ? `${doc.extracted_postal_code} ` : '')}
+                        {doc.extracted_city || ''}
+                      </p>
                       {doc.extracted_phone && (
                         <div className="flex items-center gap-1 text-xs text-blue-600 mt-1">
                           <Phone className="w-3 h-3" />

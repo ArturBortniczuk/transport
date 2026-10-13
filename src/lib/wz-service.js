@@ -111,10 +111,15 @@ export function parseWzAddress(row) {
   const uwagi = (row.UWAGI || '').trim();
   const miejsce = (row.NAZWA_MIEJSCA_DOSTAWY || '').trim();
 
-  let postalCode = '';
-  const postalMatch = (uwagi + ' ' + adres).match(/\b(\d{2}-\d{3})\b/);
-  if (postalMatch) {
-    postalCode = postalMatch[1];
+  let postalCode = (row.KOD_POCZTOWY_DOSTAWY || '').trim();
+  if (!postalCode) {
+    const postalMatch = (uwagi + ' ' + adres).match(/\b(\d{2}-\d{3})\b/);
+    if (postalMatch) {
+      postalCode = postalMatch[1];
+    }
+  } else if (/^\d{5}$/.test(postalCode)) {
+    // Format 03876 -> 03-876
+    postalCode = `${postalCode.slice(0, 2)}-${postalCode.slice(2)}`;
   }
 
   let phone = '';
@@ -229,6 +234,10 @@ export async function importWzRows(rows) {
         extracted_street: addrInfo.street,
         extracted_postal_code: addrInfo.postalCode,
         extracted_phone: addrInfo.phone,
+        kod_pocztowy_dostawy: (r.KOD_POCZTOWY_DOSTAWY || '').trim() || addrInfo.postalCode || null,
+        jednostka_lokalizacji: (r.JEDNOSTKA_LOKALIZACJI || '').trim() || null,
+        rynek: (r.RYNEK || '').trim() || null,
+        handlowiec: (r.HANDLOWIEC || '').trim() || null,
         latitude: addrInfo.latitude,
         longitude: addrInfo.longitude,
         pozycje_count: 0
@@ -289,6 +298,10 @@ export async function importWzRows(rows) {
         extracted_street: db.raw('COALESCE(EXCLUDED.extracted_street, wz_documents.extracted_street)'),
         extracted_postal_code: db.raw('COALESCE(EXCLUDED.extracted_postal_code, wz_documents.extracted_postal_code)'),
         extracted_phone: db.raw('COALESCE(EXCLUDED.extracted_phone, wz_documents.extracted_phone)'),
+        kod_pocztowy_dostawy: db.raw("COALESCE(NULLIF(EXCLUDED.kod_pocztowy_dostawy, ''), wz_documents.kod_pocztowy_dostawy)"),
+        jednostka_lokalizacji: db.raw("COALESCE(NULLIF(EXCLUDED.jednostka_lokalizacji, ''), wz_documents.jednostka_lokalizacji)"),
+        rynek: db.raw("COALESCE(NULLIF(EXCLUDED.rynek, ''), wz_documents.rynek)"),
+        handlowiec: db.raw("COALESCE(NULLIF(EXCLUDED.handlowiec, ''), wz_documents.handlowiec)"),
         latitude: db.raw('COALESCE(wz_documents.latitude, EXCLUDED.latitude)'),
         longitude: db.raw('COALESCE(wz_documents.longitude, EXCLUDED.longitude)'),
         updated_at: db.fn.now()
@@ -318,6 +331,8 @@ export async function importWzRows(rows) {
 
   // Zbieranie unikalnych magazynów i dat
   const warehouses = [...new Set(documents.map(d => `${d.symbol_magazynu} - ${d.nazwa_magazynu}`).filter(Boolean))];
+  const rynki = [...new Set(documents.map(d => d.rynek).filter(Boolean))].sort();
+  const handlowcy = [...new Set(documents.map(d => d.handlowiec).filter(Boolean))].sort();
   const dates = [...new Set(documents.map(d => d.data_wystawienia).filter(Boolean))].sort();
 
   return {
@@ -325,6 +340,8 @@ export async function importWzRows(rows) {
     totalDocuments: documents.length,
     totalItems: itemsList.length,
     warehouses,
+    rynki,
+    handlowcy,
     dateRange: {
       from: dates[0] || null,
       to: dates[dates.length - 1] || null

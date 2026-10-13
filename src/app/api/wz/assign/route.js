@@ -119,11 +119,37 @@ export async function POST(request) {
       const city = destination_city || firstDoc.extracted_city || 'Białystok';
       const postCode = postal_code || firstDoc.extracted_postal_code || '';
       const strt = street || firstDoc.extracted_street || firstDoc.adres_dostawy || '';
-      const srcWarehouse = source_warehouse || (firstDoc.symbol_magazynu?.includes('WAH') ? 'Zielonka' : 'Białystok');
+
+      // Normalizacja magazynu do standardu bazy (bialystok / zielonka)
+      const rawSrc = String(source_warehouse || (firstDoc.symbol_magazynu?.includes('WAH') ? 'zielonka' : 'bialystok')).toLowerCase();
+      const srcWarehouse = rawSrc.includes('zielon') ? 'zielonka' : 'bialystok';
 
       // Koordynaty
-      const lat = firstDoc.latitude || null;
-      const lng = firstDoc.longitude || null;
+      const lat = firstDoc.latitude ? parseFloat(firstDoc.latitude) : null;
+      const lng = firstDoc.longitude ? parseFloat(firstDoc.longitude) : null;
+
+      // Wyliczanie odległości jeśli mamy koordynaty
+      let calculatedDistance = null;
+      if (lat && lng) {
+        const whCoords = srcWarehouse === 'zielonka'
+          ? { lat: 52.3125, lng: 21.1390 }
+          : { lat: 53.1325, lng: 23.1688 };
+        const R = 6371;
+        const dLat = (lat - whCoords.lat) * Math.PI / 180;
+        const dLon = (lng - whCoords.lng) * Math.PI / 180;
+        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos(whCoords.lat * Math.PI / 180) * Math.cos(lat * Math.PI / 180) *
+          Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        calculatedDistance = Math.round(R * c * 1.25);
+      }
+
+      // Bezpieczne parsowanie daty dostawy w południe (zapobiega przesunięciu dnia przez strefy czasowe)
+      let parsedDate = new Date();
+      if (delivery_date) {
+        const dateStr = String(delivery_date).split('T')[0];
+        parsedDate = new Date(`${dateStr}T12:00:00`);
+      }
 
       const transportRecord = {
         source_warehouse: srcWarehouse,
@@ -132,15 +158,16 @@ export async function POST(request) {
         street: strt,
         latitude: lat,
         longitude: lng,
+        distance: calculatedDistance,
         driver_id: driver_id ? parseInt(driver_id, 10) : null,
         vehicle_id: vehicle_id ? parseInt(vehicle_id, 10) : null,
         status: 'active',
         wz_number: targetWzNumbers.join(', '),
         client_name: clientName,
-        market: market,
-        loading_level: loading_level,
+        market: market || 'Podlaski',
+        loading_level: loading_level || '50%',
         notes: notes ? `${notes}\n\nUwagi z WZ: ${firstDoc.uwagi || ''}` : firstDoc.uwagi || '',
-        delivery_date: delivery_date ? new Date(delivery_date) : new Date(),
+        delivery_date: parsedDate,
         requester_name: session.user.name || 'Koordynator',
         requester_email: session.user.email || '',
         mpk: mpk || session.user.mpk || '',

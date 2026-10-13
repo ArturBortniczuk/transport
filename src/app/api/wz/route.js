@@ -17,6 +17,8 @@ export async function GET(request) {
     const search = (searchParams.get('search') || '').trim();
     const warehouse = searchParams.get('warehouse') || searchParams.get('magazyn') || 'all';
     const status = searchParams.get('status') || 'all';
+    const rynek = searchParams.get('rynek') || 'all';
+    const handlowiec = searchParams.get('handlowiec') || 'all';
     const dateFrom = searchParams.get('dateFrom') || '';
     const dateTo = searchParams.get('dateTo') || '';
     const mapOnly = searchParams.get('mapOnly') === 'true';
@@ -36,6 +38,14 @@ export async function GET(request) {
 
     if (status && status !== 'all') {
       query = query.where('status', status);
+    }
+
+    if (rynek && rynek !== 'all') {
+      query = query.where('rynek', rynek);
+    }
+
+    if (handlowiec && handlowiec !== 'all') {
+      query = query.where('handlowiec', handlowiec);
     }
 
     if (dateFrom) {
@@ -58,6 +68,9 @@ export async function GET(request) {
           .orWhereILike('nazwa_kontrahenta', searchPattern)
           .orWhereILike('adres_dostawy', searchPattern)
           .orWhereILike('extracted_city', searchPattern)
+          .orWhereILike('handlowiec', searchPattern)
+          .orWhereILike('rynek', searchPattern)
+          .orWhereILike('kod_pocztowy_dostawy', searchPattern)
           .orWhereILike('uwagi', searchPattern);
       });
     }
@@ -92,6 +105,18 @@ export async function GET(request) {
       .whereNotNull('symbol_magazynu')
       .orderBy('symbol_magazynu', 'asc');
 
+    const distinctRynki = await db('wz_documents')
+      .distinct('rynek')
+      .whereNotNull('rynek')
+      .whereNot('rynek', '')
+      .orderBy('rynek', 'asc');
+
+    const distinctHandlowcy = await db('wz_documents')
+      .distinct('handlowiec')
+      .whereNotNull('handlowiec')
+      .whereNot('handlowiec', '')
+      .orderBy('handlowiec', 'asc');
+
     return NextResponse.json({
       success: true,
       documents: documents || [],
@@ -112,7 +137,9 @@ export async function GET(request) {
         symbol: w.symbol_magazynu,
         nazwa: w.nazwa_magazynu,
         label: `${w.symbol_magazynu} - ${w.nazwa_magazynu}`
-      }))
+      })),
+      rynki: distinctRynki.map(r => r.rynek).filter(Boolean),
+      handlowcy: distinctHandlowcy.map(h => h.handlowiec).filter(Boolean)
     });
   } catch (error) {
     console.error('Błąd pobierania dokumentów WZ:', error);

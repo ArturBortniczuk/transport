@@ -55,6 +55,8 @@ export default function KoordynatorPage() {
   const [documents, setDocuments] = useState([]);
   const [mapDocuments, setMapDocuments] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
+  const [rynki, setRynki] = useState([]);
+  const [handlowcy, setHandlowcy] = useState([]);
   const [stats, setStats] = useState({ total: 0, nowy: 0, przypisany: 0, zrealizowany: 0, totalBrutto: 0 });
   const [pagination, setPagination] = useState({ total: 0, page: 1, limit: 50, totalPages: 1 });
   const [loadingData, setLoadingData] = useState(false);
@@ -63,6 +65,8 @@ export default function KoordynatorPage() {
   const [search, setSearch] = useState('');
   const [selectedWarehouse, setSelectedWarehouse] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
+  const [selectedRynek, setSelectedRynek] = useState('all');
+  const [selectedHandlowiec, setSelectedHandlowiec] = useState('all');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
 
@@ -122,7 +126,9 @@ export default function KoordynatorPage() {
         limit: String(pagination.limit),
         search: search.trim(),
         warehouse: selectedWarehouse,
-        status: selectedStatus
+        status: selectedStatus,
+        rynek: selectedRynek,
+        handlowiec: selectedHandlowiec
       });
       if (dateFrom) params.append('dateFrom', dateFrom);
       if (dateTo) params.append('dateTo', dateTo);
@@ -134,9 +140,9 @@ export default function KoordynatorPage() {
         setDocuments(json.documents || []);
         setPagination(json.pagination || { total: 0, page: 1, limit: 50, totalPages: 1 });
         setStats(json.stats || { total: 0, nowy: 0, przypisany: 0, zrealizowany: 0, totalBrutto: 0 });
-        if (json.warehouses && json.warehouses.length > 0) {
-          setWarehouses(json.warehouses);
-        }
+        if (json.warehouses && json.warehouses.length > 0) setWarehouses(json.warehouses);
+        if (json.rynki && json.rynki.length > 0) setRynki(json.rynki);
+        if (json.handlowcy && json.handlowcy.length > 0) setHandlowcy(json.handlowcy);
       }
     } catch (err) {
       console.error('Błąd pobierania WZ:', err);
@@ -152,7 +158,9 @@ export default function KoordynatorPage() {
         mapOnly: 'true',
         limit: '1500',
         warehouse: selectedWarehouse,
-        status: selectedStatus
+        status: selectedStatus,
+        rynek: selectedRynek,
+        handlowiec: selectedHandlowiec
       });
       if (dateFrom) params.append('dateFrom', dateFrom);
       if (dateTo) params.append('dateTo', dateTo);
@@ -174,7 +182,7 @@ export default function KoordynatorPage() {
       fetchWzData(1);
       fetchMapData();
     }
-  }, [loadingUser, user, selectedWarehouse, selectedStatus, dateFrom, dateTo]);
+  }, [loadingUser, user, selectedWarehouse, selectedStatus, selectedRynek, selectedHandlowiec, dateFrom, dateTo]);
 
   // Szukanie z opóźnieniem
   useEffect(() => {
@@ -404,6 +412,30 @@ export default function KoordynatorPage() {
                 ))}
               </select>
 
+              {/* Rynek */}
+              <select
+                value={selectedRynek}
+                onChange={(e) => setSelectedRynek(e.target.value)}
+                className="px-3.5 py-2 border border-gray-300 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              >
+                <option value="all">Wszystkie rynki</option>
+                {rynki.map(r => (
+                  <option key={r} value={r}>Rynek: {r}</option>
+                ))}
+              </select>
+
+              {/* Handlowiec */}
+              <select
+                value={selectedHandlowiec}
+                onChange={(e) => setSelectedHandlowiec(e.target.value)}
+                className="px-3.5 py-2 border border-gray-300 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white max-w-[200px]"
+              >
+                <option value="all">Wszyscy handlowcy</option>
+                {handlowcy.map(h => (
+                  <option key={h} value={h}>{h}</option>
+                ))}
+              </select>
+
               {/* Status */}
               <select
                 value={selectedStatus}
@@ -565,14 +597,26 @@ export default function KoordynatorPage() {
                             {doc.data_wystawienia ? new Date(doc.data_wystawienia).toLocaleDateString('pl-PL') : '-'}
                           </td>
                           <td className="py-3 px-3 whitespace-nowrap">
-                            <span className="px-2 py-0.5 rounded-md font-semibold text-[11px] bg-gray-100 text-gray-800 border border-gray-200">
-                              {doc.symbol_magazynu}
-                            </span>
+                            <div className="flex items-center gap-1">
+                              <span className="px-2 py-0.5 rounded-md font-semibold text-[11px] bg-gray-100 text-gray-800 border border-gray-200">
+                                {doc.symbol_magazynu}
+                              </span>
+                              {doc.rynek && (
+                                <span className="px-1.5 py-0.5 rounded font-bold text-[10px] bg-blue-100 text-blue-800" title={`Rynek: ${doc.rynek}`}>
+                                  {doc.rynek}
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="py-3 px-3 max-w-xs">
                             <p className="font-semibold text-gray-900 truncate" title={doc.nazwa_kontrahenta}>
                               {doc.nazwa_kontrahenta}
                             </p>
+                            {doc.handlowiec && (
+                              <p className="text-[10px] text-blue-700 font-medium truncate" title={`Handlowiec: ${doc.handlowiec}`}>
+                                👤 {doc.handlowiec}
+                              </p>
+                            )}
                             {doc.nazwa_miejsca_dostawy && doc.nazwa_miejsca_dostawy !== doc.nazwa_kontrahenta && (
                               <p className="text-[11px] text-gray-500 truncate" title={doc.nazwa_miejsca_dostawy}>
                                 {doc.nazwa_miejsca_dostawy}
@@ -583,9 +627,14 @@ export default function KoordynatorPage() {
                             <div className="flex items-center gap-1 text-gray-700">
                               <MapPin className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
                               <span className="truncate" title={doc.adres_dostawy || doc.extracted_city}>
-                                {doc.adres_dostawy || (doc.extracted_city ? `${doc.extracted_postal_code || ''} ${doc.extracted_city}` : 'Odbiór własny / brak')}
+                                {doc.adres_dostawy || (doc.extracted_city ? `${doc.kod_pocztowy_dostawy || doc.extracted_postal_code || ''} ${doc.extracted_city}` : 'Odbiór własny / brak')}
                               </span>
                             </div>
+                            {doc.kod_pocztowy_dostawy && (
+                              <span className="text-[10px] text-gray-400 block pl-4 font-mono">
+                                Kod: {doc.kod_pocztowy_dostawy}
+                              </span>
+                            )}
                           </td>
                           <td className="py-3 px-3 text-center font-semibold text-gray-800">
                             {doc.pozycje_count}
