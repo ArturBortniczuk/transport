@@ -4,7 +4,8 @@ import { format } from 'date-fns'
 import { pl } from 'date-fns/locale'
 import LocationSelector from './LocationSelector'
 import ConstructionSelector from './ConstructionSelector'
-import { ChevronRight } from 'lucide-react' // Ikona dla połączonych tras
+import { ChevronRight, ExternalLink, FileText } from 'lucide-react' // Ikona dla połączonych tras
+import WzDetailsModal from '@/components/WzDetailsModal'
 import { isBlockedMpk } from '@/lib/utils'
 
 export default function TransportForm({
@@ -35,6 +36,7 @@ export default function TransportForm({
   const [connectToExistingTransport, setConnectToExistingTransport] = useState(false)
   const [selectedSourceTransport, setSelectedSourceTransport] = useState(null)
   const [defaultMagazyn, setDefaultMagazyn] = useState(null)
+  const [selectedWzToView, setSelectedWzToView] = useState(null)
 
   // NOWE STANY dla skanowania WZ
   const [wzBuffer, setWzBuffer] = useState('')
@@ -703,24 +705,47 @@ export default function TransportForm({
                   
                   {!isAddingWZ ? (
                     // Tryb normalny
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        name="numerWZ"
-                        value={nowyTransport.numerWZ}
-                        onChange={handleInputChange}
-                        onKeyDown={handleWZKeyDown} // Blokuje Enter
-                        className={inputBaseClass}
-                        placeholder="WZ/XXXXX/YY/XXX/25"
-                        required
-                      />
-                      <button
-                        type="button"
-                        onClick={startAddingWZ}
-                        className="px-3 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors text-sm whitespace-nowrap"
-                      >
-                        📱 Skanuj więcej
-                      </button>
+                    <div>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          name="numerWZ"
+                          value={nowyTransport.numerWZ}
+                          onChange={handleInputChange}
+                          onKeyDown={handleWZKeyDown} // Blokuje Enter
+                          className={inputBaseClass}
+                          placeholder="WZ/XXXXX/YY/XXX/25"
+                          required
+                        />
+                        <button
+                          type="button"
+                          onClick={startAddingWZ}
+                          className="px-3 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors text-sm whitespace-nowrap"
+                        >
+                          📱 Skanuj więcej
+                        </button>
+                      </div>
+                      {nowyTransport.numerWZ && (
+                        <div className="flex flex-wrap gap-1.5 mt-2">
+                          {nowyTransport.numerWZ.split(',').map((wz, idx) => {
+                            const cleanWz = wz.trim();
+                            if (!cleanWz) return null;
+                            return (
+                              <button
+                                key={idx}
+                                type="button"
+                                onClick={() => setSelectedWzToView(cleanWz)}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 hover:bg-blue-100 text-blue-700 hover:text-blue-900 border border-blue-200 rounded text-xs font-mono transition-colors"
+                                title={`Pokaż specyfikację towarową WZ: ${cleanWz}`}
+                              >
+                                <FileText className="w-3 h-3 text-blue-500" />
+                                <span>{cleanWz}</span>
+                                <ExternalLink className="w-2.5 h-2.5 opacity-60" />
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   ) : (
                     // Tryb skanowania
@@ -1009,6 +1034,14 @@ export default function TransportForm({
         <LocationSelector 
           onSelect={handleLocationSelect} 
           onClose={() => setShowLocationSelector(false)}
+        />
+      )}
+
+      {/* Modal podglądu specyfikacji WZ */}
+      {selectedWzToView && (
+        <WzDetailsModal
+          wzNumber={selectedWzToView}
+          onClose={() => setSelectedWzToView(null)}
         />
       )}
     </div>

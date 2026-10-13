@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { format, getDate } from 'date-fns'
 import { pl } from 'date-fns/locale'
 import { Droppable, Draggable } from '@hello-pangea/dnd'
-import { Link2, ChevronRight, CheckCircle } from 'lucide-react'
+import { Link2, ChevronRight, CheckCircle, FileText } from 'lucide-react'
 import { KIEROWCY, POJAZDY } from '../constants'
 
 export default function SimpleCalendarGrid({ 
@@ -173,27 +173,39 @@ export default function SimpleCalendarGrid({
                               ${isConnected ? 'border-l-4 border-blue-500' : ''}
                               ${isCompleted ? 'opacity-50' : ''}
                             `}>
-                              <div className="flex items-center">
+                              <div className="flex items-center truncate">
                                 {isCompleted && (
-                                  <CheckCircle className="h-3 w-3 mr-1 text-green-600" />
+                                  <CheckCircle className="h-3 w-3 mr-1 text-green-600 flex-shrink-0" />
                                 )}
                                 {isConnected && !isCompleted && (
-                                  <Link2 className="h-3 w-3 mr-1 text-blue-600" />
+                                  <Link2 className="h-3 w-3 mr-1 text-blue-600 flex-shrink-0" />
                                 )}
-                                <span>{transport.miasto}</span>
+                                <span className="truncate">{transport.miasto}</span>
                               </div>
-                              {/* Usuwamy tablice rejestracyjne z głównego widoku */}
-                              {isSource && !isCompleted && (
-                                <ChevronRight className="h-3 w-3 text-blue-600" />
-                              )}
+                              <div className="flex items-center gap-1 flex-shrink-0">
+                                {transport.numerWZ && (
+                                  <FileText className="h-3 w-3 text-blue-600" title={`WZ: ${transport.numerWZ}`} />
+                                )}
+                                {isSource && !isCompleted && (
+                                  <ChevronRight className="h-3 w-3 text-blue-600" />
+                                )}
+                              </div>
                             </div>
                             
                             {/* Tooltip (dymek) pozostaje bez zmian - z tablicami */}
                             {hoverInfo === transport.id && !snapshot.isDragging && (
-                              <div className="absolute z-10 left-0 mt-1 w-48 bg-white rounded-md shadow-lg p-3 text-xs border border-gray-200">
+                              <div className="absolute z-10 left-0 mt-1 w-52 bg-white rounded-md shadow-lg p-3 text-xs border border-gray-200">
                                 <p className="font-semibold">{transport.nazwaKlienta || 'Brak nazwy klienta'}</p>
                                 <p className="text-gray-600">{transport.osobaZlecajaca || 'Brak osoby odpowiedzialnej'}</p>
                                 {transport.mpk && <p className="text-gray-600">MPK: {transport.mpk}</p>}
+                                {transport.numerWZ && (
+                                  <div className="mt-1 pt-1 border-t border-gray-100 text-blue-700">
+                                    <p className="font-medium flex items-center gap-1">
+                                      <FileText className="h-3 w-3" />
+                                      <span className="truncate">WZ: {transport.numerWZ}</span>
+                                    </p>
+                                  </div>
+                                )}
                                 <div className="mt-1 pt-1 border-t border-gray-100">
                                   <p className="text-gray-500">{transport.ulica || ''}</p>
                                   <p className="text-gray-500">{transport.kodPocztowy} {transport.miasto}</p>

@@ -2,7 +2,8 @@ import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import { KIEROWCY, POJAZDY } from '../constants';
 import { useState, useEffect } from 'react';
-import { Link2, ArrowRight, ArrowLeft, CheckCircle, Link } from 'lucide-react';
+import { Link2, ArrowRight, ArrowLeft, CheckCircle, Link, FileText, ExternalLink } from 'lucide-react';
+import WzDetailsModal from '@/components/WzDetailsModal';
 
 export default function TransportsList({
   selectedDate,
@@ -47,6 +48,7 @@ export default function TransportsList({
   
   const [userPermissions, setUserPermissions] = useState(propUserPermissions || {});
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedWzModal, setSelectedWzModal] = useState(null);
   
   // Pobierz uprawnienia z API jeśli brak propUserPermissions
   useEffect(() => {
@@ -306,17 +308,36 @@ export default function TransportsList({
                       <p><strong>Magazyn:</strong> {transport.zrodlo}</p>
                       <p><strong>Odległość:</strong> {transport.odleglosc} km</p>
                       <p><strong>Poziom załadunku:</strong> {transport.poziomZaladunku}</p>
-                      <div className="mt-2">
-                        <strong>WZ:</strong>
-                        <div className="flex flex-wrap gap-2 mt-1">
-                          {transport.numerWZ && transport.numerWZ.split(',').map((wz, index) => (
-                            <span 
-                              key={index}
-                              className="inline-block px-2 py-1 bg-blue-100 text-blue-800 rounded border border-blue-200 text-xs font-medium"
-                            >
-                              {wz.trim()}
-                            </span>
-                          ))}
+                      <div className="mt-2.5">
+                        <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-700 mb-1">
+                          <FileText className="w-3.5 h-3.5 text-blue-600" />
+                          <span>Dokumenty WZ:</span>
+                          <span className="text-[10px] text-gray-500 font-normal">(kliknij, aby sprawdzić zawartość)</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {transport.numerWZ ? (
+                            transport.numerWZ.split(',').map((wz, index) => {
+                              const cleanWz = wz.trim();
+                              if (!cleanWz) return null;
+                              return (
+                                <button 
+                                  key={index}
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedWzModal(cleanWz);
+                                  }}
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 hover:text-blue-900 rounded-md border border-blue-200 text-xs font-mono font-medium shadow-2xs hover:shadow transition-all group cursor-pointer"
+                                  title={`Pokaż specyfikację towarową WZ: ${cleanWz}`}
+                                >
+                                  <span>{cleanWz}</span>
+                                  <ExternalLink className="w-3 h-3 text-blue-400 group-hover:text-blue-700 opacity-70 group-hover:opacity-100" />
+                                </button>
+                              );
+                            })
+                          ) : (
+                            <span className="text-xs text-gray-400 italic">Brak przypisanych WZ</span>
+                          )}
                         </div>
                       </div>
                       {transport.rynek && (
@@ -373,6 +394,14 @@ export default function TransportsList({
           })}
         </div>
       </div>
+
+      {/* Modal podglądu specyfikacji WZ */}
+      {selectedWzModal && (
+        <WzDetailsModal
+          wzNumber={selectedWzModal}
+          onClose={() => setSelectedWzModal(null)}
+        />
+      )}
     </div>
   );
 }

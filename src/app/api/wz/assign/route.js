@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import db from '@/database/db';
 import { getSessionUser } from '@/lib/auth';
+import { mapErpRynekToTransportMarket, calculateWarehouseToDestinationDistance } from '@/lib/distance-helper';
 
 export const dynamic = 'force-dynamic';
 
@@ -124,25 +125,46 @@ export async function POST(request) {
       const rawSrc = String(source_warehouse || (firstDoc.symbol_magazynu?.includes('WAH') ? 'zielonka' : 'bialystok')).toLowerCase();
       const srcWarehouse = rawSrc.includes('zielon') ? 'zielonka' : 'bialystok';
 
-      // Koordynaty
-      const lat = firstDoc.latitude ? parseFloat(firstDoc.latitude) : null;
-      const lng = firstDoc.longitude ? parseFloat(firstDoc.longitude) : null;
+      // Koordynaty i odległość
+      let finalLat = firstDoc.latitude ? parseFloat(firstDoc.latitude) : null;
+      let finalLng = firstDoc.longitude ? parseFloat(firstDoc.longitude) : null;
+      let finalDistance = (body.distance !== undefined && body.distance !== null && body.distance !== '')
+        ? parseInt(body.distance, 10)
+        : null;
 
-      // Wyliczanie odległości jeśli mamy koordynaty
-      let calculatedDistance = null;
-      if (lat && lng) {
-        const whCoords = srcWarehouse === 'zielonka'
-          ? { lat: 52.3125, lng: 21.1390 }
-          : { lat: 53.1325, lng: 23.1688 };
-        const R = 6371;
-        const dLat = (lat - whCoords.lat) * Math.PI / 180;
-        const dLon = (lng - whCoords.lng) * Math.PI / 180;
-        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-          Math.cos(whCoords.lat * Math.PI / 180) * Math.cos(lat * Math.PI / 180) *
-          Math.sin(dLon / 2) * Math.sin(dLon / 2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        calculatedDistance = Math.round(R * c * 1.25);
+      // Zawsze przeliczamy odległość jeśli brak odległości lub brak koordynatów
+      if (finalDistance === null || !finalLat || !finalLng) {
+        try {
+          const calcRes = await calculateWarehouseToDestinationDistance({
+            sourceWarehouse: srcWarehouse,
+            city,
+            postalCode: postCode,
+            street: strt,
+            lat: finalLat,
+            lng: finalLng
+          });
+          if (calcRes.distanceKm && finalDistance === null) {
+            finalDistance = calcRes.distanceKm;
+          }
+          if (calcRes.coords) {
+            finalLat = calcRes.coords.lat;
+            finalLng = calcRes.coords.lng;
+            // Aktualizacja współrzędnych w wz_documents na przyszłość
+            await db('wz_documents')
+              .whereIn('nr_wz', targetWzNumbers)
+              .whereNull('latitude')
+              .update({
+                latitude: finalLat,
+                longitude: finalLng
+              });
+          }
+        } catch (calcErr) {
+          console.warn('Nie udało się wyznaczyć odległości drogowo:', calcErr.message);
+        }
       }
+
+      // Mapowanie rynku z ERP do standardu kalendarza transportów (np. BIH -> Podlaski)
+      const targetMarket = mapErpRynekToTransportMarket(market || firstDoc.rynek, srcWarehouse);
 
       // Bezpieczne parsowanie daty dostawy w południe (zapobiega przesunięciu dnia przez strefy czasowe)
       let parsedDate = new Date();
@@ -156,15 +178,16 @@ export async function POST(request) {
         destination_city: city,
         postal_code: postCode,
         street: strt,
-        latitude: lat,
-        longitude: lng,
-        distance: calculatedDistance,
+        latitude: finalLat,
+        longitude: finalLng,
+        distance: finalDistance,
+        distance_km: finalDistance,
         driver_id: driver_id ? parseInt(driver_id, 10) : null,
         vehicle_id: vehicle_id ? parseInt(vehicle_id, 10) : null,
         status: 'active',
         wz_number: targetWzNumbers.join(', '),
         client_name: clientName,
-        market: market || 'Podlaski',
+        market: targetMarket,
         loading_level: loading_level || '50%',
         notes: notes ? `${notes}\n\nUwagi z WZ: ${firstDoc.uwagi || ''}` : firstDoc.uwagi || '',
         delivery_date: parsedDate,

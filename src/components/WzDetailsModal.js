@@ -15,7 +15,10 @@ export default function WzDetailsModal({ wzNumber, onClose, onAssignChange }) {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(`/api/wz/${encodeURIComponent(wzNumber)}`);
+        let res = await fetch(`/api/wz/details?nr=${encodeURIComponent(wzNumber)}`);
+        if (!res.ok) {
+          res = await fetch(`/api/wz/${encodeURIComponent(wzNumber)}`);
+        }
         const json = await res.json();
         if (json.success) {
           setData(json);
