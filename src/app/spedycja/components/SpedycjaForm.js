@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Calendar, Search, X, Info, Truck, PlusCircle, Route, Clock } from 'lucide-react'
 import { buildRoutePoints, calculateRouteDistance as calculateMultiPointRouteDistance } from '@/app/services/calculateRoute'
+import { isBlockedMpk } from '@/lib/utils'
 
 export default function SpedycjaForm({ onSubmit, onCancel, initialData, isResponse, isEditing }) {
   const [selectedLocation, setSelectedLocation] = useState(initialData?.location || '')
@@ -388,7 +389,7 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
 
         // Map the data to a consistent format
         const formattedUsers = data
-          .filter(user => user.role !== 'pozostale' && user.role !== 'Pozostałe')
+          .filter(user => user.role !== 'pozostale' && user.role !== 'Pozostałe' && !isBlockedMpk(user.mpk))
           .map(user => ({
           email: user.email,
           name: user.name,
@@ -922,6 +923,11 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
         return;
       }
 
+      if (selectedUser && isBlockedMpk(selectedUser.mpk)) {
+        alert('Wybrana osoba ma niedozwolony numer MPK (000-000-000). Wybierz osobę z poprawnym MPK.');
+        return;
+      }
+
       console.log('Edycja zamówienia, dane początkowe:', initialData);
 
       // Oblicz odległość, jeśli jeszcze nie obliczona
@@ -976,6 +982,11 @@ export default function SpedycjaForm({ onSubmit, onCancel, initialData, isRespon
       // Nowe zamówienie
       if (!selectedUser && selectedConstructions.length === 0) {
         alert('Wybierz osobę lub budowę odpowiedzialną za zlecenie');
+        return;
+      }
+
+      if (selectedUser && isBlockedMpk(selectedUser.mpk)) {
+        alert('Wybrana osoba ma niedozwolony numer MPK (000-000-000). Wybierz osobę z poprawnym MPK.');
         return;
       }
 

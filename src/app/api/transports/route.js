@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import db from '@/database/db';
 import { getFromCache, setInCache } from '@/utils/cache';
 import { validateSession, getSessionUser } from '@/lib/auth';
+import { isBlockedMpk } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -148,6 +149,13 @@ export async function POST(request) {
       }, { status: 400 });
     }
 
+    if (isBlockedMpk(transportData.mpk)) {
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Numer MPK 000-000-000 jest niedozwolony do utworzenia transportu' 
+      }, { status: 400 });
+    }
+
     console.log('Dane transportu do zapisania:', transportData);
     
     // W PostgreSQL używamy returning('id') aby uzyskać ID nowego rekordu
@@ -242,6 +250,13 @@ export async function PUT(request) {
     
     // Przygotowanie danych do aktualizacji
     const updateData = { ...transportData };
+
+    if ('mpk' in updateData && updateData.mpk && isBlockedMpk(updateData.mpk)) {
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Numer MPK 000-000-000 jest niedozwolony do aktualizacji transportu' 
+      }, { status: 400 });
+    }
     
     // Konwersja wartości boolean dla PostgreSQL
     if ('is_cyclical' in updateData) {

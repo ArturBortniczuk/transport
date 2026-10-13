@@ -5,6 +5,7 @@ import { pl } from 'date-fns/locale'
 import LocationSelector from './LocationSelector'
 import ConstructionSelector from './ConstructionSelector'
 import { ChevronRight } from 'lucide-react' // Ikona dla połączonych tras
+import { isBlockedMpk } from '@/lib/utils'
 
 export default function TransportForm({
   selectedDate,
@@ -151,7 +152,11 @@ export default function TransportForm({
         const response = await fetch('/api/users/list')
         if (response.ok) {
           const rawData = await response.json()
-          const data = rawData.filter(user => user.role !== 'pozostale' && user.role !== 'Pozostałe')
+          const data = rawData.filter(user => 
+            user.role !== 'pozostale' && 
+            user.role !== 'Pozostałe' &&
+            !isBlockedMpk(user.mpk)
+          )
           setUsers(data)
           setFilteredUsers(data)
         }
@@ -918,12 +923,16 @@ export default function TransportForm({
                     value={nowyTransport.mpk || ''}
                     onChange={handleInputChange}
                     placeholder="Wybierz osobę z MPK lub wpisz numer (np. 522-01-184)"
-                    className={`${inputBaseClass} ${!nowyTransport.mpk ? 'border-red-400 bg-red-50' : 'bg-gray-50'}`}
+                    className={`${inputBaseClass} ${!nowyTransport.mpk || isBlockedMpk(nowyTransport.mpk) ? 'border-red-400 bg-red-50' : 'bg-gray-50'}`}
                     required
                   />
                   {!nowyTransport.mpk ? (
                     <p className="mt-1 text-xs text-red-600 font-semibold">
                       ⚠️ Numer MPK jest wymagany do utworzenia transportu!
+                    </p>
+                  ) : isBlockedMpk(nowyTransport.mpk) ? (
+                    <p className="mt-1 text-xs text-red-600 font-semibold">
+                      ❌ Numer MPK 000-000-000 jest niedozwolony! Wybierz osobę z poprawnym MPK.
                     </p>
                   ) : (
                     <p className="mt-1 text-xs text-green-700">

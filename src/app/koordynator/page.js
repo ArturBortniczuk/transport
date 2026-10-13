@@ -1,62 +1,101 @@
-'use client'
-import { useState, useEffect } from 'react';
+// src/app/koordynator/page.js
+'use client';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import Papa from 'papaparse';
 import dynamic from 'next/dynamic';
-import { MapPin, FileSpreadsheet, Upload, Search, Filter, X, ChevronDown, ChevronUp } from 'lucide-react';
+import {
+  FileSpreadsheet,
+  MapPin,
+  Upload,
+  Search,
+  Filter,
+  X,
+  Plus,
+  Truck,
+  CheckCircle2,
+  Clock,
+  Building,
+  Calendar,
+  Layers,
+  Eye,
+  RefreshCw,
+  ArrowRight,
+  Database,
+  CheckSquare,
+  Square,
+  ChevronLeft,
+  ChevronRight
+} from 'lucide-react';
+import WzDetailsModal from '@/components/WzDetailsModal';
+import CreateTransportFromWzModal from '@/components/CreateTransportFromWzModal';
 
-const MapKoordynatorWithNoSSR = dynamic(
-  () => import('../../components/MapKoordynatorWithNoSSR'),
-  { ssr: false, loading: () => (
-    <div className="flex justify-center items-center h-full w-full bg-blue-50/50 rounded-xl">
-       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-    </div>
-  )}
+// Dynamiczny import mapy Leaflet (bez SSR)
+const WzLeafletMap = dynamic(
+  () => import('@/components/WzLeafletMap'),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex flex-col justify-center items-center h-[550px] w-full bg-blue-50/40 rounded-xl border border-blue-100">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mb-3"></div>
+        <p className="text-sm text-blue-700 font-medium">Ładowanie mapy logistycznej...</p>
+      </div>
+    )
+  }
 );
 
 export default function KoordynatorPage() {
   const router = useRouter();
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-  
-  // Stan dla pliku i danych
-  const [file, setFile] = useState(null);
-  const [parsedData, setParsedData] = useState([]);
-  const [groupedData, setGroupedData] = useState([]);
-  const [isDragging, setIsDragging] = useState(false);
-  
-  // Stan dla filtrów
-  const [filters, setFilters] = useState({
-    jednostka: [],
-    typ: [],
-    magazyn: [],
-    search: ''
-  });
-  
-  // Opcje filtrów (wypełniane dynamicznie na podstawie danych)
-  const [filterOptions, setFilterOptions] = useState({
-    jednostki: [],
-    typy: [],
-    magazyny: []
-  });
+  const [loadingUser, setLoadingUser] = useState(true);
 
-  // Autoryzacja
+  // Aktywna zakładka: 'documents' (lista WZ), 'map' (mapa logistyczna), 'import' (import ERP)
+  const [activeTab, setActiveTab] = useState('documents');
+
+  // Dane WZ z bazy
+  const [documents, setDocuments] = useState([]);
+  const [mapDocuments, setMapDocuments] = useState([]);
+  const [warehouses, setWarehouses] = useState([]);
+  const [stats, setStats] = useState({ total: 0, nowy: 0, przypisany: 0, zrealizowany: 0, totalBrutto: 0 });
+  const [pagination, setPagination] = useState({ total: 0, page: 1, limit: 50, totalPages: 1 });
+  const [loadingData, setLoadingData] = useState(false);
+
+  // Filtry
+  const [search, setSearch] = useState('');
+  const [selectedWarehouse, setSelectedWarehouse] = useState('all');
+  const [selectedStatus, setSelectedStatus] = useState('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+
+  // Zaznaczone dokumenty WZ
+  const [selectedWzNumbers, setSelectedWzNumbers] = useState([]);
+
+  // Modale
+  const [inspectWzNumber, setInspectWzNumber] = useState(null);
+  const [isCreateTransportOpen, setIsCreateTransportOpen] = useState(false);
+
+  // Stan importu CSV
+  const [isImporting, setIsImporting] = useState(false);
+  const [importMessage, setImportMessage] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
+
+  // 1. Weryfikacja użytkownika
   useEffect(() => {
     const fetchUser = async () => {
       try {
         const response = await fetch('/api/user');
         const data = await response.json();
-        
+
         if (!data.isAuthenticated) {
           router.push('/login');
           return;
         }
 
-        const role = data.user.role;
-        const isAdmin = data.user.isAdmin === true || data.user.isAdmin === 'true' || data.user.role === 'admin';
-        const permissions = data.user.permissions || {};
-        const canView = isAdmin || role === 'koordynator' || permissions.coordinator?.view === true;
-        
+        const role = (data.user?.role || '').toLowerCase();
+        const isAdmin = data.user?.isAdmin === true || role === 'admin';
+        const permissions = data.user?.permissions || {};
+        const isMagazyn = role.includes('magazyn') || role === 'koordynator';
+        const canView = isAdmin || isMagazyn || permissions.coordinator?.view !== false;
+
         if (!canView) {
           router.push('/dashboard');
           return;
@@ -67,268 +106,159 @@ export default function KoordynatorPage() {
         console.error('Błąd weryfikacji użytkownika:', error);
         router.push('/login');
       } finally {
-        setLoading(false);
+        setLoadingUser(false);
       }
     };
 
     fetchUser();
   }, [router]);
 
-  // Obsługa przeciągania pliku
-  const handleDragOver = (e) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = (e) => {
-    e.preventDefault();
-    setIsDragging(false);
-  };
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    setIsDragging(false);
-    
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const droppedFile = e.dataTransfer.files[0];
-      handleFileSelected(droppedFile);
-    }
-  };
-
-  const handleFileInput = (e) => {
-    if (e.target.files && e.target.files[0]) {
-      handleFileSelected(e.target.files[0]);
-    }
-  };
-
-  // Parsowanie CSV i wyciąganie danych
-  const handleFileSelected = (selectedFile) => {
-    if (!selectedFile.name.endsWith('.csv')) {
-      alert('Proszę załączyć plik z rozszerzeniem .csv');
-      return;
-    }
-    
-    setFile(selectedFile);
-    
-    const reader = new FileReader();
-    
-    // Używamy windows-1250, żeby polskie znaki z Excela wczytały się poprawnie jako string przed PapaParse
-    reader.readAsText(selectedFile, 'windows-1250');
-    
-    reader.onload = (e) => {
-      let csvText = e.target.result;
-      
-      // Sprawdzenie i usunięcie pierwszej linijki, jeśli to tylko tytuł dokumentu 
-      // (np. "LISTA DOKUMENTÓW MAGAZYNOWYCH WYDANIA - YMS") i nie zawiera średników
-      const lines = csvText.split(/\r?\n/);
-      if (lines.length > 0) {
-        // Jeśli pierwszy wiersz nie ma średników (naszego separatora), to jest to pewnie tytuł a nie nagłówki kolumn
-        if (!lines[0].includes(';')) {
-          csvText = lines.slice(1).join('\n');
-        } else if (lines[0].split(';').length < 3 && lines.length > 1 && lines[1].includes(';')) {
-          // Na wypadek gdyby nazwa raportu miała np. jeden średnik przypadkowo
-          csvText = lines.slice(1).join('\n');
-        }
-      }
-
-      Papa.parse(csvText, {
-        header: true,
-        skipEmptyLines: true,
-        delimiter: ";", // Wymuszamy podział po średnikach (standard z programów magazynowych PL)
-        complete: (results) => {
-          const rawData = results.data;
-          processData(rawData);
-        },
-        error: (error) => {
-          console.error("Błąd podczas parsowania pliku CSV:", error);
-          alert('Wystąpił błąd podczas odczytu pliku CSV.');
-        }
-      });
-    };
-    
-    reader.onerror = () => {
-      alert('Wystąpił błąd podczas czytania pliku.');
-    };
-  };
-
-  const extractAddress = (miejsceDostawy) => {
-    if (!miejsceDostawy) return '';
-    
-    // Szukamy tekstu wewnątrz nawiasów kwadratowych [...]
-    const match = miejsceDostawy.match(/\[(.*?)\]/);
-    if (match && match[1]) {
-      return match[1].trim();
-    }
-    
-    // Zapasowo, jeśli nie ma nawiasów, zwracamy całość lub próbujemy inaczej (zostawmy puste na razie)
-    return '';
-  };
-
-  const processData = (rawData) => {
+  // 2. Pobieranie danych dokumentów WZ z API
+  const fetchWzData = async (page = 1) => {
+    setLoadingData(true);
     try {
-      // 1. Standaryzacja i ekstrakcja danych z każdego wiersza
-      const processedRows = rawData.map(row => {
-        // Znalezienie prawidłowych kluczy ignorując wielkość znaków i białe znaki
-        // Trimujemy klucze dla pewności (czasem wpadają z cudzysłowami ew. spacjami z CSV)
-        const getColumn = (patterns) => {
-          for (const pattern of patterns) {
-            const key = Object.keys(row).find(k => 
-              k.replace(/["'\s]/g, '').toLowerCase().includes(pattern.toLowerCase())
-            );
-            if (key) {
-               // Usuwamy też ewentualne otaczające cudzysłowy ze środka samej string-wartości
-               const val = row[key];
-               return typeof val === 'string' ? val.replace(/^["']|["']$/g, '').trim() : val;
-            }
-          }
-          return '';
-        };
-
-        const kontrahent = getColumn(['kontrahent', 'klient']);
-        const jednostka = getColumn(['jednostka', 'lokalizacj']);
-        const typ = getColumn(['typ', 'dokument']);
-        const magazyn = getColumn(['magazyn', 'skład', 'sklad']);
-        const numer = getColumn(['numer', 'wz']);
-        const miejsceDostawy = getColumn(['miejsce', 'dostawy', 'adres']);
-        
-        const extractedAddress = extractAddress(miejsceDostawy);
-        
-        return {
-          originalRow: row,
-          kontrahent: kontrahent || 'Brak kontrahenta',
-          jednostka: jednostka || 'Inna',
-          typ: typ || 'Inny',
-          magazyn: magazyn || 'Inny',
-          numer: numer || 'Brak numeru',
-          miejsceDostawy: miejsceDostawy,
-          extractedAddress: extractedAddress
-        };
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: String(pagination.limit),
+        search: search.trim(),
+        warehouse: selectedWarehouse,
+        status: selectedStatus
       });
+      if (dateFrom) params.append('dateFrom', dateFrom);
+      if (dateTo) params.append('dateTo', dateTo);
 
-      setParsedData(processedRows);
+      const res = await fetch(`/api/wz?${params.toString()}`);
+      const json = await res.json();
 
-      // 2. Budowanie opcji do filtrów
-      const uniqueJednostki = [...new Set(processedRows.map(r => r.jednostka))].filter(Boolean);
-      const uniqueTypy = [...new Set(processedRows.map(r => r.typ))].filter(Boolean);
-      const uniqueMagazyny = [...new Set(processedRows.map(r => r.magazyn))].filter(Boolean);
-
-      setFilterOptions({
-        jednostki: uniqueJednostki.sort(),
-        typy: uniqueTypy.sort(),
-        magazyny: uniqueMagazyny.sort()
-      });
-
-      // 3. Grupowanie po kontrahencie
-      groupData(processedRows, filters);
-      
+      if (json.success) {
+        setDocuments(json.documents || []);
+        setPagination(json.pagination || { total: 0, page: 1, limit: 50, totalPages: 1 });
+        setStats(json.stats || { total: 0, nowy: 0, przypisany: 0, zrealizowany: 0, totalBrutto: 0 });
+        if (json.warehouses && json.warehouses.length > 0) {
+          setWarehouses(json.warehouses);
+        }
+      }
     } catch (err) {
-      console.error("Błąd podczas przetwarzania danych:", err);
+      console.error('Błąd pobierania WZ:', err);
+    } finally {
+      setLoadingData(false);
     }
   };
 
-  const groupData = (dataToGroup, currentFilters) => {
-    // Aplikowanie filtrów najpierw
-    let filteredData = dataToGroup;
-    
-    if (currentFilters.jednostka.length > 0) {
-      filteredData = filteredData.filter(row => currentFilters.jednostka.includes(row.jednostka));
-    }
-    
-    if (currentFilters.typ.length > 0) {
-      filteredData = filteredData.filter(row => currentFilters.typ.includes(row.typ));
-    }
-    
-    if (currentFilters.magazyn.length > 0) {
-      filteredData = filteredData.filter(row => currentFilters.magazyn.includes(row.magazyn));
-    }
-    
-    if (currentFilters.search) {
-      const searchLower = currentFilters.search.toLowerCase();
-      filteredData = filteredData.filter(row => 
-        row.kontrahent.toLowerCase().includes(searchLower) ||
-        row.numer.toLowerCase().includes(searchLower) ||
-        row.extractedAddress.toLowerCase().includes(searchLower)
-      );
-    }
+  // 3. Pobieranie dokumentów dla mapy (z koordynatami)
+  const fetchMapData = async () => {
+    try {
+      const params = new URLSearchParams({
+        mapOnly: 'true',
+        limit: '1500',
+        warehouse: selectedWarehouse,
+        status: selectedStatus
+      });
+      if (dateFrom) params.append('dateFrom', dateFrom);
+      if (dateTo) params.append('dateTo', dateTo);
 
-    // Grupowanie
-    const groups = {};
-    
-    filteredData.forEach(row => {
-      const key = row.kontrahent;
-      if (!groups[key]) {
-        groups[key] = {
-          kontrahent: key,
-          numery: [],
-          adresy: new Set(),
-          wiersze: [] // Wszystkie oryginalne i ułożone wiersze dla tego kontrahenta
-        };
+      const res = await fetch(`/api/wz?${params.toString()}`);
+      const json = await res.json();
+
+      if (json.success) {
+        setMapDocuments(json.documents || []);
       }
-      
-      if (row.numer && !groups[key].numery.includes(row.numer)) {
-        groups[key].numery.push(row.numer);
+    } catch (err) {
+      console.error('Błąd pobierania punktów mapy:', err);
+    }
+  };
+
+  // Wywołanie pobierania po zmianie filtrów
+  useEffect(() => {
+    if (!loadingUser && user) {
+      fetchWzData(1);
+      fetchMapData();
+    }
+  }, [loadingUser, user, selectedWarehouse, selectedStatus, dateFrom, dateTo]);
+
+  // Szukanie z opóźnieniem
+  useEffect(() => {
+    if (!loadingUser && user) {
+      const timer = setTimeout(() => {
+        fetchWzData(1);
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [search]);
+
+  // Obsługa zaznaczania
+  const handleToggleSelect = (nrWz) => {
+    setSelectedWzNumbers(prev =>
+      prev.includes(nrWz) ? prev.filter(n => n !== nrWz) : [...prev, nrWz]
+    );
+  };
+
+  const handleSelectAllOnPage = () => {
+    const pageWz = documents.map(d => d.nr_wz);
+    const allSelected = pageWz.every(n => selectedWzNumbers.includes(n));
+    if (allSelected) {
+      setSelectedWzNumbers(prev => prev.filter(n => !pageWz.includes(n)));
+    } else {
+      setSelectedWzNumbers(prev => [...new Set([...prev, ...pageWz])]);
+    }
+  };
+
+  const selectedDocsObjects = useMemo(() => {
+    // Łączymy z aktualnej strony lub mapy
+    const allKnown = [...documents, ...mapDocuments];
+    const seen = new Set();
+    const result = [];
+    selectedWzNumbers.forEach(nr => {
+      const doc = allKnown.find(d => d.nr_wz === nr);
+      if (doc && !seen.has(nr)) {
+        seen.add(nr);
+        result.push(doc);
       }
-      
-      if (row.extractedAddress) {
-        groups[key].adresy.add(row.extractedAddress);
-      }
-      
-      groups[key].wiersze.push(row);
     });
+    return result;
+  }, [selectedWzNumbers, documents, mapDocuments]);
 
-    // Przekształcenie obiektu w tablicę i sortowanie
-    const groupedArray = Object.values(groups).map(group => ({
-      ...group,
-      adresyArray: Array.from(group.adresy) // Set to Array
-    })).sort((a, b) => a.kontrahent.localeCompare(b.kontrahent));
+  // Obsługa importu pliku
+  const handleFileUpload = async (file) => {
+    if (!file) return;
+    setIsImporting(true);
+    setImportMessage(null);
 
-    setGroupedData(groupedArray);
-  };
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
 
-  // Obsługa zmiany filtrów
-  const toggleFilter = (filterType, value) => {
-    setFilters(prev => {
-      const current = prev[filterType];
-      const updated = current.includes(value)
-        ? current.filter(item => item !== value)
-        : [...current, value];
-        
-      const newFilters = { ...prev, [filterType]: updated };
-      
-      // Od razu zaktualizuj zgrupowane dane
-      if (parsedData.length > 0) {
-        groupData(parsedData, newFilters);
+      const res = await fetch('/api/wz', {
+        method: 'POST',
+        body: formData
+      });
+
+      const json = await res.json();
+      if (json.success) {
+        setImportMessage({
+          type: 'success',
+          text: json.message,
+          result: json.result
+        });
+        fetchWzData(1);
+        fetchMapData();
+      } else {
+        setImportMessage({
+          type: 'error',
+          text: json.error || 'Błąd importu pliku'
+        });
       }
-      
-      return newFilters;
-    });
-  };
-
-  const handleSearchChange = (e) => {
-    const value = e.target.value;
-    setFilters(prev => {
-      const newFilters = { ...prev, search: value };
-      if (parsedData.length > 0) {
-        groupData(parsedData, newFilters);
-      }
-      return newFilters;
-    });
-  };
-
-  const clearAllFilters = () => {
-    const cleared = {
-      jednostka: [],
-      typ: [],
-      magazyn: [],
-      search: ''
-    };
-    setFilters(cleared);
-    if (parsedData.length > 0) {
-      groupData(parsedData, cleared);
+    } catch (err) {
+      setImportMessage({
+        type: 'error',
+        text: 'Wystąpił błąd podczas wysyłania pliku na serwer'
+      });
+    } finally {
+      setIsImporting(false);
     }
   };
 
-  if (loading) {
+  if (loadingUser) {
     return (
       <div className="flex justify-center items-center h-screen bg-gray-50">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
@@ -337,268 +267,537 @@ export default function KoordynatorPage() {
   }
 
   return (
-    <div className="min-h-screen bg-transparent">
-      <div className="w-full space-y-6">
-        
-        {/* Header */}
-        <div className="flex justify-between items-center bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 flex items-center">
-              <FileSpreadsheet className="w-8 h-8 mr-3 text-blue-600" />
-              Panel Koordynatora Transportu
-            </h1>
-            <p className="text-gray-500 mt-1">
-              Wczytaj plik CSV z listą dokumentów, grupuj WZ i wyświetlaj na mapie
-            </p>
+    <div className="min-h-screen bg-gray-50/50 pb-12">
+      <div className="max-w-[1700px] mx-auto px-4 sm:px-6 lg:px-8 pt-6 space-y-6">
+
+        {/* 1. Header & Navigation */}
+        <div className="bg-white p-6 rounded-2xl shadow-xs border border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-gradient-to-tr from-blue-600 to-indigo-600 text-white rounded-xl shadow-md shadow-blue-500/20">
+              <FileSpreadsheet className="w-8 h-8" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
+                Dokumenty Magazynowe (WZ) & Logistyka
+              </h1>
+              <p className="text-sm text-gray-500 mt-0.5">
+                Centralny panel synchronizacji z ERP, planowania tras na mapie i tworzenia transportów
+              </p>
+            </div>
           </div>
-          
-          {file && (
-            <button 
-              onClick={() => {
-                setFile(null);
-                setParsedData([]);
-                setGroupedData([]);
-              }}
-              className="text-sm px-4 py-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors font-medium flex items-center"
+
+          {/* Przełącznik zakładek */}
+          <div className="flex items-center bg-gray-100/80 p-1.5 rounded-xl border border-gray-200/60 self-start md:self-auto">
+            <button
+              onClick={() => setActiveTab('documents')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                activeTab === 'documents'
+                  ? 'bg-white text-blue-700 shadow-xs border border-gray-200/50'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
             >
-              <X className="w-4 h-4 mr-2" /> Wyczyść dane
+              <FileSpreadsheet className="w-4 h-4" />
+              <span>Lista WZ ({pagination.total})</span>
             </button>
-          )}
+
+            <button
+              onClick={() => setActiveTab('map')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                activeTab === 'map'
+                  ? 'bg-white text-blue-700 shadow-xs border border-gray-200/50'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <MapPin className="w-4 h-4" />
+              <span>Mapa dostaw</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('import')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                activeTab === 'import'
+                  ? 'bg-white text-blue-700 shadow-xs border border-gray-200/50'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <Upload className="w-4 h-4" />
+              <span>Import ERP (CSV)</span>
+            </button>
+          </div>
         </div>
 
-        {!file ? (
-          (user?.isAdmin || user?.role === 'admin' || user?.permissions?.coordinator?.import_csv !== false) ? (
-          /* Strefa D&D */
-          <div 
-            className={`
-              mt-8 bg-white p-12 rounded-xl border-2 border-dashed
-              flex flex-col items-center justify-center text-center transition-all
-              ${isDragging ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-blue-400 hover:bg-gray-50'}
-            `}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-          >
-            <div className="bg-blue-100 p-4 rounded-full mb-4">
-              <Upload className="w-10 h-10 text-blue-600" />
+        {/* 2. Karty statystyk */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="bg-white p-5 rounded-2xl shadow-xs border border-gray-100 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Wszystkie dokumenty</p>
+              <p className="text-2xl font-black text-gray-900 mt-1">{stats.total.toLocaleString()}</p>
             </div>
-            <h3 className="text-xl font-semibold mb-2 text-gray-800">Przeciągnij i upuść plik CSV</h3>
-            <p className="text-gray-500 mb-6 max-w-md">
-              Zaznacz lub upuść tutaj plik typu CSV zawierający numery WZ, kontrahentów oraz miejsca dostawy podane w nawiasach kwadratowych.
-            </p>
-            
-            <label className="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors shadow-sm">
-              Wybierz plik z komputera
-              <input 
-                type="file" 
-                className="hidden" 
-                accept=".csv"
-                onChange={handleFileInput}
-              />
-            </label>
+            <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
+              <Database className="w-6 h-6" />
+            </div>
           </div>
-          ) : (
-            <div className="mt-8 bg-gray-50 p-8 rounded-xl border border-gray-200 text-center text-gray-500">
-              Brak uprawnień do importu plików CSV. Skontaktuj się z administratorem.
+
+          <div className="bg-white p-5 rounded-2xl shadow-xs border border-gray-100 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Do zaplanowania</p>
+              <p className="text-2xl font-black text-blue-600 mt-1">{stats.nowy.toLocaleString()}</p>
             </div>
-          )
-        ) : (
-          /* Panel danych */
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-            
-            {/* Lewa kolumna: Filtry */}
-            <div className="lg:col-span-1 space-y-4">
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-                <div className="flex items-center justify-between mb-4 border-b pb-4">
-                  <h3 className="font-semibold text-gray-800 flex items-center">
-                    <Filter className="w-5 h-5 mr-2 text-gray-500" /> Filtracja
-                  </h3>
-                  {(filters.jednostka.length > 0 || filters.typ.length > 0 || filters.magazyn.length > 0 || filters.search) && (
-                    <button onClick={clearAllFilters} className="text-xs text-blue-600 hover:underline">
-                      Wyczyść
-                    </button>
-                  )}
-                </div>
+            <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
+              <Clock className="w-6 h-6" />
+            </div>
+          </div>
 
-                {/* Szukaj */}
-                <div className="mb-6 relative">
-                  <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
-                    <Search className="w-4 h-4" />
-                  </span>
-                  <input
-                    type="text"
-                    value={filters.search}
-                    onChange={handleSearchChange}
-                    placeholder="Szukaj kontrahenta, WZ..."
-                    className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow text-sm"
-                  />
-                </div>
+          <div className="bg-white p-5 rounded-2xl shadow-xs border border-gray-100 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">W transporcie</p>
+              <p className="text-2xl font-black text-purple-600 mt-1">{stats.przypisany.toLocaleString()}</p>
+            </div>
+            <div className="p-3 bg-purple-50 text-purple-600 rounded-xl">
+              <Truck className="w-6 h-6" />
+            </div>
+          </div>
 
-                {/* Sekcje filtrów */}
-                <FilterSection 
-                  title="Jednostka lokalizacji" 
-                  options={filterOptions.jednostki} 
-                  selected={filters.jednostka} 
-                  onToggle={(val) => toggleFilter('jednostka', val)} 
-                />
-                
-                <FilterSection 
-                  title="Typ dokumentu" 
-                  options={filterOptions.typy} 
-                  selected={filters.typ} 
-                  onToggle={(val) => toggleFilter('typ', val)} 
-                />
-                
-                <FilterSection 
-                  title="Magazyn" 
-                  options={filterOptions.magazyny} 
-                  selected={filters.magazyn} 
-                  onToggle={(val) => toggleFilter('magazyn', val)} 
-                />
+          <div className="bg-white p-5 rounded-2xl shadow-xs border border-gray-100 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Łączna wartość brutto</p>
+              <p className="text-xl font-black text-emerald-600 mt-1">
+                {stats.totalBrutto.toLocaleString('pl-PL', { maximumFractionDigits: 0 })} zł
+              </p>
+            </div>
+            <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
+              <CheckCircle2 className="w-6 h-6" />
+            </div>
+          </div>
+        </div>
 
+        {/* 3. Pasek filtrów wspólny dla Listy i Mapy */}
+        {activeTab !== 'import' && (
+          <div className="bg-white p-4 rounded-2xl shadow-xs border border-gray-100 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-3 flex-1 min-w-[300px]">
+              {/* Szukajka */}
+              <div className="relative min-w-[240px] flex-1">
+                <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Szukaj po WZ, kliencie, adresie, mieście..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                {search && (
+                  <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
               </div>
-              
-              {/* Statystyki */}
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-                <h3 className="font-semibold text-gray-800 mb-4 border-b pb-4">Podsumowanie</h3>
-                <div className="space-y-3 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Unikalni kontrahenci:</span>
-                    <span className="font-semibold text-gray-900">{groupedData.length}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Ilość dokumentów:</span>
-                    <span className="font-semibold text-blue-600">
-                      {groupedData.reduce((acc, curr) => acc + curr.numery.length, 0)}
-                    </span>
-                  </div>
-                </div>
+
+              {/* Magazyn */}
+              <select
+                value={selectedWarehouse}
+                onChange={(e) => setSelectedWarehouse(e.target.value)}
+                className="px-3.5 py-2 border border-gray-300 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              >
+                <option value="all">Wszystkie magazyny</option>
+                {warehouses.map(w => (
+                  <option key={w.symbol} value={w.symbol}>{w.label}</option>
+                ))}
+              </select>
+
+              {/* Status */}
+              <select
+                value={selectedStatus}
+                onChange={(e) => setSelectedStatus(e.target.value)}
+                className="px-3.5 py-2 border border-gray-300 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              >
+                <option value="all">Wszystkie statusy</option>
+                <option value="nowy">Do zaplanowania (Nowe)</option>
+                <option value="przypisany">W transporcie</option>
+                <option value="zrealizowany">Zrealizowane</option>
+              </select>
+
+              {/* Data od / do */}
+              <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  className="px-2.5 py-1.5 border border-gray-300 rounded-lg text-xs outline-none"
+                  title="Data od"
+                />
+                <span>-</span>
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  className="px-2.5 py-1.5 border border-gray-300 rounded-lg text-xs outline-none"
+                  title="Data do"
+                />
               </div>
             </div>
 
-            {/* Prawa kolumna: Mapa (Placeholder) i Tabela */}
-            <div className="lg:col-span-3 space-y-6">
-              
-              {/* Tutaj miejsce na mapę z markerami */}
-              <div className="bg-white p-2 rounded-xl shadow-sm border border-gray-100 h-[500px] relative overflow-hidden">
-                 {groupedData.length > 0 ? (
-                    <MapKoordynatorWithNoSSR 
-                      locations={Array.from(new Set(groupedData.flatMap(group => group.adresyArray)))} 
-                    />
-                 ) : (
-                   <div className="absolute inset-0 bg-gray-50 flex flex-col items-center justify-center text-gray-500">
-                      <MapPin className="w-12 h-12 mb-3 text-gray-400 opacity-60" />
-                      <h3 className="text-lg font-medium">Brak punktów do wyświetlenia</h3>
-                      <p className="text-sm mt-1">Wczytaj plik, lub zmień kryteria filtru</p>
-                   </div>
-                 )}
-              </div>
-
-              {/* Tabela zgrupowanych wyników */}
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                <div className="px-6 py-4 border-b border-gray-100 bg-gray-50">
-                  <h3 className="font-semibold text-gray-800">Zgrupowane zlecenia ({groupedData.length})</h3>
-                </div>
-                
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm whitespace-nowrap">
-                    <thead className="bg-gray-50 text-gray-600">
-                      <tr>
-                        <th className="px-6 py-3 font-medium">Kontrahent</th>
-                        <th className="px-6 py-3 font-medium">Dokumenty powiązane</th>
-                        <th className="px-6 py-3 font-medium">Wyciągnięte adresy</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {groupedData.length > 0 ? (
-                        groupedData.map((group, idx) => (
-                          <tr key={idx} className="hover:bg-blue-50/50 transition-colors">
-                            <td className="px-6 py-4 font-medium text-gray-900 border-r border-gray-50">
-                              {group.kontrahent} 
-                              <span className="ml-2 text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-500 font-normal">
-                                {group.wiersze.length} poz.
-                              </span>
-                            </td>
-                            <td className="px-6 py-4">
-                              <div className="flex flex-wrap gap-1">
-                                {group.numery.map((numer, nIdx) => (
-                                  <span key={nIdx} className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
-                                    {numer}
-                                  </span>
-                                ))}
-                              </div>
-                            </td>
-                            <td className="px-6 py-4">
-                              <div className="flex flex-col gap-1">
-                                {group.adresyArray.length > 0 ? (
-                                  group.adresyArray.map((adres, aIdx) => (
-                                    <div key={aIdx} className="flex items-center text-gray-600 text-xs">
-                                      <MapPin className="w-3 h-3 mr-1 text-gray-400 flex-shrink-0" />
-                                      <span className="truncate max-w-xs" title={adres}>{adres}</span>
-                                    </div>
-                                  ))
-                                ) : (
-                                  <span className="text-gray-400 text-xs italic">Brak sprecyzowanego adresu w nawiasach []</span>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        ))
-                      ) : (
-                        <tr>
-                          <td colSpan="3" className="px-6 py-8 text-center text-gray-500">
-                            Brak wyników spełniających kryteria filtrowania.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-              
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  fetchWzData(pagination.page);
+                  fetchMapData();
+                }}
+                className="p-2 border border-gray-200 text-gray-600 hover:bg-gray-50 rounded-xl transition-colors"
+                title="Odśwież"
+              >
+                <RefreshCw className="w-4 h-4" />
+              </button>
             </div>
-            
           </div>
         )}
-      </div>
-    </div>
-  );
-}
 
-// Komponent pomocniczy dla sekcji filtrowania
-function FilterSection({ title, options, selected, onToggle }) {
-  const [isOpen, setIsOpen] = useState(true);
+        {/* Pasek akcji zbiorczych gdy są zaznaczone dokumenty */}
+        {selectedWzNumbers.length > 0 && (
+          <div className="bg-gradient-to-r from-blue-700 to-indigo-700 text-white p-4 rounded-2xl shadow-lg flex flex-wrap items-center justify-between gap-4 animate-in slide-in-from-top duration-200">
+            <div className="flex items-center gap-3">
+              <div className="bg-white/20 p-2 rounded-xl">
+                <CheckSquare className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <p className="font-bold text-sm">
+                  Zaznaczono {selectedWzNumbers.length} dokumentów WZ
+                </p>
+                <p className="text-xs text-blue-100">
+                  Łącznie pozycji: {selectedDocsObjects.reduce((acc, d) => acc + parseInt(d.pozycje_count || 0, 10), 0)} • 
+                  Wartość: {selectedDocsObjects.reduce((acc, d) => acc + parseFloat(d.dok_brutto || 0), 0).toLocaleString('pl-PL', { minimumFractionDigits: 2 })} zł
+                </p>
+              </div>
+            </div>
 
-  if (!options || options.length === 0) return null;
+            <div className="flex items-center gap-2.5">
+              <button
+                onClick={() => setIsCreateTransportOpen(true)}
+                className="bg-white text-blue-800 hover:bg-blue-50 px-4 py-2 rounded-xl text-sm font-bold shadow-xs transition-colors flex items-center gap-2"
+              >
+                <Truck className="w-4 h-4" />
+                <span>Utwórz transport własny ({selectedWzNumbers.length})</span>
+              </button>
 
-  return (
-    <div className="mb-4">
-      <button 
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex w-full justify-between items-center py-2 text-sm font-medium text-gray-700 hover:text-blue-600"
-      >
-        <span>{title} {selected.length > 0 && `(${selected.length})`}</span>
-        {isOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-      </button>
-      
-      {isOpen && (
-        <div className="mt-2 space-y-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
-          {options.map((option, idx) => (
-            <label key={idx} className="flex items-start cursor-pointer group">
-              <div className="flex items-center h-5">
+              {activeTab !== 'map' && (
+                <button
+                  onClick={() => setActiveTab('map')}
+                  className="bg-blue-600/70 hover:bg-blue-600 text-white border border-white/20 px-3.5 py-2 rounded-xl text-sm font-medium transition-colors flex items-center gap-2"
+                >
+                  <MapPin className="w-4 h-4" />
+                  <span>Pokaż na mapie</span>
+                </button>
+              )}
+
+              <button
+                onClick={() => setSelectedWzNumbers([])}
+                className="text-white/80 hover:text-white px-3 py-2 text-xs font-medium"
+              >
+                Wyczyść zaznaczenie
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 4. Zawartość Zakładki 1: Lista dokumentów WZ */}
+        {activeTab === 'documents' && (
+          <div className="bg-white rounded-2xl shadow-xs border border-gray-100 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-gray-50/80 text-gray-600 border-b border-gray-200">
+                  <tr>
+                    <th className="py-3 px-4 w-10 text-center">
+                      <button
+                        onClick={handleSelectAllOnPage}
+                        className="text-gray-400 hover:text-blue-600 transition-colors"
+                        title="Zaznacz / odznacz stronę"
+                      >
+                        {documents.length > 0 && documents.every(d => selectedWzNumbers.includes(d.nr_wz)) ? (
+                          <CheckSquare className="w-4 h-4 text-blue-600" />
+                        ) : (
+                          <Square className="w-4 h-4" />
+                        )}
+                      </button>
+                    </th>
+                    <th className="py-3 px-3 font-semibold">Numer WZ</th>
+                    <th className="py-3 px-3 font-semibold">Data</th>
+                    <th className="py-3 px-3 font-semibold">Magazyn</th>
+                    <th className="py-3 px-3 font-semibold">Kontrahent / Miejsce</th>
+                    <th className="py-3 px-3 font-semibold">Adres dostawy</th>
+                    <th className="py-3 px-3 font-semibold text-center">Pozycji</th>
+                    <th className="py-3 px-3 font-semibold text-right">Wartość brutto</th>
+                    <th className="py-3 px-3 font-semibold text-center">Status</th>
+                    <th className="py-3 px-4 font-semibold text-right">Akcja</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {loadingData ? (
+                    <tr>
+                      <td colSpan="10" className="py-12 text-center text-gray-400">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                        Wczytywanie dokumentów WZ...
+                      </td>
+                    </tr>
+                  ) : documents.length > 0 ? (
+                    documents.map((doc) => {
+                      const isSelected = selectedWzNumbers.includes(doc.nr_wz);
+                      return (
+                        <tr
+                          key={doc.id || doc.nr_wz}
+                          className={`hover:bg-blue-50/30 transition-colors ${isSelected ? 'bg-blue-50/60' : ''}`}
+                        >
+                          <td className="py-3 px-4 text-center">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => handleToggleSelect(doc.nr_wz)}
+                              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+                            />
+                          </td>
+                          <td className="py-3 px-3 font-mono font-bold text-gray-900">
+                            <button
+                              onClick={() => setInspectWzNumber(doc.nr_wz)}
+                              className="hover:text-blue-600 hover:underline text-left"
+                            >
+                              {doc.nr_wz}
+                            </button>
+                          </td>
+                          <td className="py-3 px-3 text-gray-600 whitespace-nowrap">
+                            {doc.data_wystawienia ? new Date(doc.data_wystawienia).toLocaleDateString('pl-PL') : '-'}
+                          </td>
+                          <td className="py-3 px-3 whitespace-nowrap">
+                            <span className="px-2 py-0.5 rounded-md font-semibold text-[11px] bg-gray-100 text-gray-800 border border-gray-200">
+                              {doc.symbol_magazynu}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 max-w-xs">
+                            <p className="font-semibold text-gray-900 truncate" title={doc.nazwa_kontrahenta}>
+                              {doc.nazwa_kontrahenta}
+                            </p>
+                            {doc.nazwa_miejsca_dostawy && doc.nazwa_miejsca_dostawy !== doc.nazwa_kontrahenta && (
+                              <p className="text-[11px] text-gray-500 truncate" title={doc.nazwa_miejsca_dostawy}>
+                                {doc.nazwa_miejsca_dostawy}
+                              </p>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 max-w-xs">
+                            <div className="flex items-center gap-1 text-gray-700">
+                              <MapPin className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                              <span className="truncate" title={doc.adres_dostawy || doc.extracted_city}>
+                                {doc.adres_dostawy || (doc.extracted_city ? `${doc.extracted_postal_code || ''} ${doc.extracted_city}` : 'Odbiór własny / brak')}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="py-3 px-3 text-center font-semibold text-gray-800">
+                            {doc.pozycje_count}
+                          </td>
+                          <td className="py-3 px-3 text-right font-bold text-gray-900 whitespace-nowrap">
+                            {parseFloat(doc.dok_brutto || 0).toLocaleString('pl-PL', { minimumFractionDigits: 2 })} zł
+                          </td>
+                          <td className="py-3 px-3 text-center whitespace-nowrap">
+                            {doc.status === 'przypisany' ? (
+                              <span className="px-2 py-0.5 rounded-full font-semibold text-[10px] bg-purple-100 text-purple-800">
+                                Transport #{doc.transport_id}
+                              </span>
+                            ) : doc.status === 'zrealizowany' ? (
+                              <span className="px-2 py-0.5 rounded-full font-semibold text-[10px] bg-emerald-100 text-emerald-800">
+                                Zrealizowany
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-full font-semibold text-[10px] bg-blue-100 text-blue-800">
+                                Do zaplanowania
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 text-right whitespace-nowrap">
+                            <button
+                              onClick={() => setInspectWzNumber(doc.nr_wz)}
+                              className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                              title="Szczegóły i pozycje towarowe"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan="10" className="py-12 text-center text-gray-400">
+                        Brak dokumentów spełniających kryteria wyszukiwania.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Paginacja */}
+            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between text-xs text-gray-600">
+              <div>
+                Pokazano <b>{documents.length}</b> z <b>{pagination.total}</b> dokumentów
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => fetchWzData(pagination.page - 1)}
+                  disabled={pagination.page <= 1}
+                  className="p-1.5 border border-gray-300 rounded-lg bg-white disabled:opacity-40 hover:bg-gray-50"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <span>Strona <b>{pagination.page}</b> z <b>{pagination.totalPages || 1}</b></span>
+                <button
+                  onClick={() => fetchWzData(pagination.page + 1)}
+                  disabled={pagination.page >= pagination.totalPages}
+                  className="p-1.5 border border-gray-300 rounded-lg bg-white disabled:opacity-40 hover:bg-gray-50"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 5. Zawartość Zakładki 2: Mapa logistyczna */}
+        {activeTab === 'map' && (
+          <div className="space-y-4">
+            <div className="bg-white p-3 rounded-2xl shadow-xs border border-gray-100 flex items-center justify-between text-xs text-gray-600">
+              <div className="flex items-center gap-2">
+                <MapPin className="w-4 h-4 text-blue-600" />
+                <span>
+                  Punkty dostaw na mapie: <b>{mapDocuments.length}</b> dokumentów z lokalizacją
+                </span>
+              </div>
+              <span className="text-gray-400">
+                Kliknij punkt na mapie, aby podejrzeć szczegóły i zaznaczyć WZ do trasy.
+              </span>
+            </div>
+
+            <div className="bg-white p-2 rounded-2xl shadow-xs border border-gray-100">
+              <WzLeafletMap
+                documents={mapDocuments}
+                selectedWzNumbers={selectedWzNumbers}
+                onToggleSelect={handleToggleSelect}
+                className="h-[650px] w-full rounded-xl overflow-hidden"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* 6. Zawartość Zakładki 3: Import z ERP */}
+        {activeTab === 'import' && (
+          <div className="bg-white rounded-2xl shadow-xs border border-gray-100 p-8 space-y-8 max-w-4xl mx-auto">
+            <div className="text-center max-w-xl mx-auto">
+              <div className="w-14 h-14 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <Upload className="w-7 h-7" />
+              </div>
+              <h2 className="text-xl font-bold text-gray-900">Import dokumentów WZ z ERP</h2>
+              <p className="text-xs text-gray-500 mt-1">
+                Wgraj najnowszy zrzut CSV wygenerowany z systemu ERP (np. z bieżącego tygodnia).
+                System automatycznie zaktualizuje bazę i doda nowe dokumenty bez duplikowania.
+              </p>
+            </div>
+
+            {/* Strefa Drag & Drop */}
+            <div
+              onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+              onDragLeave={(e) => { e.preventDefault(); setIsDragging(false); }}
+              onDrop={(e) => {
+                e.preventDefault();
+                setIsDragging(false);
+                if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                  handleFileUpload(e.dataTransfer.files[0]);
+                }
+              }}
+              className={`border-2 border-dashed rounded-2xl p-10 text-center transition-all ${
+                isDragging ? 'border-blue-500 bg-blue-50/50' : 'border-gray-300 hover:border-blue-400 bg-gray-50/50'
+              }`}
+            >
+              <FileSpreadsheet className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+              <p className="text-sm font-semibold text-gray-800">Przeciągnij i upuść plik CSV tutaj</p>
+              <p className="text-xs text-gray-500 mt-1 mb-4">Obsługiwany separator: średnik (;), kodowanie: Windows-1250 lub UTF-8</p>
+              
+              <label className="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition-colors shadow-xs inline-flex items-center gap-2">
+                <Upload className="w-4 h-4" />
+                <span>Wybierz plik z dysku</span>
                 <input
-                  type="checkbox"
-                  checked={selected.includes(option)}
-                  onChange={() => onToggle(option)}
-                  className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                  type="file"
+                  accept=".csv"
+                  className="hidden"
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files[0]) {
+                      handleFileUpload(e.target.files[0]);
+                    }
+                  }}
                 />
+              </label>
+            </div>
+
+            {isImporting && (
+              <div className="flex items-center justify-center gap-3 p-4 bg-blue-50 text-blue-700 rounded-xl text-sm font-medium">
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-700" />
+                <span>Trwa przetwarzanie i zapisywanie dokumentów do bazy...</span>
               </div>
-              <div className="ml-2 text-sm text-gray-600 group-hover:text-gray-900 break-words w-full">
-                {option}
+            )}
+
+            {/* Komunikat po imporcie */}
+            {importMessage && (
+              <div className={`p-4 rounded-xl border ${
+                importMessage.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-red-50 border-red-200 text-red-800'
+              }`}>
+                <div className="flex items-center gap-2 font-bold text-sm mb-1">
+                  {importMessage.type === 'success' ? <CheckCircle2 className="w-5 h-5 text-emerald-600" /> : <X className="w-5 h-5 text-red-600" />}
+                  <span>{importMessage.text}</span>
+                </div>
+                {importMessage.result && (
+                  <div className="text-xs space-y-1 mt-2 text-emerald-700">
+                    <p>• Liczba unikalnych WZ: <b>{importMessage.result.totalDocuments}</b></p>
+                    <p>• Liczba pozycji towarowych: <b>{importMessage.result.totalItems}</b></p>
+                    {importMessage.result.dateRange && (
+                      <p>• Zakres dat: <b>{importMessage.result.dateRange.from}</b> do <b>{importMessage.result.dateRange.to}</b></p>
+                    )}
+                  </div>
+                )}
               </div>
-            </label>
-          ))}
-        </div>
+            )}
+
+            {/* Karta informacyjna o automatycznym UPSERT */}
+            <div className="bg-gray-50 p-5 rounded-xl border border-gray-200 text-xs text-gray-600 space-y-2">
+              <span className="font-bold text-gray-800 uppercase tracking-wider text-[11px] block">
+                Bezpieczeństwo danych i aktualizacje:
+              </span>
+              <p>• System używa unikalnych kluczy <code>NR_WZ</code> oraz <code>ID_POZYCJI</code>.</p>
+              <p>• Wgrywając zrzut z bieżącego tygodnia, transporty przypisane wcześniej do WZ pozostają nienaruszone.</p>
+              <p>• Automatycznie uzupełniane są współrzędne miast docelowych oraz numery kontaktowe wyciągane z uwag.</p>
+            </div>
+          </div>
+        )}
+
+      </div>
+
+      {/* Modal szczegółów pojedynczego WZ */}
+      {inspectWzNumber && (
+        <WzDetailsModal
+          wzNumber={inspectWzNumber}
+          onClose={() => setInspectWzNumber(null)}
+          onAssignChange={() => {
+            fetchWzData(pagination.page);
+            fetchMapData();
+          }}
+        />
+      )}
+
+      {/* Modal tworzenia transportu z wybranych WZ */}
+      {isCreateTransportOpen && (
+        <CreateTransportFromWzModal
+          selectedDocs={selectedDocsObjects}
+          onClose={() => setIsCreateTransportOpen(false)}
+          onSuccess={(transportId) => {
+            setSelectedWzNumbers([]);
+            fetchWzData(pagination.page);
+            fetchMapData();
+            router.push('/kalendarz');
+          }}
+        />
       )}
     </div>
   );

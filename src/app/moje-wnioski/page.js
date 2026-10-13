@@ -17,6 +17,7 @@ import {
   Building,
   Mail
 } from 'lucide-react'
+import { isBlockedMpk } from '@/lib/utils'
 
 // ===== FUNKCJE POMOCNICZE DLA OBJAZDÓWEK =====
 
@@ -313,7 +314,7 @@ function UserSelector({ value, onChange, className = '' }) {
         
         // Formatuj użytkowników z typem 'user'
         const formattedUsers = usersArray
-          .filter(u => u.role === 'handlowiec')
+          .filter(u => u.role === 'handlowiec' && !isBlockedMpk(u.mpk))
           .map(user => ({
             ...user,
             type: 'user'
@@ -555,7 +556,11 @@ export default function MojeWnioskiPage() {
       if (!formData.delivery_date) errors.delivery_date = 'Data dostawy jest wymagana'
       if (!formData.justification.trim()) errors.justification = 'Uzasadnienie jest wymagane'
       if (!formData.real_client_name.trim()) errors.real_client_name = 'Rzeczywisty klient jest wymagany'
-      if (!selectedEntity) errors.entity = 'Wybór budowy lub handlowca jest wymagany'
+      if (!selectedEntity) {
+        errors.entity = 'Wybór budowy lub handlowca jest wymagany'
+      } else if (isBlockedMpk(selectedEntity.mpk)) {
+        errors.entity = 'Wybrana osoba ma niedozwolony numer MPK (000-000-000). Wybierz osobę z poprawnym MPK.'
+      }
     }
 
     setFormErrors(errors)

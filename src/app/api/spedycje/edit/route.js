@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import db from '@/database/db';
 import { validateSession } from '@/lib/auth';
+import { isBlockedMpk } from '@/lib/utils';
 
 export async function PUT(request) {
   try {
@@ -17,6 +18,13 @@ export async function PUT(request) {
     }
 
     const { id, ...data } = await request.json();
+
+    if (data.mpk && isBlockedMpk(data.mpk)) {
+      return NextResponse.json({
+        success: false,
+        error: 'Numer MPK 000-000-000 jest niedozwolony do aktualizacji zlecenia spedycji'
+      }, { status: 400 });
+    }
 
     // Sprawdź czy zlecenie istnieje i czy użytkownik jest jego twórcą
     const spedycja = await db('spedycje')

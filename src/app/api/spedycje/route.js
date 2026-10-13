@@ -6,6 +6,7 @@ import db from '@/database/db';
 import nodemailer from 'nodemailer';
 import { getSessionUser } from '@/lib/auth';
 import { getNextSpedycjaOrderNumber } from '@/lib/utils/orderNumber';
+import { isBlockedMpk } from '@/lib/utils';
 
 // Funkcja wysyłania powiadomienia o odpowiedzi na spedycję
 const sendResponseNotification = async (spedycjaData, responseData) => {
@@ -413,6 +414,14 @@ export async function POST(request) {
     }
 
     const spedycjaData = await request.json();
+
+    if (spedycjaData.mpk && isBlockedMpk(spedycjaData.mpk)) {
+      return NextResponse.json({
+        success: false,
+        error: 'Numer MPK 000-000-000 jest niedozwolony do utworzenia zlecenia spedycji'
+      }, { status: 400 });
+    }
+
     const userId = user.email;
     const creatorName = user.name || spedycjaData.createdBy || userId.split('@')[0];
 

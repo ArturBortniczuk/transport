@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import db from '@/database/db';
 import nodemailer from 'nodemailer';
 import { getSessionUser } from '@/lib/auth';
+import { isBlockedMpk } from '@/lib/utils';
 
 // Konfiguracja transportera email
 const transporter = nodemailer.createTransport({
@@ -565,6 +566,13 @@ export async function POST(request) {
             error: `Pole ${field} jest wymagane`
           }, { status: 400 });
         }
+      }
+
+      if (requestData.mpk && isBlockedMpk(requestData.mpk)) {
+        return NextResponse.json({
+          success: false,
+          error: 'Numer MPK 000-000-000 jest niedozwolony do złożenia wniosku transportowego'
+        }, { status: 400 });
       }
     }
 

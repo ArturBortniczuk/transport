@@ -376,6 +376,61 @@ const initializeDatabase = async () => {
       console.log('Tabela cable_dictionaries już istnieje');
     }
 
+    // Tabela dokumentów magazynowych WZ
+    const wzDocsExists = await db.schema.hasTable('wz_documents');
+    if (!wzDocsExists) {
+      await db.schema.createTable('wz_documents', table => {
+        table.increments('id').primary();
+        table.string('nr_wz').unique().notNullable();
+        table.date('data_wystawienia');
+        table.string('id_magazynu');
+        table.string('symbol_magazynu');
+        table.string('nazwa_magazynu');
+        table.string('kod_kontrahenta');
+        table.string('nazwa_kontrahenta');
+        table.string('nazwa_miejsca_dostawy');
+        table.string('adres_dostawy');
+        table.string('id_zamowienia');
+        table.text('uwagi');
+        table.text('uwagi_ukoncowe');
+        table.decimal('dok_netto', 14, 2);
+        table.decimal('dok_brutto', 14, 2);
+        table.float('latitude');
+        table.float('longitude');
+        table.string('status').defaultTo('nowy');
+        table.integer('transport_id');
+        table.integer('spedycja_id');
+        table.integer('pozycje_count').defaultTo(0);
+        table.string('extracted_city');
+        table.string('extracted_postal_code');
+        table.string('extracted_street');
+        table.string('extracted_phone');
+        table.timestamp('created_at').defaultTo(db.fn.now());
+        table.timestamp('updated_at').defaultTo(db.fn.now());
+      });
+      console.log('Tabela wz_documents została utworzona');
+    }
+
+    const wzItemsExists = await db.schema.hasTable('wz_items');
+    if (!wzItemsExists) {
+      await db.schema.createTable('wz_items', table => {
+        table.increments('id').primary();
+        table.string('id_pozycji').unique().notNullable();
+        table.string('nr_wz').notNullable();
+        table.string('lp');
+        table.string('kod_towaru');
+        table.text('nazwa_towaru');
+        table.string('jednostka_miary');
+        table.decimal('ilosc', 14, 3);
+        table.decimal('cena_jed_netto', 14, 2);
+        table.decimal('wartosc_netto', 14, 2);
+        table.string('stawka_vat');
+        table.decimal('wartosc_brutto', 14, 2);
+        table.timestamp('created_at').defaultTo(db.fn.now());
+      });
+      console.log('Tabela wz_items została utworzona');
+    }
+
     return true;
   } catch (error) {
     console.error('Błąd inicjalizacji bazy danych:', error);

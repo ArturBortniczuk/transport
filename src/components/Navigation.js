@@ -193,10 +193,15 @@ export default function Navigation({ children }) {
   // Transport własny items:
   const canViewAllRequests = isAdmin || perms.transport_requests?.view_all === true || perms.transport_requests?.approve === true;
   const canViewOwnRequests = !canViewAllRequests && (perms.transport_requests?.view_own !== false || perms.transport_requests?.add !== false);
+  const hasCoordinatorView = isAdmin || perms.coordinator?.view === true || userRole === 'koordynator' || userRole?.includes('magazyn');
 
   const transportWlasnyItems = [
     ...(isAdmin || perms.calendar?.view !== false
       ? [{ name: 'Kalendarz', path: '/kalendarz', icon: Calendar }]
+      : []
+    ),
+    ...(hasCoordinatorView
+      ? [{ name: 'Dokumenty WZ & Planowanie', path: '/koordynator', icon: ListFilter }]
       : []
     ),
     ...(isAdmin || perms.archive?.view !== false
@@ -234,7 +239,6 @@ export default function Navigation({ children }) {
   const hasAdminConstructions = isAdmin || perms.admin?.constructions === true;
   const hasAdminValuation = isAdmin || perms.admin?.valuation === true;
   const hasAdminCableAdvices = isAdmin || perms.admin?.cable_advices === true;
-  const hasCoordinatorView = isAdmin || perms.coordinator?.view === true || userRole === 'koordynator';
 
   const adminItems = [
     ...(hasAdminUsers

@@ -13,6 +13,7 @@ import TransportsList from './components/TransportsList'
 import { wyslijPowiadomienieOdbioruBebnow } from '@/utils/smsNotifications'
 import { MAGAZYNY } from './constants'
 import { KIEROWCY } from './constants'
+import { isBlockedMpk } from '@/lib/utils'
 
 export default function KalendarzPage() {
   const [currentMonth, setCurrentMonth] = useState(new Date())
@@ -384,6 +385,11 @@ export default function KalendarzPage() {
       return;
     }
 
+    if (isBlockedMpk(nowyTransport.mpk)) {
+      alert('Nie można dodać transportu: Osoba z numerem MPK 000-000-000 jest niedozwolona. Wybierz osobę z poprawnym MPK.');
+      return;
+    }
+
     console.log('Dane transportu wysyłane do API:', {
       miasto: nowyTransport.miasto,
       osobaZlecajaca: nowyTransport.osobaZlecajaca,
@@ -643,6 +649,11 @@ export default function KalendarzPage() {
 
     if (!nowyTransport.mpk || !nowyTransport.mpk.trim()) {
       alert('Nie można zapisać zmian: Brak numeru MPK! Upewnij się, że osoba/budowa ma przypisany numer MPK.');
+      return;
+    }
+
+    if (isBlockedMpk(nowyTransport.mpk)) {
+      alert('Nie można zapisać zmian: Osoba z numerem MPK 000-000-000 jest niedozwolona. Wybierz osobę z poprawnym MPK.');
       return;
     }
     
