@@ -24,7 +24,9 @@ import {
   CheckSquare,
   Square,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Package,
+  Weight
 } from 'lucide-react';
 import WzDetailsModal from '@/components/WzDetailsModal';
 import CreateTransportFromWzModal from '@/components/CreateTransportFromWzModal';
