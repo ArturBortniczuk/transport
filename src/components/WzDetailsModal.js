@@ -55,19 +55,37 @@ export default function WzDetailsModal({ wzNumber, onClose, onAssignChange }) {
               <div className="flex items-center gap-2">
                 <h2 className="text-lg font-bold text-gray-900">{wzNumber}</h2>
                 {doc && (
-                  <span className={`text-xs px-2.5 py-0.5 rounded-full font-semibold ${
-                    doc.status === 'przypisany' 
-                      ? 'bg-purple-100 text-purple-800'
-                      : doc.status === 'zrealizowany'
-                      ? 'bg-emerald-100 text-emerald-800'
-                      : 'bg-blue-100 text-blue-800'
-                  }`}>
-                    {doc.status === 'przypisany' ? 'W transporcie' : doc.status === 'zrealizowany' ? 'Zrealizowany' : 'Do zaplanowania'}
-                  </span>
+                  <>
+                    {doc.typ_dokumentu && (
+                      <span className="text-xs px-2 py-0.5 rounded font-mono font-bold bg-slate-100 text-slate-800 border border-slate-300">
+                        {doc.typ_dokumentu}
+                      </span>
+                    )}
+                    <span className={`text-xs px-2.5 py-0.5 rounded-full font-semibold ${
+                      doc.status === 'przypisany' 
+                        ? 'bg-purple-100 text-purple-800'
+                        : doc.status === 'zrealizowany'
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : 'bg-blue-100 text-blue-800'
+                    }`}>
+                      {doc.status === 'przypisany' ? 'W transporcie' : doc.status === 'zrealizowany' ? 'Zrealizowany' : 'Do zaplanowania'}
+                    </span>
+                    {parseFloat(doc.waga_suma || 0) > 0 && (
+                      <span className="text-xs px-2.5 py-0.5 rounded-full font-semibold bg-amber-50 text-amber-900 border border-amber-300">
+                        ⚖️ {parseFloat(doc.waga_suma) >= 1000 ? `${(parseFloat(doc.waga_suma) / 1000).toFixed(2)} t` : `${parseFloat(doc.waga_suma).toFixed(1)} kg`}
+                      </span>
+                    )}
+                    {parseInt(doc.liczba_bebnow || 0, 10) > 0 && (
+                      <span className="text-xs px-2.5 py-0.5 rounded-full font-semibold bg-purple-50 text-purple-900 border border-purple-300">
+                        📦 Bębny: {doc.liczba_bebnow} szt.
+                      </span>
+                    )}
+                  </>
                 )}
               </div>
               <p className="text-xs text-gray-500 mt-0.5">
                 {doc?.nazwa_magazynu} ({doc?.symbol_magazynu}) • Wystawiono: {doc?.data_wystawienia ? new Date(doc.data_wystawienia).toLocaleDateString('pl-PL') : '-'}
+                {doc?.dokumenty_powiazane && ` • WZO: ${doc.dokumenty_powiazane}`}
               </p>
             </div>
           </div>
@@ -168,9 +186,16 @@ export default function WzDetailsModal({ wzNumber, onClose, onAssignChange }) {
                     <span>Pozycje towarowe</span>
                     <span className="text-xs font-normal text-gray-500">({items.length} pozycji)</span>
                   </h3>
-                  <div className="text-xs text-gray-500">
-                    Wartość netto: <b className="text-gray-900 font-semibold">{parseFloat(doc.dok_netto || 0).toLocaleString('pl-PL', { minimumFractionDigits: 2 })} zł</b> • 
-                    Brutto: <b className="text-blue-600 font-semibold">{parseFloat(doc.dok_brutto || 0).toLocaleString('pl-PL', { minimumFractionDigits: 2 })} zł</b>
+                  <div className="text-xs text-gray-500 flex items-center gap-3">
+                    {parseFloat(doc.waga_suma || 0) > 0 && (
+                      <span className="text-amber-800 font-semibold bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                        Waga łączna: {parseFloat(doc.waga_suma) >= 1000 ? `${(parseFloat(doc.waga_suma)/1000).toFixed(2)} t` : `${parseFloat(doc.waga_suma).toFixed(1)} kg`}
+                      </span>
+                    )}
+                    <div>
+                      Netto: <b className="text-gray-900 font-semibold">{parseFloat(doc.dok_netto || 0).toLocaleString('pl-PL', { minimumFractionDigits: 2 })} zł</b> • 
+                      Brutto: <b className="text-blue-600 font-semibold">{parseFloat(doc.dok_brutto || 0).toLocaleString('pl-PL', { minimumFractionDigits: 2 })} zł</b>
+                    </div>
                   </div>
                 </div>
 
@@ -183,7 +208,9 @@ export default function WzDetailsModal({ wzNumber, onClose, onAssignChange }) {
                           <th className="py-2.5 px-3 font-semibold">Kod towaru</th>
                           <th className="py-2.5 px-3 font-semibold">Nazwa towaru</th>
                           <th className="py-2.5 px-3 font-semibold text-right">Ilość</th>
-                          <th className="py-2.5 px-3 font-semibold text-center w-16">J.M.</th>
+                          <th className="py-2.5 px-3 font-semibold text-center w-14">J.M.</th>
+                          <th className="py-2.5 px-3 font-semibold text-right">Waga (kg)</th>
+                          <th className="py-2.5 px-3 font-semibold">Bęben / Cecha</th>
                           <th className="py-2.5 px-3 font-semibold text-right">Cena netto</th>
                           <th className="py-2.5 px-3 font-semibold text-right">Wartość netto</th>
                         </tr>
@@ -197,13 +224,25 @@ export default function WzDetailsModal({ wzNumber, onClose, onAssignChange }) {
                               <td className="py-2 px-3 font-medium text-gray-900">{it.nazwa_towaru}</td>
                               <td className="py-2 px-3 text-right font-bold text-gray-900">{it.ilosc}</td>
                               <td className="py-2 px-3 text-center text-gray-500">{it.jednostka_miary}</td>
+                              <td className="py-2 px-3 text-right font-mono text-gray-700">
+                                {it.waga_pozycji ? `${parseFloat(it.waga_pozycji).toFixed(1)} kg` : '-'}
+                              </td>
+                              <td className="py-2 px-3">
+                                {it.cecha_bebna ? (
+                                  <span className="inline-flex items-center gap-1 font-mono text-[11px] font-semibold text-purple-800 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
+                                    📦 {it.cecha_bebna}
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-300">-</span>
+                                )}
+                              </td>
                               <td className="py-2 px-3 text-right text-gray-600">{parseFloat(it.cena_jed_netto || 0).toFixed(2)} zł</td>
                               <td className="py-2 px-3 text-right font-semibold text-gray-900">{parseFloat(it.wartosc_netto || 0).toFixed(2)} zł</td>
                             </tr>
                           ))
                         ) : (
                           <tr>
-                            <td colSpan="7" className="py-6 text-center text-gray-400">
+                            <td colSpan="9" className="py-6 text-center text-gray-400">
                               Brak pozycji towarowych w bazie
                             </td>
                           </tr>

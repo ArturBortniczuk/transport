@@ -409,6 +409,10 @@ const initializeDatabase = async () => {
         table.string('jednostka_lokalizacji');
         table.string('rynek');
         table.string('handlowiec');
+        table.string('typ_dokumentu');
+        table.decimal('waga_suma', 14, 2).defaultTo(0);
+        table.integer('liczba_bebnow').defaultTo(0);
+        table.text('dokumenty_powiazane');
         table.timestamp('created_at').defaultTo(db.fn.now());
         table.timestamp('updated_at').defaultTo(db.fn.now());
       });
@@ -430,6 +434,11 @@ const initializeDatabase = async () => {
         table.decimal('wartosc_netto', 14, 2);
         table.string('stawka_vat');
         table.decimal('wartosc_brutto', 14, 2);
+        table.string('typ_dokumentu');
+        table.decimal('waga_jednostkowa', 14, 4);
+        table.decimal('waga_pozycji', 14, 2);
+        table.string('cecha_bebna');
+        table.string('dokumenty_powiazane_wzo');
         table.timestamp('created_at').defaultTo(db.fn.now());
       });
       console.log('Tabela wz_items została utworzona');

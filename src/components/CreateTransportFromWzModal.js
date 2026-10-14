@@ -88,12 +88,22 @@ export default function CreateTransportFromWzModal({
     }
   };
 
+  const totalWeight = selectedDocs.reduce((acc, d) => acc + parseFloat(d.waga_suma || 0), 0);
+  const totalDrums = selectedDocs.reduce((acc, d) => acc + parseInt(d.liczba_bebnow || 0, 10), 0);
+
   // Automatyczne generowanie podsumowania ładunku z wybranych WZ
   useEffect(() => {
     if (selectedDocs.length > 0) {
       const wzList = selectedDocs.map(d => d.nr_wz).join(', ');
-      const desc = `Dokumenty WZ: ${wzList}\nŁączna wartość: ${selectedDocs.reduce((acc, d) => acc + parseFloat(d.dok_brutto || 0), 0).toFixed(2)} zł\nŁącznie pozycji: ${selectedDocs.reduce((acc, d) => acc + parseInt(d.pozycje_count || 0, 10), 0)} poz.`;
+      let desc = `Dokumenty WZ: ${wzList}\nŁączna wartość: ${selectedDocs.reduce((acc, d) => acc + parseFloat(d.dok_brutto || 0), 0).toFixed(2)} zł\nŁącznie pozycji: ${selectedDocs.reduce((acc, d) => acc + parseInt(d.pozycje_count || 0, 10), 0)} poz.`;
       
+      if (totalWeight > 0) {
+        desc += `\nŁączna masa ładunku: ${totalWeight >= 1000 ? (totalWeight / 1000).toFixed(2) + ' t' : totalWeight.toFixed(1) + ' kg'}`;
+      }
+      if (totalDrums > 0) {
+        desc += `\nBębny kablowe: ${totalDrums} szt. (wymagany rozładunek wózkiem / winda)`;
+      }
+
       const city = firstDoc.extracted_city || '';
       const postal = firstDoc.kod_pocztowy_dostawy || firstDoc.extracted_postal_code || '';
       const strt = firstDoc.extracted_street || firstDoc.adres_dostawy || '';
@@ -114,7 +124,7 @@ export default function CreateTransportFromWzModal({
       // Przelicz odległość
       calculateDistance(wh, city, postal, strt);
     }
-  }, [selectedDocs]);
+  }, [selectedDocs, totalWeight, totalDrums]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -204,12 +214,24 @@ export default function CreateTransportFromWzModal({
                 </span>
               ))}
             </div>
-            {(firstDoc.handlowiec || firstDoc.rynek) && (
-              <div className="mt-2 pt-2 border-t border-gray-200/80 flex flex-wrap items-center justify-between text-[11px] text-gray-500">
+            <div className="mt-2 pt-2 border-t border-gray-200/80 flex flex-wrap items-center justify-between text-[11px] text-gray-600 gap-y-1">
+              <div className="flex flex-wrap items-center gap-2">
+                {totalWeight > 0 && (
+                  <span className="inline-flex items-center gap-1 font-semibold text-gray-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                    ⚖️ Łączna masa: {totalWeight >= 1000 ? `${(totalWeight / 1000).toFixed(2)} t` : `${totalWeight.toFixed(1)} kg`}
+                  </span>
+                )}
+                {totalDrums > 0 && (
+                  <span className="inline-flex items-center gap-1 font-semibold text-purple-800 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
+                    📦 Bębny kablowe: {totalDrums} szt.
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-3">
                 {firstDoc.handlowiec && <span>Handlowiec: <b className="text-gray-800">{firstDoc.handlowiec}</b></span>}
                 {firstDoc.rynek && <span>Rynek ERP: <b className="text-blue-700">{firstDoc.rynek}</b></span>}
               </div>
-            )}
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

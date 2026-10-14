@@ -211,6 +211,12 @@ export async function importWzRows(rows) {
     const nrWz = (r.NR_WZ || '').trim();
     if (!nrWz) continue;
 
+    const typDok = (r.TYP_DOKUMENTU || '').trim() || null;
+    const wagaJedn = parsePolishFloat(r.WAGA_JEDNOSTKOWA);
+    const wagaPoz = parsePolishFloat(r.WAGA_POZYCJI);
+    const cechaBebna = (r.CECHA_BEBNA || '').trim() || null;
+    const dokPowiazane = (r.DOKUMENTY_POWIAZANE_WZO || '').trim() || null;
+
     if (!docMap.has(nrWz)) {
       const addrInfo = parseWzAddress(r);
       const dataWyst = parsePolishDate(r.DATA_WYSTAWIENIA);
@@ -238,6 +244,10 @@ export async function importWzRows(rows) {
         jednostka_lokalizacji: (r.JEDNOSTKA_LOKALIZACJI || '').trim() || null,
         rynek: (r.RYNEK || '').trim() || null,
         handlowiec: (r.HANDLOWIEC || '').trim() || null,
+        typ_dokumentu: typDok,
+        waga_suma: 0,
+        liczba_bebnow: 0,
+        dokumenty_powiazane: dokPowiazane,
         latitude: addrInfo.latitude,
         longitude: addrInfo.longitude,
         pozycje_count: 0
@@ -246,6 +256,18 @@ export async function importWzRows(rows) {
 
     const doc = docMap.get(nrWz);
     doc.pozycje_count += 1;
+    if (wagaPoz > 0) {
+      doc.waga_suma += wagaPoz;
+    }
+    if (cechaBebna) {
+      doc.liczba_bebnow += 1;
+    }
+    if (dokPowiazane && (!doc.dokumenty_powiazane || !doc.dokumenty_powiazane.includes(dokPowiazane))) {
+      doc.dokumenty_powiazane = doc.dokumenty_powiazane ? `${doc.dokumenty_powiazane}, ${dokPowiazane}` : dokPowiazane;
+    }
+    if (typDok && !doc.typ_dokumentu) {
+      doc.typ_dokumentu = typDok;
+    }
 
     // Pozycja towarowa
     if (r.ID_POZYCJI || r.KOD_TOWARU || r.NAZWA_TOWARU) {
@@ -261,7 +283,12 @@ export async function importWzRows(rows) {
         cena_jed_netto: parsePolishFloat(r.CENA_JED_NETTO),
         wartosc_netto: parsePolishFloat(r.WARTOSC_NETTO),
         stawka_vat: (r.STAWKA_VAT || '').trim(),
-        wartosc_brutto: parsePolishFloat(r.WARTOSC_BRUTTO)
+        wartosc_brutto: parsePolishFloat(r.WARTOSC_BRUTTO),
+        typ_dokumentu: typDok,
+        waga_jednostkowa: wagaJedn > 0 ? wagaJedn : null,
+        waga_pozycji: wagaPoz > 0 ? wagaPoz : null,
+        cecha_bebna: cechaBebna,
+        dokumenty_powiazane_wzo: dokPowiazane
       });
     }
   }
@@ -302,6 +329,10 @@ export async function importWzRows(rows) {
         jednostka_lokalizacji: db.raw("COALESCE(NULLIF(EXCLUDED.jednostka_lokalizacji, ''), wz_documents.jednostka_lokalizacji)"),
         rynek: db.raw("COALESCE(NULLIF(EXCLUDED.rynek, ''), wz_documents.rynek)"),
         handlowiec: db.raw("COALESCE(NULLIF(EXCLUDED.handlowiec, ''), wz_documents.handlowiec)"),
+        typ_dokumentu: db.raw("COALESCE(NULLIF(EXCLUDED.typ_dokumentu, ''), wz_documents.typ_dokumentu)"),
+        waga_suma: db.raw('EXCLUDED.waga_suma'),
+        liczba_bebnow: db.raw('EXCLUDED.liczba_bebnow'),
+        dokumenty_powiazane: db.raw("COALESCE(NULLIF(EXCLUDED.dokumenty_powiazane, ''), wz_documents.dokumenty_powiazane)"),
         latitude: db.raw('COALESCE(wz_documents.latitude, EXCLUDED.latitude)'),
         longitude: db.raw('COALESCE(wz_documents.longitude, EXCLUDED.longitude)'),
         updated_at: db.fn.now()
@@ -325,7 +356,12 @@ export async function importWzRows(rows) {
         cena_jed_netto: db.raw('EXCLUDED.cena_jed_netto'),
         wartosc_netto: db.raw('EXCLUDED.wartosc_netto'),
         stawka_vat: db.raw('EXCLUDED.stawka_vat'),
-        wartosc_brutto: db.raw('EXCLUDED.wartosc_brutto')
+        wartosc_brutto: db.raw('EXCLUDED.wartosc_brutto'),
+        typ_dokumentu: db.raw('EXCLUDED.typ_dokumentu'),
+        waga_jednostkowa: db.raw('EXCLUDED.waga_jednostkowa'),
+        waga_pozycji: db.raw('EXCLUDED.waga_pozycji'),
+        cecha_bebna: db.raw('EXCLUDED.cecha_bebna'),
+        dokumenty_powiazane_wzo: db.raw('EXCLUDED.dokumenty_powiazane_wzo')
       });
   }
 

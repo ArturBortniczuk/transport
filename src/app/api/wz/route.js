@@ -19,6 +19,8 @@ export async function GET(request) {
     const status = searchParams.get('status') || 'all';
     const rynek = searchParams.get('rynek') || 'all';
     const handlowiec = searchParams.get('handlowiec') || 'all';
+    const typDokumentu = searchParams.get('typDokumentu') || 'all';
+    const tylkoBebny = searchParams.get('tylkoBebny') === 'true';
     const dateFrom = searchParams.get('dateFrom') || '';
     const dateTo = searchParams.get('dateTo') || '';
     const mapOnly = searchParams.get('mapOnly') === 'true';
@@ -48,6 +50,14 @@ export async function GET(request) {
       query = query.where('handlowiec', handlowiec);
     }
 
+    if (typDokumentu && typDokumentu !== 'all') {
+      query = query.where('typ_dokumentu', typDokumentu);
+    }
+
+    if (tylkoBebny) {
+      query = query.where('liczba_bebnow', '>', 0);
+    }
+
     if (dateFrom) {
       query = query.where('data_wystawienia', '>=', dateFrom);
     }
@@ -71,6 +81,7 @@ export async function GET(request) {
           .orWhereILike('handlowiec', searchPattern)
           .orWhereILike('rynek', searchPattern)
           .orWhereILike('kod_pocztowy_dostawy', searchPattern)
+          .orWhereILike('dokumenty_powiazane', searchPattern)
           .orWhereILike('uwagi', searchPattern);
       });
     }
@@ -96,7 +107,10 @@ export async function GET(request) {
         db.raw("COUNT(CASE WHEN status = 'nowy' THEN 1 END) as nowy_count"),
         db.raw("COUNT(CASE WHEN status = 'przypisany' THEN 1 END) as przypisany_count"),
         db.raw("COUNT(CASE WHEN status = 'zrealizowany' THEN 1 END) as zrealizowany_count"),
-        db.raw('COALESCE(SUM(dok_brutto), 0) as total_brutto')
+        db.raw('COALESCE(SUM(dok_brutto), 0) as total_brutto'),
+        db.raw('COALESCE(SUM(waga_suma), 0) as total_waga'),
+        db.raw('COALESCE(SUM(liczba_bebnow), 0) as total_bebny'),
+        db.raw('COUNT(CASE WHEN liczba_bebnow > 0 THEN 1 END) as docs_with_drums_count')
       )
       .first();
 
@@ -117,6 +131,12 @@ export async function GET(request) {
       .whereNot('handlowiec', '')
       .orderBy('handlowiec', 'asc');
 
+    const distinctTypy = await db('wz_documents')
+      .distinct('typ_dokumentu')
+      .whereNotNull('typ_dokumentu')
+      .whereNot('typ_dokumentu', '')
+      .orderBy('typ_dokumentu', 'asc');
+
     return NextResponse.json({
       success: true,
       documents: documents || [],
@@ -131,7 +151,11 @@ export async function GET(request) {
         nowy: parseInt(statsQuery?.nowy_count || 0, 10),
         przypisany: parseInt(statsQuery?.przypisany_count || 0, 10),
         zrealizowany: parseInt(statsQuery?.zrealizowany_count || 0, 10),
-        totalBrutto: parseFloat(statsQuery?.total_brutto || 0)
+        totalBrutto: parseFloat(statsQuery?.total_brutto || 0),
+        totalWagaKg: parseFloat(statsQuery?.total_waga || 0),
+        totalWagaTon: +(parseFloat(statsQuery?.total_waga || 0) / 1000).toFixed(2),
+        totalBebny: parseInt(statsQuery?.total_bebny || 0, 10),
+        docsWithDrums: parseInt(statsQuery?.docs_with_drums_count || 0, 10)
       },
       warehouses: distinctWarehouses.map(w => ({
         symbol: w.symbol_magazynu,
@@ -139,7 +163,8 @@ export async function GET(request) {
         label: `${w.symbol_magazynu} - ${w.nazwa_magazynu}`
       })),
       rynki: distinctRynki.map(r => r.rynek).filter(Boolean),
-      handlowcy: distinctHandlowcy.map(h => h.handlowiec).filter(Boolean)
+      handlowcy: distinctHandlowcy.map(h => h.handlowiec).filter(Boolean),
+      typyDokumentow: distinctTypy.map(t => t.typ_dokumentu).filter(Boolean)
     });
   } catch (error) {
     console.error('Błąd pobierania dokumentów WZ:', error);
