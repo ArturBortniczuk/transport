@@ -272,42 +272,6 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
 
-    const tableExists = await db.schema.hasTable('spedycje');
-    if (!tableExists) {
-      await db.schema.createTable('spedycje', table => {
-        table.increments('id').primary();
-        table.string('status').defaultTo('new');
-        table.string('order_number');
-        table.string('created_by');
-        table.string('created_by_email');
-        table.string('responsible_person');
-        table.string('responsible_email');
-        table.string('mpk');
-        table.string('location');
-        table.text('location_data');
-        table.text('delivery_data');
-        table.string('loading_contact');
-        table.string('unloading_contact');
-        table.date('delivery_date');
-        table.string('documents');
-        table.text('notes');
-        table.text('response_data');
-        table.string('completed_by');
-        table.timestamp('created_at').defaultTo(db.fn.now());
-        table.timestamp('completed_at');
-        table.integer('distance_km');
-        table.boolean('order_sent').defaultTo(false);
-        table.timestamp('order_sent_at');
-        table.string('order_sent_by');
-        table.string('order_recipient');
-        table.text('order_data');
-        table.string('client_name');
-        table.text('goods_description');
-        table.text('responsible_constructions');
-        table.text('merged_transports');
-      });
-    }
-
     let query = db('spedycje');
 
     if (status === 'new') {
@@ -466,52 +430,6 @@ export async function POST(request) {
     };
 
     console.log('Dane do zapisania w bazie:', dataToSave);
-
-    const tableExists = await db.schema.hasTable('spedycje');
-    if (!tableExists) {
-      await db.schema.createTable('spedycje', table => {
-        table.increments('id').primary();
-        table.string('status').defaultTo('new');
-        table.string('order_number');
-        table.string('created_by');
-        table.string('created_by_email');
-        table.string('responsible_person');
-        table.string('responsible_email');
-        table.string('mpk');
-        table.string('location');
-        table.text('location_data');
-        table.text('delivery_data');
-        table.string('loading_contact');
-        table.string('unloading_contact');
-        table.date('delivery_date');
-        table.string('documents');
-        table.text('notes');
-        table.text('response_data');
-        table.string('completed_by');
-        table.timestamp('created_at').defaultTo(db.fn.now());
-        table.timestamp('completed_at');
-        table.integer('distance_km');
-        table.boolean('order_sent').defaultTo(false);
-        table.timestamp('order_sent_at');
-        table.string('order_sent_by');
-        table.string('order_recipient');
-        table.text('order_data');
-        table.string('client_name');
-        table.string('source_client_name');
-        table.text('goods_description');
-        table.text('responsible_constructions');
-        table.text('merged_transports');
-      });
-    } else {
-      // Sprawdź czy nowa kolumna istnieje i dodaj ją jeśli nie
-      const hasSourceClientName = await db.schema.hasColumn('spedycje', 'source_client_name');
-      if (!hasSourceClientName) {
-        await db.schema.alterTable('spedycje', table => {
-          table.string('source_client_name');
-        });
-        console.log('Dodano brakującą kolumnę source_client_name do tabeli spedycje');
-      }
-    }
 
     const result = await db('spedycje').insert(dataToSave).returning('id');
     const id = result[0]?.id;

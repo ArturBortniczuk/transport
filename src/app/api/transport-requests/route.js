@@ -228,8 +228,12 @@ const sendNewRequestNotification = async (requestData) => {
   }
 };
 
+// Flaga sprawdzania tabeli - wystarczy raz na cykl życia procesu
+let tableChecked = false;
+
 // Funkcja zapewniająca istnienie tabeli
 const ensureTableExists = async () => {
+  if (tableChecked) return true;
   try {
     const tableExists = await db.schema.hasTable('transport_requests');
     if (!tableExists) {
@@ -372,6 +376,7 @@ const ensureTableExists = async () => {
       }
     }
 
+    tableChecked = true;
     return true;
   } catch (error) {
     console.error('Błąd tworzenia tabeli transport_requests:', error);

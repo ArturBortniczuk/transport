@@ -21,10 +21,11 @@ const formatDate = (date) => {
   });
 };
 
+const dashboardCache = global._dashboardCache || (global._dashboardCache = new Map());
+const DASHBOARD_CACHE_TTL = 60 * 1000;
+
 export async function GET(request) {
   try {
-    console.log('=== START GET /api/dashboard ===');
-
     // Sprawdzamy uwierzytelnienie
     const sessionResult = await getSessionUser(request);
 
@@ -37,6 +38,12 @@ export async function GET(request) {
 
     const user = sessionResult.user;
     const userId = user.email;
+
+    const cacheKey = `${userId}_${user.role}_${user.mpk || ''}`;
+    const cached = dashboardCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return NextResponse.json(cached.data);
+    }
 
     // Sprawdź uprawnienia
     const isAdmin = user.role === 'admin';
@@ -113,9 +120,7 @@ export async function GET(request) {
     let ownTransportsLastMonth = 0;
 
     try {
-      const transportsExist = await db.schema.hasTable('transports');
-      if (transportsExist) {
-        // Aktywne transporty
+      // Aktywne transporty
         const activeResult = await applyTransportFilter(db('transports'))
           .whereNot('status', 'completed')
           .count('* as count').first();
@@ -191,7 +196,6 @@ export async function GET(request) {
           .where('delivery_date', '<=', lastMonthEnd.toISOString())
           .count('* as count').first();
         ownTransportsLastMonth = parseInt(ownLastMonth?.count || 0);
-      }
     } catch (error) {
       console.error('Błąd transportów własnych:', error);
     }
@@ -205,9 +209,7 @@ export async function GET(request) {
     let lastWeekCost = 0;
 
     try {
-      const spedycjeExist = await db.schema.hasTable('spedycje');
-      if (spedycjeExist) {
-        // Aktywne spedycje
+      // Aktywne spedycje
         const activeSpedResult = await applySpedycjaFilter(db('spedycje'))
           .whereNot('status', 'completed')
           .count('* as count').first();
@@ -331,23 +333,19 @@ export async function GET(request) {
             }
           } catch (e) { }
         });
-      }
     } catch (error) {
       console.error('Błąd spedycji:', error);
     }
 
     // 3. WNIOSKI TRANSPORTOWE
     try {
-      const requestsExist = await db.schema.hasTable('transport_requests');
-      if (requestsExist) {
-        // Zastosuj filtr user.email lub user.name na transport_requests 
-        const pendingQuery = db('transport_requests').where('status', 'pending');
-        if (isHandlowiec) {
-          pendingQuery.where('created_by_email', userId);
-        }
-        const pendingResult = await pendingQuery.count('* as count').first();
-        dashboardData.pendingRequests = parseInt(pendingResult?.count || 0);
+      // Zastosuj filtr user.email lub user.name na transport_requests 
+      const pendingQuery = db('transport_requests').where('status', 'pending');
+      if (isHandlowiec) {
+        pendingQuery.where('created_by_email', userId);
       }
+      const pendingResult = await pendingQuery.count('* as count').first();
+      dashboardData.pendingRequests = parseInt(pendingResult?.count || 0);
     } catch (error) {
       console.error('Błąd wniosków:', error);
     }
@@ -382,42 +380,36 @@ export async function GET(request) {
 
       try {
         // Transport własny
-        const transportsExist = await db.schema.hasTable('transports');
-        if (transportsExist) {
-          const ownResult = await applyTransportFilter(db('transports'))
-            .where('delivery_date', '>=', monthStart.toISOString())
-            .where('delivery_date', '<=', monthEnd.toISOString())
-            .count('* as count').first();
-          ownCount = parseInt(ownResult?.count || 0);
-        }
+        const ownResult = await applyTransportFilter(db('transports'))
+          .where('delivery_date', '>=', monthStart.toISOString())
+          .where('delivery_date', '<=', monthEnd.toISOString())
+          .count('* as count').first();
+        ownCount = parseInt(ownResult?.count || 0);
 
         // Spedycje
-        const spedycjeExist = await db.schema.hasTable('spedycje');
-        if (spedycjeExist) {
-          const spedResult = await applySpedycjaFilter(db('spedycje'))
-            .where('created_at', '>=', monthStart.toISOString())
-            .where('created_at', '<=', monthEnd.toISOString())
-            .count('* as count').first();
-          speditionCount = parseInt(spedResult?.count || 0);
+        const spedResult = await applySpedycjaFilter(db('spedycje'))
+          .where('created_at', '>=', monthStart.toISOString())
+          .where('created_at', '<=', monthEnd.toISOString())
+          .count('* as count').first();
+        speditionCount = parseInt(spedResult?.count || 0);
 
-          // Koszty TYLKO spedycji
-          const monthSpeditions = await applySpedycjaFilter(db('spedycje'))
-            .where('completed_at', '>=', monthStart.toISOString())
-            .where('completed_at', '<=', monthEnd.toISOString())
-            .where('status', 'completed')
-            .select('response_data');
+        // Koszty TYLKO spedycji
+        const monthSpeditions = await applySpedycjaFilter(db('spedycje'))
+          .where('completed_at', '>=', monthStart.toISOString())
+          .where('completed_at', '<=', monthEnd.toISOString())
+          .where('status', 'completed')
+          .select('response_data');
 
-          monthSpeditions.forEach(spedycja => {
-            try {
-              if (spedycja.response_data) {
-                const responseData = typeof spedycja.response_data === 'string' ? JSON.parse(spedycja.response_data) : spedycja.response_data;
-                if (responseData.deliveryPrice) {
-                  monthCost += parseFloat(responseData.deliveryPrice);
-                }
+        monthSpeditions.forEach(spedycja => {
+          try {
+            if (spedycja.response_data) {
+              const responseData = typeof spedycja.response_data === 'string' ? JSON.parse(spedycja.response_data) : spedycja.response_data;
+              if (responseData.deliveryPrice) {
+                monthCost += parseFloat(responseData.deliveryPrice);
               }
-            } catch (e) { }
-          });
-        }
+            }
+          } catch (e) { }
+        });
       } catch (error) {
         console.error(`Błąd danych dla miesiąca ${monthName}:`, error);
       }
@@ -439,23 +431,19 @@ export async function GET(request) {
     dashboardData.monthlyChartData = transportChartData;  // Podział transportów
     dashboardData.costChartData = costChartData;         // Koszty spedycji
 
-    console.log('SPÓJNE DANE:', {
-      activeDrivers: dashboardData.activeDrivers,
-      fleetsInUse: dashboardData.fleetsInUse,
-      totalFleets: dashboardData.totalFleets,
-      ownThisMonth: ownTransportsThisMonth,
-      speditionThisMonth: speditionTransportsThisMonth,
-      thisMonthCost: Math.round(thisMonthCost),
-      transportChartLength: transportChartData.length,
-      costChartLength: costChartData.length
-    });
-
-    return NextResponse.json({
+    const resultPayload = {
       success: true,
       data: dashboardData,
       userRole: user.role,
       userName: user.name
+    };
+
+    dashboardCache.set(cacheKey, {
+      data: resultPayload,
+      expiresAt: Date.now() + DASHBOARD_CACHE_TTL
     });
+
+    return NextResponse.json(resultPayload);
 
   } catch (error) {
     console.error('Błąd w GET /api/dashboard:', error);

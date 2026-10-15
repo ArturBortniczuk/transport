@@ -349,19 +349,6 @@ export async function GET(request) {
       }, { status: 400 })
     }
 
-    const tableExists = await db.schema.hasTable('spedition_detailed_ratings')
-    if (!tableExists) {
-      return NextResponse.json({
-        success: true,
-        rating: null,
-        stats: { totalRatings: 0, overallRatingPercentage: null },
-        canBeRated: userId ? true : false,
-        hasUserRated: false,
-        allRatings: [],
-        hasResolution: false
-      })
-    }
-
     let allDetailedRatings = []
     try {
       allDetailedRatings = await db('spedition_detailed_ratings')
@@ -574,31 +561,6 @@ export async function POST(request) {
         success: false,
         error: 'Nie można edytować oceny - administrator dodał już rozwiązanie problemu'
       }, { status: 403 })
-    }
-
-    const detailedRatingsExist = await db.schema.hasTable('spedition_detailed_ratings')
-
-    if (!detailedRatingsExist) {
-      await db.schema.createTable('spedition_detailed_ratings', (table) => {
-        table.increments('id').primary()
-        table.integer('spedition_id').notNullable()
-        table.string('rater_email').notNullable()
-        table.string('rater_name')
-        table.boolean('carrier_professional')
-        table.boolean('loading_on_time')
-        table.boolean('cargo_complete')
-        table.boolean('cargo_undamaged')
-        table.boolean('delivery_notified')
-        table.boolean('delivery_on_time')
-        table.boolean('documents_complete')
-        table.boolean('documents_correct')
-        table.boolean('other_problem').defaultTo(false)
-        table.text('comment')
-        table.timestamp('rated_at').defaultTo(db.fn.now())
-
-        table.index(['spedition_id'])
-        table.unique(['spedition_id', 'rater_email'])
-      })
     }
 
     const user = await db('users')

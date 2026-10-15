@@ -17,6 +17,12 @@ export async function GET(request) {
       }, { status: 401 });
     }
 
+    const cacheKey = 'users_full_list';
+    const cached = getFromCache(cacheKey);
+    if (cached) {
+      return NextResponse.json(cached);
+    }
+
     // Pobieranie listy użytkowników (tylko pracownicy, bez klientów zewnętrznych)
     const users = await db('users')
       .select('name', 'position', 'email', 'permissions', 'role', 'mpk')
@@ -26,6 +32,8 @@ export async function GET(request) {
     if (!users || users.length === 0) {
       throw new Error('Nie znaleziono użytkowników');
     }
+
+    setInCache(cacheKey, users, 60);
 
     return NextResponse.json(users);
   } catch (error) {

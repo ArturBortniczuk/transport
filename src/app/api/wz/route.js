@@ -67,8 +67,23 @@ export async function GET(request) {
     }
 
     if (mapOnly) {
-      // Dla mapy pobieramy tylko dokumenty mające współrzędne
-      query = query.whereNotNull('latitude').whereNotNull('longitude');
+      // Dla mapy pobieramy tylko dokumenty mające współrzędne i TYLKO niezbędne kolumny
+      const mapDocuments = await query
+        .whereNotNull('latitude')
+        .whereNotNull('longitude')
+        .select([
+          'id', 'nr_wz', 'latitude', 'longitude', 'status',
+          'nazwa_kontrahenta', 'adres_dostawy', 'extracted_city',
+          'symbol_magazynu', 'transport_id', 'liczba_bebnow', 'waga_suma'
+        ])
+        .orderBy('data_wystawienia', 'desc')
+        .orderBy('id', 'desc')
+        .limit(limit);
+
+      return NextResponse.json({
+        success: true,
+        documents: mapDocuments || []
+      });
     }
 
     if (search) {
@@ -100,42 +115,76 @@ export async function GET(request) {
     const totalCountRes = await totalCountQuery;
     const totalCount = parseInt(totalCountRes?.count || 0, 10);
 
-    // Pobieranie statystyk i słowników
-    const statsQuery = await db('wz_documents')
-      .select(
-        db.raw('COUNT(*) as total_count'),
-        db.raw("COUNT(CASE WHEN status = 'nowy' THEN 1 END) as nowy_count"),
-        db.raw("COUNT(CASE WHEN status = 'przypisany' THEN 1 END) as przypisany_count"),
-        db.raw("COUNT(CASE WHEN status = 'zrealizowany' THEN 1 END) as zrealizowany_count"),
-        db.raw('COALESCE(SUM(dok_brutto), 0) as total_brutto'),
-        db.raw('COALESCE(SUM(waga_suma), 0) as total_waga'),
-        db.raw('COALESCE(SUM(liczba_bebnow), 0) as total_bebny'),
-        db.raw('COUNT(CASE WHEN liczba_bebnow > 0 THEN 1 END) as docs_with_drums_count')
-      )
-      .first();
+    // Cache'owanie statystyk (TTL: 60 sekund)
+    const now = Date.now();
+    let stats = global._wzStatsCache;
+    if (!stats || !global._wzStatsExpires || global._wzStatsExpires < now) {
+      const statsQuery = await db('wz_documents')
+        .select(
+          db.raw('COUNT(*) as total_count'),
+          db.raw("COUNT(CASE WHEN status = 'nowy' THEN 1 END) as nowy_count"),
+          db.raw("COUNT(CASE WHEN status = 'przypisany' THEN 1 END) as przypisany_count"),
+          db.raw("COUNT(CASE WHEN status = 'zrealizowany' THEN 1 END) as zrealizowany_count"),
+          db.raw('COALESCE(SUM(dok_brutto), 0) as total_brutto'),
+          db.raw('COALESCE(SUM(waga_suma), 0) as total_waga'),
+          db.raw('COALESCE(SUM(liczba_bebnow), 0) as total_bebny'),
+          db.raw('COUNT(CASE WHEN liczba_bebnow > 0 THEN 1 END) as docs_with_drums_count')
+        )
+        .first();
 
-    const distinctWarehouses = await db('wz_documents')
-      .distinct('symbol_magazynu', 'nazwa_magazynu')
-      .whereNotNull('symbol_magazynu')
-      .orderBy('symbol_magazynu', 'asc');
+      stats = {
+        total: parseInt(statsQuery?.total_count || 0, 10),
+        nowy: parseInt(statsQuery?.nowy_count || 0, 10),
+        przypisany: parseInt(statsQuery?.przypisany_count || 0, 10),
+        zrealizowany: parseInt(statsQuery?.zrealizowany_count || 0, 10),
+        totalBrutto: parseFloat(statsQuery?.total_brutto || 0),
+        totalWagaKg: parseFloat(statsQuery?.total_waga || 0),
+        totalWagaTon: +(parseFloat(statsQuery?.total_waga || 0) / 1000).toFixed(2),
+        totalBebny: parseInt(statsQuery?.total_bebny || 0, 10),
+        docsWithDrums: parseInt(statsQuery?.docs_with_drums_count || 0, 10)
+      };
+      global._wzStatsCache = stats;
+      global._wzStatsExpires = now + 60 * 1000;
+    }
 
-    const distinctRynki = await db('wz_documents')
-      .distinct('rynek')
-      .whereNotNull('rynek')
-      .whereNot('rynek', '')
-      .orderBy('rynek', 'asc');
+    // Cache'owanie słowników (TTL: 5 minut)
+    let dicts = global._wzDictsCache;
+    if (!dicts || !global._wzDictsExpires || global._wzDictsExpires < now) {
+      const [distinctWarehouses, distinctRynki, distinctHandlowcy, distinctTypy] = await Promise.all([
+        db('wz_documents')
+          .distinct('symbol_magazynu', 'nazwa_magazynu')
+          .whereNotNull('symbol_magazynu')
+          .orderBy('symbol_magazynu', 'asc'),
+        db('wz_documents')
+          .distinct('rynek')
+          .whereNotNull('rynek')
+          .whereNot('rynek', '')
+          .orderBy('rynek', 'asc'),
+        db('wz_documents')
+          .distinct('handlowiec')
+          .whereNotNull('handlowiec')
+          .whereNot('handlowiec', '')
+          .orderBy('handlowiec', 'asc'),
+        db('wz_documents')
+          .distinct('typ_dokumentu')
+          .whereNotNull('typ_dokumentu')
+          .whereNot('typ_dokumentu', '')
+          .orderBy('typ_dokumentu', 'asc')
+      ]);
 
-    const distinctHandlowcy = await db('wz_documents')
-      .distinct('handlowiec')
-      .whereNotNull('handlowiec')
-      .whereNot('handlowiec', '')
-      .orderBy('handlowiec', 'asc');
-
-    const distinctTypy = await db('wz_documents')
-      .distinct('typ_dokumentu')
-      .whereNotNull('typ_dokumentu')
-      .whereNot('typ_dokumentu', '')
-      .orderBy('typ_dokumentu', 'asc');
+      dicts = {
+        warehouses: distinctWarehouses.map(w => ({
+          symbol: w.symbol_magazynu,
+          nazwa: w.nazwa_magazynu,
+          label: `${w.symbol_magazynu} - ${w.nazwa_magazynu}`
+        })),
+        rynki: distinctRynki.map(r => r.rynek).filter(Boolean),
+        handlowcy: distinctHandlowcy.map(h => h.handlowiec).filter(Boolean),
+        typyDokumentow: distinctTypy.map(t => t.typ_dokumentu).filter(Boolean)
+      };
+      global._wzDictsCache = dicts;
+      global._wzDictsExpires = now + 5 * 60 * 1000;
+    }
 
     return NextResponse.json({
       success: true,
@@ -146,25 +195,11 @@ export async function GET(request) {
         limit,
         totalPages: Math.ceil(totalCount / limit)
       },
-      stats: {
-        total: parseInt(statsQuery?.total_count || 0, 10),
-        nowy: parseInt(statsQuery?.nowy_count || 0, 10),
-        przypisany: parseInt(statsQuery?.przypisany_count || 0, 10),
-        zrealizowany: parseInt(statsQuery?.zrealizowany_count || 0, 10),
-        totalBrutto: parseFloat(statsQuery?.total_brutto || 0),
-        totalWagaKg: parseFloat(statsQuery?.total_waga || 0),
-        totalWagaTon: +(parseFloat(statsQuery?.total_waga || 0) / 1000).toFixed(2),
-        totalBebny: parseInt(statsQuery?.total_bebny || 0, 10),
-        docsWithDrums: parseInt(statsQuery?.docs_with_drums_count || 0, 10)
-      },
-      warehouses: distinctWarehouses.map(w => ({
-        symbol: w.symbol_magazynu,
-        nazwa: w.nazwa_magazynu,
-        label: `${w.symbol_magazynu} - ${w.nazwa_magazynu}`
-      })),
-      rynki: distinctRynki.map(r => r.rynek).filter(Boolean),
-      handlowcy: distinctHandlowcy.map(h => h.handlowiec).filter(Boolean),
-      typyDokumentow: distinctTypy.map(t => t.typ_dokumentu).filter(Boolean)
+      stats: stats,
+      warehouses: dicts.warehouses,
+      rynki: dicts.rynki,
+      handlowcy: dicts.handlowcy,
+      typyDokumentow: dicts.typyDokumentow
     });
   } catch (error) {
     console.error('Błąd pobierania dokumentów WZ:', error);
@@ -208,6 +243,10 @@ export async function POST(request) {
     }
 
     const result = await importWzRows(rows);
+
+    // Unieważnij pamięć podręczną statystyk i słowników po nowym imporcie
+    global._wzStatsExpires = 0;
+    global._wzDictsExpires = 0;
 
     return NextResponse.json({
       success: true,

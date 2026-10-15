@@ -23,7 +23,14 @@ export async function GET(request) {
     const date = searchParams.get('date');
     const status = searchParams.get('status') || 'active'; // Domyślnie pobieramy tylko aktywne
     
-    // Wyłączamy cache całkowicie
+    const cacheKey = `transports_${status}_${date || 'all'}`;
+    const cachedTransports = getFromCache(cacheKey);
+    if (cachedTransports) {
+      return NextResponse.json({ 
+        success: true, 
+        transports: cachedTransports 
+      });
+    }
     
     // Budujemy zapytanie
     let query = db('transports');
@@ -51,18 +58,12 @@ export async function GET(request) {
     // Wykonaj zapytanie
     const transports = await query;
     
-    console.log(`Pobrano ${transports.length} transportów o statusie: ${status}`);
+    // Zapisz w pamięci podręcznej na 30 sekund
+    setInCache(cacheKey, transports || [], 30);
     
     return NextResponse.json({ 
       success: true, 
       transports: transports || []
-    }, {
-      headers: {
-        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0',
-        'Surrogate-Control': 'no-store'
-      }
     });
   } catch (error) {
     console.error('Error fetching transports:', error);

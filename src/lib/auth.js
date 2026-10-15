@@ -135,6 +135,18 @@ export function normalizeTransportRole(rawRole) {
   return lower;
 }
 
+// Pamięć podręczna sesji użytkowników w pamięci RAM (zapobiega powtarzającym się zapytaniom auth do Supabase)
+const sessionCache = global._transportUserSessionCache || (global._transportUserSessionCache = new Map());
+const SESSION_CACHE_TTL = 60 * 1000; // 60 sekund
+
+export function invalidateUserSession(email) {
+  if (!email) {
+    sessionCache.clear();
+  } else {
+    sessionCache.delete(email.toLowerCase().trim());
+  }
+}
+
 /**
  * Pobiera dane zalogowanego użytkownika na podstawie ciasteczka Supabase SSO (eltron_auth_token)
  * lub ciasteczka authToken / userEmail.
@@ -159,6 +171,12 @@ export async function getSessionUser(request) {
     }
 
     if (ssoEmail) {
+      const cacheKey = ssoEmail.toLowerCase().trim();
+      const cached = sessionCache.get(cacheKey);
+      if (cached && cached.expiresAt > Date.now()) {
+        return cached.session;
+      }
+
       // 1. Pobierz użytkownika z profiles oraz z user_app_permissions bezpośrednio z Supabase
       let userRow = null;
       let userPerm = null;
@@ -166,7 +184,7 @@ export async function getSessionUser(request) {
       try {
         const { data: profile } = await supabaseAdmin
           .from('profiles')
-          .select('*')
+          .select('id, email, name, position, mpk, permissions')
           .ilike('email', ssoEmail)
           .maybeSingle();
 
@@ -174,7 +192,7 @@ export async function getSessionUser(request) {
           userRow = profile;
           const { data: perm } = await supabaseAdmin
             .from('user_app_permissions')
-            .select('*')
+            .select('id, user_id, app_id, role, permissions, is_active')
             .eq('user_id', profile.id)
             .eq('app_id', 'transport')
             .maybeSingle();
@@ -323,7 +341,7 @@ export async function getSessionUser(request) {
         }
       };
 
-      return {
+      const sessionResult = {
         isAuthenticated: true,
         user: {
           id: userRow?.id,
@@ -337,6 +355,13 @@ export async function getSessionUser(request) {
           isAdmin: isAdmin
         }
       };
+
+      sessionCache.set(cacheKey, {
+        session: sessionResult,
+        expiresAt: Date.now() + SESSION_CACHE_TTL
+      });
+
+      return sessionResult;
     }
 
     return { isAuthenticated: false, user: null };

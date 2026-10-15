@@ -271,19 +271,6 @@ export async function GET(request) {
       }, { status: 400 });
     }
 
-    const tableExists = await db.schema.hasTable('transport_detailed_ratings');
-    if (!tableExists) {
-      return NextResponse.json({
-        success: true,
-        rating: null,
-        stats: { totalRatings: 0, overallRatingPercentage: null },
-        canBeRated: userId ? true : false,
-        hasUserRated: false,
-        allRatings: [],
-        hasResolution: false
-      });
-    }
-
     const allDetailedRatings = await db('transport_detailed_ratings')
       .where('transport_id', transportId)
       .orderBy('created_at', 'desc')
@@ -453,28 +440,6 @@ export async function POST(request) {
         success: false,
         error: 'Nie można edytować oceny - administrator dodał już rozwiązanie problemu'
       }, { status: 403 });
-    }
-
-    const detailedRatingsExist = await db.schema.hasTable('transport_detailed_ratings');
-    if (!detailedRatingsExist) {
-      await db.schema.createTable('transport_detailed_ratings', (table) => {
-        table.increments('id').primary();
-        table.integer('transport_id').notNullable();
-        table.string('rater_email').notNullable();
-        table.string('rater_name');
-        table.boolean('driver_professional');
-        table.boolean('driver_tasks_completed');
-        table.boolean('cargo_complete');
-        table.boolean('cargo_correct');
-        table.boolean('delivery_notified');
-        table.boolean('delivery_on_time');
-        table.boolean('other_problem').defaultTo(false);
-        table.text('comment');
-        table.timestamp('created_at').defaultTo(db.fn.now());
-
-        table.index(['transport_id']);
-        table.unique(['transport_id', 'rater_email']);
-      });
     }
 
     const user = await db('users')

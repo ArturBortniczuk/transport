@@ -10,11 +10,6 @@ const CACHE_TTL = 5 * 60 * 1000 // 5 minut cache
 // Funkcja do obliczania procentów na podstawie szczegółowych ocen
 const calculateDetailedPercentage = async (transportId) => {
   try {
-    // Sprawdź czy tabela szczegółowych ocen istnieje
-    const hasTable = await db.schema.hasTable('transport_detailed_ratings');
-    if (!hasTable) {
-      return null;
-    }
     
     // Pobierz szczegółowe oceny dla tego transportu
     const detailedRatings = await db('transport_detailed_ratings')
@@ -108,13 +103,10 @@ export async function POST(request) {
       // OPTYMALIZACJA: Pobierz wszystkie szczegółowe oceny w jednym zapytaniu
       let allDetailedRatings = [];
       try {
-        const hasDetailedTable = await db.schema.hasTable('transport_detailed_ratings');
-        if (hasDetailedTable) {
-          allDetailedRatings = await db('transport_detailed_ratings')
-            .whereIn('transport_id', transportIds)
-            .select('*');
-          console.log(`Znaleziono ${allDetailedRatings.length} szczegółowych ocen`);
-        }
+        allDetailedRatings = await db('transport_detailed_ratings')
+          .whereIn('transport_id', transportIds)
+          .select('*');
+        console.log(`Znaleziono ${allDetailedRatings.length} szczegółowych ocen`);
       } catch (error) {
         console.log('Tabela transport_detailed_ratings nie istnieje lub błąd:', error.message);
       }

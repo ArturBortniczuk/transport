@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server';
 import db from '@/database/db';
 import { removeFromCache } from '@/utils/cache';
-import { validateSession } from '@/lib/auth';
+import { validateSession, invalidateUserSession } from '@/lib/auth';
 
 export async function PUT(request) {
   try {
@@ -96,8 +96,10 @@ export async function PUT(request) {
       throw new Error('Nie udało się zaktualizować uprawnień');
     }
 
-    // Wyczyść cache listy użytkowników po zmianie uprawnień
+    // Wyczyść cache listy użytkowników i sesję użytkownika po zmianie uprawnień
     removeFromCache('users_list_basic');
+    removeFromCache('users_full_list');
+    invalidateUserSession(targetUserId);
 
     return NextResponse.json({ 
       success: true,
