@@ -38,6 +38,26 @@ export async function GET(request) {
       .where('nr_wz', doc.nr_wz)
       .orderBy('id', 'asc');
 
+    // Jeśli pozycje mają cecha_bebna, dołącz dane o powiązanych bębnach z innych dokumentów (np. WZO / WIO)
+    const cechy = (items || []).map(it => it.cecha_bebna).filter(Boolean);
+    let linkedDrums = [];
+    if (cechy.length > 0) {
+      linkedDrums = await db('wz_items')
+        .whereIn('cecha_bebna', cechy)
+        .whereNot('nr_wz', doc.nr_wz)
+        .select('nr_wz', 'nazwa_towaru', 'cecha_bebna', 'waga_pozycji', 'waga_jednostkowa', 'typ_dokumentu');
+    }
+
+    const itemsWithDrums = (items || []).map(item => {
+      const matched = item.cecha_bebna
+        ? linkedDrums.filter(d => d.cecha_bebna === item.cecha_bebna)
+        : [];
+      return {
+        ...item,
+        linked_drums: matched
+      };
+    });
+
     // Informacje o transporcie
     let transportInfo = null;
     if (doc.transport_id) {
@@ -57,7 +77,7 @@ export async function GET(request) {
     return NextResponse.json({
       success: true,
       document: doc,
-      items: items || [],
+      items: itemsWithDrums,
       transport: transportInfo,
       spedycja: spedycjaInfo
     });

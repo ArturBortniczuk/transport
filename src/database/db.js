@@ -411,6 +411,10 @@ const initializeDatabase = async () => {
         table.string('handlowiec');
         table.string('typ_dokumentu');
         table.decimal('waga_suma', 14, 2).defaultTo(0);
+        table.decimal('waga_towaru', 14, 2).defaultTo(0);
+        table.decimal('waga_bebnow', 14, 2).defaultTo(0);
+        table.integer('waga_brak_towar_count').defaultTo(0);
+        table.integer('waga_brak_beben_count').defaultTo(0);
         table.integer('liczba_bebnow').defaultTo(0);
         table.text('dokumenty_powiazane');
         table.timestamp('created_at').defaultTo(db.fn.now());

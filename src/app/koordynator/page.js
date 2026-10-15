@@ -26,10 +26,12 @@ import {
   ChevronLeft,
   ChevronRight,
   Package,
-  Weight
+  Weight,
+  Building2
 } from 'lucide-react';
 import WzDetailsModal from '@/components/WzDetailsModal';
 import CreateTransportFromWzModal from '@/components/CreateTransportFromWzModal';
+import CreateSpeditionFromWzModal from '@/components/CreateSpeditionFromWzModal';
 
 // Dynamiczny import mapy Leaflet (bez SSR)
 const WzLeafletMap = dynamic(
@@ -81,6 +83,7 @@ export default function KoordynatorPage() {
   // Modale
   const [inspectWzNumber, setInspectWzNumber] = useState(null);
   const [isCreateTransportOpen, setIsCreateTransportOpen] = useState(false);
+  const [isCreateSpeditionOpen, setIsCreateSpeditionOpen] = useState(false);
 
   // Stan importu CSV
   const [isImporting, setIsImporting] = useState(false);
@@ -382,7 +385,9 @@ export default function KoordynatorPage() {
               <p className="text-xl font-black text-amber-600 mt-1">
                 {stats.totalWagaTon ? `${stats.totalWagaTon} t` : `${stats.totalWagaKg || 0} kg`}
               </p>
-              <p className="text-[10px] text-gray-400 mt-0.5">Bębny: {stats.totalBebny || 0} szt.</p>
+              <p className="text-[10px] text-gray-500 mt-0.5">
+                Towar: <b>{stats.totalWagaTowaruTon || 0} t</b> • Bębny: <b>{stats.totalBebny || 0} szt.</b> ({stats.totalWagaBebnowTon || 0} t)
+              </p>
             </div>
             <div className="p-2.5 bg-amber-50 text-amber-600 rounded-xl">
               <Package className="w-5 h-5" />
@@ -552,7 +557,7 @@ export default function KoordynatorPage() {
                   Pozycji: {selectedDocsObjects.reduce((acc, d) => acc + parseInt(d.pozycje_count || 0, 10), 0)} • 
                   Wartość: {selectedDocsObjects.reduce((acc, d) => acc + parseFloat(d.dok_brutto || 0), 0).toLocaleString('pl-PL', { minimumFractionDigits: 2 })} zł
                   {selectedDocsObjects.some(d => parseFloat(d.waga_suma || 0) > 0) && (
-                    <> • Łączna masa: <b className="text-amber-200">{(selectedDocsObjects.reduce((acc, d) => acc + parseFloat(d.waga_suma || 0), 0) / 1000).toFixed(2)} t</b></>
+                    <> • Łączna masa: <b className="text-amber-200">{(selectedDocsObjects.reduce((acc, d) => acc + parseFloat(d.waga_suma || 0), 0) / 1000).toFixed(2)} t</b> (Towar: {(selectedDocsObjects.reduce((acc, d) => acc + parseFloat(d.waga_towaru || 0), 0) / 1000).toFixed(2)} t + Bębny: {(selectedDocsObjects.reduce((acc, d) => acc + parseFloat(d.waga_bebnow || 0), 0) / 1000).toFixed(2)} t)</>
                   )}
                   {selectedDocsObjects.some(d => parseInt(d.liczba_bebnow || 0, 10) > 0) && (
                     <> • Bębny: <b className="text-purple-200">{selectedDocsObjects.reduce((acc, d) => acc + parseInt(d.liczba_bebnow || 0, 10), 0)} szt.</b></>
@@ -561,13 +566,21 @@ export default function KoordynatorPage() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2.5 flex-wrap">
               <button
                 onClick={() => setIsCreateTransportOpen(true)}
                 className="bg-white text-blue-800 hover:bg-blue-50 px-4 py-2 rounded-xl text-sm font-bold shadow-xs transition-colors flex items-center gap-2"
               >
-                <Truck className="w-4 h-4" />
-                <span>Utwórz transport własny ({selectedWzNumbers.length})</span>
+                <Truck className="w-4 h-4 text-blue-700" />
+                <span>Transport własny ({selectedWzNumbers.length})</span>
+              </button>
+
+              <button
+                onClick={() => setIsCreateSpeditionOpen(true)}
+                className="bg-indigo-600 hover:bg-indigo-500 text-white border border-indigo-400/30 px-4 py-2 rounded-xl text-sm font-bold shadow-xs transition-colors flex items-center gap-2"
+              >
+                <Building2 className="w-4 h-4 text-indigo-200" />
+                <span>Zlecenie spedycyjne ({selectedWzNumbers.length})</span>
               </button>
 
               {activeTab !== 'map' && (
@@ -661,14 +674,18 @@ export default function KoordynatorPage() {
                           <td className="py-3 px-3 font-mono font-bold text-gray-900">
                             <button
                               onClick={() => setInspectWzNumber(doc.nr_wz)}
-                              className="hover:text-blue-600 hover:underline text-left"
+                              className="hover:text-blue-600 hover:underline text-left block"
                             >
                               {doc.nr_wz}
                             </button>
                             {doc.dokumenty_powiazane && (
-                              <span className="block text-[10px] font-mono text-gray-400 font-normal truncate max-w-[150px]" title={`Powiązane: ${doc.dokumenty_powiazane}`}>
-                                ↳ {doc.dokumenty_powiazane}
-                              </span>
+                              <button
+                                onClick={() => setInspectWzNumber(doc.dokumenty_powiazane.split(',')[0].trim())}
+                                className="inline-flex items-center gap-1 text-[10px] font-mono font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 px-1.5 py-0.5 rounded border border-purple-200 mt-0.5 truncate max-w-[150px]"
+                                title={`Powiązane opakowania/zlecenia: ${doc.dokumenty_powiazane}. Kliknij aby zobaczyć.`}
+                              >
+                                ↳ WZO: {doc.dokumenty_powiazane}
+                              </button>
                             )}
                           </td>
                           <td className="py-3 px-3 text-gray-600 whitespace-nowrap">
@@ -716,11 +733,23 @@ export default function KoordynatorPage() {
                           </td>
                           <td className="py-3 px-3 text-right whitespace-nowrap">
                             {parseFloat(doc.waga_suma || 0) > 0 ? (
-                              <span className="font-semibold text-gray-900">
-                                {parseFloat(doc.waga_suma) >= 1000
-                                  ? `${(parseFloat(doc.waga_suma) / 1000).toFixed(2)} t`
-                                  : `${parseFloat(doc.waga_suma).toFixed(1)} kg`}
-                              </span>
+                              <div>
+                                <span className="font-bold text-gray-900 block">
+                                  {parseFloat(doc.waga_suma) >= 1000
+                                    ? `${(parseFloat(doc.waga_suma) / 1000).toFixed(2)} t`
+                                    : `${parseFloat(doc.waga_suma).toFixed(1)} kg`}
+                                </span>
+                                {(parseFloat(doc.waga_towaru || 0) > 0 || parseFloat(doc.waga_bebnow || 0) > 0) && (
+                                  <span className="text-[10px] text-gray-400 block font-mono">
+                                    T: {parseFloat(doc.waga_towaru || 0).toFixed(0)} + B: {parseFloat(doc.waga_bebnow || 0).toFixed(0)} kg
+                                  </span>
+                                )}
+                                {(parseInt(doc.waga_brak_towar_count || 0, 10) > 0 || parseInt(doc.waga_brak_beben_count || 0, 10) > 0) && (
+                                  <span className="text-[9px] text-amber-600 font-semibold block" title="W ERP brak wagi dla części pozycji towarowych lub bębnów">
+                                    ⚠️ brak w ERP
+                                  </span>
+                                )}
+                              </div>
                             ) : (
                               <span className="text-gray-300">-</span>
                             )}
@@ -729,7 +758,7 @@ export default function KoordynatorPage() {
                             {parseInt(doc.liczba_bebnow || 0, 10) > 0 ? (
                               <span
                                 className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200"
-                                title={`Liczba bębnów kablowych: ${doc.liczba_bebnow}`}
+                                title={`Liczba bębnów: ${doc.liczba_bebnow} szt. (waga tary: ${parseFloat(doc.waga_bebnow || 0).toFixed(0)} kg)`}
                               >
                                 📦 {doc.liczba_bebnow}
                               </span>
@@ -744,16 +773,20 @@ export default function KoordynatorPage() {
                             {parseFloat(doc.dok_brutto || 0).toLocaleString('pl-PL', { minimumFractionDigits: 2 })} zł
                           </td>
                           <td className="py-3 px-3 text-center whitespace-nowrap">
-                            {doc.status === 'przypisany' ? (
-                              <span className="px-2 py-0.5 rounded-full font-semibold text-[10px] bg-purple-100 text-purple-800">
+                            {doc.transport_id ? (
+                              <span className="px-2 py-0.5 rounded-full font-semibold text-[10px] bg-purple-100 text-purple-800" title={`ID Transportu: #${doc.transport_id}`}>
                                 Transport #{doc.transport_id}
+                              </span>
+                            ) : doc.spedycja_id ? (
+                              <span className="px-2 py-0.5 rounded-full font-semibold text-[10px] bg-blue-100 text-blue-800" title={`ID Zlecenia Spedycji: #${doc.spedycja_id}`}>
+                                Spedycja #{doc.spedycja_id}
                               </span>
                             ) : doc.status === 'zrealizowany' ? (
                               <span className="px-2 py-0.5 rounded-full font-semibold text-[10px] bg-emerald-100 text-emerald-800">
                                 Zrealizowany
                               </span>
                             ) : (
-                              <span className="px-2 py-0.5 rounded-full font-semibold text-[10px] bg-blue-100 text-blue-800">
+                              <span className="px-2 py-0.5 rounded-full font-semibold text-[10px] bg-gray-100 text-gray-700">
                                 Do zaplanowania
                               </span>
                             )}
@@ -946,6 +979,21 @@ export default function KoordynatorPage() {
             fetchWzData(pagination.page);
             fetchMapData();
             router.push('/kalendarz');
+          }}
+        />
+      )}
+
+      {/* Modal tworzenia zlecenia spedycyjnego z wybranych WZ */}
+      {isCreateSpeditionOpen && (
+        <CreateSpeditionFromWzModal
+          isOpen={isCreateSpeditionOpen}
+          selectedWzNumbers={selectedWzNumbers}
+          selectedDocs={selectedDocsObjects}
+          onClose={() => setIsCreateSpeditionOpen(false)}
+          onCreated={(result) => {
+            setSelectedWzNumbers([]);
+            fetchWzData(pagination.page);
+            fetchMapData();
           }}
         />
       )}

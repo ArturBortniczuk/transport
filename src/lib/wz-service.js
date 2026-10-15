@@ -203,7 +203,29 @@ export async function importWzRows(rows) {
     return { success: false, message: 'Brak danych do importu' };
   }
 
-  // 1. Grupowanie pozycji według dokumentu WZ
+  // 1. Zbudowanie indeksu bębnów (WZO, WIO oraz towary zawierające bęben) wg cechy
+  const drumsByCecha = new Map();
+  for (const r of rows) {
+    const cecha = (r.CECHA_BEBNA || '').trim();
+    if (!cecha) continue;
+    const typ = (r.TYP_DOKUMENTU || '').trim();
+    const towar = (r.NAZWA_TOWARU || '').toLowerCase();
+    const isDrum = typ === 'WZO' || typ === 'WIO' || towar.includes('bęben') || towar.includes('beben') || towar.includes('bben') || towar.includes('bêben');
+    if (isDrum) {
+      const waga = parsePolishFloat(r.WAGA_POZYCJI);
+      const nrWz = (r.NR_WZ || '').trim();
+      if (!drumsByCecha.has(cecha)) drumsByCecha.set(cecha, []);
+      drumsByCecha.get(cecha).push({
+        docNr: nrWz,
+        typ: typ,
+        towar: (r.NAZWA_TOWARU || '').trim(),
+        waga: waga,
+        wagaZero: waga === 0
+      });
+    }
+  }
+
+  // 2. Grupowanie pozycji według dokumentu WZ
   const docMap = new Map();
   const itemsList = [];
 
@@ -246,8 +268,13 @@ export async function importWzRows(rows) {
         handlowiec: (r.HANDLOWIEC || '').trim() || null,
         typ_dokumentu: typDok,
         waga_suma: 0,
+        waga_towaru: 0,
+        waga_bebnow: 0,
+        waga_brak_towar_count: 0,
+        waga_brak_beben_count: 0,
         liczba_bebnow: 0,
-        dokumenty_powiazane: dokPowiazane,
+        dokumenty_powiazane: null,
+        _wzoSet: new Set(),
         latitude: addrInfo.latitude,
         longitude: addrInfo.longitude,
         pozycje_count: 0
@@ -256,15 +283,37 @@ export async function importWzRows(rows) {
 
     const doc = docMap.get(nrWz);
     doc.pozycje_count += 1;
-    if (wagaPoz > 0) {
-      doc.waga_suma += wagaPoz;
-    }
-    if (cechaBebna) {
+
+    const towarLower = (r.NAZWA_TOWARU || '').toLowerCase();
+    const isDrumItem = typDok === 'WZO' || typDok === 'WIO' || towarLower.includes('bęben') || towarLower.includes('beben') || towarLower.includes('bben') || towarLower.includes('bêben');
+
+    if (isDrumItem) {
+      doc.waga_bebnow += wagaPoz;
       doc.liczba_bebnow += 1;
+      if (wagaPoz === 0) doc.waga_brak_beben_count += 1;
+    } else {
+      doc.waga_towaru += wagaPoz;
+      if (wagaPoz === 0) doc.waga_brak_towar_count += 1;
+
+      if (cechaBebna) {
+        doc.liczba_bebnow += 1;
+        const assignedDrums = drumsByCecha.get(cechaBebna);
+        if (assignedDrums && assignedDrums.length > 0) {
+          for (const d of assignedDrums) {
+            if (d.docNr && d.docNr !== nrWz) {
+              doc._wzoSet.add(d.docNr);
+            }
+            doc.waga_bebnow += d.waga;
+            if (d.wagaZero) doc.waga_brak_beben_count += 1;
+          }
+        }
+      }
     }
-    if (dokPowiazane && (!doc.dokumenty_powiazane || !doc.dokumenty_powiazane.includes(dokPowiazane))) {
-      doc.dokumenty_powiazane = doc.dokumenty_powiazane ? `${doc.dokumenty_powiazane}, ${dokPowiazane}` : dokPowiazane;
+
+    if (dokPowiazane) {
+      doc._wzoSet.add(dokPowiazane);
     }
+
     if (typDok && !doc.typ_dokumentu) {
       doc.typ_dokumentu = typDok;
     }
@@ -293,9 +342,18 @@ export async function importWzRows(rows) {
     }
   }
 
+  // Finalizacja wag i powiązań dokumentów
+  for (const doc of docMap.values()) {
+    doc.waga_suma = doc.waga_towaru + doc.waga_bebnow;
+    if (doc._wzoSet && doc._wzoSet.size > 0) {
+      doc.dokumenty_powiazane = Array.from(doc._wzoSet).join(', ');
+    }
+    delete doc._wzoSet;
+  }
+
   const documents = Array.from(docMap.values());
 
-  // 2. Wstawianie dokumentów (batch upsert po nr_wz)
+  // 3. Wstawianie dokumentów (batch upsert po nr_wz)
   const batchSize = 100;
   let insertedDocsCount = 0;
 
@@ -331,6 +389,10 @@ export async function importWzRows(rows) {
         handlowiec: db.raw("COALESCE(NULLIF(EXCLUDED.handlowiec, ''), wz_documents.handlowiec)"),
         typ_dokumentu: db.raw("COALESCE(NULLIF(EXCLUDED.typ_dokumentu, ''), wz_documents.typ_dokumentu)"),
         waga_suma: db.raw('EXCLUDED.waga_suma'),
+        waga_towaru: db.raw('EXCLUDED.waga_towaru'),
+        waga_bebnow: db.raw('EXCLUDED.waga_bebnow'),
+        waga_brak_towar_count: db.raw('EXCLUDED.waga_brak_towar_count'),
+        waga_brak_beben_count: db.raw('EXCLUDED.waga_brak_beben_count'),
         liczba_bebnow: db.raw('EXCLUDED.liczba_bebnow'),
         dokumenty_powiazane: db.raw("COALESCE(NULLIF(EXCLUDED.dokumenty_powiazane, ''), wz_documents.dokumenty_powiazane)"),
         latitude: db.raw('COALESCE(wz_documents.latitude, EXCLUDED.latitude)'),

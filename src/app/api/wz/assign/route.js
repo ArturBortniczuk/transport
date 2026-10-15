@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import db from '@/database/db';
 import { getSessionUser } from '@/lib/auth';
 import { mapErpRynekToTransportMarket, calculateWarehouseToDestinationDistance } from '@/lib/distance-helper';
+import { getNextSpedycjaOrderNumber } from '@/lib/utils/orderNumber';
 
 export const dynamic = 'force-dynamic';
 
@@ -216,6 +217,156 @@ export async function POST(request) {
         success: true,
         message: `Utworzono transport #${transportId} i przypisano ${targetWzNumbers.length} WZ.`,
         transportId
+      });
+    }
+
+    // 4. Opcja: Utworzenie nowego zlecenia spedycyjnego z wybranych dokumentów WZ
+    if (action === 'create_spedycja') {
+      const {
+        location = 'Magazyn Białystok',
+        deliveryDate,
+        clientName,
+        destination_city,
+        street,
+        postal_code,
+        distance,
+        notes,
+        goods_description,
+        mpk,
+        loadingContact,
+        unloadingContact
+      } = body;
+
+      const firstDoc = wzDocs[0];
+      const currentDate = new Date();
+      const month = (currentDate.getMonth() + 1).toString().padStart(2, '0');
+      const year = currentDate.getFullYear();
+
+      // Wygeneruj unikalny numer zlecenia spedycyjnego (np. 0124/10/2026)
+      const { formattedOrderNumber } = await getNextSpedycjaOrderNumber(db, month, year);
+
+      // Dane adresowe magazynu załadunku
+      const isZielonka = location.toLowerCase().includes('zielonka');
+      const producerAddress = {
+        firma: 'Grupa Eltron Sp. z o.o.',
+        ulica: isZielonka ? 'ul. Krótka 2' : 'ul. Wysockiego 69B',
+        kod: isZielonka ? '05-220' : '15-169',
+        miasto: isZielonka ? 'Zielonka' : 'Białystok'
+      };
+
+      const city = destination_city || firstDoc.extracted_city || '';
+      const postCode = postal_code || firstDoc.kod_pocztowy_dostawy || firstDoc.extracted_postal_code || '';
+      const strt = street || firstDoc.extracted_street || firstDoc.adres_dostawy || '';
+
+      const deliveryAddress = {
+        city,
+        postalCode: postCode,
+        street: strt,
+        country: 'Polska'
+      };
+
+      // Bezpieczne parsowanie daty dostawy w południe
+      let parsedDate = new Date();
+      if (deliveryDate) {
+        const dateStr = String(deliveryDate).split('T')[0];
+        parsedDate = new Date(`${dateStr}T12:00:00`);
+      }
+
+      // Lista numerów WZ i powiązanych WZO
+      const allWzo = wzDocs.map(d => d.dokumenty_powiazane).filter(Boolean);
+      const combinedDocs = [...new Set([...targetWzNumbers, ...allWzo.flatMap(w => w.split(',').map(s => s.trim()))])];
+
+      let finalDistance = distance ? parseInt(distance, 10) : 0;
+      if (!finalDistance && (city || postCode)) {
+        try {
+          const originWh = isZielonka ? 'zielonka' : 'bialystok';
+          const calcRes = await calculateWarehouseToDestinationDistance(originWh, strt, postCode, city);
+          if (calcRes?.distanceKm) {
+            finalDistance = calcRes.distanceKm;
+          }
+        } catch (calcErr) {
+          console.warn('Nie udało się wyznaczyć odległości drogowo dla spedycji:', calcErr.message);
+        }
+      }
+
+      const spedycjaRecord = {
+        status: 'new',
+        order_number: formattedOrderNumber,
+        created_by: session.user.name || session.user.email.split('@')[0],
+        created_by_email: session.user.email,
+        responsible_person: session.user.name || session.user.email.split('@')[0],
+        responsible_email: session.user.email,
+        mpk: mpk || session.user.mpk || '',
+        location: location,
+        location_data: JSON.stringify(producerAddress),
+        delivery_data: JSON.stringify(deliveryAddress),
+        delivery_date: parsedDate,
+        documents: combinedDocs.join(', '),
+        notes: notes ? `${notes}\n\nUwagi z WZ:\n${firstDoc.uwagi || ''}` : firstDoc.uwagi || '',
+        distance_km: finalDistance,
+        client_name: clientName || firstDoc.nazwa_kontrahenta || '',
+        source_client_name: 'Grupa Eltron Sp. z o.o.',
+        goods_description: goods_description ? (typeof goods_description === 'string' ? goods_description : JSON.stringify(goods_description)) : null,
+        loading_contact: loadingContact || '',
+        unloading_contact: unloadingContact || firstDoc.extracted_phone || '',
+        created_at: db.fn.now()
+      };
+
+      const [newSpedycja] = await db('spedycje')
+        .insert(spedycjaRecord)
+        .returning('id');
+
+      const spedycjaId = typeof newSpedycja === 'object' ? newSpedycja.id : newSpedycja;
+
+      // Powiązanie WZ ze zleceniem spedycyjnym
+      await db('wz_documents')
+        .whereIn('nr_wz', targetWzNumbers)
+        .update({
+          spedycja_id: spedycjaId,
+          status: 'przypisany',
+          updated_at: db.fn.now()
+        });
+
+      return NextResponse.json({
+        success: true,
+        message: `Utworzono zlecenie spedycyjne #${spedycjaId} (${formattedOrderNumber}) i przypisano ${targetWzNumbers.length} WZ.`,
+        spedycjaId,
+        orderNumber: formattedOrderNumber
+      });
+    }
+
+    // 5. Opcja: Przypisanie do istniejącego zlecenia spedycyjnego
+    if (action === 'link_existing_spedycja') {
+      const { spedycjaId } = body;
+      if (!spedycjaId) {
+        return NextResponse.json({ success: false, error: 'Nie podano ID zlecenia spedycji' }, { status: 400 });
+      }
+
+      const spedycja = await db('spedycje').where('id', spedycjaId).first();
+      if (!spedycja) {
+        return NextResponse.json({ success: false, error: 'Nie znaleziono zlecenia spedycji' }, { status: 404 });
+      }
+
+      const currentDocs = spedycja.documents ? spedycja.documents.split(',').map(s => s.trim()).filter(Boolean) : [];
+      const updatedDocs = [...new Set([...currentDocs, ...targetWzNumbers])].join(', ');
+
+      await db('spedycje')
+        .where('id', spedycjaId)
+        .update({
+          documents: updatedDocs
+        });
+
+      await db('wz_documents')
+        .whereIn('nr_wz', targetWzNumbers)
+        .update({
+          spedycja_id: spedycjaId,
+          status: 'przypisany',
+          updated_at: db.fn.now()
+        });
+
+      return NextResponse.json({
+        success: true,
+        message: `Przypisano ${targetWzNumbers.length} dokumentów WZ do zlecenia spedycyjnego #${spedycjaId}.`
       });
     }
 

@@ -127,8 +127,11 @@ export async function GET(request) {
           db.raw("COUNT(CASE WHEN status = 'zrealizowany' THEN 1 END) as zrealizowany_count"),
           db.raw('COALESCE(SUM(dok_brutto), 0) as total_brutto'),
           db.raw('COALESCE(SUM(waga_suma), 0) as total_waga'),
+          db.raw('COALESCE(SUM(waga_towaru), 0) as total_waga_towaru'),
+          db.raw('COALESCE(SUM(waga_bebnow), 0) as total_waga_bebnow'),
           db.raw('COALESCE(SUM(liczba_bebnow), 0) as total_bebny'),
-          db.raw('COUNT(CASE WHEN liczba_bebnow > 0 THEN 1 END) as docs_with_drums_count')
+          db.raw('COUNT(CASE WHEN liczba_bebnow > 0 THEN 1 END) as docs_with_drums_count'),
+          db.raw('COUNT(CASE WHEN waga_brak_towar_count > 0 OR waga_brak_beben_count > 0 THEN 1 END) as docs_with_missing_weight_count')
         )
         .first();
 
@@ -140,8 +143,13 @@ export async function GET(request) {
         totalBrutto: parseFloat(statsQuery?.total_brutto || 0),
         totalWagaKg: parseFloat(statsQuery?.total_waga || 0),
         totalWagaTon: +(parseFloat(statsQuery?.total_waga || 0) / 1000).toFixed(2),
+        totalWagaTowaruKg: parseFloat(statsQuery?.total_waga_towaru || 0),
+        totalWagaTowaruTon: +(parseFloat(statsQuery?.total_waga_towaru || 0) / 1000).toFixed(2),
+        totalWagaBebnowKg: parseFloat(statsQuery?.total_waga_bebnow || 0),
+        totalWagaBebnowTon: +(parseFloat(statsQuery?.total_waga_bebnow || 0) / 1000).toFixed(2),
         totalBebny: parseInt(statsQuery?.total_bebny || 0, 10),
-        docsWithDrums: parseInt(statsQuery?.docs_with_drums_count || 0, 10)
+        docsWithDrums: parseInt(statsQuery?.docs_with_drums_count || 0, 10),
+        docsWithMissingWeight: parseInt(statsQuery?.docs_with_missing_weight_count || 0, 10)
       };
       global._wzStatsCache = stats;
       global._wzStatsExpires = now + 60 * 1000;

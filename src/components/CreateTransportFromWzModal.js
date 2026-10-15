@@ -89,16 +89,29 @@ export default function CreateTransportFromWzModal({
   };
 
   const totalWeight = selectedDocs.reduce((acc, d) => acc + parseFloat(d.waga_suma || 0), 0);
+  const totalTowarWeight = selectedDocs.reduce((acc, d) => acc + parseFloat(d.waga_towaru || 0), 0);
+  const totalBebnyWeight = selectedDocs.reduce((acc, d) => acc + parseFloat(d.waga_bebnow || 0), 0);
   const totalDrums = selectedDocs.reduce((acc, d) => acc + parseInt(d.liczba_bebnow || 0, 10), 0);
+  const missingTowarCount = selectedDocs.reduce((acc, d) => acc + parseInt(d.waga_brak_towar_count || 0, 10), 0);
+  const missingBebenCount = selectedDocs.reduce((acc, d) => acc + parseInt(d.waga_brak_beben_count || 0, 10), 0);
 
   // Automatyczne generowanie podsumowania ładunku z wybranych WZ
   useEffect(() => {
     if (selectedDocs.length > 0) {
       const wzList = selectedDocs.map(d => d.nr_wz).join(', ');
-      let desc = `Dokumenty WZ: ${wzList}\nŁączna wartość: ${selectedDocs.reduce((acc, d) => acc + parseFloat(d.dok_brutto || 0), 0).toFixed(2)} zł\nŁącznie pozycji: ${selectedDocs.reduce((acc, d) => acc + parseInt(d.pozycje_count || 0, 10), 0)} poz.`;
+      const wzoList = selectedDocs.map(d => d.dokumenty_powiazane).filter(Boolean).join(', ');
+
+      let desc = `Dokumenty WZ: ${wzList}`;
+      if (wzoList) {
+        desc += `\nPowiązane opakowania/zlecenia: ${wzoList}`;
+      }
+      desc += `\nŁączna wartość: ${selectedDocs.reduce((acc, d) => acc + parseFloat(d.dok_brutto || 0), 0).toFixed(2)} zł\nŁącznie pozycji: ${selectedDocs.reduce((acc, d) => acc + parseInt(d.pozycje_count || 0, 10), 0)} poz.`;
       
       if (totalWeight > 0) {
         desc += `\nŁączna masa ładunku: ${totalWeight >= 1000 ? (totalWeight / 1000).toFixed(2) + ' t' : totalWeight.toFixed(1) + ' kg'}`;
+        if (totalTowarWeight > 0 || totalBebnyWeight > 0) {
+          desc += ` (Towar: ${totalTowarWeight >= 1000 ? (totalTowarWeight / 1000).toFixed(2) + ' t' : totalTowarWeight.toFixed(0) + ' kg'}, Bębny: ${totalBebnyWeight >= 1000 ? (totalBebnyWeight / 1000).toFixed(2) + ' t' : totalBebnyWeight.toFixed(0) + ' kg'})`;
+        }
       }
       if (totalDrums > 0) {
         desc += `\nBębny kablowe: ${totalDrums} szt. (wymagany rozładunek wózkiem / winda)`;
@@ -217,8 +230,11 @@ export default function CreateTransportFromWzModal({
             <div className="mt-2 pt-2 border-t border-gray-200/80 flex flex-wrap items-center justify-between text-[11px] text-gray-600 gap-y-1">
               <div className="flex flex-wrap items-center gap-2">
                 {totalWeight > 0 && (
-                  <span className="inline-flex items-center gap-1 font-semibold text-gray-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                  <span className="inline-flex items-center gap-1 font-bold text-gray-900 bg-amber-50 px-2.5 py-0.5 rounded border border-amber-300">
                     ⚖️ Łączna masa: {totalWeight >= 1000 ? `${(totalWeight / 1000).toFixed(2)} t` : `${totalWeight.toFixed(1)} kg`}
+                    <span className="text-[10px] text-gray-500 font-normal">
+                      (Towar: {totalTowarWeight >= 1000 ? `${(totalTowarWeight / 1000).toFixed(2)} t` : `${totalTowarWeight.toFixed(0)} kg`} + Bębny: {totalBebnyWeight >= 1000 ? `${(totalBebnyWeight / 1000).toFixed(2)} t` : `${totalBebnyWeight.toFixed(0)} kg`})
+                    </span>
                   </span>
                 )}
                 {totalDrums > 0 && (
@@ -232,6 +248,17 @@ export default function CreateTransportFromWzModal({
                 {firstDoc.rynek && <span>Rynek ERP: <b className="text-blue-700">{firstDoc.rynek}</b></span>}
               </div>
             </div>
+
+            {(missingTowarCount > 0 || missingBebenCount > 0) && (
+              <div className="mt-2 p-2 bg-amber-50 rounded-lg border border-amber-200 text-[11px] text-amber-900 flex items-start gap-1.5">
+                <AlertCircle className="w-3.5 h-3.5 text-amber-600 flex-shrink-0 mt-0.5" />
+                <span>
+                  <b>Uwaga:</b> W ERP brak wagi dla {missingTowarCount > 0 && `${missingTowarCount} pozycji towarowych`}
+                  {missingTowarCount > 0 && missingBebenCount > 0 && ' oraz '}
+                  {missingBebenCount > 0 && `${missingBebenCount} bębnów`}. Rzeczywista masa jest wyższa!
+                </span>
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
